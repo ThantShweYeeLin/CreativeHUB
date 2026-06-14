@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { LoginPage } from './components/LoginPage';
+import { SignUpPage } from './components/SignUpPage';
 import { Search, Bell, Menu, Sparkles, ChevronLeft, ChevronRight, Star, Compass, MapPin, Grid, Heart } from 'lucide-react';
 import { ImageWithFallback } from './components/figma/ImageWithFallback';
 import logoImage from '../imports/logo.png';
@@ -135,6 +137,7 @@ function CarouselSection({ title, profiles, onViewProfile }: CarouselSectionProp
 }
 
 export default function App() {
+  const [authPage, setAuthPage] = useState<'login' | 'signup' | 'app'>('login');
   const [activeTab, setActiveTab] = useState<'explore' | 'map' | 'freelancers' | 'foryou'>('explore');
   const [showProfile, setShowProfile] = useState(false);
   const [profileRequestStatus, setProfileRequestStatus] = useState<'accepted' | 'pending' | 'rejected' | null>(null);
@@ -192,7 +195,14 @@ export default function App() {
     setShowBookingTracking(true);
   };
 
-    if (showProfile) {
+    if (authPage === 'login') {
+    return <LoginPage onLogin={() => setAuthPage('app')} onGoToSignUp={() => setAuthPage('signup')} />;
+  }
+  if (authPage === 'signup') {
+    return <SignUpPage onSignUp={() => setAuthPage('app')} onGoToLogin={() => setAuthPage('login')} />;
+  }
+
+  if (showProfile) {
     return (
       <FreelancerProfile
         onBack={() => { setShowProfile(false); setProfileRequestStatus(null); }}
