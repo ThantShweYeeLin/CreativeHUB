@@ -12,9 +12,11 @@ export function UserMenu({ onClose, onSelectItem }: UserMenuProps) {
     { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
     { id: 'favorites' as const, label: 'Favorites', icon: Heart },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
-  ];
+  ] as const;
 
-  const handleClick = (item: typeof menuItems[0]['id']) => {
+  type MenuItemId = UserMenuProps['onSelectItem'] extends (item: infer T) => any ? T : never;
+
+  const handleClick = (item: MenuItemId) => {
     onSelectItem(item);
     onClose();
   };

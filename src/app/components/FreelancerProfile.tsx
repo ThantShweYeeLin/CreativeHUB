@@ -1,6 +1,6 @@
-import { ArrowLeft, Star, MapPin, Briefcase, Phone, Mail, Heart, Users, X, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Star, MapPin, Briefcase, Phone, Mail, Heart, Users, X, MessageCircle, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useState } from 'react';
+import { FormEvent, useState } from 'react';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -28,7 +28,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     description: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     console.log('Booking submitted:', formData);
     setIsBookingFormOpen(false);
