@@ -204,3 +204,9 @@ create index idx_conversations_participant_ids on public.conversations(participa
 create index idx_favorites_user_id on public.favorites(user_id);
 create index idx_reviews_booking_id on public.reviews(booking_id);
 create index idx_notifications_user_id on public.notifications(user_id);
+
+-- insert policy for users to create their own profile upon sign up --
+create policy "Users can insert own record" 
+  on public.users
+  for insert
+  with check (auth.uid() = id);

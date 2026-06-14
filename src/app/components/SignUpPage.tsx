@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 
 interface SignUpPageProps {
-  onSignUp: () => void;
+  onSignUp: (fullName: string, email: string, password: string, role: AccountType) => Promise<void>;
   onGoToLogin: () => void;
 }
 
@@ -33,15 +33,35 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
     setStep(2);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
-    if (!password) { setError('Please enter a password.'); return; }
-    if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
-    if (!agreed) { setError('Please agree to the Terms & Privacy Policy.'); return; }
+
+    if (!password) {
+      setError('Please enter a password.');
+      return;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+    if (!agreed) {
+      setError('Please agree to the Terms & Privacy Policy.');
+      return;
+    }
+
     setLoading(true);
-    setTimeout(() => { setLoading(false); onSignUp(); }, 1200);
+    try {
+      await onSignUp(fullName.trim(), email, password, accountType);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create account.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -189,8 +209,12 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 {[{ name: 'Google', icon: 'G' }, { name: 'Facebook', icon: 'f' }].map(({ name, icon }) => (
-                  <button key={name} type="button" onClick={onSignUp}
-                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700">
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setError(`${name} sign up is not available yet.`)}
+                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
+                  >
                     <span className="font-bold">{icon}</span> {name}
                   </button>
                 ))}

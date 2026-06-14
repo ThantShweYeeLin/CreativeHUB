@@ -3,9 +3,10 @@ import { Send, MessageCircle, Heart, Settings, LogOut, Crown, Package } from 'lu
 interface UserMenuProps {
   onClose: () => void;
   onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => void;
+  onLogout: () => void;
 }
 
-export function UserMenu({ onClose, onSelectItem }: UserMenuProps) {
+export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
   const menuItems = [
     { id: 'bookings' as const, label: 'My Bookings', icon: Package },
     { id: 'requests' as const, label: 'Requests', icon: Send },
@@ -68,7 +69,10 @@ export function UserMenu({ onClose, onSelectItem }: UserMenuProps) {
 
           {/* Log Out */}
           <button
-            onClick={() => {/* Handle logout */}}
+            onClick={() => {
+              onLogout();
+              onClose();
+            }}
             className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50 transition-all group"
           >
             <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />

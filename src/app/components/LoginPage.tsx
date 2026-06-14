@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 
 interface LoginPageProps {
-  onLogin: () => void;
+  onLogin: (email: string, password: string) => Promise<void>;
   onGoToSignUp: () => void;
 }
 
@@ -14,18 +14,23 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+
     if (!email || !password) {
       setError('Please fill in all fields.');
       return;
     }
+
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await onLogin(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in.');
+    } finally {
       setLoading(false);
-      onLogin();
-    }, 1000);
+    }
   };
 
   return (
@@ -150,7 +155,7 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
               <button
                 key={name}
                 type="button"
-                onClick={onLogin}
+                onClick={() => setError(`${name} login is not available yet.`)}
                 className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
               >
                 <span className="font-bold">{icon}</span> {name}

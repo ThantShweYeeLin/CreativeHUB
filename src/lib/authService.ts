@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export interface SignUpData {
   email: string;
@@ -37,6 +38,20 @@ class AuthService {
         return { user: null, error: new Error('User creation failed') };
       }
 
+      // Ensure the user session is active before creating the profile row.
+      let session = authData.session;
+      if (!session?.user) {
+        const { data: sessionResponse, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          return { user: null, error: new Error((sessionError as any).message || 'Unable to verify session after sign up') };
+        }
+        session = sessionResponse.session;
+      }
+
+      if (!session?.user) {
+        return { user: null, error: new Error('Please confirm your email before signing in to complete registration.') };
+      }
+
       // Create user profile
       const { error: profileError } = await supabase.from('users').insert({
         id: authData.user.id,
@@ -46,8 +61,6 @@ class AuthService {
       });
 
       if (profileError) {
-        // Clean up auth user if profile creation fails
-        await supabase.auth.admin.deleteUser(authData.user.id);
         return { user: null, error: new Error((profileError as any).message || 'Failed to create user profile') };
       }
 
@@ -86,10 +99,14 @@ class AuthService {
         .from('users')
         .select('*')
         .eq('id', authData.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         return { user: null, error: new Error((profileError as any).message || 'Failed to load profile') };
+      }
+
+      if (!userProfile) {
+        return { user: null, error: new Error('Your account exists but your profile is not complete. Please contact support.') };
       }
 
       return {
@@ -129,10 +146,14 @@ class AuthService {
         .from('users')
         .select('*')
         .eq('id', data.session.user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
         return { user: null, error: new Error((profileError as any).message || 'Failed to load profile') };
+      }
+
+      if (!userProfile) {
+        return { user: null, error: new Error('User signed in but profile record is missing. Please complete registration.') };
       }
 
       return {
@@ -162,13 +183,13 @@ class AuthService {
   }
 
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
-    return supabase.auth.onAuthStateChange(async (event, session) => {
+    return supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
         const { data: userProfile } = await supabase
           .from('users')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
 
         if (userProfile) {
           callback({
