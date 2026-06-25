@@ -1,7 +1,10 @@
 import { ArrowLeft, Star, MapPin, Briefcase, Phone, Mail, Heart, Users, X, MessageCircle, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router';
 import logoImage from '../../imports/logo.png';
+import { DataService } from '../../lib/dataService';
+import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelancerMapper';
 
 interface FreelancerProfileProps {
   onBack: () => void;
@@ -9,16 +12,12 @@ interface FreelancerProfileProps {
   onOpenChat?: () => void;
 }
 
-const portfolioImages = [
-  'https://images.unsplash.com/photo-1758613653735-9d7e87996110?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-  'https://images.unsplash.com/photo-1758613653298-738e98658e31?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-  'https://images.unsplash.com/photo-1758613653231-bae4e1131dde?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-  'https://images.unsplash.com/photo-1707920026227-dc635c6f2c13?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-  'https://images.unsplash.com/photo-1611182911608-01f69e20c73d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-  'https://images.unsplash.com/flagged/photo-1562597021-bae50de4d586?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=600',
-];
-
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const [freelancer, setFreelancer] = useState<FreelancerMapProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isBookingFormOpen, setIsBookingFormOpen] = useState(false);
   const [isFavorited, setIsFavorited] = useState(false);
   const [showPortfolioModal, setShowPortfolioModal] = useState(false);
@@ -27,6 +26,46 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     budget: '',
     description: '',
   });
+  const visiblePortfolio = useMemo(
+    () => freelancer?.portfolio.length ? freelancer.portfolio : [],
+    [freelancer]
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFreelancer() {
+      if (!id) {
+        setFreelancer(null);
+        setErrorMessage('Freelancer not found.');
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setErrorMessage(null);
+
+      const { data, error } = await DataService.getFreelancerById(id);
+
+      if (!isMounted) return;
+
+      if (error || !data) {
+        setFreelancer(null);
+        setErrorMessage('Freelancer not found.');
+        setIsLoading(false);
+        return;
+      }
+
+      setFreelancer(normalizeFreelancer(data));
+      setIsLoading(false);
+    }
+
+    loadFreelancer();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -34,6 +73,41 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsBookingFormOpen(false);
     setFormData({ projectName: '', budget: '', description: '' });
   };
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack();
+    }
+
+    navigate(-1);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+          <p className="text-sm text-gray-600">Loading freelancer profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMessage || !freelancer) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 flex items-center justify-center px-4">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 text-center max-w-md w-full">
+          <p className="text-xl font-bold text-gray-900">Freelancer not found.</p>
+          <button
+            onClick={() => navigate('/map')}
+            className="mt-6 px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
+          >
+            Back to Map
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
@@ -43,7 +117,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           <div className="flex items-center justify-between h-16 md:h-20">
             <div className="flex items-center gap-3 md:gap-6">
               <button
-                onClick={onBack}
+                onClick={handleBack}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-700" />
@@ -67,28 +141,28 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             <div className="relative flex-shrink-0">
               <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden ring-4 ring-gray-100">
                 <ImageWithFallback
-                  src="https://images.unsplash.com/photo-1576558656222-ba66febe3dec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400"
-                  alt="Darling Arias"
+                  src={freelancer.profileImage}
+                  alt={freelancer.fullName}
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="absolute bottom-2 right-2 w-5 h-5 md:w-6 md:h-6 bg-green-500 rounded-full border-4 border-white"></div>
+              <div className={`absolute bottom-2 right-2 w-5 h-5 md:w-6 md:h-6 rounded-full border-4 border-white ${freelancer.isAvailable ? 'bg-green-500' : 'bg-gray-400'}`}></div>
             </div>
 
             {/* Info */}
             <div className="flex-1 w-full">
               <div className="mb-4">
                 <div className="text-center md:text-left mb-4">
-                  <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">Darling Arias</h1>
-                  <p className="text-base md:text-xl text-gray-600 mb-3 md:mb-4">@darlingarias</p>
+                  <h1 className="text-2xl md:text-4xl font-bold text-gray-900 mb-2">{freelancer.fullName}</h1>
+                  <p className="text-base md:text-xl text-gray-600 mb-3 md:mb-4">@{freelancer.username || 'freelancer'}</p>
                   <div className="flex flex-col md:flex-row md:items-center gap-2 text-gray-700 text-sm md:text-base">
                     <div className="flex items-center gap-2 justify-center md:justify-start">
                       <MapPin className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                      <span className="font-medium">Bang Na, Bangkok</span>
+                      <span className="font-medium">{freelancer.location || 'Location not provided'}</span>
                     </div>
                     <div className="flex items-center gap-2 justify-center md:justify-start">
                       <Briefcase className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                      <span className="font-medium">Fashion Editorial Photographer</span>
+                      <span className="font-medium">{freelancer.profession}</span>
                     </div>
                   </div>
                 </div>
@@ -141,24 +215,24 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="grid grid-cols-2 md:flex md:flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 py-4 md:py-6 border-y border-gray-200 text-sm md:text-base">
                 <div className="flex items-center gap-2 justify-center md:justify-start">
                   <Heart className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
-                  <span className="font-semibold text-gray-900">10</span>
+                  <span className="font-semibold text-gray-900">{freelancer.totalReviews}</span>
                   <span className="text-gray-600 hidden md:inline">Favorites</span>
                   <span className="text-gray-600 md:hidden">Favs</span>
                 </div>
                 <div className="flex items-center gap-2 justify-center md:justify-start">
                   <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                  <span className="font-semibold text-gray-900">4</span>
+                  <span className="font-semibold text-gray-900">{freelancer.totalReviews}</span>
                   <span className="text-gray-600">Clients</span>
                 </div>
                 <div className="flex items-center gap-2 justify-center md:justify-start">
                   <Briefcase className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                  <span className="font-semibold text-gray-900">127</span>
+                  <span className="font-semibold text-gray-900">{freelancer.totalProjects}</span>
                   <span className="text-gray-600">Projects</span>
                 </div>
                 <div className="flex items-center gap-2 justify-center md:justify-start">
                   <Star className="w-4 h-4 md:w-5 md:h-5 fill-yellow-400 text-yellow-400" />
-                  <span className="font-semibold text-gray-900">5.0</span>
-                  <span className="text-gray-600">(342)</span>
+                  <span className="font-semibold text-gray-900">{freelancer.rating.toFixed(1)}</span>
+                  <span className="text-gray-600">({freelancer.totalReviews})</span>
                 </div>
               </div>
 
@@ -166,11 +240,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="mt-4 md:mt-6 flex flex-col md:flex-row items-center justify-center md:justify-start gap-3 md:gap-6 text-xs md:text-base">
                 <div className="flex items-center gap-2 text-gray-700">
                   <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                  <span>+66 81 234 5678</span>
+                  <span>{freelancer.phone || 'Phone not provided'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Mail className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                  <span className="truncate">darling.arias@email.com</span>
+                  <span className="truncate">{freelancer.email || 'Email not provided'}</span>
                 </div>
               </div>
             </div>
@@ -180,26 +254,32 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         {/* Posts Section */}
         <div className="bg-white rounded-2xl md:rounded-3xl shadow-xl p-4 md:p-8">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 md:mb-6">Posts</h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
-            {portfolioImages.map((image, index) => (
+          {visiblePortfolio.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-6">
+            {visiblePortfolio.map((item, index) => (
               <div
-                key={index}
+                key={item.id}
                 className="group relative aspect-[4/3] rounded-xl overflow-hidden cursor-pointer"
               >
                 <ImageWithFallback
-                  src={image}
-                  alt={`Portfolio ${index + 1}`}
+                  src={item.imageUrl}
+                  alt={item.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="absolute bottom-4 left-4 right-4">
-                    <p className="text-white font-semibold">Project {index + 1}</p>
-                    <p className="text-white/80 text-sm">Fashion Editorial</p>
+                    <p className="text-white font-semibold">{item.title || `Project ${index + 1}`}</p>
+                    <p className="text-white/80 text-sm">{item.description || freelancer.profession}</p>
                   </div>
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center">
+              <p className="font-semibold text-gray-900">No portfolio items yet.</p>
+            </div>
+          )}
         </div>
       </main>
 
@@ -223,18 +303,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-gray-200">
                     <ImageWithFallback
-                      src="https://images.unsplash.com/photo-1576558656222-ba66febe3dec?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200"
-                      alt="Darling Arias"
+                      src={freelancer.profileImage}
+                      alt={freelancer.fullName}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">Darling Arias</h3>
-                    <p className="text-gray-600">Fashion Editorial Photographer</p>
+                    <h3 className="text-xl font-bold text-gray-900">{freelancer.fullName}</h3>
+                    <p className="text-gray-600">{freelancer.profession}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold text-sm">5.0</span>
-                      <span className="text-xs text-gray-500">(342 reviews)</span>
+                      <span className="font-semibold text-sm">{freelancer.rating.toFixed(1)}</span>
+                      <span className="text-xs text-gray-500">({freelancer.totalReviews} reviews)</span>
                     </div>
                   </div>
                 </div>
@@ -340,10 +420,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   Description
                 </h3>
                 <p className="text-sm md:text-base text-gray-700 leading-relaxed">
-                  Passionate fashion editorial photographer with over 8 years of experience capturing stunning visuals.
-                  Specializing in high-fashion, beauty, and lifestyle photography. I work closely with clients to bring
-                  their creative vision to life, ensuring every shot tells a compelling story. Known for attention to
-                  detail, professional approach, and ability to work under tight deadlines.
+                  {freelancer.bio || 'No bio provided.'}
                 </p>
               </div>
 
@@ -356,9 +433,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   Style
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {['Editorial', 'High Fashion', 'Minimalist', 'Dramatic Lighting', 'Vibrant Colors', 'Cinematic'].map((style) => (
-                    <span key={style} className="px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r from-gray-100 to-gray-200 text-black rounded-full text-xs md:text-sm font-semibold">
-                      {style}
+                  {(freelancer.skills.length > 0 ? freelancer.skills : ['No skills listed']).map((skill) => (
+                    <span key={skill} className="px-3 md:px-4 py-1.5 md:py-2 bg-gradient-to-r from-gray-100 to-gray-200 text-black rounded-full text-xs md:text-sm font-semibold">
+                      {skill}
                     </span>
                   ))}
                 </div>
@@ -374,9 +451,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     Experience
                   </h3>
                   <p className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-gray-900 to-black text-gray-900 mb-2">
-                    8+ Years
+                    {freelancer.experienceYears ? `${freelancer.experienceYears}+ Years` : 'Not provided'}
                   </p>
-                  <p className="text-xs md:text-sm text-gray-600">Professional Photography</p>
+                  <p className="text-xs md:text-sm text-gray-600">{freelancer.profession}</p>
                 </div>
 
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl md:rounded-2xl p-4 md:p-6 border-2 border-gray-200">
@@ -387,18 +464,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     Specialization
                   </h3>
                   <ul className="space-y-2 text-sm md:text-base text-gray-700">
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />
-                      Fashion Editorial
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />
-                      Beauty & Lifestyle
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />
-                      Commercial Photography
-                    </li>
+                    {(freelancer.skills.length > 0 ? freelancer.skills : [freelancer.profession]).map((skill) => (
+                      <li key={skill} className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-gray-900 rounded-full" />
+                        {skill}
+                      </li>
+                    ))}
                   </ul>
                 </div>
               </div>
@@ -412,30 +483,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   Requirements & Limits
                 </h3>
                 <ul className="space-y-2 md:space-y-3 text-sm md:text-base text-gray-700">
-                  <li className="flex items-start gap-3">
-                    <div className="w-4 h-4 md:w-5 md:h-5 bg-orange-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs">•</span>
-                    </div>
-                    <span>Minimum 7 days advance booking required</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div className="w-4 h-4 md:w-5 md:h-5 bg-orange-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs">•</span>
-                    </div>
-                    <span>50% deposit required upon booking confirmation</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div className="w-4 h-4 md:w-5 md:h-5 bg-orange-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs">•</span>
-                    </div>
-                    <span>Professional studio equipment provided</span>
-                  </li>
-                  <li className="flex items-start gap-3">
-                    <div className="w-4 h-4 md:w-5 md:h-5 bg-orange-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-xs">•</span>
-                    </div>
-                    <span>Raw files delivery within 48 hours, edited within 7-10 days</span>
-                  </li>
+                  {freelancer.availability.map((availability) => (
+                    <li key={availability} className="flex items-start gap-3">
+                      <div className="w-4 h-4 md:w-5 md:h-5 bg-orange-200 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-xs">•</span>
+                      </div>
+                      <span>{availability}</span>
+                    </li>
+                  ))}
                 </ul>
               </div>
 
@@ -446,8 +501,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <span className="text-xl md:text-2xl">💰</span>
                   </div>
                   <h4 className="text-sm md:text-base font-bold text-gray-900 mb-1 md:mb-2">Budget Range</h4>
-                  <p className="text-base md:text-lg font-bold text-green-600">฿8,000 - ฿25,000</p>
-                  <p className="text-xs text-gray-500 mt-1">Per project</p>
+                  <p className="text-base md:text-lg font-bold text-green-600">
+                    {freelancer.hourlyRate ? `฿${freelancer.hourlyRate.toLocaleString()}` : 'Not provided'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">Hourly rate</p>
                 </div>
 
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl md:rounded-2xl p-4 md:p-5 border-2 border-gray-200 text-center">
@@ -455,8 +512,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <span className="text-xl md:text-2xl">📅</span>
                   </div>
                   <h4 className="text-sm md:text-base font-bold text-gray-900 mb-1 md:mb-2">Working Days</h4>
-                  <p className="text-xs md:text-sm font-semibold text-gray-700">Monday - Saturday</p>
-                  <p className="text-xs text-gray-500 mt-1">Flexible hours</p>
+                  <p className="text-xs md:text-sm font-semibold text-gray-700">{freelancer.availability.join(', ')}</p>
+                  <p className="text-xs text-gray-500 mt-1">{freelancer.isAvailable ? 'Available' : 'Unavailable'}</p>
                 </div>
 
                 <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl md:rounded-2xl p-4 md:p-5 border-2 border-gray-200 text-center">
@@ -464,7 +521,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <MapPin className="w-5 h-5 md:w-6 md:h-6 text-red-600" />
                   </div>
                   <h4 className="text-sm md:text-base font-bold text-gray-900 mb-1 md:mb-2">Location</h4>
-                  <p className="text-xs md:text-sm font-semibold text-gray-700">Bangkok</p>
+                  <p className="text-xs md:text-sm font-semibold text-gray-700">{freelancer.location || 'Not provided'}</p>
                   <p className="text-xs text-gray-500 mt-1">Travel available</p>
                 </div>
               </div>

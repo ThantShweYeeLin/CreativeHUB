@@ -32,19 +32,32 @@ export class DataService {
   static async getFreelancerProfile(userId: string) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*')
+      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
       .eq('user_id', userId)
       .single();
     return { data, error };
   }
 
-  static async getAllFreelancers(limit = 20, offset = 0) {
+  static async getFreelancerById(id: string) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)')
-      .eq('is_available', true)
-      .limit(limit)
-      .range(offset, offset + limit - 1);
+      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
+      .eq('id', id)
+      .single();
+    return { data, error };
+  }
+
+  static async getAllFreelancers(limit?: number, offset = 0) {
+    let query = supabase
+      .from('freelancer_profiles')
+      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
+      .order('created_at', { ascending: false });
+
+    if (typeof limit === 'number') {
+      query = query.range(offset, offset + limit - 1);
+    }
+
+    const { data, error } = await query;
     return { data, error };
   }
 
