@@ -12,6 +12,7 @@ create table public.users (
   email text unique not null,
   full_name text,
   avatar_url text,
+  cover_url text,
   bio text,
   role user_role default 'client',
   location text,

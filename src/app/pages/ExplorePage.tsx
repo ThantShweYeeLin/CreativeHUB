@@ -1,44 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { DataService } from '../../lib/dataService';
 
-const makeupArtists = [
-  { name: 'Mihaela Claudia', specialty: 'Bridal Makeup', rating: 4.9, reviews: 127, image: 'https://images.unsplash.com/photo-1741544486129-956dec7c89ee?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Laura Chouette', specialty: 'Fashion & Editorial', rating: 5.0, reviews: 243, image: 'https://images.unsplash.com/photo-1596704182101-542876d47a68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Baylee Gramling', specialty: 'Natural Beauty', rating: 4.8, reviews: 156, image: 'https://images.unsplash.com/photo-1560869683-f5d8bf564346?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Maya Thompson', specialty: 'Special Effects', rating: 4.9, reviews: 198, image: 'https://images.unsplash.com/photo-1585616840136-d91fe5f967aa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Simran Sood', specialty: 'Creative Artistry', rating: 5.0, reviews: 312, image: 'https://images.unsplash.com/photo-1637862666931-be59da5dd8ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Anil Sharma', specialty: 'HD Makeup', rating: 4.7, reviews: 189, image: 'https://images.unsplash.com/photo-1644134395029-d68dd6b97761?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-];
-
-const photographers = [
-  { name: 'Deny Napitupulu', specialty: 'Landscape & Nature', rating: 4.9, reviews: 234, image: 'https://images.unsplash.com/photo-1706661912295-bd1dc10ffe7f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Marcus Chen', specialty: 'Action Sports', rating: 5.0, reviews: 187, image: 'https://images.unsplash.com/photo-1706661912765-7d0f68289a0f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'ENG-HS', specialty: 'Portrait & Studio', rating: 4.8, reviews: 298, image: 'https://images.unsplash.com/photo-1643264623879-bb85ea39c62a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Irish O\'Connell', specialty: 'Event Photography', rating: 4.9, reviews: 221, image: 'https://images.unsplash.com/photo-1627961888164-b79f406b245b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'James Park', specialty: 'Product & Commercial', rating: 4.7, reviews: 165, image: 'https://images.unsplash.com/photo-1643968612613-fd411aecd1fd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Darling Arias', specialty: 'Fashion Editorial', rating: 5.0, reviews: 342, image: 'https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-];
-
-const models = [
-  { name: 'Daria Magazzu', specialty: 'High Fashion', rating: 5.0, reviews: 412, image: 'https://images.unsplash.com/photo-1559878541-926091e4c31b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Sour Moha', specialty: 'Editorial & Runway', rating: 4.9, reviews: 387, image: 'https://images.unsplash.com/photo-1676286255284-3a5cab9cea19?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Mesut Çiçen', specialty: 'Commercial & Lifestyle', rating: 4.8, reviews: 256, image: 'https://images.unsplash.com/photo-1671454390265-c0ed999cd528?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Isabella Rodriguez', specialty: 'Fashion & Beauty', rating: 5.0, reviews: 489, image: 'https://images.unsplash.com/photo-1671454265388-0c0672798125?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Artem Artemov', specialty: 'Creative Portraits', rating: 4.9, reviews: 298, image: 'https://images.unsplash.com/photo-1664891399651-bccb92f27f25?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-  { name: 'Sofia Winters', specialty: 'Avant-Garde', rating: 4.8, reviews: 334, image: 'https://images.unsplash.com/photo-1671454264961-98e81937dc94?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400' },
-];
+const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
 interface ProfileCardProps {
+  id: string;
   name: string;
   specialty: string;
   rating: number;
   reviews: number;
   image: string;
+  location?: string;
 }
 
-function ProfileCard({ name, specialty, rating, reviews, image }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -58,7 +36,7 @@ function ProfileCard({ name, specialty, rating, reviews, image }: ProfileCardPro
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className={`absolute bottom-4 left-4 right-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
             <button
-              onClick={() => navigate(`/profile/1`)}
+              onClick={() => navigate(`/profile/${id}`)}
               className="w-full bg-white text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
             >
               View Profile
@@ -68,14 +46,15 @@ function ProfileCard({ name, specialty, rating, reviews, image }: ProfileCardPro
         <div className="p-4 sm:p-5">
           <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-1">{name}</h3>
           <p className="text-sm text-gray-600 mb-3">{specialty}</p>
+          {location && <p className="text-xs text-gray-500 mb-3">{location}</p>}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
               <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-semibold text-sm text-gray-900">{rating}</span>
+              <span className="font-semibold text-sm text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
               <span className="text-xs text-gray-500">({reviews})</span>
             </div>
             <button
-              onClick={() => navigate(`/profile/1`)}
+              onClick={() => navigate(`/profile/${id}`)}
               className="text-sm text-gray-900 font-semibold hover:text-black transition-colors"
             >
               Book Now
@@ -108,7 +87,7 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
       </div>
       <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide">
         {profiles.map((profile, index) => (
-          <ProfileCard key={index} {...profile} />
+          <ProfileCard key={profile.id || index} {...profile} />
         ))}
       </div>
     </div>
@@ -117,6 +96,69 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
 
 export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
+  const [freelancers, setFreelancers] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFreelancers() {
+      setIsLoading(true);
+      setError(null);
+
+      const response = searchQuery.trim()
+        ? await DataService.searchFreelancers(searchQuery.trim())
+        : await DataService.getAllFreelancers(60);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to load freelancers.');
+        setFreelancers([]);
+      } else {
+        setFreelancers(response.data || []);
+      }
+
+      setIsLoading(false);
+    }
+
+    const timeoutId = window.setTimeout(loadFreelancers, searchQuery.trim() ? 250 : 0);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [searchQuery]);
+
+  const profiles = useMemo<ProfileCardProps[]>(() => {
+    return freelancers.map((profile) => ({
+      id: profile.user_id || profile.users?.id || profile.id,
+      name: profile.users?.full_name || profile.title || 'Creative Freelancer',
+      specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
+      rating: Number(profile.users?.rating || 0),
+      reviews: Number(profile.users?.total_reviews || 0),
+      image: profile.users?.avatar_url || fallbackProfileImage,
+      location: profile.users?.location || undefined,
+    }));
+  }, [freelancers]);
+
+  const sectionFor = (keywords: string[]) => {
+    return profiles.filter((profile) => {
+      const searchable = `${profile.specialty} ${freelancers.find((item) => (item.user_id || item.users?.id || item.id) === profile.id)?.skills?.join(' ') || ''}`.toLowerCase();
+      return keywords.some((keyword) => searchable.includes(keyword));
+    });
+  };
+
+  const makeupArtists = sectionFor(['makeup', 'beauty', 'hair', 'stylist']);
+  const photographers = sectionFor(['photo', 'camera', 'studio', 'portrait', 'editorial']);
+  const models = sectionFor(['model', 'fashion', 'runway']);
+  const uncategorizedProfiles = profiles.filter((profile) =>
+    ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
+  );
 
   return (
     <>
@@ -126,6 +168,8 @@ export function ExplorePage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Search for makeup artists, photographers, models..."
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
           />
@@ -158,19 +202,50 @@ export function ExplorePage() {
         </div>
       </div>
 
+      {error && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {isLoading && (
+        <div className="flex justify-center py-16">
+          <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+        </div>
+      )}
+
+      {!isLoading && profiles.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers found</h2>
+          <p className="text-gray-600">Available freelancer profiles from the database will appear here.</p>
+        </div>
+      )}
+
       {/* Carousel Sections */}
-      <CarouselSection
-        title="Popular Makeup Artists in Thailand"
-        profiles={makeupArtists}
-      />
-      <CarouselSection
-        title="Popular Photographers in Thailand"
-        profiles={photographers}
-      />
-      <CarouselSection
-        title="Popular Models in Thailand"
-        profiles={models}
-      />
+      {!isLoading && makeupArtists.length > 0 && (
+        <CarouselSection
+          title="Popular Makeup Artists in Thailand"
+          profiles={makeupArtists}
+        />
+      )}
+      {!isLoading && photographers.length > 0 && (
+        <CarouselSection
+          title="Popular Photographers in Thailand"
+          profiles={photographers}
+        />
+      )}
+      {!isLoading && models.length > 0 && (
+        <CarouselSection
+          title="Popular Models in Thailand"
+          profiles={models}
+        />
+      )}
+      {!isLoading && uncategorizedProfiles.length > 0 && (
+        <CarouselSection
+          title="Featured Creative Freelancers"
+          profiles={uncategorizedProfiles}
+        />
+      )}
     </>
   );
 }

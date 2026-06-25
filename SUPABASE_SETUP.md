@@ -48,6 +48,12 @@ This creates:
 - Favorites, Reviews, Notifications tables
 - RLS (Row Level Security) policies
 
+If you already ran an older version of the schema, add the profile background column with:
+```sql
+alter table public.users
+  add column if not exists cover_url text;
+```
+
 ## Step 5: Enable Email Authentication
 
 1. Go to **Authentication → Providers**
@@ -62,8 +68,34 @@ For file uploads (portfolio images, avatars):
 2. Click "New bucket"
 3. Create buckets:
    - `portfolio-images` (public)
-   - `avatars` (public)
+   - `avatars` (public, used for profile pictures and profile backgrounds)
    - `contract-files` (private)
+
+4. Add storage policies for `avatars` so authenticated users can upload and update their own profile images:
+   ```sql
+   create policy "Users can upload own avatar files"
+     on storage.objects
+     for insert
+     with check (
+       bucket_id = 'avatars'
+       and auth.role() = 'authenticated'
+       and (storage.foldername(name))[1] = auth.uid()::text
+     );
+
+   create policy "Users can update own avatar files"
+     on storage.objects
+     for update
+     using (
+       bucket_id = 'avatars'
+       and auth.role() = 'authenticated'
+       and (storage.foldername(name))[1] = auth.uid()::text
+     );
+
+   create policy "Avatar files are publicly viewable"
+     on storage.objects
+     for select
+     using (bucket_id = 'avatars');
+   ```
 
 ## Step 7: Install Dependencies
 

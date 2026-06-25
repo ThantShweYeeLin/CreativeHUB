@@ -41,7 +41,7 @@ export class DataService {
   static async getAllFreelancers(limit = 20, offset = 0) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating)')
+      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)')
       .eq('is_available', true)
       .limit(limit)
       .range(offset, offset + limit - 1);
@@ -51,7 +51,7 @@ export class DataService {
   static async searchFreelancers(query: string, skills?: string[]) {
     let q = supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating)');
+      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)');
 
     if (query) {
       q = q.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
@@ -82,6 +82,35 @@ export class DataService {
       .select()
       .single();
     return { data, error };
+  }
+
+  static async updateUser(userId: string, updates: Partial<User>) {
+    const { data, error } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', userId)
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async uploadUserProfileImage(userId: string, file: File, imageType: 'avatar' | 'cover') {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const filePath = `${userId}/${imageType}-${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true });
+
+    if (error) {
+      return { publicUrl: null, error };
+    }
+
+    const { data } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
   }
 
   // PORTFOLIOS
