@@ -1,5 +1,37 @@
+# Dependencies
 node_modules/
-.vite/
+
+# Build and tool output
 dist/
+.vite/
+coverage/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+!server/.env.example
+
+# Package-manager lockfiles
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+bun.lockb
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Archives
 *.tar.gz
 *.zip

@@ -132,6 +132,21 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     setIsSaving(false);
   };
 
+  const getUploadErrorMessage = (uploadError: any) => {
+    const message = uploadError?.message || '';
+    const lowerMessage = message.toLowerCase();
+
+    if (lowerMessage.includes('bucket') && lowerMessage.includes('not found')) {
+      return 'Profile uploads need a public Supabase Storage bucket named "avatars". Create it or run the storage SQL in SUPABASE_SETUP.md.';
+    }
+
+    if (lowerMessage.includes('row-level security') || lowerMessage.includes('policy')) {
+      return 'Supabase blocked this upload. Add the "avatars" storage policies from SUPABASE_SETUP.md, then try again.';
+    }
+
+    return message || 'Unable to upload image.';
+  };
+
   const handleImageUpload = async (
     event: ChangeEvent<HTMLInputElement>,
     imageType: 'avatar' | 'cover'
@@ -154,7 +169,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     const uploadResponse = await DataService.uploadUserProfileImage(user.id, file, imageType);
 
     if (uploadResponse.error || !uploadResponse.publicUrl) {
-      setError((uploadResponse.error as any)?.message || 'Unable to upload image.');
+      setError(getUploadErrorMessage(uploadResponse.error));
       setUploadingImageType(null);
       return;
     }

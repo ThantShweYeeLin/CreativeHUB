@@ -60,19 +60,25 @@ alter table public.users
 2. Make sure "Email" is enabled (it should be by default)
 3. Go to **Email Templates** to customize if needed
 
-## Step 6: Configure Storage Buckets (Optional)
+## Step 6: Configure Storage Buckets
 
 For file uploads (portfolio images, avatars):
 
-1. Go to **Storage** in the Supabase console
-2. Click "New bucket"
-3. Create buckets:
-   - `portfolio-images` (public)
-   - `avatars` (public, used for profile pictures and profile backgrounds)
-   - `contract-files` (private)
-
-4. Add storage policies for `avatars` so authenticated users can upload and update their own profile images:
+1. Run this SQL in Supabase SQL Editor to create the `avatars` bucket and policies used by profile pictures and profile backgrounds:
    ```sql
+   insert into storage.buckets (id, name, public)
+   values ('avatars', 'avatars', true)
+   on conflict (id) do update set public = excluded.public;
+
+   drop policy if exists "Avatar files are publicly viewable" on storage.objects;
+   drop policy if exists "Users can upload own avatar files" on storage.objects;
+   drop policy if exists "Users can update own avatar files" on storage.objects;
+
+   create policy "Avatar files are publicly viewable"
+     on storage.objects
+     for select
+     using (bucket_id = 'avatars');
+
    create policy "Users can upload own avatar files"
      on storage.objects
      for insert
@@ -90,12 +96,11 @@ For file uploads (portfolio images, avatars):
        and auth.role() = 'authenticated'
        and (storage.foldername(name))[1] = auth.uid()::text
      );
-
-   create policy "Avatar files are publicly viewable"
-     on storage.objects
-     for select
-     using (bucket_id = 'avatars');
    ```
+
+2. Optional future buckets:
+   - `portfolio-images` (public)
+   - `contract-files` (private)
 
 ## Step 7: Install Dependencies
 

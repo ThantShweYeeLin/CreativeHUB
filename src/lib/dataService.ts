@@ -100,7 +100,10 @@ export class DataService {
 
     const { error } = await supabase.storage
       .from('avatars')
-      .upload(filePath, file, { upsert: true });
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
 
     if (error) {
       return { publicUrl: null, error };
