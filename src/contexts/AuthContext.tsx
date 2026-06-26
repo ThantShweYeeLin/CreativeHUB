@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authService, type AuthUser } from '../lib/authService';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -17,6 +18,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     // Check current user on mount
     authService.getCurrentUser().then(({ user: currentUser }) => {
       setUser(currentUser);
@@ -34,6 +40,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
     const { user: newUser, error } = await authService.signUp({
       email,
       password,
@@ -49,6 +59,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
     const { user: signedInUser, error } = await authService.signIn({
       email,
       password,
@@ -62,6 +76,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!isSupabaseConfigured) {
+      setUser(null);
+      return;
+    }
+
     const { error } = await authService.signOut();
     if (error) {
       throw error;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
+import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
 
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
@@ -100,6 +101,8 @@ export function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAIMatcher, setShowAIMatcher] = useState(false);
+  const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherFreelancer[] | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -188,7 +191,8 @@ export function ExplorePage() {
             </div>
           </button>
           <button
-            onClick={() => {}}
+            type="button"
+            onClick={() => setShowAIMatcher(true)}
             className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -201,6 +205,13 @@ export function ExplorePage() {
           </button>
         </div>
       </div>
+
+      <AIImageMatcher
+        open={showAIMatcher}
+        freelancers={freelancers}
+        onClose={() => setShowAIMatcher(false)}
+        onResults={setAIMatcherResults}
+      />
 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -219,6 +230,16 @@ export function ExplorePage() {
           <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers found</h2>
           <p className="text-gray-600">Available freelancer profiles from the database will appear here.</p>
         </div>
+      )}
+
+      {!isLoading && aiMatcherResults && (
+        <AIImageMatcherResults
+          results={aiMatcherResults}
+          onReset={() => {
+            setAIMatcherResults(null);
+            setShowAIMatcher(true);
+          }}
+        />
       )}
 
       {/* Carousel Sections */}

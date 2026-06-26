@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
@@ -9,10 +10,6 @@ import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 import { FreelancerProfile } from './components/FreelancerProfile';
 import { MapView } from './components/MapView';
 import { PortfoliosView } from './components/PortfoliosView';
-import { SearchResults } from './components/SearchResults';
-import { AIImageMatcher } from './components/AIImageMatcher';
-import { UserMenu } from './components/UserMenu';
-import { NotificationsPanel } from './components/NotificationsPanel';
 import { RequestsPage } from './components/RequestsPage';
 import { ClientProfilePage } from './components/ClientProfilePage';
 import { BecomeFreelancerPage } from './components/BecomeFreelancerPage';
@@ -37,11 +34,41 @@ function LoadingScreen() {
   );
 }
 
+function SupabaseSetupScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-bold text-white">
+          CH
+        </div>
+        <h1 className="mb-2 text-2xl font-bold text-gray-900">Supabase setup needed</h1>
+        <p className="mb-6 text-sm leading-6 text-gray-600">
+          CreativeHUB needs your Supabase project URL and anon key before it can show the app.
+        </p>
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-3 text-sm font-semibold text-gray-900">Create a file named .env in the project root:</p>
+          <pre className="overflow-x-auto rounded-xl bg-black p-4 text-xs text-white">
+{`VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
+          </pre>
+        </div>
+        <p className="mt-5 text-sm text-gray-600">
+          After saving the file, restart the dev server and reload the page.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const { loading, isAuthenticated } = useAuth();
 
   if (loading) {
     return <LoadingScreen />;
+  }
+
+  if (!isSupabaseConfigured) {
+    return <SupabaseSetupScreen />;
   }
 
   return (
