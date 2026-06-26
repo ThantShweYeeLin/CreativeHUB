@@ -1,62 +1,44 @@
 import { Sparkles, MapPin as MapPinIcon, Layers, Navigation, Users, Camera, Palette, User, X, Filter } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router';
+import { DataService } from '../../lib/dataService';
+/*import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelancerMapper';
+*/
+type PositionedFreelancer = FreelancerMapProfile & {
+  position: { x: number; y: number };
+};
 
-const freelancers = [
-  {
-    id: 1,
-    name: 'Darling Arias',
-    specialty: 'Fashion Photography',
-    image: 'https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200',
-    position: { x: 65, y: 45 },
-    location: 'Bang Na',
-    rating: 5.0,
-    projects: 127
-  },
-  {
-    id: 2,
-    name: 'Simran Sood',
-    specialty: 'Makeup Artist',
-    image: 'https://images.unsplash.com/photo-1637862666931-be59da5dd8ca?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200',
-    position: { x: 25, y: 30 },
-    location: 'Sukhumvit',
-    rating: 4.9,
-    projects: 89
-  },
-  {
-    id: 3,
-    name: 'Marcus Chen',
-    specialty: 'Photographer',
-    image: 'https://images.unsplash.com/photo-1706661912765-7d0f68289a0f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200',
-    position: { x: 45, y: 60 },
-    location: 'Silom',
-    rating: 4.8,
-    projects: 156
-  },
-  {
-    id: 4,
-    name: 'Laura Chen',
-    specialty: 'Model',
-    image: 'https://images.unsplash.com/photo-1596704182101-542876d47a68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200',
-    position: { x: 80, y: 25 },
-    location: 'Thonglor',
-    rating: 4.9,
-    projects: 201
-  },
-  {
-    id: 5,
-    name: 'James Park',
-    specialty: 'Photographer',
-    image: 'https://images.unsplash.com/photo-1643968612613-fd411aecd1fd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=200',
-    position: { x: 35, y: 75 },
-    location: 'Sathorn',
-    rating: 4.7,
-    projects: 98
-  },
-];
+function getFreelancerPositions(freelancers: FreelancerMapProfile[]): PositionedFreelancer[] {
+  const freelancersWithCoordinates = freelancers.filter(
+    (freelancer) => freelancer.latitude !== null && freelancer.longitude !== null
+  );
+  const latitudes = freelancersWithCoordinates.map((freelancer) => freelancer.latitude as number);
+  const longitudes = freelancersWithCoordinates.map((freelancer) => freelancer.longitude as number);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+  const latRange = maxLat - minLat || 1;
+  const lngRange = maxLng - minLng || 1;
+
+  return freelancers.map((freelancer, index) => {
+    const hasCoordinates = freelancer.latitude !== null && freelancer.longitude !== null;
+    const fallbackX = 20 + ((index * 17) % 60);
+    const fallbackY = 25 + ((index * 23) % 50);
+
+    return {
+      ...freelancer,
+      position: {
+        x: hasCoordinates ? 10 + (((freelancer.longitude as number) - minLng) / lngRange) * 80 : fallbackX,
+        y: hasCoordinates ? 90 - (((freelancer.latitude as number) - minLat) / latRange) * 80 : fallbackY,
+      },
+    };
+  });
+}
 
 interface MapMarkerProps {
-  freelancer: typeof freelancers[0];
+  freelancer: PositionedFreelancer;
   isSelected: boolean;
   onClick: () => void;
 }
@@ -84,8 +66,8 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
       <div className={`relative transition-all duration-300 ${isSelected ? 'scale-125' : isHovered ? 'scale-110' : ''}`}>
         <div className="w-12 h-12 md:w-16 md:h-16 rounded-full overflow-hidden ring-2 md:ring-4 ring-white shadow-2xl bg-white">
           <ImageWithFallback
-            src={freelancer.image}
-            alt={freelancer.name}
+            src={freelancer.profileImage}
+            alt={freelancer.fullName}
             className="w-full h-full object-cover"
           />
         </div>
@@ -95,7 +77,7 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
             ? 'bg-gradient-to-r from-gray-900 to-black text-white'
             : 'bg-white text-gray-700 shadow-md'
         }`}>
-          {freelancer.specialty.split(' ')[0]}
+          {freelancer.profession.split(' ')[0]}
         </div>
       </div>
 
@@ -103,14 +85,19 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-6 w-72 pointer-events-none animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl overflow-visible border-2 border-gray-100">
             <div className="h-20 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 relative rounded-t-2xl">
+              <ImageWithFallback
+                src={freelancer.coverImage}
+                alt={`${freelancer.fullName} cover`}
+                className="absolute inset-0 w-full h-full object-cover rounded-t-2xl"
+              />
               <div className="absolute inset-0 bg-black/20 rounded-t-2xl" />
             </div>
             <div className="p-5 pt-0 relative">
               <div className="absolute -top-10 left-5">
                 <div className="w-20 h-20 rounded-xl overflow-hidden ring-4 ring-white shadow-xl bg-white">
                   <ImageWithFallback
-                    src={freelancer.image}
-                    alt={freelancer.name}
+                    src={freelancer.profileImage}
+                    alt={freelancer.fullName}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -118,8 +105,8 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
               <div className="pt-12">
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <h3 className="font-bold text-gray-900 text-lg mb-1">{freelancer.name}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{freelancer.specialty}</p>
+                    <h3 className="font-bold text-gray-900 text-lg mb-1">{freelancer.fullName}</h3>
+                    <p className="text-sm text-gray-600 mb-2">{freelancer.profession}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-600 mb-3">
@@ -133,7 +120,7 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
                   </div>
                   <div className="flex items-center gap-1 text-gray-600">
                     <Layers className="w-4 h-4" />
-                    <span>{freelancer.projects} projects</span>
+                    <span>{freelancer.totalProjects} projects</span>
                   </div>
                 </div>
               </div>
@@ -146,15 +133,19 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
 }
 
 interface MapViewProps {
-  onViewProfile: () => void;
+  onViewProfile?: (freelancerId: string) => void;
 }
 
 export function MapView({ onViewProfile }: MapViewProps) {
-  const [selectedMarkerId, setSelectedMarkerId] = useState<number | null>(null);
+  const navigate = useNavigate();
+  const [freelancers, setFreelancers] = useState<FreelancerMapProfile[]>([]);
+  const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState('all');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filterPosition, setFilterPosition] = useState({ x: 20, y: 200 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; elemX: number; elemY: number } | null>(null);
 
   const categoryIcons = {
@@ -164,10 +155,78 @@ export function MapView({ onViewProfile }: MapViewProps) {
     models: User,
   };
 
-  const filteredFreelancers = freelancers.filter((f) => {
+  const positionedFreelancers = useMemo(() => getFreelancerPositions(freelancers), [freelancers]);
+  const filteredFreelancers = positionedFreelancers.filter((f) => {
     if (filterCategory === 'all') return true;
-    return f.specialty.toLowerCase().includes(filterCategory);
+    const profession = f.profession.toLowerCase();
+    if (filterCategory === 'photographers') return profession.includes('photographer');
+    if (filterCategory === 'makeup artists') return profession.includes('makeup');
+    if (filterCategory === 'models') return profession.includes('model');
+    return profession.includes(filterCategory);
   });
+  const selectedFreelancer = positionedFreelancers.find((freelancer) => freelancer.id === selectedMarkerId);
+
+  const getCategoryCount = (category: string) => {
+    if (category === 'all') return positionedFreelancers.length;
+
+    return positionedFreelancers.filter((freelancer) => {
+      const profession = freelancer.profession.toLowerCase();
+      if (category === 'photographers') return profession.includes('photographer');
+      if (category === 'makeup artists') return profession.includes('makeup');
+      if (category === 'models') return profession.includes('model');
+      return profession.includes(category);
+    }).length;
+  };
+
+  const handleViewProfile = (freelancerId: string) => {
+    if (onViewProfile) {
+      onViewProfile(freelancerId);
+      return;
+    }
+
+    navigate(`/profile/${freelancerId}`);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFreelancers() {
+      setIsLoading(true);
+      setErrorMessage(null);
+
+      const { data, error } = await DataService.getAllFreelancers();
+
+      if (!isMounted) return;
+
+      if (error) {
+        setErrorMessage(error.message || 'Failed to load freelancers.');
+        setFreelancers([]);
+        setSelectedMarkerId(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const normalizedFreelancers = (data ?? [])
+        .map(normalizeFreelancer)
+        .filter((freelancer) => freelancer.id && freelancer.latitude !== null && freelancer.longitude !== null);
+
+      setFreelancers(normalizedFreelancers);
+      setSelectedMarkerId((currentId) => {
+        if (currentId && normalizedFreelancers.some((freelancer) => freelancer.id === currentId)) {
+          return currentId;
+        }
+
+        return normalizedFreelancers[0]?.id ?? null;
+      });
+      setIsLoading(false);
+    }
+
+    loadFreelancers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -276,6 +335,29 @@ export function MapView({ onViewProfile }: MapViewProps) {
             />
           ))}
         </div>
+
+        {(isLoading || errorMessage || (!isLoading && !errorMessage && filteredFreelancers.length === 0)) && (
+          <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-20 flex justify-center pointer-events-none">
+            <div className="bg-white rounded-xl md:rounded-2xl shadow-xl border border-gray-200 px-5 py-4 text-center max-w-sm">
+              {isLoading ? (
+                <>
+                  <div className="mx-auto mb-3 h-8 w-8 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+                  <p className="font-semibold text-gray-900">Loading freelancers...</p>
+                </>
+              ) : errorMessage ? (
+                <>
+                  <p className="font-semibold text-gray-900">Unable to load freelancers</p>
+                  <p className="text-sm text-gray-600 mt-1">{errorMessage}</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-gray-900">No freelancers found</p>
+                  <p className="text-sm text-gray-600 mt-1">Try another category or add freelancer coordinates in the database.</p>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Draggable Filter Button */}
@@ -355,9 +437,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               <div className="p-4 md:p-6 space-y-2 md:space-y-3 overflow-y-auto flex-1">
                 {Object.entries(categoryIcons).map(([category, Icon]) => {
                   const isActive = filterCategory === category;
-                  const count = category === 'all'
-                    ? freelancers.length
-                    : freelancers.filter(f => f.specialty.toLowerCase().includes(category)).length;
+                  const count = getCategoryCount(category);
 
                   return (
                     <button
@@ -406,15 +486,15 @@ export function MapView({ onViewProfile }: MapViewProps) {
       )}
 
       {/* Selected Freelancer Action Card */}
-      {selectedMarkerId && (
+      {selectedFreelancer && (
         <div className="absolute bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 z-30 animate-fadeIn w-[calc(100%-2rem)] md:w-auto">
           <div className="bg-white rounded-xl md:rounded-2xl shadow-2xl p-4 md:p-5 border-2 border-gray-500">
             <div className="mb-2 md:mb-3">
               <p className="text-xs text-gray-500 font-medium mb-1">Selected Freelancer</p>
-              <p className="font-bold text-gray-900 text-base md:text-lg">{freelancers.find(f => f.id === selectedMarkerId)?.name}</p>
+              <p className="font-bold text-gray-900 text-base md:text-lg">{selectedFreelancer.fullName}</p>
             </div>
             <button
-              onClick={onViewProfile}
+              onClick={() => handleViewProfile(selectedFreelancer.id)}
               className="w-full flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg md:rounded-xl text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
             >
               <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
@@ -454,22 +534,22 @@ export function MapView({ onViewProfile }: MapViewProps) {
         {filteredFreelancers.map((freelancer) => (
           <div
             key={freelancer.id}
-            onClick={onViewProfile}
+            onClick={() => handleViewProfile(freelancer.id)}
             className="group cursor-pointer bg-gradient-to-br from-gray-50 to-white rounded-xl md:rounded-2xl p-4 md:p-5 border-2 border-gray-200 hover:border-gray-300 transition-all hover:shadow-xl"
           >
             <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">
               <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden ring-2 ring-white shadow-lg flex-shrink-0">
                 <ImageWithFallback
-                  src={freelancer.image}
-                  alt={freelancer.name}
+                  src={freelancer.profileImage}
+                  alt={freelancer.fullName}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-bold text-gray-900 text-base md:text-lg mb-1 truncate group-hover:text-gray-900 transition-colors">
-                  {freelancer.name}
+                  {freelancer.fullName}
                 </h3>
-                <p className="text-xs md:text-sm text-gray-600 mb-2 truncate">{freelancer.specialty}</p>
+                <p className="text-xs md:text-sm text-gray-600 mb-2 truncate">{freelancer.profession}</p>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
                   <MapPinIcon className="w-3 h-3 md:w-3.5 md:h-3.5" />
                   <span>{freelancer.location}</span>
@@ -485,7 +565,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                 </div>
                 <div className="flex items-center gap-1 text-gray-600">
                   <Layers className="w-3.5 h-3.5" />
-                  <span className="text-sm">{freelancer.projects}</span>
+                  <span className="text-sm">{freelancer.totalProjects}</span>
                 </div>
               </div>
               <button className="px-4 py-2 bg-gradient-to-r from-gray-900 to-black text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all">

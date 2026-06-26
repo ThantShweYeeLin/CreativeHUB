@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:test-accounts": "node --env-file=.env.local scripts/seed-test-accounts.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

@@ -1,80 +1,84 @@
-import { ChevronLeft, Heart, Star, MapPin } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, Heart, MapPin, Star } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { DataService } from '../../lib/dataService';
 
 interface FavoritesPageProps {
   onBack: () => void;
-  onViewProfile: () => void;
+  onViewProfile: (freelancerId: string) => void;
 }
 
-const favoriteFreelancers = [
-  {
-    id: 1,
-    name: 'Simran Sood',
-    specialty: 'Creative Artistry',
-    image: 'https://images.unsplash.com/photo-1637862666931-be59da5dd8ca?w=400',
-    rating: 5.0,
-    reviews: 312,
-    location: 'Sukhumvit',
-    projects: 89
-  },
-  {
-    id: 2,
-    name: 'Deny Napitupulu',
-    specialty: 'Landscape & Nature',
-    image: 'https://images.unsplash.com/photo-1706661912295-bd1dc10ffe7f?w=400',
-    rating: 4.9,
-    reviews: 234,
-    location: 'Bang Na',
-    projects: 127
-  },
-  {
-    id: 3,
-    name: 'Laura Chouette',
-    specialty: 'Fashion & Editorial',
-    image: 'https://images.unsplash.com/photo-1596704182101-542876d47a68?w=400',
-    rating: 5.0,
-    reviews: 243,
-    location: 'Thonglor',
-    projects: 156
-  },
-  {
-    id: 4,
-    name: 'Daria Magazzu',
-    specialty: 'High Fashion',
-    image: 'https://images.unsplash.com/photo-1559878541-926091e4c31b?w=400',
-    rating: 5.0,
-    reviews: 412,
-    location: 'Silom',
-    projects: 201
-  },
-  {
-    id: 5,
-    name: 'Marcus Chen',
-    specialty: 'Action Sports',
-    image: 'https://images.unsplash.com/photo-1706661912765-7d0f68289a0f?w=400',
-    rating: 5.0,
-    reviews: 187,
-    location: 'Sathorn',
-    projects: 145
-  },
-  {
-    id: 6,
-    name: 'Darling Arias',
-    specialty: 'Fashion Editorial',
-    image: 'https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?w=400',
-    rating: 5.0,
-    reviews: 342,
-    location: 'Asoke',
-    projects: 198
-  }
-];
+const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
 export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
-  const [favorites, setFavorites] = useState(favoriteFreelancers);
+  const { user } = useAuth();
+  const [favorites, setFavorites] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const removeFavorite = (id: number) => {
-    setFavorites(favorites.filter(f => f.id !== id));
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFavorites() {
+      if (!user?.id) {
+        if (isMounted) {
+          setFavorites([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      const response = await DataService.getUserFavorites(user.id);
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to load favorites.');
+        setFavorites([]);
+      } else {
+        setFavorites(response.data || []);
+      }
+
+      setIsLoading(false);
+    }
+
+    loadFavorites();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const cards = useMemo(() => {
+    return favorites.map((favorite) => ({
+      id: favorite.freelancer?.user_id,
+      name: favorite.freelancer?.users?.full_name || 'Creative Freelancer',
+      specialty: favorite.freelancer?.title || favorite.freelancer?.skills?.[0] || 'Freelancer',
+      image: favorite.freelancer?.users?.avatar_url || fallbackProfileImage,
+      rating: Number(favorite.freelancer?.users?.rating || 0),
+      reviews: Number(favorite.freelancer?.users?.total_reviews || 0),
+      location: favorite.freelancer?.users?.location || 'Location not added',
+      projects: Number(favorite.freelancer?.portfolio_count || 0),
+    })).filter((item) => !!item.id);
+  }, [favorites]);
+
+  const removeFavorite = async (freelancerId: string) => {
+    if (!user?.id) {
+      return;
+    }
+
+    const { error: removeError } = await DataService.removeFavorite(user.id, freelancerId);
+    if (removeError) {
+      setError((removeError as any).message || 'Unable to remove favorite.');
+      return;
+    }
+
+    setFavorites((current) => current.filter((favorite) => favorite.freelancer?.user_id !== freelancerId));
   };
 
   return (
@@ -95,16 +99,28 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900">My Favorites</h1>
-              <p className="text-sm md:text-base text-gray-600">{favorites.length} favorite freelancers</p>
+              <p className="text-sm md:text-base text-gray-600">{cards.length} favorite freelancers</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-[1200px] mx-auto px-4 md:px-8">
-        {favorites.length > 0 ? (
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="flex justify-center py-16">
+            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          </div>
+        )}
+
+        {!isLoading && cards.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {favorites.map((freelancer) => (
+            {cards.map((freelancer) => (
               <div
                 key={freelancer.id}
                 className="group relative bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-2xl transition-all duration-300"
@@ -129,7 +145,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                   {/* Hover Actions */}
                   <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                     <button
-                      onClick={onViewProfile}
+                      onClick={() => onViewProfile(freelancer.id)}
                       className="w-full bg-white text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
                     >
                       View Profile
@@ -149,15 +165,15 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                     </div>
                     <div className="flex items-center gap-1">
                       <Star className="w-3 h-3 md:w-4 md:h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold text-gray-900">{freelancer.rating}</span>
+                      <span className="font-semibold text-gray-900">{freelancer.rating > 0 ? freelancer.rating.toFixed(1) : 'New'}</span>
                       <span className="text-gray-500">({freelancer.reviews})</span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-3 md:pt-4 border-t border-gray-200">
-                    <span className="text-xs md:text-sm text-gray-600">{freelancer.projects} projects</span>
+                    <span className="text-xs md:text-sm text-gray-600">{freelancer.projects} portfolio items</span>
                     <button
-                      onClick={onViewProfile}
+                      onClick={() => onViewProfile(freelancer.id)}
                       className="text-xs md:text-sm text-gray-900 font-semibold hover:text-black transition-colors"
                     >
                       Book Now →
@@ -168,13 +184,13 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-16 text-center">
+          !isLoading && <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-16 text-center">
             <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
               <Heart className="w-12 h-12 text-gray-700" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-3">No Favorites Yet</h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
-              Start exploring and add freelancers to your favorites to easily find them later!
+              Start exploring and add freelancers to your favorites to easily find them later.
             </p>
             <button
               onClick={onBack}

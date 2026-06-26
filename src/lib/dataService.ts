@@ -193,7 +193,7 @@ export class DataService {
   static async getBooking(bookingId: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*')
+      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, rating, total_reviews, location), client:client_id(id, email, full_name, avatar_url, rating, total_reviews, location)')
       .eq('id', bookingId)
       .single();
     return { data, error };
@@ -301,7 +301,7 @@ export class DataService {
   static async getUserFavorites(userId: string) {
     const { data, error } = await supabase
       .from('favorites')
-      .select('*, freelancer:freelancer_id(*, users:user_id(id, email, full_name, avatar_url, rating))')
+      .select('*, freelancer:freelancer_id(*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location))')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
     return { data, error };

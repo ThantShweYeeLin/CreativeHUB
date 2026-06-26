@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
@@ -39,6 +39,7 @@ function LoadingScreen() {
 
 export default function App() {
   const { loading, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   if (loading) {
     return <LoadingScreen />;
@@ -105,7 +106,7 @@ export default function App() {
             path="/profile/:id"
             element={
               <ProtectedRoute>
-                <FreelancerProfile onBack={() => {}} requestStatus={null} onOpenChat={() => {}} />
+                <FreelancerProfile onBack={() => navigate(-1)} requestStatus={null} onOpenChat={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -113,7 +114,7 @@ export default function App() {
             path="/client-profile"
             element={
               <ProtectedRoute>
-                <ClientProfilePage onBack={() => {}} />
+                <ClientProfilePage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -123,7 +124,7 @@ export default function App() {
             path="/requests"
             element={
               <ProtectedRoute>
-                <RequestsPage onBack={() => {}} onViewProfile={() => {}} onOpenMessages={() => {}} />
+                <RequestsPage onBack={() => navigate(-1)} onViewProfile={() => navigate('/freelancers')} onOpenMessages={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -131,7 +132,7 @@ export default function App() {
             path="/my-bookings"
             element={
               <ProtectedRoute>
-                <MyBookingsPage onBack={() => {}} onSelectBooking={() => {}} />
+                <MyBookingsPage onBack={() => navigate('/explore')} onSelectBooking={(id) => navigate(`/booking/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -139,7 +140,7 @@ export default function App() {
             path="/booking/:id"
             element={
               <ProtectedRoute>
-                <BookingTrackingPage onBack={() => {}} />
+                <BookingTrackingPage onBack={() => navigate('/my-bookings')} />
               </ProtectedRoute>
             }
           />
@@ -149,7 +150,7 @@ export default function App() {
             path="/messages"
             element={
               <ProtectedRoute>
-                <MessagesPage onBack={() => {}} />
+                <MessagesPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -157,7 +158,7 @@ export default function App() {
             path="/favorites"
             element={
               <ProtectedRoute>
-                <FavoritesPage onBack={() => {}} onViewProfile={() => {}} />
+                <FavoritesPage onBack={() => navigate('/explore')} onViewProfile={(id) => navigate(`/profile/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -165,7 +166,7 @@ export default function App() {
             path="/freelancer-dashboard"
             element={
               <ProtectedRoute>
-                <FreelancerDashboard onBack={() => {}} />
+                <FreelancerDashboard onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -173,7 +174,7 @@ export default function App() {
             path="/become-freelancer"
             element={
               <ProtectedRoute>
-                <BecomeFreelancerPage onBack={() => {}} />
+                <BecomeFreelancerPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -181,7 +182,7 @@ export default function App() {
             path="/premium"
             element={
               <ProtectedRoute>
-                <PremiumSubscriptionPage onBack={() => {}} />
+                <PremiumSubscriptionPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />

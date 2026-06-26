@@ -120,6 +120,39 @@ Test by:
 2. Try signing up / logging in
 3. Create a freelancer profile
 
+## Optional: Seed Test Accounts
+
+If you want ready-made users for login, messaging, search, and booking tests:
+
+1. In **Settings -> API**, copy your **service_role** key.
+2. Add it to `.env.local` without the `VITE_` prefix:
+  ```
+  SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+  ```
+3. Run:
+  ```bash
+  pnpm seed:test-accounts
+  ```
+
+The script creates four reusable accounts and keeps them in sync if you rerun it:
+
+- `mia.client@creativehub.test` - client
+- `noah.client@creativehub.test` - client
+- `ava.freelancer@creativehub.test` - freelancer
+- `liam.freelancer@creativehub.test` - freelancer
+
+Default password for all seeded accounts:
+
+```text
+CreativeHub123!
+```
+
+You can override that password for a run with:
+
+```bash
+TEST_ACCOUNT_PASSWORD='YourOwnTestPassword123!' pnpm seed:test-accounts
+```
+
 ## Database Tables Overview
 
 | Table | Purpose |

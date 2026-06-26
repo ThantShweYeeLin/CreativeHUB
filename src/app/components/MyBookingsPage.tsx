@@ -1,75 +1,99 @@
-import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin, DollarSign } from 'lucide-react';
+import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { DataService } from '../../lib/dataService';
 
 interface MyBookingsPageProps {
   onBack: () => void;
-  onSelectBooking: (bookingId: number) => void;
+  onSelectBooking: (bookingId: string) => void;
 }
 
-const bookings = [
-  {
-    id: 1,
-    bookingId: '#BK20260514001',
-    freelancer: {
-      name: 'Darling Arias',
-      specialty: 'Fashion Editorial Photographer',
-      image: 'https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-      rating: 5.0
-    },
-    service: {
-      title: 'Fashion Editorial Photoshoot',
-      date: '2026-05-20',
-      time: '10:00 AM - 2:00 PM',
-      location: 'Central World, Bangkok'
-    },
-    status: 'In Progress',
-    statusColor: 'bg-blue-100 text-blue-700 border-blue-200',
-    totalAmount: 13000,
-    deposit: 3000
-  },
-  {
-    id: 2,
-    bookingId: '#BK20260510002',
-    freelancer: {
-      name: 'Laura Chouette',
-      specialty: 'Fashion & Editorial Makeup',
-      image: 'https://images.unsplash.com/photo-1596704182101-542876d47a68?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-      rating: 5.0
-    },
-    service: {
-      title: 'Bridal Makeup Session',
-      date: '2026-05-25',
-      time: '9:00 AM - 12:00 PM',
-      location: 'Sukhumvit, Bangkok'
-    },
-    status: 'Confirmed',
-    statusColor: 'bg-green-100 text-green-700 border-green-200',
-    totalAmount: 8500,
-    deposit: 2500
-  },
-  {
-    id: 3,
-    bookingId: '#BK20260505003',
-    freelancer: {
-      name: 'Marcus Chen',
-      specialty: 'Action Sports Photography',
-      image: 'https://images.unsplash.com/photo-1706661912765-7d0f68289a0f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-      rating: 5.0
-    },
-    service: {
-      title: 'Outdoor Sports Photoshoot',
-      date: '2026-05-15',
-      time: '2:00 PM - 5:00 PM',
-      location: 'Lumpini Park, Bangkok'
-    },
-    status: 'Completed',
-    statusColor: 'bg-gray-100 text-gray-700 border-gray-200',
-    totalAmount: 12000,
-    deposit: 3500
+const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+
+function formatStatus(status: string) {
+  switch (status) {
+    case 'in_progress':
+      return { label: 'In Progress', color: 'bg-blue-100 text-blue-700 border-blue-200' };
+    case 'confirmed':
+      return { label: 'Confirmed', color: 'bg-green-100 text-green-700 border-green-200' };
+    case 'completed':
+      return { label: 'Completed', color: 'bg-gray-100 text-gray-700 border-gray-200' };
+    case 'cancelled':
+      return { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200' };
+    default:
+      return { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200' };
   }
-];
+}
 
 export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps) {
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBookings() {
+      if (!user) {
+        if (isMounted) {
+          setBookings([]);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      const response = user.role === 'freelancer'
+        ? await DataService.getFreelancerBookings(user.id)
+        : await DataService.getClientBookings(user.id);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to load bookings.');
+        setBookings([]);
+      } else {
+        setBookings(response.data || []);
+      }
+
+      setIsLoading(false);
+    }
+
+    loadBookings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const normalizedBookings = useMemo(() => {
+    return bookings.map((booking) => {
+      const counterparty = user?.role === 'freelancer' ? booking.client : booking.freelancer;
+      const status = formatStatus(booking.status);
+
+      return {
+        id: booking.id,
+        bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+        name: counterparty?.full_name || 'CreativeHUB User',
+        specialty: booking.project_name,
+        image: counterparty?.avatar_url || fallbackProfileImage,
+        date: booking.start_date || 'Schedule pending',
+        endDate: booking.end_date || null,
+        location: counterparty?.location || 'Location to be confirmed',
+        statusLabel: status.label,
+        statusColor: status.color,
+        totalAmount: Number(booking.budget || 0),
+        deposit: Math.round(Number(booking.budget || 0) * 0.3),
+      };
+    });
+  }, [bookings, user?.role]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
       {/* Header */}
@@ -83,14 +107,27 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             Back
           </button>
           <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
-          <p className="text-sm text-gray-600">{bookings.length} active bookings</p>
+          <p className="text-sm text-gray-600">{normalizedBookings.length} bookings</p>
         </div>
       </div>
 
       <div className="max-w-[600px] mx-auto px-4 py-6">
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          </div>
+        )}
+
         {/* Bookings List */}
+        {!isLoading && normalizedBookings.length > 0 && (
         <div className="space-y-4">
-          {bookings.map((booking) => (
+          {normalizedBookings.map((booking) => (
             <button
               key={booking.id}
               onClick={() => onSelectBooking(booking.id)}
@@ -101,14 +138,14 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
                 <div className="flex items-center gap-3">
                   <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-gray-200 flex-shrink-0">
                     <ImageWithFallback
-                      src={booking.freelancer.image}
-                      alt={booking.freelancer.name}
+                      src={booking.image}
+                      alt={booking.name}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div>
-                    <h2 className="font-bold text-gray-900">{booking.freelancer.name}</h2>
-                    <p className="text-sm text-gray-600">{booking.freelancer.specialty}</p>
+                    <h2 className="font-bold text-gray-900">{booking.name}</h2>
+                    <p className="text-sm text-gray-600">{booking.specialty}</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -116,15 +153,15 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
 
               {/* Service Details */}
               <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                <h3 className="font-bold text-gray-900 mb-2 text-sm">{booking.service.title}</h3>
+                <h3 className="font-bold text-gray-900 mb-2 text-sm">{booking.specialty}</h3>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <Calendar className="w-3 h-3" />
-                    <span>{booking.service.date} • {booking.service.time}</span>
+                    <span>{booking.date}{booking.endDate ? ` to ${booking.endDate}` : ''}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-gray-600">
                     <MapPin className="w-3 h-3" />
-                    <span>{booking.service.location}</span>
+                    <span>{booking.location}</span>
                   </div>
                 </div>
               </div>
@@ -133,7 +170,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`px-3 py-1 rounded-full text-xs font-bold border-2 ${booking.statusColor}`}>
-                    {booking.status}
+                    {booking.statusLabel}
                   </div>
                   <span className="text-xs text-gray-500">{booking.bookingId}</span>
                 </div>
@@ -151,9 +188,10 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             </button>
           ))}
         </div>
+        )}
 
         {/* Empty State - if no bookings */}
-        {bookings.length === 0 && (
+        {!isLoading && normalizedBookings.length === 0 && (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-12 text-center">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Clock className="w-10 h-10 text-gray-400" />

@@ -1,6 +1,8 @@
 import { ChevronLeft, Clock, CheckCircle, FileText, Upload, AlertCircle, RefreshCw, Shield, Camera, MessageSquare, ChevronRight } from 'lucide-react';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router';
+import { DataService } from '../../lib/dataService';
 
 interface BookingTrackingPageProps {
   onBack: () => void;
@@ -8,34 +10,103 @@ interface BookingTrackingPageProps {
 
 type BookingStage = 'requested' | 'confirmed' | 'inProgress' | 'issue' | 'refundReview' | 'refundApproved' | 'replacement' | 'completed' | 'released';
 
-const bookingData = {
-  bookingId: '#BK20260514001',
-  freelancer: {
-    name: 'Darling Arias',
-    specialty: 'Fashion Editorial Photographer',
-    image: 'https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    rating: 5.0,
-    reviews: 342
-  },
-  service: {
-    title: 'Fashion Editorial Photoshoot',
-    date: '2026-05-20',
-    time: '10:00 AM - 2:00 PM',
-    location: 'Central World, Bangkok'
-  },
-  pricing: {
-    servicePrice: 10000,
-    deposit: 3000,
-    total: 13000
-  },
-  bookingDate: '2026-05-14'
-};
+const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+
+function getInitialStage(status: string | undefined): BookingStage {
+  switch (status) {
+    case 'confirmed':
+      return 'confirmed';
+    case 'in_progress':
+      return 'inProgress';
+    case 'completed':
+      return 'completed';
+    case 'cancelled':
+      return 'refundReview';
+    default:
+      return 'requested';
+  }
+}
 
 export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
-  const [currentStage, setCurrentStage] = useState<BookingStage>('inProgress');
+  const { id } = useParams();
+  const [booking, setBooking] = useState<any | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentStage, setCurrentStage] = useState<BookingStage>('requested');
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [issueDescription, setIssueDescription] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBooking() {
+      if (!id) {
+        if (isMounted) {
+          setError('Missing booking id.');
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      const response = await DataService.getBooking(id);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error || !response.data) {
+        setError((response.error as any)?.message || 'Unable to load booking.');
+        setBooking(null);
+      } else {
+        setBooking(response.data);
+        setCurrentStage(getInitialStage(response.data.status));
+      }
+
+      setIsLoading(false);
+    }
+
+    loadBooking();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
+  const bookingData = useMemo(() => {
+    if (!booking) {
+      return null;
+    }
+
+    const servicePrice = Number(booking.budget || 0);
+    const deposit = Math.round(servicePrice * 0.3);
+
+    return {
+      bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+      freelancer: {
+        name: booking.freelancer?.full_name || 'CreativeHUB Freelancer',
+        specialty: booking.project_name,
+        image: booking.freelancer?.avatar_url || fallbackProfileImage,
+        rating: Number(booking.freelancer?.rating || 0),
+        reviews: Number(booking.freelancer?.total_reviews || 0),
+      },
+      service: {
+        title: booking.project_name,
+        date: booking.start_date || 'Schedule pending',
+        time: booking.end_date ? `Ends ${booking.end_date}` : 'Time to be confirmed',
+        location: booking.freelancer?.location || booking.client?.location || 'Location to be confirmed',
+      },
+      pricing: {
+        servicePrice,
+        deposit,
+        total: servicePrice,
+      },
+      bookingDate: booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'Pending',
+    };
+  }, [booking]);
 
   const stages = [
     {
@@ -118,6 +189,31 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
   const isStageActive = (stageId: string) => {
     return stageId === currentStage;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 flex items-center justify-center">
+        <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !bookingData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
+        <div className="mx-auto max-w-[600px] rounded-2xl border border-red-200 bg-white p-6 shadow-lg">
+          <button
+            onClick={onBack}
+            className="mb-4 flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors"
+          >
+            <ChevronLeft className="w-5 h-5" />
+            Back
+          </button>
+          <p className="text-sm text-red-700">{error || 'Booking could not be loaded.'}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
