@@ -9,6 +9,56 @@ type Message = Database['public']['Tables']['messages']['Row'];
 type Favorite = Database['public']['Tables']['favorites']['Row'];
 
 export class DataService {
+  private static hasMissingLocationColumnError(error: unknown) {
+    const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
+    return (
+      message.includes('location_latitude') ||
+      message.includes('location_longitude') ||
+      message.includes('location_place_id')
+    );
+  }
+
+  private static async getAllFreelancersQuery(
+    limit: number,
+    offset: number,
+    includeLocationColumns: boolean
+  ) {
+    const userFields = includeLocationColumns
+      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+
+    return supabase
+      .from('freelancer_profiles')
+      .select(`*, users:user_id(${userFields})`)
+      .eq('is_available', true)
+      .limit(limit)
+      .range(offset, offset + limit - 1);
+  }
+
+  private static getSearchFreelancersQuery(
+    query: string,
+    skills: string[] | undefined,
+    includeLocationColumns: boolean
+  ) {
+    const userFields = includeLocationColumns
+      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+
+    let q = supabase
+      .from('freelancer_profiles')
+      .select(`*, users:user_id(${userFields})`);
+
+    if (query) {
+      q = q.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
+    }
+
+    if (skills && skills.length > 0) {
+      q = q.overlaps('skills', skills);
+    }
+
+    return q.eq('is_available', true);
+  }
+
   // USERS
   static async getUser(userId: string) {
     const { data, error } = await supabase
@@ -38,31 +88,33 @@ export class DataService {
     return { data, error };
   }
 
-  static async getAllFreelancers(limit = 20, offset = 0) {
+  static async getFreelancerProfileById(profileId: string) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)')
-      .eq('is_available', true)
-      .limit(limit)
-      .range(offset, offset + limit - 1);
+      .select('*')
+      .eq('id', profileId)
+      .single();
     return { data, error };
   }
 
+  static async getAllFreelancers(limit = 20, offset = 0) {
+    const firstAttempt = await this.getAllFreelancersQuery(limit, offset, true);
+    if (firstAttempt.error && this.hasMissingLocationColumnError(firstAttempt.error)) {
+      const fallbackAttempt = await this.getAllFreelancersQuery(limit, offset, false);
+      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
+    }
+
+    return { data: firstAttempt.data, error: firstAttempt.error };
+  }
+
   static async searchFreelancers(query: string, skills?: string[]) {
-    let q = supabase
-      .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)');
-
-    if (query) {
-      q = q.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
+    const firstAttempt = await this.getSearchFreelancersQuery(query, skills, true);
+    if (firstAttempt.error && this.hasMissingLocationColumnError(firstAttempt.error)) {
+      const fallbackAttempt = await this.getSearchFreelancersQuery(query, skills, false);
+      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
     }
 
-    if (skills && skills.length > 0) {
-      q = q.overlaps('skills', skills);
-    }
-
-    const { data, error } = await q.eq('is_available', true);
-    return { data, error };
+    return { data: firstAttempt.data, error: firstAttempt.error };
   }
 
   static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
@@ -85,12 +137,33 @@ export class DataService {
   }
 
   static async updateUser(userId: string, updates: Partial<User>) {
-    const { data, error } = await supabase
+    const firstAttempt = await supabase
       .from('users')
       .update(updates)
       .eq('id', userId)
       .select()
       .single();
+
+    if (
+      firstAttempt.error &&
+      this.hasMissingLocationColumnError(firstAttempt.error) &&
+      (Object.prototype.hasOwnProperty.call(updates, 'location_latitude') ||
+        Object.prototype.hasOwnProperty.call(updates, 'location_longitude') ||
+        Object.prototype.hasOwnProperty.call(updates, 'location_place_id'))
+    ) {
+      const { location_latitude: _lat, location_longitude: _lng, location_place_id: _pid, ...safeUpdates } = updates as any;
+
+      const fallbackAttempt = await supabase
+        .from('users')
+        .update(safeUpdates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
+    }
+
+    const { data, error } = firstAttempt;
 
     if (
       error &&
@@ -270,6 +343,15 @@ export class DataService {
     return { data, error };
   }
 
+  static async ensureConversation(participant1Id: string, participant2Id: string) {
+    const existing = await this.getConversation(participant1Id, participant2Id);
+    if (existing.data) {
+      return existing;
+    }
+
+    return this.createConversation(participant1Id, participant2Id);
+  }
+
   static async getMessages(conversationId: string, limit = 50) {
     const { data, error } = await supabase
       .from('messages')
@@ -323,6 +405,18 @@ export class DataService {
       .insert({ user_id: userId, freelancer_id: freelancerId })
       .select()
       .single();
+
+    const message = (error as any)?.message?.toLowerCase?.() || '';
+    if (error && message.includes('row-level security policy')) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Favorites insert blocked by RLS policy. Run the favorites RLS migration SQL in supabase/schema.sql, then try again.',
+        } as any,
+      };
+    }
+
     return { data, error };
   }
 
@@ -336,12 +430,57 @@ export class DataService {
   }
 
   static async getUserFavorites(userId: string) {
-    const { data, error } = await supabase
+    const favoritesResponse = await supabase
       .from('favorites')
-      .select('*, freelancer:freelancer_id(*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location))')
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    return { data, error };
+
+    if (favoritesResponse.error || !favoritesResponse.data?.length) {
+      return { data: favoritesResponse.data || [], error: favoritesResponse.error };
+    }
+
+    const freelancerIds = Array.from(
+      new Set(favoritesResponse.data.map((item: any) => item.freelancer_id).filter(Boolean))
+    );
+
+    const [usersResponse, profilesResponse] = await Promise.all([
+      supabase
+        .from('users')
+        .select('id, email, full_name, avatar_url, rating, total_reviews, location')
+        .in('id', freelancerIds),
+      supabase
+        .from('freelancer_profiles')
+        .select('*')
+        .in('user_id', freelancerIds),
+    ]);
+
+    if (usersResponse.error) {
+      return { data: [], error: usersResponse.error };
+    }
+
+    if (profilesResponse.error) {
+      return { data: [], error: profilesResponse.error };
+    }
+
+    const usersById = new Map((usersResponse.data || []).map((item: any) => [item.id, item]));
+    const profilesByUserId = new Map((profilesResponse.data || []).map((item: any) => [item.user_id, item]));
+
+    const data = favoritesResponse.data.map((favorite: any) => {
+      const profile = profilesByUserId.get(favorite.freelancer_id) || {};
+      const profileUser = usersById.get(favorite.freelancer_id) || null;
+
+      return {
+        ...favorite,
+        freelancer: {
+          ...profile,
+          user_id: favorite.freelancer_id,
+          users: profileUser,
+        },
+      };
+    });
+
+    return { data, error: null };
   }
 
   static async isFavorited(userId: string, freelancerId: string) {
@@ -355,13 +494,22 @@ export class DataService {
   }
 
   // NOTIFICATIONS
-  static async getUserNotifications(userId: string) {
-    const { data, error } = await supabase
+  static async getUserNotifications(userId: string, options?: { unreadOnly?: boolean; limit?: number }) {
+    const unreadOnly = options?.unreadOnly ?? false;
+    const limit = options?.limit ?? 30;
+
+    let query = supabase
       .from('notifications')
       .select('*')
       .eq('user_id', userId)
-      .eq('read', false)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (unreadOnly) {
+      query = query.eq('read', false);
+    }
+
+    const { data, error } = await query;
     return { data, error };
   }
 
@@ -370,6 +518,15 @@ export class DataService {
       .from('notifications')
       .update({ read: true })
       .eq('id', notificationId);
+    return { error };
+  }
+
+  static async markAllNotificationsAsRead(userId: string) {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .eq('user_id', userId)
+      .eq('read', false);
     return { error };
   }
 
@@ -389,6 +546,18 @@ export class DataService {
       .insert(request)
       .select()
       .single();
+
+    const message = (error as any)?.message?.toLowerCase?.() || '';
+    if (error && message.includes('row-level security policy')) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Request insert blocked by RLS policy. Ensure you are logged in as a client and run the requests RLS migration SQL in supabase/schema.sql.',
+        } as any,
+      };
+    }
+
     return { data, error };
   }
 
@@ -418,6 +587,156 @@ export class DataService {
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
+    return { data, error };
+  }
+
+  static async getClientPostsByClientId(clientId: string, limit = 20) {
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .eq('client_id', clientId)
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return { data, error };
+  }
+
+  static async getClientPostLikeStats(postIds: string[], userId?: string) {
+    if (postIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const [{ data: likes, error: likesError }, { data: comments, error: commentsError }] = await Promise.all([
+      supabase
+        .from('client_post_likes')
+        .select('post_id, user_id')
+        .in('post_id', postIds),
+      supabase
+        .from('client_post_comments')
+        .select('post_id')
+        .in('post_id', postIds),
+    ]);
+
+    if (likesError || commentsError) {
+      return { data: null, error: likesError || commentsError };
+    }
+
+    const likesByPost: Record<string, number> = {};
+    const likedByMe: Record<string, boolean> = {};
+    (likes || []).forEach((item: any) => {
+      likesByPost[item.post_id] = (likesByPost[item.post_id] || 0) + 1;
+      if (userId && item.user_id === userId) {
+        likedByMe[item.post_id] = true;
+      }
+    });
+
+    const commentsByPost: Record<string, number> = {};
+    (comments || []).forEach((item: any) => {
+      commentsByPost[item.post_id] = (commentsByPost[item.post_id] || 0) + 1;
+    });
+
+    return {
+      data: postIds.map((postId) => ({
+        post_id: postId,
+        likes: likesByPost[postId] || 0,
+        comments: commentsByPost[postId] || 0,
+        liked_by_me: !!likedByMe[postId],
+      })),
+      error: null,
+    };
+  }
+
+  static async getClientPostComments(postId: string, limit = 40) {
+    const { data, error } = await supabase
+      .from('client_post_comments')
+      .select('*, user:user_id(id, full_name, avatar_url)')
+      .eq('post_id', postId)
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    return { data, error };
+  }
+
+  static async toggleClientPostLike(userId: string, postId: string, currentlyLiked: boolean) {
+    if (currentlyLiked) {
+      const { error } = await supabase
+        .from('client_post_likes')
+        .delete()
+        .eq('user_id', userId)
+        .eq('post_id', postId);
+      return { liked: false, error };
+    }
+
+    const { error } = await supabase
+      .from('client_post_likes')
+      .insert({ user_id: userId, post_id: postId });
+
+    if (error && error.code !== '23505') {
+      return { liked: currentlyLiked, error };
+    }
+
+    return { liked: true, error: null };
+  }
+
+  static async addClientPostComment(userId: string, postId: string, content: string) {
+    const { data, error } = await supabase
+      .from('client_post_comments')
+      .insert({
+        user_id: userId,
+        post_id: postId,
+        content: content.trim(),
+      })
+      .select('*, user:user_id(id, full_name, avatar_url)')
+      .single();
+
+    return { data, error };
+  }
+
+  static async getActiveOrLatestBookingBetweenUsers(userAId: string, userBId: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .or(`and(client_id.eq.${userAId},freelancer_id.eq.${userBId}),and(client_id.eq.${userBId},freelancer_id.eq.${userAId})`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    return { data, error };
+  }
+
+  static async completeBookingSession(bookingId: string) {
+    return this.updateBooking(bookingId, {
+      status: 'completed',
+      updated_at: new Date().toISOString(),
+    } as any);
+  }
+
+  static async hasReviewForBooking(bookingId: string, reviewerId: string) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('id')
+      .eq('booking_id', bookingId)
+      .eq('reviewer_id', reviewerId)
+      .maybeSingle();
+
+    return { exists: !!data, error };
+  }
+
+  static async createReview(review: {
+    booking_id: string;
+    reviewer_id: string;
+    reviewee_id: string;
+    rating: number;
+    comment?: string | null;
+  }) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .insert({
+        ...review,
+        comment: review.comment ?? null,
+      })
+      .select()
+      .single();
+
     return { data, error };
   }
 

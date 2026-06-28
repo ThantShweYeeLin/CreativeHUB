@@ -31,6 +31,8 @@
    VITE_SUPABASE_ANON_KEY=your-anon-key-here
    ```
 
+The app map uses Leaflet + OpenStreetMap, so no map API key is required.
+
 ## Step 4: Run Database Schema
 
 1. In Supabase console, go to **SQL Editor**
@@ -52,6 +54,11 @@ If you already ran an older version of the schema, add the profile background co
 ```sql
 alter table public.users
   add column if not exists cover_url text;
+
+alter table public.users
+  add column if not exists location_latitude numeric(10,7),
+  add column if not exists location_longitude numeric(10,7),
+  add column if not exists location_place_id text;
 ```
 
 If request sending fails with `new row violates row-level security policy for table "requests"`, run:

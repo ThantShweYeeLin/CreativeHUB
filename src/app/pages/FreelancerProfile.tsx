@@ -28,6 +28,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
+  const [profilePosts, setProfilePosts] = useState<any[]>([]);
+  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
@@ -41,6 +43,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     currency: 'THB',
     description: '',
   });
+
+  const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
 
   useEffect(() => {
     let isMounted = true;
@@ -78,10 +82,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setError(null);
       setSuccessMessage(null);
 
-      const [userResponse, freelancerResponse] = await Promise.all([
-        DataService.getUser(id),
-        DataService.getFreelancerProfile(id),
-      ]);
+      let userResponse = await DataService.getUser(id);
+      let freelancerResponse = await DataService.getFreelancerProfile(id);
+
+      if (!userResponse.data && freelancerResponse.error) {
+        const profileIdResponse = await DataService.getFreelancerProfileById(id);
+        if (profileIdResponse.data?.user_id) {
+          freelancerResponse = profileIdResponse;
+          userResponse = await DataService.getUser(profileIdResponse.data.user_id);
+        }
+      }
 
       if (!isMounted) {
         return;
@@ -115,13 +125,29 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setPortfolioItems([]);
       }
 
-      if (user?.id && user.id !== id) {
-        const favoriteResponse = await DataService.isFavorited(user.id, id);
+      const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
+
+      if (user?.id && user.id !== targetId) {
+        const favoriteResponse = await DataService.isFavorited(user.id, targetId);
         if (isMounted && !favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
       } else {
         setIsFavorited(false);
+      }
+
+      const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
+      if (isMounted && !postsResponse.error) {
+        setProfilePosts(postsResponse.data || []);
+        const seed: Record<string, { likes: number; comments: number; liked: boolean }> = {};
+        (postsResponse.data || []).forEach((post: any) => {
+          seed[post.id] = {
+            likes: Math.max(0, Number(post.likes_count || 0)),
+            comments: Math.max(0, Number(post.comments_count || 0)),
+            liked: false,
+          };
+        });
+        setPostEngagement(seed);
       }
 
       setIsLoading(false);
@@ -149,15 +175,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
 
   const handleFavoriteToggle = async () => {
-    if (!user?.id || !id || user.id === id) {
+    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
       return;
     }
 
     setError(null);
 
     const response = isFavorited
-      ? await DataService.removeFavorite(user.id, id)
-      : await DataService.addFavorite(user.id, id);
+      ? await DataService.removeFavorite(user.id, targetFreelancerUserId)
+      : await DataService.addFavorite(user.id, targetFreelancerUserId);
 
     if (response.error) {
       setError((response.error as any).message || 'Unable to update favorites.');
@@ -170,8 +196,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const handleSubmitRequest = async (event: FormEvent) => {
     event.preventDefault();
 
-    if (!user?.id || !id) {
+    if (!user?.id || !targetFreelancerUserId) {
       setError('You must be signed in to send a booking request.');
+      return;
+    }
+
+    if (user.role !== 'client') {
+      setError('Only client accounts can submit booking requests.');
       return;
     }
 
@@ -201,7 +232,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     const { error: requestError } = await DataService.createRequest({
       client_id: user.id,
-      freelancer_id: id,
+      freelancer_id: targetFreelancerUserId,
       project_name: formData.projectName,
       description: requestMessage,
       budget: budgetMax,
@@ -225,6 +256,33 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       description: '',
     }));
     setIsSubmittingRequest(false);
+  };
+
+  const togglePostLike = (postId: string) => {
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          liked: !existing.liked,
+          likes: existing.liked ? Math.max(0, existing.likes - 1) : existing.likes + 1,
+        },
+      };
+    });
+  };
+
+  const addPostComment = (postId: string) => {
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          comments: existing.comments + 1,
+        },
+      };
+    });
   };
 
   if (isLoading) {
@@ -305,7 +363,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {user?.id !== id && (
+                  {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={handleFavoriteToggle}
                       className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -323,7 +381,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       Open Chat
                     </button>
                   ) : (
-                    user?.id !== id && (
+                    user?.id !== targetFreelancerUserId && (
                       <button
                         onClick={() => setShowBookingForm(true)}
                         className="px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
@@ -439,6 +497,50 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
           </aside>
         </section>
+
+        {profilePosts.length > 0 && (
+          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900">Recent Posts</h2>
+            <p className="mt-1 text-sm text-gray-600">Posts from this profile also visible in For You feed.</p>
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {profilePosts.map((post) => {
+                const engagement = postEngagement[post.id] || { likes: 0, comments: 0, liked: false };
+                return (
+                  <article key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                    <div className="aspect-[4/3] bg-white">
+                      <ImageWithFallback
+                        src={post.image_url || avatarUrl}
+                        alt={post.caption || 'Post image'}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
+                      <div className="mt-3 flex items-center gap-3 text-sm text-gray-700">
+                        <button
+                          type="button"
+                          onClick={() => togglePostLike(post.id)}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
+                          {engagement.likes}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addPostComment(post.id)}
+                          className="inline-flex items-center gap-1"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          {engagement.comments}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </main>
 
       {showBookingForm && (

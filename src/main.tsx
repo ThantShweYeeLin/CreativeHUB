@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import App from './app/App';
 import { AuthProvider } from './contexts/AuthContext';
+import 'leaflet/dist/leaflet.css';
 import './styles/index.css';
 
 const root = document.getElementById('root');

@@ -8,7 +8,7 @@ import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 
 // Authenticated page imports
 import { FreelancerProfile } from './pages/FreelancerProfile';
-import { MapView } from './pages/MapView';
+import { MapView } from './pages/MapExplorePage';
 import { RequestsPage } from './pages/RequestsPage';
 import { ClientProfilePage } from './pages/ClientProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
@@ -17,6 +17,7 @@ import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequ
 import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
 import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
 import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { BookingTrackingPage } from './pages/BookingTrackingPage';
 import { MyBookingsPage } from './pages/MyBookingsPage';
 import { FavoritesPage } from './pages/FavoritesPage';
@@ -105,7 +106,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <MapView onViewProfile={(id) => navigate(`/profile/${id}`)} />
+                  <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -255,6 +256,16 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <BecomeFreelancerPage onBack={() => navigate(-1)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SettingsPage />
+                </MainLayout>
               </ProtectedRoute>
             }
           />

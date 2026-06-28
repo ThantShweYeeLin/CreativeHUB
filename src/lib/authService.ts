@@ -22,6 +22,29 @@ export interface AuthUser {
 }
 
 class AuthService {
+  private toFriendlyAuthError(error: any, fallback: string) {
+    const raw = String(error?.message || fallback);
+    const lower = raw.toLowerCase();
+
+    if (lower.includes('invalid login credentials')) {
+      return new Error('Incorrect email or password. Please try again.');
+    }
+
+    if (lower.includes('invalid email')) {
+      return new Error('Invalid email format. Please enter a valid email address.');
+    }
+
+    if (lower.includes('password should be at least')) {
+      return new Error('Password is too short. Use at least 6 characters.');
+    }
+
+    if (lower.includes('user already registered') || lower.includes('already been registered')) {
+      return new Error('This email is already registered. Please sign in instead.');
+    }
+
+    return new Error(raw);
+  }
+
   async signUp(data: SignUpData): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
       // Create auth user
@@ -31,7 +54,7 @@ class AuthService {
       });
 
       if (authError) {
-        return { user: null, error: authError as any };
+        return { user: null, error: this.toFriendlyAuthError(authError, 'Unable to sign up.') };
       }
 
       if (!authData.user) {
@@ -61,7 +84,7 @@ class AuthService {
       });
 
       if (profileError) {
-        return { user: null, error: new Error((profileError as any).message || 'Failed to create user profile') };
+        return { user: null, error: this.toFriendlyAuthError(profileError, 'Failed to create user profile') };
       }
 
       return {
@@ -87,7 +110,7 @@ class AuthService {
       });
 
       if (authError) {
-        return { user: null, error: authError as any };
+        return { user: null, error: this.toFriendlyAuthError(authError, 'Unable to sign in.') };
       }
 
       if (!authData.user) {
@@ -102,7 +125,7 @@ class AuthService {
         .maybeSingle();
 
       if (profileError) {
-        return { user: null, error: new Error((profileError as any).message || 'Failed to load profile') };
+        return { user: null, error: this.toFriendlyAuthError(profileError, 'Failed to load profile') };
       }
 
       if (!userProfile) {
@@ -179,6 +202,16 @@ class AuthService {
       .select()
       .single();
 
+    return { data, error };
+  }
+
+  async updateEmail(email: string) {
+    const { data, error } = await supabase.auth.updateUser({ email });
+    return { data, error };
+  }
+
+  async updatePassword(password: string) {
+    const { data, error } = await supabase.auth.updateUser({ password });
     return { data, error };
   }
 

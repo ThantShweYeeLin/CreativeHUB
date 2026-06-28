@@ -16,6 +16,9 @@ create table public.users (
   bio text,
   role user_role default 'client',
   location text,
+  location_latitude numeric(10,7),
+  location_longitude numeric(10,7),
+  location_place_id text,
   rating numeric(3,2) default 0,
   total_reviews int default 0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -202,6 +205,16 @@ create policy "Clients can create requests" on public.requests
 create policy "Participants can update requests" on public.requests
   for update using (auth.uid() = client_id or auth.uid() = freelancer_id);
 
+-- Favorites: owner can read/write own favorites
+create policy "Users can view own favorites" on public.favorites
+  for select using (auth.uid() = user_id);
+
+create policy "Users can insert own favorites" on public.favorites
+  for insert with check (auth.uid() = user_id);
+
+create policy "Users can delete own favorites" on public.favorites
+  for delete using (auth.uid() = user_id);
+
 -- Messages: participants only
 create policy "Users see own messages" on public.messages
   for select using (auth.uid() = sender_id or auth.uid() = recipient_id);
@@ -225,6 +238,48 @@ create policy "Clients can create own posts" on public.client_posts
 
 create policy "Clients can update own posts" on public.client_posts
   for update using (auth.uid() = client_id);
+
+-- Reviews: reviewer/reviewee can read, reviewer can insert
+create policy "Users can view own related reviews" on public.reviews
+  for select using (auth.uid() = reviewer_id or auth.uid() = reviewee_id);
+
+create policy "Users can insert own reviews" on public.reviews
+  for insert with check (auth.uid() = reviewer_id);
+
+-- Client post engagement tables
+create table public.client_post_likes (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(post_id, user_id)
+);
+
+create table public.client_post_comments (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.client_post_likes enable row level security;
+alter table public.client_post_comments enable row level security;
+
+create policy "Users can read client post likes" on public.client_post_likes
+  for select using (true);
+
+create policy "Users can like as themselves" on public.client_post_likes
+  for insert with check (auth.uid() = user_id);
+
+create policy "Users can unlike as themselves" on public.client_post_likes
+  for delete using (auth.uid() = user_id);
+
+create policy "Users can read client post comments" on public.client_post_comments
+  for select using (true);
+
+create policy "Users can comment as themselves" on public.client_post_comments
+  for insert with check (auth.uid() = user_id);
 
 -- Indexes for performance
 create index idx_freelancer_profiles_user_id on public.freelancer_profiles(user_id);

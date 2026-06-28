@@ -20,6 +20,12 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [bookingSession, setBookingSession] = useState<any | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
+  const [isEndingSession, setIsEndingSession] = useState(false);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -99,6 +105,111 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
       isMounted = false;
     };
   }, [selectedConversationId, user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBookingSession() {
+      const selectedRawConversation = conversations.find((item: any) => item.id === selectedConversationId);
+      const participant1 = selectedRawConversation?.participant_1;
+      const participant2 = selectedRawConversation?.participant_2;
+      const otherParticipantId = participant1?.id === user?.id ? participant2?.id : participant1?.id;
+
+      if (!user?.id || !otherParticipantId) {
+        if (isMounted) {
+          setBookingSession(null);
+          setHasSubmittedReview(false);
+        }
+        return;
+      }
+
+      const bookingResponse = await DataService.getActiveOrLatestBookingBetweenUsers(
+        user.id,
+        otherParticipantId
+      );
+
+      if (!isMounted) return;
+
+      if (bookingResponse.error || !bookingResponse.data) {
+        setBookingSession(null);
+        setHasSubmittedReview(false);
+        return;
+      }
+
+      setBookingSession(bookingResponse.data);
+
+      if (bookingResponse.data.status === 'completed') {
+        const reviewCheck = await DataService.hasReviewForBooking(bookingResponse.data.id, user.id);
+        if (isMounted && !reviewCheck.error) {
+          setHasSubmittedReview(reviewCheck.exists);
+        }
+      } else {
+        setHasSubmittedReview(false);
+      }
+    }
+
+    loadBookingSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedConversationId, conversations, user?.id]);
+
+  const canChat = bookingSession && bookingSession.status !== 'completed';
+
+  const handleEndSession = async () => {
+    if (!bookingSession?.id || !user?.id || !selectedConversation?.otherParticipantId || !selectedConversationId) {
+      return;
+    }
+
+    setIsEndingSession(true);
+    setError(null);
+
+    const response = await DataService.completeBookingSession(bookingSession.id);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to end this session.');
+      setIsEndingSession(false);
+      return;
+    }
+
+    await DataService.sendMessage({
+      conversation_id: selectedConversationId,
+      sender_id: user.id,
+      recipient_id: selectedConversation.otherParticipantId,
+      content: 'Session ended. Booking marked as completed. Please leave a review for each other.',
+      read: false,
+    } as any);
+
+    setBookingSession(response.data || { ...bookingSession, status: 'completed' });
+    setIsEndingSession(false);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!bookingSession?.id || !user?.id || !selectedConversation?.otherParticipantId) {
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    setError(null);
+
+    const reviewResponse = await DataService.createReview({
+      booking_id: bookingSession.id,
+      reviewer_id: user.id,
+      reviewee_id: selectedConversation.otherParticipantId,
+      rating: reviewRating,
+      comment: reviewComment.trim() || null,
+    });
+
+    if (reviewResponse.error) {
+      setError((reviewResponse.error as any).message || 'Unable to submit review.');
+      setIsSubmittingReview(false);
+      return;
+    }
+
+    setHasSubmittedReview(true);
+    setReviewComment('');
+    setIsSubmittingReview(false);
+  };
 
   const normalizedConversations = useMemo(() => {
     return conversations
@@ -268,7 +379,61 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
                     <h2 className="font-bold text-gray-900">{selectedConversation.name}</h2>
                     <p className="text-sm text-gray-600">Direct conversation</p>
                   </div>
+                  {canChat && (
+                    <button
+                      type="button"
+                      onClick={() => void handleEndSession()}
+                      disabled={isEndingSession}
+                      className="ml-auto rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      {isEndingSession ? 'Ending...' : 'End Session'}
+                    </button>
+                  )}
                 </div>
+
+                {bookingSession?.status === 'accepted' || bookingSession?.status === 'confirmed' || bookingSession?.status === 'in_progress' ? (
+                  <div className="border-b border-green-200 bg-green-50 px-6 py-3 text-sm text-green-700">
+                    You may now chat with this person.
+                  </div>
+                ) : null}
+
+                {bookingSession?.status === 'completed' && (
+                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                    <p className="text-sm font-semibold text-gray-900">Session completed</p>
+                    {!hasSubmittedReview ? (
+                      <div className="mt-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-700">Rating:</span>
+                          <select
+                            value={reviewRating}
+                            onChange={(event) => setReviewRating(Number(event.target.value))}
+                            className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                          >
+                            {[5, 4, 3, 2, 1].map((value) => (
+                              <option key={value} value={value}>{value} stars</option>
+                            ))}
+                          </select>
+                        </div>
+                        <textarea
+                          value={reviewComment}
+                          onChange={(event) => setReviewComment(event.target.value)}
+                          placeholder="Write a short review"
+                          className="min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleSubmitReview()}
+                          disabled={isSubmittingReview}
+                          className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                        >
+                          {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-sm text-gray-600">Thanks, your review has been submitted.</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
                   {isLoadingMessages && (
@@ -320,11 +485,12 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
                         }
                       }}
                       placeholder="Type a message..."
+                      disabled={!canChat}
                       className="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
                     />
                     <button
                       onClick={() => void handleSendMessage()}
-                      disabled={!messageInput.trim() || isSending}
+                      disabled={!canChat || !messageInput.trim() || isSending}
                       className="p-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-5 h-5" />

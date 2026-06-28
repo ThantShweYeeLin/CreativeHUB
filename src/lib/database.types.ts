@@ -31,6 +31,9 @@ export interface Database {
           bio: string | null;
           role: 'freelancer' | 'client';
           location: string | null;
+          location_latitude: number | null;
+          location_longitude: number | null;
+          location_place_id: string | null;
           rating: number;
           total_reviews: number;
           created_at: string;

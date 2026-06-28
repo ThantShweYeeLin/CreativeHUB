@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { CheckCircle2, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { geocodeAddress } from '../../lib/osmGeocoding';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
@@ -140,6 +141,29 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setError(null);
     setIsSaving(true);
 
+    let locationLatitude: number | null = null;
+    let locationLongitude: number | null = null;
+    let locationPlaceId: string | null = null;
+
+    if (location.trim()) {
+      try {
+        const resolved = await geocodeAddress(location.trim());
+        if (!resolved) {
+          setError('Unable to resolve your location. Please use a more specific address.');
+          setIsSaving(false);
+          return;
+        }
+
+        locationLatitude = resolved.latitude;
+        locationLongitude = resolved.longitude;
+        locationPlaceId = resolved.placeId;
+      } catch (resolveError) {
+        setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve your location.');
+        setIsSaving(false);
+        return;
+      }
+    }
+
     const isAvailable = availability === 'Available';
     const parsedStartingPrice = Number(startingPrice || 0);
     const profileDescription = [
@@ -162,6 +186,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       avatar_url: profilePictureUrl.trim() || null,
       cover_url: coverPhotoUrl.trim() || null,
       location: location.trim(),
+      location_latitude: locationLatitude,
+      location_longitude: locationLongitude,
+      location_place_id: locationPlaceId,
       bio: bio.trim() || null,
       updated_at: new Date().toISOString(),
     } as any);

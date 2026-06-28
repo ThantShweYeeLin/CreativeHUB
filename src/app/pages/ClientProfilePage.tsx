@@ -1,9 +1,12 @@
-import { Briefcase, Calendar, Camera, ChevronLeft, Edit, ImagePlus, MapPin, Save, Star } from 'lucide-react';
+import { Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { geocodeAddress } from '../../lib/osmGeocoding';
+import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
+import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
 
 interface ClientProfilePageProps {
   onBack: () => void;
@@ -14,10 +17,21 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
-  const [formValues, setFormValues] = useState({ full_name: '', location: '', bio: '' });
+  const [posts, setPosts] = useState<any[]>([]);
+  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
+  const [formValues, setFormValues] = useState({
+    full_name: '',
+    location: '',
+    location_latitude: null as number | null,
+    location_longitude: null as number | null,
+    location_place_id: null as string | null,
+    bio: '',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingImageType, setUploadingImageType] = useState<'avatar' | 'cover' | null>(null);
+  const [isResolvingLocation, setIsResolvingLocation] = useState(false);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
@@ -39,6 +53,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         DataService.getClientBookings(user.id),
       ]);
 
+      const postsResponse = await DataService.getClientPostsByClientId(user.id, 20);
+
       if (!isMounted) {
         return;
       }
@@ -50,6 +66,9 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         setFormValues({
           full_name: profileResponse.data?.full_name || '',
           location: profileResponse.data?.location || '',
+          location_latitude: profileResponse.data?.location_latitude ?? null,
+          location_longitude: profileResponse.data?.location_longitude ?? null,
+          location_place_id: profileResponse.data?.location_place_id ?? null,
           bio: profileResponse.data?.bio || '',
         });
       }
@@ -58,6 +77,20 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         setError((bookingsResponse.error as any).message || 'Unable to load your bookings.');
       } else {
         setBookings(bookingsResponse.data || []);
+      }
+
+      if (!postsResponse.error) {
+        const loadedPosts = postsResponse.data || [];
+        setPosts(loadedPosts);
+        const nextEngagement: Record<string, { likes: number; comments: number; liked: boolean }> = {};
+        loadedPosts.forEach((post: any) => {
+          nextEngagement[post.id] = {
+            likes: Math.max(0, Number(post.likes_count || 0)),
+            comments: Math.max(0, Number(post.comments_count || 0)),
+            liked: false,
+          };
+        });
+        setPostEngagement(nextEngagement);
       }
 
       setIsLoading(false);
@@ -82,6 +115,77 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const location = profile?.location || 'Location not added';
   const rating = Number(profile?.rating || 0);
   const totalReviews = Number(profile?.total_reviews || 0);
+  const locationLatitude = profile?.location_latitude ?? formValues.location_latitude;
+  const locationLongitude = profile?.location_longitude ?? formValues.location_longitude;
+  const hasPreciseLocation = locationLatitude !== null && locationLongitude !== null;
+
+  const resolveLocation = async (locationText: string) => {
+    const result = await geocodeAddress(locationText.trim());
+    if (!result) {
+      throw new Error('Unable to resolve that location. Try a more specific address.');
+    }
+
+    return result;
+  };
+
+  const handleResolveLocation = async () => {
+    const nextLocation = formValues.location.trim();
+
+    if (!nextLocation) {
+      setError('Add a location before resolving it on the map.');
+      return;
+    }
+
+    setIsResolvingLocation(true);
+    setError(null);
+
+    try {
+      const resolved = await resolveLocation(nextLocation);
+      setFormValues((current) => ({
+        ...current,
+        location: resolved.formattedAddress,
+        location_latitude: resolved.latitude,
+        location_longitude: resolved.longitude,
+        location_place_id: resolved.placeId,
+      }));
+      setProfile((current: any) => ({
+        ...(current || {}),
+        location: resolved.formattedAddress,
+        location_latitude: resolved.latitude,
+        location_longitude: resolved.longitude,
+        location_place_id: resolved.placeId,
+      }));
+    } catch (resolveError) {
+      setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve location.');
+    } finally {
+      setIsResolvingLocation(false);
+    }
+  };
+
+  const handleLocationPicked = (point: {
+    latitude: number;
+    longitude: number;
+    formattedAddress: string;
+    placeId: string | null;
+  }) => {
+    setFormValues((current) => ({
+      ...current,
+      location: point.formattedAddress,
+      location_latitude: point.latitude,
+      location_longitude: point.longitude,
+      location_place_id: point.placeId,
+    }));
+
+    setProfile((current: any) => ({
+      ...(current || {}),
+      location: point.formattedAddress,
+      location_latitude: point.latitude,
+      location_longitude: point.longitude,
+      location_place_id: point.placeId,
+    }));
+
+    setIsLocationPickerOpen(false);
+  };
 
   const formatDate = (date: string | null) => {
     if (!date) {
@@ -103,6 +207,33 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     }).format(Number(amount));
   };
 
+  const togglePostLike = (postId: string) => {
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          liked: !existing.liked,
+          likes: existing.liked ? Math.max(0, existing.likes - 1) : existing.likes + 1,
+        },
+      };
+    });
+  };
+
+  const addPostComment = (postId: string) => {
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          comments: existing.comments + 1,
+        },
+      };
+    });
+  };
+
   const handleSaveProfile = async () => {
     if (!user?.id) {
       return;
@@ -116,9 +247,35 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     setIsSaving(true);
     setError(null);
 
+    const locationText = formValues.location.trim();
+    let resolvedLocation = locationText || null;
+    let resolvedLatitude = formValues.location_latitude;
+    let resolvedLongitude = formValues.location_longitude;
+    let resolvedPlaceId = formValues.location_place_id;
+
+    if (locationText) {
+      const locationChanged = locationText !== (profile?.location || '').trim();
+      if (locationChanged || resolvedLatitude === null || resolvedLongitude === null) {
+        try {
+          const resolved = await resolveLocation(locationText);
+          resolvedLocation = resolved.formattedAddress;
+          resolvedLatitude = resolved.latitude;
+          resolvedLongitude = resolved.longitude;
+          resolvedPlaceId = resolved.placeId;
+        } catch (resolveError) {
+          setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve location.');
+          setIsSaving(false);
+          return;
+        }
+      }
+    }
+
     const { data, error: saveError } = await DataService.updateUser(user.id, {
       full_name: formValues.full_name,
-      location: formValues.location,
+      location: resolvedLocation,
+      location_latitude: resolvedLatitude,
+      location_longitude: resolvedLongitude,
+      location_place_id: resolvedPlaceId,
       bio: formValues.bio,
       updated_at: new Date().toISOString(),
     } as any);
@@ -354,6 +511,29 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           </div>
         </div>
 
+        {hasPreciseLocation && (
+          <div className="mb-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between px-4 py-4 md:px-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Precise Location</h2>
+                <p className="text-sm text-gray-600">Your profile location as shown on the map.</p>
+              </div>
+              <div className="text-right text-xs text-gray-500">
+                <p>{locationLatitude?.toFixed(6)}</p>
+                <p>{locationLongitude?.toFixed(6)}</p>
+              </div>
+            </div>
+            <div className="h-[260px] md:h-[360px]">
+              <LeafletLocationPreview
+                latitude={locationLatitude as number}
+                longitude={locationLongitude as number}
+                title={displayName}
+                subtitle={location}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Personal Info Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 md:p-8 mb-6 md:mb-8">
           <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Personal Info</h3>
@@ -363,7 +543,53 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
               <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 capitalize">{profile?.role || user?.role || 'client'}</div>
             </div>
-            {renderField('Location', profile?.location || '', 'location')}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Precise Location</label>
+              {isEditMode ? (
+                <div className="space-y-3">
+                  <input
+                    value={formValues.location}
+                    onChange={(event) => setFormValues((current) => ({ ...current, location: event.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-50 rounded-lg text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Street address, district, city, country"
+                  />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationPickerOpen(true)}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Pick Exact Point
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleResolveLocation()}
+                      disabled={isResolvingLocation}
+                      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                    >
+                      {isResolvingLocation ? 'Resolving...' : 'Resolve Address'}
+                    </button>
+                    {hasPreciseLocation && (
+                      <span className="text-xs text-gray-500">
+                        {locationLatitude?.toFixed(6)}, {locationLongitude?.toFixed(6)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Enter an exact address so the map can place your profile precisely.
+                  </p>
+                </div>
+              ) : (
+                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                  {location}
+                  {hasPreciseLocation && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {locationLatitude?.toFixed(6)}, {locationLongitude?.toFixed(6)}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-sm md:text-base truncate">{profile?.email || user?.email || 'Not added yet'}</div>
@@ -432,7 +658,61 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
             </div>
           )}
         </div>
+
+        {posts.length > 0 && (
+          <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-lg md:mt-8 md:p-8">
+            <h3 className="text-xl font-bold text-gray-900 md:text-2xl">My For You Posts</h3>
+            <p className="mt-1 text-sm text-gray-600">Posts published from your client account.</p>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {posts.map((post) => {
+                const engagement = postEngagement[post.id] || { likes: 0, comments: 0, liked: false };
+                return (
+                  <article key={post.id} className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
+                    <div className="aspect-[4/3] bg-white">
+                      <ImageWithFallback
+                        src={post.image_url || avatarUrl}
+                        alt={post.caption || 'Post'}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
+                      <div className="mt-3 flex items-center gap-3 text-sm text-gray-700">
+                        <button type="button" onClick={() => togglePostLike(post.id)} className="inline-flex items-center gap-1">
+                          <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
+                          {engagement.likes}
+                        </button>
+                        <button type="button" onClick={() => addPostComment(post.id)} className="inline-flex items-center gap-1">
+                          <MessageCircle className="h-4 w-4" />
+                          {engagement.comments}
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
+
+      {isLocationPickerOpen && (
+        <LeafletLocationPicker
+          initialPoint={
+            formValues.location_latitude !== null && formValues.location_longitude !== null
+              ? {
+                  latitude: formValues.location_latitude,
+                  longitude: formValues.location_longitude,
+                  formattedAddress: formValues.location,
+                  placeId: formValues.location_place_id,
+                }
+              : null
+          }
+          onCancel={() => setIsLocationPickerOpen(false)}
+          onConfirm={handleLocationPicked}
+        />
+      )}
     </div>
   );
 }

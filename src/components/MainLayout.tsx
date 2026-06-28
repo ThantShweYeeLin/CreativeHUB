@@ -4,8 +4,9 @@ import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { UserMenu } from '../app/components/UserMenu';
-import { NotificationsPanel } from '../app/components/NotificationsPanel';
+import { NotificationPanelItem, NotificationsPanel } from '../app/components/NotificationsPanel';
 import { DataService } from '../lib/dataService';
+import { FeedService } from '../lib/feedService';
 import { ImageWithFallback } from './common/ImageWithFallback';
 import { DEFAULT_AVATAR_URL } from '../lib/defaults';
 
@@ -18,8 +19,26 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { signOut, user } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationPanelItem[]>([]);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
+
+  const unreadNotificationsCount = notifications.filter((item) => !item.read).length;
+
+  const mapNotificationRecord = (row: any): NotificationPanelItem => {
+    const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
+    return {
+      id: String(row.id),
+      type: String(row.type || 'system'),
+      title: String(row.title || 'Notification'),
+      message: typeof row.message === 'string' ? row.message : null,
+      actorName: actor?.full_name || 'CreativeHUB',
+      actorAvatar: actor?.avatar_url || null,
+      createdAt: String(row.created_at || new Date().toISOString()),
+      read: Boolean(row.read),
+    };
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -71,6 +90,58 @@ export function MainLayout({ children }: MainLayoutProps) {
     };
   }, [user?.id, user?.role]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setNotifications([]);
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadNotifications = async () => {
+      setIsNotificationsLoading(true);
+      const response = await DataService.getUserNotifications(user.id, { limit: 30 });
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setNotifications([]);
+      } else {
+        setNotifications((response.data || []).map(mapNotificationRecord));
+      }
+      setIsNotificationsLoading(false);
+    };
+
+    loadNotifications();
+
+    const channel = FeedService.subscribeToNotifications(user.id, () => {
+      loadNotifications();
+    });
+
+    return () => {
+      isMounted = false;
+      channel.unsubscribe();
+    };
+  }, [user?.id]);
+
+  const handleMarkNotificationAsRead = async (notificationId: string) => {
+    setNotifications((current) =>
+      current.map((item) => (item.id === notificationId ? { ...item, read: true } : item))
+    );
+
+    await DataService.markNotificationAsRead(notificationId);
+  };
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    if (!user?.id) {
+      return;
+    }
+
+    setNotifications((current) => current.map((item) => ({ ...item, read: true })));
+    await DataService.markAllNotificationsAsRead(user.id);
+  };
+
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
     setShowUserMenu(false);
     switch (item) {
@@ -90,7 +161,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         navigate('/my-bookings');
         break;
       case 'settings':
-        // TODO: Implement settings page
+        navigate('/settings');
         break;
     }
   };
@@ -156,11 +227,17 @@ export function MainLayout({ children }: MainLayoutProps) {
                   className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  {unreadNotificationsCount > 0 && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  )}
                 </button>
                 {showNotifications && (
                   <NotificationsPanel
                     onClose={() => setShowNotifications(false)}
+                    notifications={notifications}
+                    isLoading={isNotificationsLoading}
+                    onMarkAsRead={handleMarkNotificationAsRead}
+                    onMarkAllAsRead={handleMarkAllNotificationsAsRead}
                     onOpenRequests={() => {
                       setShowNotifications(false);
                       navigate('/requests');

@@ -17,6 +17,7 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 
 type DashboardSection = 'portfolio' | 'requests' | 'analytics' | 'settings';
@@ -204,6 +205,21 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
         if (bookingResponse.error) {
           setError((bookingResponse.error as any).message || 'Request accepted, but booking conversion failed.');
         }
+
+        const conversationResponse = await DataService.ensureConversation(
+          request.client_id,
+          request.freelancer_id
+        );
+
+        if (conversationResponse.data?.id) {
+          await DataService.sendMessage({
+            conversation_id: conversationResponse.data.id,
+            sender_id: request.freelancer_id,
+            recipient_id: request.client_id,
+            content: 'Your request has been accepted. You may now chat with this person.',
+            read: false,
+          } as any);
+        }
       }
     }
 
@@ -390,6 +406,30 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
     setError(null);
     setSuccess(null);
 
+    const locationText = settingsForm.location.trim();
+    let locationLatitude: number | null = null;
+    let locationLongitude: number | null = null;
+    let locationPlaceId: string | null = null;
+
+    if (locationText) {
+      try {
+        const resolved = await geocodeAddress(locationText);
+        if (!resolved) {
+          setError('Unable to resolve your location. Please use a more specific address.');
+          setIsSavingSettings(false);
+          return;
+        }
+
+        locationLatitude = resolved.latitude;
+        locationLongitude = resolved.longitude;
+        locationPlaceId = resolved.placeId;
+      } catch (resolveError) {
+        setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve your location.');
+        setIsSavingSettings(false);
+        return;
+      }
+    }
+
     const [profileUpdate, userUpdate] = await Promise.all([
       DataService.updateFreelancerProfile(user.id, {
         title: settingsForm.title,
@@ -402,7 +442,10 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
         updated_at: new Date().toISOString(),
       } as any),
       DataService.updateUser(user.id, {
-        location: settingsForm.location,
+        location: locationText || null,
+        location_latitude: locationLatitude,
+        location_longitude: locationLongitude,
+        location_place_id: locationPlaceId,
         updated_at: new Date().toISOString(),
       } as any),
     ]);

@@ -48,6 +48,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, any[]>>({});
+  const [commentDraftByPost, setCommentDraftByPost] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newPostCaption, setNewPostCaption] = useState('');
@@ -132,6 +134,23 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         return bTime - aTime;
       });
 
+      const clientPostIds = clientPosts.map((post) => post.id.replace('client-post-', ''));
+      if (clientPostIds.length > 0) {
+        const statsResponse = await DataService.getClientPostLikeStats(clientPostIds, user?.id);
+        if (!statsResponse.error && statsResponse.data) {
+          const statsMap = new Map(statsResponse.data.map((item: any) => [item.post_id, item]));
+          combined.forEach((post) => {
+            if (!post.isClientPost) return;
+            const postId = post.id.replace('client-post-', '');
+            const stat = statsMap.get(postId);
+            if (!stat) return;
+            post.likes = Number(stat.likes || 0);
+            post.commentsCount = Number(stat.comments || 0);
+            post.isLiked = !!stat.liked_by_me;
+          });
+        }
+      }
+
       setPosts(combined);
       setIsLoading(false);
     }
@@ -146,11 +165,77 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const sortedPosts = useMemo(() => posts, [posts]);
 
   const handleLike = (postId: string) => {
+    const target = posts.find((item) => item.id === postId);
+    if (!target) return;
+
+    if (target.isClientPost && user?.id) {
+      void (async () => {
+        const dbPostId = postId.replace('client-post-', '');
+        const result = await DataService.toggleClientPostLike(user.id, dbPostId, target.isLiked);
+        if (result.error) {
+          setError((result.error as any)?.message || 'Unable to update like.');
+          return;
+        }
+      })();
+    }
+
     setPosts((current) =>
       current.map((post) =>
         post.id === postId
           ? { ...post, isLiked: !post.isLiked, likes: post.isLiked ? post.likes - 1 : post.likes + 1 }
           : post
+      )
+    );
+  };
+
+  const loadCommentsForPost = async (postId: string) => {
+    const target = posts.find((item) => item.id === postId);
+    if (!target?.isClientPost) {
+      return;
+    }
+
+    const dbPostId = postId.replace('client-post-', '');
+    const response = await DataService.getClientPostComments(dbPostId, 40);
+    if (response.error) {
+      setError((response.error as any)?.message || 'Unable to load comments.');
+      return;
+    }
+
+    setCommentsByPost((current) => ({
+      ...current,
+      [postId]: response.data || [],
+    }));
+  };
+
+  const handleAddComment = async (postId: string) => {
+    if (!user?.id) return;
+    const target = posts.find((item) => item.id === postId);
+    if (!target?.isClientPost) return;
+
+    const content = (commentDraftByPost[postId] || '').trim();
+    if (!content) {
+      return;
+    }
+
+    const response = await DataService.addClientPostComment(
+      user.id,
+      postId.replace('client-post-', ''),
+      content
+    );
+
+    if (response.error || !response.data) {
+      setError((response.error as any)?.message || 'Unable to add comment.');
+      return;
+    }
+
+    setCommentsByPost((current) => ({
+      ...current,
+      [postId]: [...(current[postId] || []), response.data],
+    }));
+    setCommentDraftByPost((current) => ({ ...current, [postId]: '' }));
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post
       )
     );
   };
@@ -164,7 +249,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   };
 
   const handleShare = async (postId: string) => {
-    const shareUrl = `${window.location.origin}/profile/${postId.split('-')[0]}`;
+    const targetPost = posts.find((item) => item.id === postId);
+    const shareUrl = `${window.location.origin}/profile/${targetPost?.authorId || ''}`;
     await navigator.clipboard.writeText(shareUrl);
   };
 
@@ -276,7 +362,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
               <div className="px-4 md:px-6 py-3 md:py-4 flex items-center justify-between">
                 <button
                   onClick={() => {
-                    if (!post.isClientPost) {
+                    if (post.authorId) {
                       onViewProfile?.(post.authorId);
                     }
                   }}
@@ -305,7 +391,13 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                       <span className="font-semibold text-gray-900">{post.likes}</span>
                     </button>
                     <button
-                      onClick={() => setExpandedCommentsForPost((current) => current === post.id ? null : post.id)}
+                      onClick={() => {
+                        const nextId = expandedCommentsForPost === post.id ? null : post.id;
+                        setExpandedCommentsForPost(nextId);
+                        if (nextId && post.isClientPost) {
+                          void loadCommentsForPost(nextId);
+                        }
+                      }}
                       className="group flex items-center gap-2 transition-all"
                     >
                       <MessageCircle className="w-7 h-7 text-gray-700 group-hover:scale-110 transition-transform" />
@@ -330,8 +422,45 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 </div>
 
                 {expandedCommentsForPost === post.id && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    Comment threads are not yet enabled for this feed item.
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 space-y-3">
+                    {post.isClientPost ? (
+                      <>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {(commentsByPost[post.id] || []).length === 0 ? (
+                            <p className="text-xs text-gray-500">No comments yet.</p>
+                          ) : (
+                            (commentsByPost[post.id] || []).map((comment: any) => (
+                              <div key={comment.id} className="rounded-lg bg-white p-2 text-xs text-gray-700">
+                                <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}:</span>{' '}
+                                {comment.content}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={commentDraftByPost[post.id] || ''}
+                            onChange={(event) =>
+                              setCommentDraftByPost((current) => ({
+                                ...current,
+                                [post.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="Write a comment"
+                            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void handleAddComment(post.id)}
+                            className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white"
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div>Comment threads are not enabled for generated portfolio posts yet.</div>
+                    )}
                   </div>
                 )}
               </div>
