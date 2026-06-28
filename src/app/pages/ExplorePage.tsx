@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
-
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
 interface ProfileCardProps {
   id: string;
@@ -150,7 +149,7 @@ export function ExplorePage() {
       specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
       rating: Number(profile.users?.rating || 0),
       reviews: Number(profile.users?.total_reviews || 0),
-      image: profile.users?.avatar_url || fallbackProfileImage,
+      image: DEFAULT_AVATAR_URL,
       location: profile.users?.location || undefined,
     }));
   }, [freelancers]);
