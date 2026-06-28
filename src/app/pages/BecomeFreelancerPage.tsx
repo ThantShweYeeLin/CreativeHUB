@@ -1,179 +1,348 @@
-import { ChevronLeft, Camera, Upload, Sparkles, CheckCircle } from 'lucide-react';
-import { useState } from 'react';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router';
+import { CheckCircle2, ChevronLeft } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { DataService } from '../../lib/dataService';
 
 interface BecomeFreelancerPageProps {
-  onBack: () => void;
+  onBack?: () => void;
+}
+
+const services = [
+  'Photographer',
+  'Videographer',
+  'Graphic Designer',
+  'Makeup Artist',
+  'Hair Stylist',
+  'Fashion Designer',
+  'Model',
+  'Event Decoration',
+] as const;
+
+const specialtyMap: Record<string, string[]> = {
+  Photographer: ['Wedding', 'Portrait', 'Fashion', 'Food', 'Commercial'],
+  Videographer: ['Wedding Film', 'Commercial', 'Music Video', 'Event', 'Documentary'],
+  'Graphic Designer': ['Branding', 'Editorial', 'Packaging', 'Social Media', 'Illustration'],
+  'Makeup Artist': ['Bridal', 'Editorial', 'Special Effects', 'Runway', 'Beauty'],
+  'Hair Stylist': ['Bridal', 'Runway', 'Colorist', 'Editorial', 'Studio'],
+  'Fashion Designer': ['Ready-to-Wear', 'Luxury', 'Couture', 'Streetwear', 'Costume'],
+  Model: ['Runway', 'Editorial', 'E-commerce', 'Commercial', 'Beauty'],
+  'Event Decoration': ['Weddings', 'Corporate', 'Floral', 'Theme', 'Luxury Setup'],
+};
+
+const experienceOptions = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 years', '10+ years'] as const;
+const availabilityOptions = ['Available', 'Busy', 'Unavailable'] as const;
+const workingDayOptions = ['Monday-Friday', 'Weekends', 'Flexible'] as const;
+
+function toggle(list: string[], value: string) {
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+}
+
+function parseExperienceYears(value: string) {
+  switch (value) {
+    case 'Less than 1 year':
+      return 0;
+    case '1-3 years':
+      return 2;
+    case '3-5 years':
+      return 4;
+    case '5-10 years':
+      return 7;
+    case '10+ years':
+      return 10;
+    default:
+      return 0;
+  }
 }
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [formData, setFormData] = useState({
-    displayName: '',
-    specialty: '',
-    location: '',
-    phone: '',
-    email: '',
-    bio: '',
-    experience: '',
-    hourlyRate: '',
-    portfolio: [] as File[]
-  });
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const [displayName, setDisplayName] = useState(user?.fullName || '');
+  const [profilePictureUrl, setProfilePictureUrl] = useState('');
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState('');
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
+  const [experience, setExperience] = useState('');
+  const [bio, setBio] = useState('');
+  const [startingPrice, setStartingPrice] = useState('');
+  const [projectBudgetRange, setProjectBudgetRange] = useState('');
+  const [availability, setAvailability] = useState('Available');
+  const [workingDays, setWorkingDays] = useState('Flexible');
+  const [location, setLocation] = useState('');
+  const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', '', '']);
+  const [instagram, setInstagram] = useState('');
+  const [behance, setBehance] = useState('');
+  const [website, setWebsite] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [idDocumentUrl, setIdDocumentUrl] = useState('');
+  const [businessLicenseUrl, setBusinessLicenseUrl] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const specialties = [
-    'Photographer',
-    'Makeup Artist',
-    'Model',
-    'Videographer',
-    'Hairstylist',
-    'Fashion Designer',
-    'Graphic Designer',
-    'Video Editor'
-  ];
+  const availableSpecialties = useMemo(() => {
+    return Array.from(new Set(selectedServices.flatMap((service) => specialtyMap[service] || [])));
+  }, [selectedServices]);
 
-  const handleSubmit = () => {
-    // TODO: Submit freelancer application
-    console.log('Submitting freelancer application:', formData);
+  const handleContinue = () => {
+    setError(null);
+
+    if (step === 1) {
+      if (!displayName.trim()) {
+        setError('Professional display name is required.');
+        return;
+      }
+    }
+
+    if (step === 2) {
+      if (selectedServices.length === 0) {
+        setError('Choose at least one service.');
+        return;
+      }
+      if (!experience) {
+        setError('Select your experience level.');
+        return;
+      }
+      if (!bio.trim()) {
+        setError('Add a short professional bio.');
+        return;
+      }
+    }
+
+    if (step === 3) {
+      const validPortfolio = portfolioUrls.map((item) => item.trim()).filter(Boolean);
+      if (validPortfolio.length < 5) {
+        setError('Please add at least 5 portfolio image URLs to continue.');
+        return;
+      }
+      if (!location.trim()) {
+        setError('Location is required for map visibility.');
+        return;
+      }
+    }
+
+    setStep((current) => (current < 4 ? ((current + 1) as 1 | 2 | 3 | 4) : current));
+  };
+
+  const handleFinish = async () => {
+    if (!user?.id) {
+      setError('Please sign in again to complete freelancer onboarding.');
+      return;
+    }
+
+    const validPortfolio = portfolioUrls.map((item) => item.trim()).filter(Boolean);
+    if (validPortfolio.length < 5) {
+      setError('Please add at least 5 portfolio image URLs.');
+      return;
+    }
+
+    setError(null);
+    setIsSaving(true);
+
+    const isAvailable = availability === 'Available';
+    const parsedStartingPrice = Number(startingPrice || 0);
+    const profileDescription = [
+      bio.trim(),
+      projectBudgetRange ? `Typical project budget: ${projectBudgetRange}` : '',
+      `Working days: ${workingDays}`,
+      instagram ? `Instagram: ${instagram}` : '',
+      behance ? `Behance: ${behance}` : '',
+      website ? `Website: ${website}` : '',
+      tiktok ? `TikTok: ${tiktok}` : '',
+      idDocumentUrl ? 'ID verification submitted' : '',
+      businessLicenseUrl ? 'Business license submitted' : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    const userUpdate = await DataService.updateUser(user.id, {
+      role: 'freelancer',
+      full_name: displayName.trim(),
+      avatar_url: profilePictureUrl.trim() || null,
+      cover_url: coverPhotoUrl.trim() || null,
+      location: location.trim(),
+      bio: bio.trim() || null,
+      updated_at: new Date().toISOString(),
+    } as any);
+
+    if (userUpdate.error) {
+      setError((userUpdate.error as any).message || 'Unable to update your account role.');
+      setIsSaving(false);
+      return;
+    }
+
+    const existingProfile = await DataService.getFreelancerProfile(user.id);
+    let freelancerProfileId = existingProfile.data?.id as string | undefined;
+
+    if (existingProfile.data) {
+      const updateProfile = await DataService.updateFreelancerProfile(user.id, {
+        title: selectedServices[0],
+        description: profileDescription,
+        hourly_rate: parsedStartingPrice > 0 ? parsedStartingPrice : null,
+        skills: [...selectedServices, ...selectedSpecialties],
+        styles: selectedSpecialties,
+        experience_years: parseExperienceYears(experience),
+        portfolio_count: validPortfolio.length,
+        is_available: isAvailable,
+        updated_at: new Date().toISOString(),
+      } as any);
+
+      if (updateProfile.error || !updateProfile.data) {
+        setError((updateProfile.error as any)?.message || 'Unable to update freelancer profile.');
+        setIsSaving(false);
+        return;
+      }
+
+      freelancerProfileId = updateProfile.data.id;
+    } else {
+      const createProfile = await DataService.createFreelancerProfile(user.id, {
+        title: selectedServices[0],
+        description: profileDescription,
+        hourly_rate: parsedStartingPrice > 0 ? parsedStartingPrice : null,
+        skills: [...selectedServices, ...selectedSpecialties],
+        styles: selectedSpecialties,
+        experience_years: parseExperienceYears(experience),
+        portfolio_count: validPortfolio.length,
+        is_available: isAvailable,
+      } as any);
+
+      if (createProfile.error || !createProfile.data) {
+        setError((createProfile.error as any)?.message || 'Unable to create freelancer profile.');
+        setIsSaving(false);
+        return;
+      }
+
+      freelancerProfileId = createProfile.data.id;
+    }
+
+    if (freelancerProfileId) {
+      const createPortfolioTasks = validPortfolio.slice(0, 20).map((url, index) =>
+        DataService.createPortfolioItem(freelancerProfileId!, {
+          title: `${selectedServices[0] || 'Creative'} Portfolio ${index + 1}`,
+          description: selectedSpecialties.length > 0 ? `${selectedSpecialties.join(', ')} showcase` : null,
+          image_urls: [url],
+          project_url: null,
+          tools_used: selectedServices,
+          featured: index < 3,
+        } as any)
+      );
+
+      await Promise.all(createPortfolioTasks);
+    }
+
+    localStorage.setItem(
+      `creativehub:freelancer-onboarding:${user.id}`,
+      JSON.stringify({
+        completedAt: new Date().toISOString(),
+        services: selectedServices,
+        specialties: selectedSpecialties,
+        experience,
+        projectBudgetRange,
+        availability,
+        workingDays,
+        socials: { instagram, behance, website, tiktok },
+        verification: { idDocumentUrl, businessLicenseUrl },
+      })
+    );
+
+    setIsSaving(false);
+    navigate('/freelancer-dashboard/portfolio');
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-12">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200 mb-8">
-        <div className="max-w-[1200px] mx-auto px-8 py-6">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-900 hover:text-black font-semibold mb-4 transition-colors"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Back to Home
-          </button>
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Become a Freelancer</h1>
-            <p className="text-gray-600">Join our creative community and start working on exciting projects</p>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
+      <div className="mx-auto w-full max-w-4xl px-4">
+        <button
+          onClick={() => (onBack ? onBack() : navigate('/explore'))}
+          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          {step === 1 ? 'Back to Explore' : 'Back'}
+        </button>
 
-      <div className="max-w-[900px] mx-auto px-8">
-        {/* Progress Steps */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 mb-8">
-          <div className="flex items-center justify-between mb-8">
-            {[1, 2, 3].map((step) => (
-              <div key={step} className="flex items-center flex-1">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all ${
-                      currentStep >= step
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white'
-                        : 'bg-gray-200 text-gray-500'
-                    }`}
-                  >
-                    {currentStep > step ? <CheckCircle className="w-6 h-6" /> : step}
-                  </div>
-                  <div>
-                    <div className={`font-semibold ${currentStep >= step ? 'text-gray-900' : 'text-gray-500'}`}>
-                      {step === 1 ? 'Basic Info' : step === 2 ? 'Professional Details' : 'Portfolio'}
-                    </div>
-                  </div>
-                </div>
-                {step < 3 && (
-                  <div
-                    className={`flex-1 h-1 mx-4 rounded-full ${
-                      currentStep > step ? 'bg-gradient-to-r from-gray-900 to-black' : 'bg-gray-200'
-                    }`}
-                  />
-                )}
-              </div>
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
+          <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Freelancer Onboarding</p>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">Build your professional profile</h1>
+          <p className="mb-8 text-sm text-gray-600">Complete your setup to unlock freelancer dashboard and AI matching visibility.</p>
+
+          <div className="mb-8 flex items-center gap-2">
+            {[1, 2, 3, 4].map((dot) => (
+              <div key={dot} className={`h-2 w-full rounded-full ${step >= dot ? 'bg-gray-900' : 'bg-gray-200'}`} />
             ))}
           </div>
-        </div>
 
-        {/* Form Content */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
-          {currentStep === 1 && (
-            <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Basic Information</h3>
+          {error && <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-              {/* Profile Picture Upload */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Profile Picture</label>
-                <div className="flex items-center gap-6">
-                  <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 ring-4 ring-gray-100">
-                    <ImageWithFallback
-                      src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200"
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-900 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
-                    <Camera className="w-5 h-5" />
-                    Upload Photo
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Display Name</label>
+          {step === 1 && (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Professional Display Name</label>
                 <input
-                  type="text"
-                  value={formData.displayName}
-                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                  placeholder="Enter your full name"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                  value={displayName}
+                  onChange={(event) => setDisplayName(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  placeholder="Emma Wong"
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Profile Picture URL</label>
                 <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="your.email@example.com"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                  value={profilePictureUrl}
+                  onChange={(event) => setProfilePictureUrl(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  placeholder="https://..."
                 />
               </div>
-
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Cover Photo URL</label>
                 <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="+66 123 456 789"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="Bangkok, Thailand"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                  value={coverPhotoUrl}
+                  onChange={(event) => setCoverPhotoUrl(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  placeholder="https://..."
                 />
               </div>
             </div>
           )}
 
-          {currentStep === 2 && (
+          {step === 2 && (
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Professional Details</h3>
+              <div>
+                <p className="mb-3 text-sm font-semibold text-gray-700">Choose Services (multi-select)</p>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {services.map((service) => (
+                    <button
+                      key={service}
+                      type="button"
+                      onClick={() => setSelectedServices((current) => toggle(current, service))}
+                      className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+                        selectedServices.includes(service)
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                      }`}
+                    >
+                      {service}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Specialty</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {specialties.map((specialty) => (
+                <p className="mb-3 text-sm font-semibold text-gray-700">Specialties</p>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {availableSpecialties.length === 0 && (
+                    <p className="col-span-full text-sm text-gray-500">Select services first to unlock specialty options.</p>
+                  )}
+                  {availableSpecialties.map((specialty) => (
                     <button
                       key={specialty}
-                      onClick={() => setFormData({ ...formData, specialty })}
-                      className={`px-4 py-3 rounded-lg font-semibold transition-all ${
-                        formData.specialty === specialty
-                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      type="button"
+                      onClick={() => setSelectedSpecialties((current) => toggle(current, specialty))}
+                      className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
+                        selectedSpecialties.includes(specialty)
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
                       }`}
                     >
                       {specialty}
@@ -182,95 +351,187 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Experience</label>
+                  <select
+                    value={experience}
+                    onChange={(event) => setExperience(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    <option value="">Select experience</option>
+                    {experienceOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Availability</label>
+                  <select
+                    value={availability}
+                    onChange={(event) => setAvailability(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    {availabilityOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Bio</label>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Bio</label>
                 <textarea
-                  value={formData.bio}
-                  onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                  placeholder="Tell us about yourself and your creative journey..."
-                  rows={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all resize-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Years of Experience</label>
-                <input
-                  type="number"
-                  value={formData.experience}
-                  onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                  placeholder="5"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Hourly Rate (THB)</label>
-                <input
-                  type="number"
-                  value={formData.hourlyRate}
-                  onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
-                  placeholder="1500"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                  value={bio}
+                  onChange={(event) => setBio(event.target.value)}
+                  className="min-h-28 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  placeholder="Fashion photographer with 7 years of experience specializing in editorial and luxury branding."
                 />
               </div>
             </div>
           )}
 
-          {currentStep === 3 && (
+          {step === 3 && (
             <div className="space-y-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Portfolio</h3>
-
-              <div className="border-2 border-dashed border-gray-300 rounded-2xl p-12 text-center hover:border-gray-500 transition-all cursor-pointer">
-                <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <Upload className="w-10 h-10 text-gray-900" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Starting Price (USD, optional)</label>
+                  <input
+                    value={startingPrice}
+                    onChange={(event) => setStartingPrice(event.target.value)}
+                    type="number"
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                    placeholder="300"
+                  />
                 </div>
-                <h4 className="text-xl font-bold text-gray-900 mb-2">Upload Your Portfolio</h4>
-                <p className="text-gray-600 mb-4">Drag and drop images of your best work, or click to browse</p>
-                <p className="text-sm text-gray-500">Support: JPG, PNG (Max 10 images)</p>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Typical Project Budget (optional)</label>
+                  <input
+                    value={projectBudgetRange}
+                    onChange={(event) => setProjectBudgetRange(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                    placeholder="$300-$800"
+                  />
+                </div>
               </div>
 
-              <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border-2 border-gray-100">
-                <div className="flex items-start gap-3">
-                  <Sparkles className="w-6 h-6 text-gray-900 flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-bold text-gray-900 mb-2">Portfolio Tips</h4>
-                    <ul className="text-sm text-gray-700 space-y-1">
-                      <li>• Upload your best and most recent work</li>
-                      <li>• Show variety in your style and techniques</li>
-                      <li>• Include before/after shots if applicable</li>
-                      <li>• High-quality images get more attention</li>
-                    </ul>
-                  </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Working Days</label>
+                  <select
+                    value={workingDays}
+                    onChange={(event) => setWorkingDays(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    {workingDayOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
+                  <input
+                    value={location}
+                    onChange={(event) => setLocation(event.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                    placeholder="Bangkok, Thailand"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-gray-700">Portfolio Upload URLs (minimum 5, recommended 10-20)</p>
+                <div className="space-y-2">
+                  {portfolioUrls.map((url, index) => (
+                    <input
+                      key={index}
+                      value={url}
+                      onChange={(event) =>
+                        setPortfolioUrls((current) =>
+                          current.map((item, itemIndex) => (itemIndex === index ? event.target.value : item))
+                        )
+                      }
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                      placeholder={`Portfolio image URL ${index + 1}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPortfolioUrls((current) => [...current, ''])}
+                  className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
+                >
+                  Add Another URL
+                </button>
               </div>
             </div>
           )}
 
-          {/* Navigation Buttons */}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Instagram (optional)</label>
+                  <input value={instagram} onChange={(event) => setInstagram(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Behance (optional)</label>
+                  <input value={behance} onChange={(event) => setBehance(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Website (optional)</label>
+                  <input value={website} onChange={(event) => setWebsite(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">TikTok (optional)</label>
+                  <input value={tiktok} onChange={(event) => setTiktok(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">ID Document URL (optional)</label>
+                  <input value={idDocumentUrl} onChange={(event) => setIdDocumentUrl(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Business License URL (optional)</label>
+                  <input value={businessLicenseUrl} onChange={(event) => setBusinessLicenseUrl(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                After completion, your account is upgraded to freelancer and the dashboard button becomes available.
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 flex items-center justify-between gap-3">
             <button
-              onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-              disabled={currentStep === 1}
-              className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              type="button"
+              onClick={() => setStep((current) => (current > 1 ? ((current - 1) as 1 | 2 | 3 | 4) : current))}
+              disabled={step === 1}
+              className="rounded-xl border border-gray-200 px-5 py-3 text-sm font-semibold text-gray-700 disabled:opacity-50"
             >
-              Previous
+              Back
             </button>
-            {currentStep < 3 ? (
+
+            {step < 4 ? (
               <button
-                onClick={() => setCurrentStep(currentStep + 1)}
-                className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                type="button"
+                onClick={handleContinue}
+                className="rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white"
               >
-                Next Step
-                <ChevronLeft className="w-5 h-5 rotate-180" />
+                Continue
               </button>
             ) : (
               <button
-                onClick={handleSubmit}
-                className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                type="button"
+                onClick={() => void handleFinish()}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
               >
-                <CheckCircle className="w-5 h-5" />
-                Submit Application
+                <CheckCircle2 className="h-4 w-4" />
+                {isSaving ? 'Saving...' : 'Complete Freelancer Setup'}
               </button>
             )}
           </div>

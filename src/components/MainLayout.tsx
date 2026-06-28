@@ -19,6 +19,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+  const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -45,6 +46,30 @@ export function MainLayout({ children }: MainLayoutProps) {
       isMounted = false;
     };
   }, [user?.id, user?.avatar_url]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function resolveFreelancerAccess() {
+      if (!user?.id || user.role !== 'freelancer') {
+        setCanAccessFreelancerDashboard(false);
+        return;
+      }
+
+      const response = await DataService.getFreelancerProfile(user.id);
+      if (!isMounted) {
+        return;
+      }
+
+      setCanAccessFreelancerDashboard(!response.error && !!response.data);
+    }
+
+    resolveFreelancerAccess();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.role]);
 
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
     setShowUserMenu(false);
@@ -103,7 +128,6 @@ export function MainLayout({ children }: MainLayoutProps) {
               {[
                 { label: 'Explore', path: '/explore' },
                 { label: 'Map', path: '/map' },
-                { label: 'Freelancers', path: '/freelancers' },
                 { label: 'For You', path: '/for-you' },
               ].map((tab) => (
                 <button
@@ -119,10 +143,12 @@ export function MainLayout({ children }: MainLayoutProps) {
             {/* Right Actions */}
             <div className="flex items-center gap-2 md:gap-4">
               <button
-                onClick={() => navigate('/freelancer-dashboard/portfolio')}
+                onClick={() =>
+                  navigate(canAccessFreelancerDashboard ? '/freelancer-dashboard/portfolio' : '/become-freelancer')
+                }
                 className="hidden md:block px-6 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
               >
-                Freelancer Dashboard
+                {canAccessFreelancerDashboard ? 'Freelancer Dashboard' : 'Become a Freelancer'}
               </button>
               <div className="relative">
                 <button

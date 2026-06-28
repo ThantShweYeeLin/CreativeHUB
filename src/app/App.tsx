@@ -9,7 +9,6 @@ import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 // Authenticated page imports
 import { FreelancerProfile } from './pages/FreelancerProfile';
 import { MapView } from './pages/MapView';
-import { PortfoliosView } from './pages/PortfoliosView';
 import { RequestsPage } from './pages/RequestsPage';
 import { ClientProfilePage } from './pages/ClientProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
@@ -24,6 +23,7 @@ import { FavoritesPage } from './pages/FavoritesPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
+import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
 
 // Loading component
 function LoadingScreen() {
@@ -64,7 +64,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
 }
 
 export default function App() {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
   if (loading) {
@@ -114,9 +114,7 @@ export default function App() {
             path="/freelancers"
             element={
               <ProtectedRoute>
-                <MainLayout>
-                  <PortfoliosView onViewProfile={(id) => navigate(`/profile/${id}`)} />
-                </MainLayout>
+                <Navigate to="/explore" replace />
               </ProtectedRoute>
             }
           />
@@ -154,7 +152,7 @@ export default function App() {
             path="/requests"
             element={
               <ProtectedRoute>
-                <RequestsPage onBack={() => navigate(-1)} onViewProfile={() => navigate('/freelancers')} onOpenMessages={() => navigate('/messages')} />
+                <RequestsPage onBack={() => navigate(-1)} onViewProfile={() => navigate('/explore')} onOpenMessages={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -196,7 +194,11 @@ export default function App() {
             path="/freelancer-dashboard"
             element={
               <ProtectedRoute>
-                <Navigate to="/freelancer-dashboard/portfolio" replace />
+                {user?.role === 'freelancer' ? (
+                  <Navigate to="/freelancer-dashboard/portfolio" replace />
+                ) : (
+                  <Navigate to="/become-freelancer" replace />
+                )}
               </ProtectedRoute>
             }
           />
@@ -204,7 +206,7 @@ export default function App() {
             path="/freelancer-dashboard/portfolio"
             element={
               <ProtectedRoute>
-                <FreelancerDashboardPortfolioPage />
+                {user?.role === 'freelancer' ? <FreelancerDashboardPortfolioPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />
@@ -212,7 +214,7 @@ export default function App() {
             path="/freelancer-dashboard/requests"
             element={
               <ProtectedRoute>
-                <FreelancerDashboardRequestsPage />
+                {user?.role === 'freelancer' ? <FreelancerDashboardRequestsPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />
@@ -220,7 +222,7 @@ export default function App() {
             path="/freelancer-dashboard/analytics"
             element={
               <ProtectedRoute>
-                <FreelancerDashboardAnalyticsPage />
+                {user?.role === 'freelancer' ? <FreelancerDashboardAnalyticsPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />
@@ -228,7 +230,23 @@ export default function App() {
             path="/freelancer-dashboard/settings"
             element={
               <ProtectedRoute>
-                <FreelancerDashboardSettingsPage />
+                {user?.role === 'freelancer' ? <FreelancerDashboardSettingsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/client"
+            element={
+              <ProtectedRoute>
+                <ClientOnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/freelancer"
+            element={
+              <ProtectedRoute>
+                <BecomeFreelancerPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />

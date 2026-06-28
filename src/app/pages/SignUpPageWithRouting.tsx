@@ -9,7 +9,7 @@ export function SignUpPageWithRouting() {
   const handleSignUp = async (fullName: string, email: string, password: string, role: 'freelancer' | 'client') => {
     try {
       await signUp(email, password, fullName, role);
-      navigate('/explore');
+      navigate(role === 'freelancer' ? '/onboarding/freelancer' : '/onboarding/client');
     } catch (error) {
       console.error('Sign up failed:', error);
       // Error will be displayed by the SignUpPage component
