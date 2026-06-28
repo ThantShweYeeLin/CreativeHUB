@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { UserMenu } from '../app/components/UserMenu';
 import { NotificationsPanel } from '../app/components/NotificationsPanel';
+import { DataService } from '../lib/dataService';
+import { ImageWithFallback } from './common/ImageWithFallback';
+import { DEFAULT_AVATAR_URL } from '../lib/defaults';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -12,9 +15,36 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadUserAvatar() {
+      if (!user?.id) {
+        setProfileAvatarUrl(null);
+        return;
+      }
+
+      const response = await DataService.getUser(user.id);
+      if (!isMounted) return;
+
+      if (response.error) {
+        setProfileAvatarUrl(user.avatar_url || null);
+      } else {
+        setProfileAvatarUrl(response.data?.avatar_url || user.avatar_url || null);
+      }
+    }
+
+    loadUserAvatar();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id, user?.avatar_url]);
 
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
     setShowUserMenu(false);
@@ -89,7 +119,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             {/* Right Actions */}
             <div className="flex items-center gap-2 md:gap-4">
               <button
-                onClick={() => navigate('/freelancer-dashboard')}
+                onClick={() => navigate('/freelancer-dashboard/portfolio')}
                 className="hidden md:block px-6 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
               >
                 Freelancer Dashboard
@@ -105,9 +135,9 @@ export function MainLayout({ children }: MainLayoutProps) {
                 {showNotifications && (
                   <NotificationsPanel
                     onClose={() => setShowNotifications(false)}
-                    onViewProfile={(status: 'accepted' | 'pending' | 'rejected') => {
+                    onOpenRequests={() => {
                       setShowNotifications(false);
-                      navigate(`/profile/1?status=${status}`);
+                      navigate('/requests');
                     }}
                     onOpenMessages={() => {
                       setShowNotifications(false);
@@ -118,9 +148,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               </div>
               <button
                 onClick={() => navigate('/client-profile')}
-                className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-full flex items-center justify-center cursor-pointer hover:shadow-lg transition-shadow"
+                className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-gray-200"
               >
-                <span className="text-white text-sm md:text-base font-semibold">JD</span>
+                <ImageWithFallback
+                  src={profileAvatarUrl || DEFAULT_AVATAR_URL}
+                  alt="Profile picture"
+                  className="h-full w-full object-cover"
+                />
               </button>
               <div className="relative">
                 <button

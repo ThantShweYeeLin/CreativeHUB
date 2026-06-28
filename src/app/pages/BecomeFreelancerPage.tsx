@@ -1,6 +1,6 @@
 import { ChevronLeft, Camera, Upload, Sparkles, CheckCircle } from 'lucide-react';
 import { useState } from 'react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 
 interface BecomeFreelancerPageProps {
   onBack: () => void;

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
-import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
+import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
@@ -99,6 +100,11 @@ export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>({
+    services: [],
+    priceRange: [0, 10000],
+    locations: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAIMatcher, setShowAIMatcher] = useState(false);
@@ -149,8 +155,35 @@ export function ExplorePage() {
     }));
   }, [freelancers]);
 
-  const sectionFor = (keywords: string[]) => {
+  const filteredProfiles = useMemo(() => {
+    const mapById = new Map(
+      freelancers.map((item) => [item.user_id || item.users?.id || item.id, item])
+    );
+
     return profiles.filter((profile) => {
+      const source = mapById.get(profile.id);
+      const combinedText = `${profile.specialty} ${source?.title || ''} ${(source?.skills || []).join(' ')}`.toLowerCase();
+
+      const serviceMatch =
+        filters.services.length === 0 ||
+        filters.services.some((service) => combinedText.includes(service.toLowerCase().replace('&', 'and')));
+
+      const locationMatch =
+        filters.locations.length === 0 ||
+        filters.locations.some((location) =>
+          (profile.location || '').toLowerCase().includes(location.toLowerCase())
+        );
+
+      const hourlyRate = Number(source?.hourly_rate ?? 0);
+      const [minPrice, maxPrice] = filters.priceRange;
+      const priceMatch = hourlyRate === 0 ? true : hourlyRate >= minPrice && hourlyRate <= maxPrice;
+
+      return serviceMatch && locationMatch && priceMatch;
+    });
+  }, [profiles, freelancers, filters]);
+
+  const sectionFor = (keywords: string[]) => {
+    return filteredProfiles.filter((profile) => {
       const searchable = `${profile.specialty} ${freelancers.find((item) => (item.user_id || item.users?.id || item.id) === profile.id)?.skills?.join(' ') || ''}`.toLowerCase();
       return keywords.some((keyword) => searchable.includes(keyword));
     });
@@ -159,7 +192,7 @@ export function ExplorePage() {
   const makeupArtists = sectionFor(['makeup', 'beauty', 'hair', 'stylist']);
   const photographers = sectionFor(['photo', 'camera', 'studio', 'portrait', 'editorial']);
   const models = sectionFor(['model', 'fashion', 'runway']);
-  const uncategorizedProfiles = profiles.filter((profile) =>
+  const uncategorizedProfiles = filteredProfiles.filter((profile) =>
     ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
   );
 
@@ -242,6 +275,13 @@ export function ExplorePage() {
         />
       )}
 
+      {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers match these filters</h2>
+          <p className="text-gray-600">Adjust service, location, or price range in Advanced Filter.</p>
+        </div>
+      )}
+
       {/* Carousel Sections */}
       {!isLoading && makeupArtists.length > 0 && (
         <CarouselSection
@@ -265,6 +305,13 @@ export function ExplorePage() {
         <CarouselSection
           title="Featured Creative Freelancers"
           profiles={uncategorizedProfiles}
+        />
+      )}
+
+      {showSearchFilter && (
+        <SearchFilterPanel
+          onClose={() => setShowSearchFilter(false)}
+          onSearch={(nextFilters) => setFilters(nextFilters)}
         />
       )}
     </>

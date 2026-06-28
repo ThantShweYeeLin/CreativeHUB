@@ -1,9 +1,9 @@
 import { Bell, Check, MessageCircle, Heart, MessageSquare, X as XIcon } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 
 interface NotificationsPanelProps {
   onClose: () => void;
-  onViewProfile?: (status: 'accepted' | 'rejected') => void;
+  onOpenRequests?: () => void;
   onOpenMessages?: () => void;
 }
 
@@ -72,7 +72,7 @@ const getNotificationIcon = (type: string) => {
   }
 };
 
-export function NotificationsPanel({ onClose, onViewProfile, onOpenMessages }: NotificationsPanelProps) {
+export function NotificationsPanel({ onClose, onOpenRequests, onOpenMessages }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
@@ -104,10 +104,10 @@ export function NotificationsPanel({ onClose, onViewProfile, onOpenMessages }: N
               key={notification.id}
               onClick={() => {
                 if (notification.type === 'request_accepted') {
-                  onViewProfile?.('accepted');
+                  onOpenRequests?.();
                   onClose();
                 } else if (notification.type === 'request_rejected') {
-                  onViewProfile?.('rejected');
+                  onOpenRequests?.();
                   onClose();
                 } else if (notification.type === 'message') {
                   onOpenMessages?.();

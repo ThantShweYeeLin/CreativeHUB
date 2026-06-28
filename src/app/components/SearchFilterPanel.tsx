@@ -6,7 +6,7 @@ interface SearchFilterPanelProps {
   onSearch: (filters: FilterState) => void;
 }
 
-interface FilterState {
+export interface FilterState {
   services: string[];
   priceRange: [number, number];
   locations: string[];
