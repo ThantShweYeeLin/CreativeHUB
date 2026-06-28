@@ -1,79 +1,16 @@
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { useAuth } from '../../contexts/AuthContext';
+import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 
 interface RequestsPageProps {
   onBack: () => void;
   onViewProfile?: (status: 'accepted' | 'pending' | 'rejected') => void;
   onOpenMessages?: () => void;
 }
-
-const requests = [
-  {
-    id: 1,
-    freelancer: {
-      name: 'Simran Sood',
-      specialty: 'Creative Artistry',
-      avatar: 'https://images.unsplash.com/photo-1637862666931-be59da5dd8ca?w=200'
-    },
-    projectName: 'Wedding Makeup - Beach Theme',
-    budget: 15000,
-    status: 'accepted' as const,
-    date: '2026-05-03',
-    message: 'I\'d love to work on this project! Let\'s discuss the details.'
-  },
-  {
-    id: 2,
-    freelancer: {
-      name: 'Deny Napitupulu',
-      specialty: 'Landscape & Nature',
-      avatar: 'https://images.unsplash.com/photo-1706661912295-bd1dc10ffe7f?w=200'
-    },
-    projectName: 'Product Photography - E-commerce',
-    budget: 8000,
-    status: 'pending' as const,
-    date: '2026-05-04',
-    message: null
-  },
-  {
-    id: 3,
-    freelancer: {
-      name: 'Laura Chouette',
-      specialty: 'Fashion & Editorial',
-      avatar: 'https://images.unsplash.com/photo-1596704182101-542876d47a68?w=200'
-    },
-    projectName: 'Fashion Editorial Shoot',
-    budget: 25000,
-    status: 'rejected' as const,
-    date: '2026-05-02',
-    message: 'Thank you for reaching out. Unfortunately, I\'m fully booked for this month.'
-  },
-  {
-    id: 4,
-    freelancer: {
-      name: 'Daria Magazzu',
-      specialty: 'High Fashion',
-      avatar: 'https://images.unsplash.com/photo-1559878541-926091e4c31b?w=200'
-    },
-    projectName: 'Runway Model - Fashion Week',
-    budget: 30000,
-    status: 'pending' as const,
-    date: '2026-05-05',
-    message: null
-  },
-  {
-    id: 5,
-    freelancer: {
-      name: 'Marcus Chen',
-      specialty: 'Action Sports',
-      avatar: 'https://images.unsplash.com/photo-1706661912765-7d0f68289a0f?w=200'
-    },
-    projectName: 'Sports Event Coverage',
-    budget: 12000,
-    status: 'accepted' as const,
-    date: '2026-05-01',
-    message: 'Excited to capture this event! Available on the requested dates.'
-  },
-];
 
 const getStatusColor = (status: 'pending' | 'accepted' | 'rejected') => {
   switch (status) {
@@ -91,6 +28,66 @@ const getStatusText = (status: 'pending' | 'accepted' | 'rejected') => {
 };
 
 export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: RequestsPageProps) {
+  const { user } = useAuth();
+  const [requests, setRequests] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadRequests() {
+      if (!user?.id) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      const response = await DataService.getClientRequests(user.id);
+      if (!isMounted) return;
+
+      if (response.error) {
+        setError((response.error as any)?.message || 'Unable to load your requests.');
+        setRequests([]);
+      } else {
+        setRequests(response.data || []);
+      }
+
+      setIsLoading(false);
+    }
+
+    loadRequests();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const normalizedRequests = useMemo(
+    () =>
+      requests.map((request) => ({
+        budgetMeta: extractBudgetMeta(request.message, request.description) || {
+          currency: 'THB',
+          min: Number(request.budget || 0),
+          max: Number(request.budget || 0),
+        },
+        id: request.id,
+        freelancer: {
+          name: request.freelancer?.full_name || 'Freelancer',
+          specialty: request.freelancer?.title || 'Creative Freelancer',
+          avatar: request.freelancer?.avatar_url || DEFAULT_AVATAR_URL,
+        },
+        projectName: request.project_name,
+        budget: Number(request.budget || 0),
+        status: request.status as 'pending' | 'accepted' | 'rejected',
+        date: request.created_at,
+        message: stripBudgetMeta(request.message || request.description || ''),
+      })),
+    [requests]
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
       {/* Header */}
@@ -112,8 +109,19 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
       {/* Requests List */}
       <div className="max-w-[1200px] mx-auto px-4 md:px-8">
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          </div>
+        ) : (
         <div className="space-y-4">
-          {requests.map((request) => (
+          {normalizedRequests.map((request) => (
             <div
               key={request.id}
               className="bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow"
@@ -153,7 +161,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
                     <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-3 md:gap-6 mb-4 text-xs md:text-sm text-gray-600">
                       <div>
-                        <span className="font-semibold text-gray-900">Budget:</span> ฿{request.budget.toLocaleString()}
+                        <span className="font-semibold text-gray-900">Budget:</span> {formatBudgetRange(request.budgetMeta)}
                       </div>
                       <div>
                         <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -209,9 +217,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             </div>
           ))}
         </div>
+        )}
 
         {/* Empty State */}
-        {requests.length === 0 && (
+        {!isLoading && normalizedRequests.length === 0 && (
           <div className="text-center py-16">
             <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-12 h-12 text-gray-900" />

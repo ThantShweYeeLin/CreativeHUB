@@ -9,7 +9,6 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
       "react": ["./node_modules/@types/react"],
       "react/*": ["./node_modules/react/*"],

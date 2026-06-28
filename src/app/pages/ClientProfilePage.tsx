@@ -1,8 +1,9 @@
 import { Briefcase, Calendar, Camera, ChevronLeft, Edit, ImagePlus, MapPin, Save, Star } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface ClientProfilePageProps {
   onBack: () => void;
@@ -76,7 +77,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const recentBookings = bookings.slice(0, 3);
   const displayName = profile?.full_name || user?.fullName || 'CreativeHUB Client';
   const username = profile?.email ? `@${profile.email.split('@')[0]}` : '@client';
-  const avatarUrl = profile?.avatar_url || user?.avatar_url || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
+  const avatarUrl = profile?.avatar_url || user?.avatar_url || DEFAULT_AVATAR_URL;
   const coverUrl = profile?.cover_url || '';
   const location = profile?.location || 'Location not added';
   const rating = Number(profile?.rating || 0);
@@ -186,7 +187,11 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     if (saveError) {
       setError((saveError as any).message || `Uploaded image, but could not save your ${imageType}.`);
     } else {
-      setProfile(data);
+      setProfile((current: any) => ({
+        ...(current || {}),
+        ...(data || {}),
+        ...updates,
+      }));
     }
 
     setUploadingImageType(null);

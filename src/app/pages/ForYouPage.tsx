@@ -5,11 +5,11 @@ import { DataService } from '../../lib/dataService';
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
- 
+
 interface ForYouPageProps {
   onViewProfile?: (freelancerId: string) => void;
 }
- 
+
 interface FeedPost {
   id: string;
   authorId: string;
@@ -26,14 +26,14 @@ interface FeedPost {
   isSaved: boolean;
   isClientPost?: boolean;
 }
- 
+
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
- 
+
 function toTimeAgo(timestamp: string | undefined) {
   if (!timestamp) {
     return 'Recently';
   }
- 
+
   const diffMs = Date.now() - new Date(timestamp).getTime();
   const minutes = Math.floor(diffMs / 60000);
   if (minutes < 1) return 'Just now';
@@ -43,7 +43,7 @@ function toTimeAgo(timestamp: string | undefined) {
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 }
- 
+
 export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -53,19 +53,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const [newPostCaption, setNewPostCaption] = useState('');
   const [newPostImageUrl, setNewPostImageUrl] = useState('');
   const [isPublishing, setIsPublishing] = useState(false);
- 
+
   useEffect(() => {
     let isMounted = true;
- 
+
     async function loadFeed() {
       setIsLoading(true);
       setError(null);
- 
+
       const [freelancersResponse, clientPostsResponse] = await Promise.all([
         DataService.getAllFreelancers(40),
         DataService.getClientPosts(30),
       ]);
- 
+
       if (freelancersResponse.error && clientPostsResponse.error) {
         if (isMounted) {
           setError((freelancersResponse.error as any)?.message || (clientPostsResponse.error as any)?.message || 'Unable to load feed.');
@@ -74,15 +74,15 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         }
         return;
       }
- 
+
       const normalizedFreelancers = (freelancersResponse.data || []).map(normalizeFreelancer);
- 
+
       const generatedPosts: FeedPost[] = normalizedFreelancers.flatMap((freelancer) => {
         const authorId = freelancer.userId || freelancer.id;
         const username = freelancer.username || freelancer.fullName.toLowerCase().replace(/\s+/g, '_');
         const specialty = freelancer.profession || freelancer.skills[0] || 'Creative Freelancer';
         const projectItems = freelancer.portfolio;
- 
+
         return projectItems.map((project, index) => ({
           id: `${authorId}-${project.id}`,
           authorId,
@@ -99,11 +99,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           isSaved: false,
         }));
       }).slice(0, 30);
- 
+
       const clientPosts: FeedPost[] = (clientPostsResponse.data || []).map((post: any) => {
         const authorName = post.client?.full_name || 'Client';
         const username = (post.client?.email || 'client').split('@')[0];
- 
+
         return {
           id: `client-post-${post.id}`,
           authorId: post.client_id,
@@ -121,30 +121,30 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           isClientPost: true,
         };
       });
- 
+
       if (!isMounted) {
         return;
       }
- 
+
       const combined = [...clientPosts, ...generatedPosts].sort((a, b) => {
         const aTime = a.timeAgo === 'Just now' ? Date.now() : 0;
         const bTime = b.timeAgo === 'Just now' ? Date.now() : 0;
         return bTime - aTime;
       });
- 
+
       setPosts(combined);
       setIsLoading(false);
     }
- 
+
     loadFeed();
- 
+
     return () => {
       isMounted = false;
     };
   }, []);
- 
+
   const sortedPosts = useMemo(() => posts, [posts]);
- 
+
   const handleLike = (postId: string) => {
     setPosts((current) =>
       current.map((post) =>
@@ -154,7 +154,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       )
     );
   };
- 
+
   const handleSave = (postId: string) => {
     setPosts((current) =>
       current.map((post) =>
@@ -162,38 +162,38 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       )
     );
   };
- 
+
   const handleShare = async (postId: string) => {
     const shareUrl = `${window.location.origin}/profile/${postId.split('-')[0]}`;
     await navigator.clipboard.writeText(shareUrl);
   };
- 
+
   const handlePublishClientPost = async () => {
     if (!user?.id || user.role !== 'client') {
       setError('Only client accounts can publish For You posts.');
       return;
     }
- 
+
     if (!newPostCaption.trim()) {
       setError('Please add a caption before publishing.');
       return;
     }
- 
+
     setIsPublishing(true);
     setError(null);
- 
+
     const response = await DataService.createClientPost({
       client_id: user.id,
       caption: newPostCaption.trim(),
       image_url: newPostImageUrl.trim() || null,
     });
- 
+
     if (response.error || !response.data) {
       setError((response.error as any)?.message || 'Unable to publish post.');
       setIsPublishing(false);
       return;
     }
- 
+
     const created = response.data as any;
     const newFeedPost: FeedPost = {
       id: `client-post-${created.id}`,
@@ -211,13 +211,13 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       isSaved: false,
       isClientPost: true,
     };
- 
+
     setPosts((current) => [newFeedPost, ...current]);
     setNewPostCaption('');
     setNewPostImageUrl('');
     setIsPublishing(false);
   };
- 
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 py-4 md:py-8 -mx-4 md:mx-0">
       <div className="max-w-2xl mx-auto">
@@ -225,7 +225,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">For You</h1>
           <p className="text-sm md:text-base text-gray-600">Live creative feed from freelancer portfolios</p>
         </div>
- 
+
         {user?.role === 'client' && (
           <div className="mb-6 mx-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-lg md:p-5">
             <h2 className="mb-3 text-lg font-bold text-gray-900">Publish Client Post</h2>
@@ -250,26 +250,26 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
             </button>
           </div>
         )}
- 
+
         {error && (
           <div className="mb-6 mx-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
           </div>
         )}
- 
+
         {isLoading && (
           <div className="flex justify-center py-12">
             <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
           </div>
         )}
- 
+
         {!isLoading && sortedPosts.length === 0 && (
           <div className="mx-4 rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
             <h2 className="mb-2 text-xl font-bold text-gray-900">No feed posts yet</h2>
             <p className="text-gray-600">Freelancer portfolio posts will appear here as soon as data is available.</p>
           </div>
         )}
- 
+
         <div className="space-y-4 md:space-y-6">
           {sortedPosts.map((post) => (
             <div key={post.id} className="bg-white rounded-2xl md:rounded-3xl shadow-lg overflow-hidden border border-gray-200">
@@ -292,11 +292,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 </button>
                 <span className="text-sm text-gray-500">{post.timeAgo}</span>
               </div>
- 
+
               <div className="relative aspect-square bg-gray-100">
                 <ImageWithFallback src={post.image} alt={post.caption} className="w-full h-full object-cover" />
               </div>
- 
+
               <div className="px-4 md:px-6 py-3 md:py-4">
                 <div className="flex items-center justify-between mb-3 md:mb-4">
                   <div className="flex items-center gap-4">
@@ -319,7 +319,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     <Bookmark className={`w-6 h-6 transition-all ${post.isSaved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
                   </button>
                 </div>
- 
+
                 <div className="mb-4">
                   <p className="text-gray-900">
                     <button onClick={() => onViewProfile?.(post.authorId)} className="font-bold hover:text-gray-900 transition-colors">
@@ -328,7 +328,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     <span>{post.caption}</span>
                   </p>
                 </div>
- 
+
                 {expandedCommentsForPost === post.id && (
                   <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                     Comment threads are not yet enabled for this feed item.
@@ -342,5 +342,3 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     </div>
   );
 }
- 
- 

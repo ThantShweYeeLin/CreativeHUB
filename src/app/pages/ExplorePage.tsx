@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
-import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
-
+import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
+ 
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
-
+ 
 interface ProfileCardProps {
   id: string;
   name: string;
@@ -16,11 +17,11 @@ interface ProfileCardProps {
   image: string;
   location?: string;
 }
-
+ 
 function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
-
+ 
   return (
     <div
       className="flex-shrink-0 w-[240px] sm:w-[280px] group cursor-pointer"
@@ -66,12 +67,12 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, location }: 
     </div>
   );
 }
-
+ 
 interface CarouselSectionProps {
   title: string;
   profiles: ProfileCardProps[];
 }
-
+ 
 function CarouselSection({ title, profiles }: CarouselSectionProps) {
   return (
     <div className="mb-12 md:mb-16">
@@ -94,49 +95,54 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
     </div>
   );
 }
-
+ 
 export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>({
+    services: [],
+    priceRange: [0, 10000],
+    locations: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAIMatcher, setShowAIMatcher] = useState(false);
   const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherFreelancer[] | null>(null);
-
+ 
   useEffect(() => {
     let isMounted = true;
-
+ 
     async function loadFreelancers() {
       setIsLoading(true);
       setError(null);
-
+ 
       const response = searchQuery.trim()
         ? await DataService.searchFreelancers(searchQuery.trim())
         : await DataService.getAllFreelancers(60);
-
+ 
       if (!isMounted) {
         return;
       }
-
+ 
       if (response.error) {
         setError((response.error as any).message || 'Unable to load freelancers.');
         setFreelancers([]);
       } else {
         setFreelancers(response.data || []);
       }
-
+ 
       setIsLoading(false);
     }
-
+ 
     const timeoutId = window.setTimeout(loadFreelancers, searchQuery.trim() ? 250 : 0);
-
+ 
     return () => {
       isMounted = false;
       window.clearTimeout(timeoutId);
     };
   }, [searchQuery]);
-
+ 
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers.map((profile) => ({
       id: profile.user_id || profile.users?.id || profile.id,
@@ -148,21 +154,48 @@ export function ExplorePage() {
       location: profile.users?.location || undefined,
     }));
   }, [freelancers]);
-
-  const sectionFor = (keywords: string[]) => {
+ 
+  const filteredProfiles = useMemo(() => {
+    const mapById = new Map(
+      freelancers.map((item) => [item.user_id || item.users?.id || item.id, item])
+    );
+ 
     return profiles.filter((profile) => {
+      const source = mapById.get(profile.id);
+      const combinedText = `${profile.specialty} ${source?.title || ''} ${(source?.skills || []).join(' ')}`.toLowerCase();
+ 
+      const serviceMatch =
+        filters.services.length === 0 ||
+        filters.services.some((service) => combinedText.includes(service.toLowerCase().replace('&', 'and')));
+ 
+      const locationMatch =
+        filters.locations.length === 0 ||
+        filters.locations.some((location) =>
+          (profile.location || '').toLowerCase().includes(location.toLowerCase())
+        );
+ 
+      const hourlyRate = Number(source?.hourly_rate ?? 0);
+      const [minPrice, maxPrice] = filters.priceRange;
+      const priceMatch = hourlyRate === 0 ? true : hourlyRate >= minPrice && hourlyRate <= maxPrice;
+ 
+      return serviceMatch && locationMatch && priceMatch;
+    });
+  }, [profiles, freelancers, filters]);
+ 
+  const sectionFor = (keywords: string[]) => {
+    return filteredProfiles.filter((profile) => {
       const searchable = `${profile.specialty} ${freelancers.find((item) => (item.user_id || item.users?.id || item.id) === profile.id)?.skills?.join(' ') || ''}`.toLowerCase();
       return keywords.some((keyword) => searchable.includes(keyword));
     });
   };
-
+ 
   const makeupArtists = sectionFor(['makeup', 'beauty', 'hair', 'stylist']);
   const photographers = sectionFor(['photo', 'camera', 'studio', 'portrait', 'editorial']);
   const models = sectionFor(['model', 'fashion', 'runway']);
-  const uncategorizedProfiles = profiles.filter((profile) =>
+  const uncategorizedProfiles = filteredProfiles.filter((profile) =>
     ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
   );
-
+ 
   return (
     <>
       {/* Search and AI Matcher */}
@@ -205,33 +238,33 @@ export function ExplorePage() {
           </button>
         </div>
       </div>
-
+ 
       <AIImageMatcher
         open={showAIMatcher}
         freelancers={freelancers}
         onClose={() => setShowAIMatcher(false)}
         onResults={setAIMatcherResults}
       />
-
+ 
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
-
+ 
       {isLoading && (
         <div className="flex justify-center py-16">
           <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
         </div>
       )}
-
+ 
       {!isLoading && profiles.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
           <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers found</h2>
           <p className="text-gray-600">Available freelancer profiles from the database will appear here.</p>
         </div>
       )}
-
+ 
       {!isLoading && aiMatcherResults && (
         <AIImageMatcherResults
           results={aiMatcherResults}
@@ -241,7 +274,14 @@ export function ExplorePage() {
           }}
         />
       )}
-
+ 
+      {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers match these filters</h2>
+          <p className="text-gray-600">Adjust service, location, or price range in Advanced Filter.</p>
+        </div>
+      )}
+ 
       {/* Carousel Sections */}
       {!isLoading && makeupArtists.length > 0 && (
         <CarouselSection
@@ -267,6 +307,15 @@ export function ExplorePage() {
           profiles={uncategorizedProfiles}
         />
       )}
+ 
+      {showSearchFilter && (
+        <SearchFilterPanel
+          onClose={() => setShowSearchFilter(false)}
+          onSearch={(nextFilters) => setFilters(nextFilters)}
+        />
+      )}
     </>
   );
 }
+ 
+ 

@@ -1,27 +1,30 @@
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
-
+ 
 // Authenticated page imports
-import { FreelancerProfile } from './components/FreelancerProfile';
-import { MapView } from './components/MapView';
-import { PortfoliosView } from './components/PortfoliosView';
-import { RequestsPage } from './components/RequestsPage';
-import { ClientProfilePage } from './components/ClientProfilePage';
-import { BecomeFreelancerPage } from './components/BecomeFreelancerPage';
-import { FreelancerDashboard } from './components/FreelancerDashboard';
-import { PremiumSubscriptionPage } from './components/PremiumSubscriptionPage';
-import { BookingTrackingPage } from './components/BookingTrackingPage';
-import { MyBookingsPage } from './components/MyBookingsPage';
-import { FavoritesPage } from './components/FavoritesPage';
-import { MessagesPage } from './components/MessagesPage';
-import { ForYouPage } from './components/ForYouPage';
+import { FreelancerProfile } from './pages/FreelancerProfile';
+import { MapView } from './pages/MapView';
+import { PortfoliosView } from './pages/PortfoliosView';
+import { RequestsPage } from './pages/RequestsPage';
+import { ClientProfilePage } from './pages/ClientProfilePage';
+import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
+import { FreelancerDashboardPortfolioPage } from './pages/FreelancerDashboardPortfolioPage';
+import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
+import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
+import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
+import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
+import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { MyBookingsPage } from './pages/MyBookingsPage';
+import { FavoritesPage } from './pages/FavoritesPage';
+import { MessagesPage } from './pages/MessagesPage';
+import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
-
+ 
 // Loading component
 function LoadingScreen() {
   return (
@@ -33,7 +36,7 @@ function LoadingScreen() {
     </div>
   );
 }
-
+ 
 function SupabaseSetupScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
@@ -59,18 +62,19 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
     </div>
   );
 }
-
+ 
 export default function App() {
   const { loading, isAuthenticated } = useAuth();
-
+  const navigate = useNavigate();
+ 
   if (loading) {
     return <LoadingScreen />;
   }
-
+ 
   if (!isSupabaseConfigured) {
     return <SupabaseSetupScreen />;
   }
-
+ 
   return (
     <Routes>
       {/* Public Routes */}
@@ -81,7 +85,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/login" replace />} />
         </>
       )}
-
+ 
       {/* Protected Routes */}
       {isAuthenticated && (
         <>
@@ -101,7 +105,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <MapView onViewProfile={() => {}} />
+                  <MapView onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -111,7 +115,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <PortfoliosView onViewProfile={() => {}} />
+                  <PortfoliosView onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -121,18 +125,18 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <ForYouPage onViewProfile={() => {}} />
+                  <ForYouPage onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
           />
-
+ 
           {/* Profile pages */}
           <Route
             path="/profile/:id"
             element={
               <ProtectedRoute>
-                <FreelancerProfile onBack={() => {}} requestStatus={null} onOpenChat={() => {}} />
+                <FreelancerProfile onBack={() => navigate(-1)} requestStatus={null} onOpenChat={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -140,17 +144,17 @@ export default function App() {
             path="/client-profile"
             element={
               <ProtectedRoute>
-                <ClientProfilePage onBack={() => {}} />
+                <ClientProfilePage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
-
+ 
           {/* Booking and requests */}
           <Route
             path="/requests"
             element={
               <ProtectedRoute>
-                <RequestsPage onBack={() => {}} onViewProfile={() => {}} onOpenMessages={() => {}} />
+                <RequestsPage onBack={() => navigate(-1)} onViewProfile={() => navigate('/freelancers')} onOpenMessages={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -158,7 +162,7 @@ export default function App() {
             path="/my-bookings"
             element={
               <ProtectedRoute>
-                <MyBookingsPage onBack={() => {}} onSelectBooking={() => {}} />
+                <MyBookingsPage onBack={() => navigate('/explore')} onSelectBooking={(id) => navigate(`/booking/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -166,17 +170,17 @@ export default function App() {
             path="/booking/:id"
             element={
               <ProtectedRoute>
-                <BookingTrackingPage onBack={() => {}} />
+                <BookingTrackingPage onBack={() => navigate('/my-bookings')} />
               </ProtectedRoute>
             }
           />
-
+ 
           {/* User pages */}
           <Route
             path="/messages"
             element={
               <ProtectedRoute>
-                <MessagesPage onBack={() => {}} />
+                <MessagesPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -184,7 +188,7 @@ export default function App() {
             path="/favorites"
             element={
               <ProtectedRoute>
-                <FavoritesPage onBack={() => {}} onViewProfile={() => {}} />
+                <FavoritesPage onBack={() => navigate('/explore')} onViewProfile={(id) => navigate(`/profile/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -192,7 +196,39 @@ export default function App() {
             path="/freelancer-dashboard"
             element={
               <ProtectedRoute>
-                <FreelancerDashboard onBack={() => {}} />
+                <Navigate to="/freelancer-dashboard/portfolio" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/portfolio"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardPortfolioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/requests"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardRequestsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/analytics"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardAnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/settings"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardSettingsPage />
               </ProtectedRoute>
             }
           />
@@ -200,7 +236,7 @@ export default function App() {
             path="/become-freelancer"
             element={
               <ProtectedRoute>
-                <BecomeFreelancerPage onBack={() => {}} />
+                <BecomeFreelancerPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -208,11 +244,11 @@ export default function App() {
             path="/premium"
             element={
               <ProtectedRoute>
-                <PremiumSubscriptionPage onBack={() => {}} />
+                <PremiumSubscriptionPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
-
+ 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/explore" replace />} />
           <Route path="*" element={<Navigate to="/explore" replace />} />
@@ -221,3 +257,5 @@ export default function App() {
     </Routes>
   );
 }
+ 
+ 
