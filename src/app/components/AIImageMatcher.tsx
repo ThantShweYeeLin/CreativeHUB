@@ -1,7 +1,7 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CheckCircle2, CloudUpload, ImagePlus, Loader2, Star, Trash2, X } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 
 const filters = ['All', 'Makeup', 'Hairstyle', 'Photography', 'Videography', 'Model', 'Designer'] as const;
 const maxImages = 6;
