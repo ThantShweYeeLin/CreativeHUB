@@ -136,6 +136,17 @@ create table public.notifications (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Client posts for For You feed
+create table public.client_posts (
+  id uuid default uuid_generate_v4() primary key,
+  client_id uuid references public.users on delete cascade not null,
+  caption text not null,
+  image_url text,
+  is_published boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Enable RLS
 alter table public.users enable row level security;
 alter table public.freelancer_profiles enable row level security;
@@ -147,6 +158,7 @@ alter table public.conversations enable row level security;
 alter table public.favorites enable row level security;
 alter table public.reviews enable row level security;
 alter table public.notifications enable row level security;
+alter table public.client_posts enable row level security;
 
 -- RLS Policies
 -- Users: public read, own write
@@ -175,9 +187,19 @@ create policy "Users see own bookings" on public.bookings
   for select using (auth.uid() = client_id or auth.uid() = freelancer_id);
 
 create policy "Users can insert own bookings" on public.bookings
-  for insert with check (auth.uid() = client_id);
+  for insert with check (auth.uid() = client_id or auth.uid() = freelancer_id);
 
 create policy "Users can update own bookings" on public.bookings
+  for update using (auth.uid() = client_id or auth.uid() = freelancer_id);
+
+-- Requests: participants can read/update, clients can create
+create policy "Users see own requests" on public.requests
+  for select using (auth.uid() = client_id or auth.uid() = freelancer_id);
+
+create policy "Clients can create requests" on public.requests
+  for insert with check (auth.uid() = client_id);
+
+create policy "Participants can update requests" on public.requests
   for update using (auth.uid() = client_id or auth.uid() = freelancer_id);
 
 -- Messages: participants only
@@ -194,6 +216,16 @@ create policy "Users see own notifications" on public.notifications
 create policy "Users can update own notifications" on public.notifications
   for update using (auth.uid() = user_id);
 
+-- Client posts: public read, client owns writes
+create policy "Client posts are viewable by everyone" on public.client_posts
+  for select using (is_published = true);
+
+create policy "Clients can create own posts" on public.client_posts
+  for insert with check (auth.uid() = client_id);
+
+create policy "Clients can update own posts" on public.client_posts
+  for update using (auth.uid() = client_id);
+
 -- Indexes for performance
 create index idx_freelancer_profiles_user_id on public.freelancer_profiles(user_id);
 create index idx_portfolios_freelancer_id on public.portfolios(freelancer_id);
@@ -205,6 +237,9 @@ create index idx_conversations_participant_ids on public.conversations(participa
 create index idx_favorites_user_id on public.favorites(user_id);
 create index idx_reviews_booking_id on public.reviews(booking_id);
 create index idx_notifications_user_id on public.notifications(user_id);
+create index idx_requests_client_id on public.requests(client_id);
+create index idx_requests_freelancer_id on public.requests(freelancer_id);
+create index idx_client_posts_client_id on public.client_posts(client_id);
 
 -- insert policy for users to create their own profile upon sign up --
 create policy "Users can insert own record" 

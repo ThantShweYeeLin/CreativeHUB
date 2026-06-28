@@ -1,9 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { ArrowLeft, Briefcase, Heart, Mail, MapPin, MessageCircle, Sparkles, Star, Users, X } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import {
+  appendBudgetMeta,
+  formatBudgetRange,
+  inferCurrencyFromLocation,
+  SUPPORTED_CURRENCIES,
+  type BudgetMeta,
+} from '../../lib/requestBudget';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -12,7 +20,7 @@ interface FreelancerProfileProps {
   onOpenChat?: () => void;
 }
 
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
@@ -28,9 +36,31 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     projectName: '',
-    budget: '',
+    budgetMin: '',
+    budgetMax: '',
+    currency: 'THB',
     description: '',
   });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadClientCurrency() {
+      if (!user?.id) return;
+
+      const response = await DataService.getUser(user.id);
+      if (!isMounted) return;
+
+      const inferredCurrency = inferCurrencyFromLocation(response.data?.location || null);
+      setFormData((current) => ({ ...current, currency: inferredCurrency }));
+    }
+
+    loadClientCurrency();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,11 +175,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    const budget = Number(formData.budget);
-    if (!Number.isFinite(budget) || budget <= 0) {
-      setError('Enter a valid budget amount.');
+    const budgetMin = Number(formData.budgetMin);
+    const budgetMax = Number(formData.budgetMax);
+
+    if (!Number.isFinite(budgetMin) || !Number.isFinite(budgetMax) || budgetMin <= 0 || budgetMax <= 0) {
+      setError('Enter a valid budget range.');
       return;
     }
+
+    if (budgetMax < budgetMin) {
+      setError('Maximum budget must be greater than or equal to minimum budget.');
+      return;
+    }
+
+    const budgetMeta: BudgetMeta = {
+      currency: formData.currency,
+      min: budgetMin,
+      max: budgetMax,
+    };
+
+    const requestMessage = appendBudgetMeta(formData.description, budgetMeta);
 
     setIsSubmittingRequest(true);
     setError(null);
@@ -158,9 +203,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       client_id: user.id,
       freelancer_id: id,
       project_name: formData.projectName,
-      description: formData.description,
-      budget,
-      message: formData.description,
+      description: requestMessage,
+      budget: budgetMax,
+      message: requestMessage,
       status: 'pending',
     } as any);
 
@@ -172,7 +217,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     setSuccessMessage('Booking request sent successfully.');
     setShowBookingForm(false);
-    setFormData({ projectName: '', budget: '', description: '' });
+    setFormData((current) => ({
+      ...current,
+      projectName: '',
+      budgetMin: '',
+      budgetMax: '',
+      description: '',
+    }));
     setIsSubmittingRequest(false);
   };
 
@@ -426,16 +477,45 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label htmlFor="budget" className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
-                <input
-                  id="budget"
-                  required
-                  inputMode="decimal"
-                  value={formData.budget}
-                  onChange={(event) => setFormData((current) => ({ ...current, budget: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="e.g. 5000"
-                />
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget Range</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <select
+                    value={formData.currency}
+                    onChange={(event) => setFormData((current) => ({ ...current, currency: event.target.value }))}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    {SUPPORTED_CURRENCIES.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.code} - {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={formData.budgetMin}
+                    onChange={(event) => setFormData((current) => ({ ...current, budgetMin: event.target.value }))}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Min budget"
+                  />
+                  <input
+                    required
+                    inputMode="decimal"
+                    value={formData.budgetMax}
+                    onChange={(event) => setFormData((current) => ({ ...current, budgetMax: event.target.value }))}
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Max budget"
+                  />
+                </div>
+                {formData.budgetMin && formData.budgetMax && (
+                  <p className="mt-2 text-xs text-gray-600">
+                    Requested range: {formatBudgetRange({
+                      currency: formData.currency,
+                      min: Number(formData.budgetMin || 0),
+                      max: Number(formData.budgetMax || 0),
+                    })}
+                  </p>
+                )}
               </div>
 
               <div>

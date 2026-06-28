@@ -1,5 +1,5 @@
 import { ChevronLeft, Clock, CheckCircle, FileText, Upload, AlertCircle, RefreshCw, Shield, Camera, MessageSquare, ChevronRight } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { DataService } from '../../lib/dataService';

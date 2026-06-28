@@ -4,6 +4,9 @@ export interface FreelancerPortfolioItem {
   description: string;
   imageUrl: string;
   projectUrl?: string;
+  createdAt?: string;
+  likes?: number;
+  comments?: number;
 }
 
 export interface FreelancerMapProfile {
@@ -117,6 +120,9 @@ function normalizePortfolio(value: unknown): FreelancerPortfolioItem[] {
         description: stringValue(record.description),
         imageUrl,
         projectUrl: stringValue(record.projectUrl, record.project_url),
+        createdAt: stringValue(record.created_at, record.createdAt) || undefined,
+        likes: numberValue(record.likes, record.like_count) ?? undefined,
+        comments: numberValue(record.comments, record.comment_count) ?? undefined,
       };
     })
     .filter((item) => item.imageUrl);

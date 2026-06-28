@@ -54,6 +54,58 @@ alter table public.users
   add column if not exists cover_url text;
 ```
 
+If request sending fails with `new row violates row-level security policy for table "requests"`, run:
+```sql
+drop policy if exists "Users see own requests" on public.requests;
+drop policy if exists "Clients can create requests" on public.requests;
+drop policy if exists "Participants can update requests" on public.requests;
+
+create policy "Users see own requests" on public.requests
+  for select using (auth.uid() = client_id or auth.uid() = freelancer_id);
+
+create policy "Clients can create requests" on public.requests
+  for insert with check (auth.uid() = client_id);
+
+create policy "Participants can update requests" on public.requests
+  for update using (auth.uid() = client_id or auth.uid() = freelancer_id);
+```
+
+To enable client publishing on the For You page, run:
+```sql
+create table if not exists public.client_posts (
+  id uuid default uuid_generate_v4() primary key,
+  client_id uuid references public.users on delete cascade not null,
+  caption text not null,
+  image_url text,
+  is_published boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.client_posts enable row level security;
+
+drop policy if exists "Client posts are viewable by everyone" on public.client_posts;
+drop policy if exists "Clients can create own posts" on public.client_posts;
+drop policy if exists "Clients can update own posts" on public.client_posts;
+
+create policy "Client posts are viewable by everyone" on public.client_posts
+  for select using (is_published = true);
+
+create policy "Clients can create own posts" on public.client_posts
+  for insert with check (auth.uid() = client_id);
+
+create policy "Clients can update own posts" on public.client_posts
+  for update using (auth.uid() = client_id);
+```
+
+If you want freelancer request acceptance to auto-create bookings, update booking insert policy with:
+```sql
+drop policy if exists "Users can insert own bookings" on public.bookings;
+
+create policy "Users can insert own bookings" on public.bookings
+  for insert with check (auth.uid() = client_id or auth.uid() = freelancer_id);
+```
+
 ## Step 5: Enable Email Authentication
 
 1. Go to **Authentication → Providers**

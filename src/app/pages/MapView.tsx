@@ -1,10 +1,9 @@
 import { Sparkles, MapPin as MapPinIcon, Layers, Navigation, Users, Camera, Palette, User, X, Filter } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { DataService } from '../../lib/dataService';
-/*import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelancerMapper';
-*/
+import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMapper';
 type PositionedFreelancer = FreelancerMapProfile & {
   position: { x: number; y: number };
 };

@@ -91,12 +91,49 @@ export class DataService {
       .eq('id', userId)
       .select()
       .single();
+
+    if (
+      error &&
+      (error as any).message?.toLowerCase().includes("could not find the 'cover_url' column") &&
+      Object.prototype.hasOwnProperty.call(updates, 'cover_url')
+    ) {
+      return {
+        data: null,
+        error: {
+          message:
+            'Missing users.cover_url column. Run: alter table public.users add column if not exists cover_url text; then retry.',
+        } as any,
+      };
+    }
+
     return { data, error };
   }
 
   static async uploadUserProfileImage(userId: string, file: File, imageType: 'avatar' | 'cover') {
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${userId}/${imageType}-${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
+
+    if (error) {
+      return { publicUrl: null, error };
+    }
+
+    const { data } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
+  }
+
+  static async uploadPortfolioImage(userId: string, file: File) {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const filePath = `${userId}/portfolio-${Date.now()}.${fileExt}`;
 
     const { error } = await supabase.storage
       .from('avatars')
@@ -361,6 +398,43 @@ export class DataService {
       .select('*, client:client_id(id, email, full_name, avatar_url)')
       .eq('freelancer_id', freelancerId)
       .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
+  static async getClientRequests(clientId: string) {
+    const { data, error } = await supabase
+      .from('requests')
+      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, location)')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
+  // CLIENT POSTS (FOR YOU)
+  static async getClientPosts(limit = 30) {
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return { data, error };
+  }
+
+  static async createClientPost(post: {
+    client_id: string;
+    caption: string;
+    image_url?: string | null;
+    is_published?: boolean;
+  }) {
+    const { data, error } = await supabase
+      .from('client_posts')
+      .insert({
+        ...post,
+        is_published: post.is_published ?? true,
+      })
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .single();
     return { data, error };
   }
 

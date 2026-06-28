@@ -6,23 +6,26 @@ import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 
 // Authenticated page imports
-import { FreelancerProfile } from './components/FreelancerProfile';
-import { MapView } from './components/MapView';
-import { PortfoliosView } from './components/PortfoliosView';
+import { FreelancerProfile } from './pages/FreelancerProfile';
+import { MapView } from './pages/MapView';
+import { PortfoliosView } from './pages/PortfoliosView';
 import { SearchResults } from './components/SearchResults';
 import { AIImageMatcher } from './components/AIImageMatcher';
 import { UserMenu } from './components/UserMenu';
 import { NotificationsPanel } from './components/NotificationsPanel';
-import { RequestsPage } from './components/RequestsPage';
-import { ClientProfilePage } from './components/ClientProfilePage';
-import { BecomeFreelancerPage } from './components/BecomeFreelancerPage';
-import { FreelancerDashboard } from './components/FreelancerDashboard';
-import { PremiumSubscriptionPage } from './components/PremiumSubscriptionPage';
-import { BookingTrackingPage } from './components/BookingTrackingPage';
-import { MyBookingsPage } from './components/MyBookingsPage';
-import { FavoritesPage } from './components/FavoritesPage';
-import { MessagesPage } from './components/MessagesPage';
-import { ForYouPage } from './components/ForYouPage';
+import { RequestsPage } from './pages/RequestsPage';
+import { ClientProfilePage } from './pages/ClientProfilePage';
+import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
+import { FreelancerDashboardPortfolioPage } from './pages/FreelancerDashboardPortfolioPage';
+import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
+import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
+import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
+import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
+import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { MyBookingsPage } from './pages/MyBookingsPage';
+import { FavoritesPage } from './pages/FavoritesPage';
+import { MessagesPage } from './pages/MessagesPage';
+import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
 
 // Loading component
@@ -75,7 +78,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <MapView onViewProfile={() => {}} />
+                  <MapView onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -85,7 +88,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <PortfoliosView onViewProfile={() => {}} />
+                  <PortfoliosView onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -95,7 +98,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <ForYouPage onViewProfile={() => {}} />
+                  <ForYouPage onViewProfile={(id) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -166,7 +169,39 @@ export default function App() {
             path="/freelancer-dashboard"
             element={
               <ProtectedRoute>
-                <FreelancerDashboard onBack={() => navigate(-1)} />
+                <Navigate to="/freelancer-dashboard/portfolio" replace />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/portfolio"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardPortfolioPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/requests"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardRequestsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/analytics"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardAnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/settings"
+            element={
+              <ProtectedRoute>
+                <FreelancerDashboardSettingsPage />
               </ProtectedRoute>
             }
           />

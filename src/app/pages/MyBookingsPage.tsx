@@ -1,15 +1,16 @@
 import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface MyBookingsPageProps {
   onBack: () => void;
   onSelectBooking: (bookingId: string) => void;
 }
 
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 function formatStatus(status: string) {
   switch (status) {
