@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CheckCircle2, ChevronLeft } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ImagePlus, UploadCloud, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
@@ -35,6 +35,17 @@ const experienceOptions = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 y
 const availabilityOptions = ['Available', 'Busy', 'Unavailable'] as const;
 const workingDayOptions = ['Monday-Friday', 'Weekends', 'Flexible'] as const;
 
+interface PortfolioUpload {
+  id: string;
+  file: File;
+  previewUrl: string;
+}
+
+interface ImageUpload {
+  file: File;
+  previewUrl: string;
+}
+
 function toggle(list: string[], value: string) {
   return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
 }
@@ -56,13 +67,105 @@ function parseExperienceYears(value: string) {
   }
 }
 
+function ProfileImageDropzone({
+  label,
+  helper,
+  upload,
+  isDragging,
+  previewClassName,
+  onDragChange,
+  onChange,
+  onRemove,
+}: {
+  label: string;
+  helper: string;
+  upload: ImageUpload | null;
+  isDragging: boolean;
+  previewClassName: string;
+  onDragChange: (isDragging: boolean) => void;
+  onChange: (file: File) => void;
+  onRemove: () => void;
+}) {
+  const handleFiles = (files: FileList | null) => {
+    const file = Array.from(files || []).find((item) => item.type.startsWith('image/'));
+    if (file) {
+      onChange(file);
+    }
+  };
+
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-gray-700">{label}</label>
+      <label
+        onDragEnter={(event) => {
+          event.preventDefault();
+          onDragChange(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          onDragChange(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          onDragChange(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          onDragChange(false);
+          handleFiles(event.dataTransfer.files);
+        }}
+        className={`relative flex min-h-44 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed p-4 text-center transition-all ${
+          isDragging ? 'border-gray-900 bg-gray-100' : 'border-gray-300 bg-gray-50 hover:border-gray-500 hover:bg-white'
+        }`}
+      >
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            handleFiles(event.target.files);
+            event.target.value = '';
+          }}
+        />
+
+        {upload ? (
+          <>
+            <img src={upload.previewUrl} alt={`${label} preview`} className={previewClassName} />
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                onRemove();
+              }}
+              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow-md transition-colors hover:bg-gray-900 hover:text-white"
+              aria-label={`Remove ${label.toLowerCase()}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-md">
+              <ImagePlus className="h-6 w-6" />
+            </div>
+            <p className="text-sm font-bold text-gray-900">Drag an image here or choose a photo</p>
+            <p className="mt-1 text-xs text-gray-500">{helper}</p>
+          </>
+        )}
+      </label>
+    </div>
+  );
+}
+
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [displayName, setDisplayName] = useState(user?.fullName || '');
-  const [profilePictureUrl, setProfilePictureUrl] = useState('');
-  const [coverPhotoUrl, setCoverPhotoUrl] = useState('');
+  const [profilePictureUpload, setProfilePictureUpload] = useState<ImageUpload | null>(null);
+  const [coverPhotoUpload, setCoverPhotoUpload] = useState<ImageUpload | null>(null);
+  const [isDraggingProfilePicture, setIsDraggingProfilePicture] = useState(false);
+  const [isDraggingCoverPhoto, setIsDraggingCoverPhoto] = useState(false);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [experience, setExperience] = useState('');
@@ -72,7 +175,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [availability, setAvailability] = useState('Available');
   const [workingDays, setWorkingDays] = useState('Flexible');
   const [location, setLocation] = useState('');
-  const [portfolioUrls, setPortfolioUrls] = useState<string[]>(['', '', '', '', '']);
+  const [portfolioUploads, setPortfolioUploads] = useState<PortfolioUpload[]>([]);
+  const [isDraggingPortfolio, setIsDraggingPortfolio] = useState(false);
   const [instagram, setInstagram] = useState('');
   const [behance, setBehance] = useState('');
   const [website, setWebsite] = useState('');
@@ -85,6 +189,56 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const availableSpecialties = useMemo(() => {
     return Array.from(new Set(selectedServices.flatMap((service) => specialtyMap[service] || [])));
   }, [selectedServices]);
+
+  const addPortfolioFiles = (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+
+    if (imageFiles.length === 0) {
+      setError('Please choose image files for your portfolio.');
+      return;
+    }
+
+    setError(null);
+    setPortfolioUploads((current) => {
+      const remainingSlots = Math.max(20 - current.length, 0);
+      const nextUploads = imageFiles.slice(0, remainingSlots).map((file) => ({
+        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+
+      return [...current, ...nextUploads];
+    });
+  };
+
+  const removePortfolioUpload = (uploadId: string) => {
+    setPortfolioUploads((current) => {
+      const upload = current.find((item) => item.id === uploadId);
+      if (upload) {
+        URL.revokeObjectURL(upload.previewUrl);
+      }
+
+      return current.filter((item) => item.id !== uploadId);
+    });
+  };
+
+  const setProfileImageFile = (file: File) => {
+    if (profilePictureUpload) {
+      URL.revokeObjectURL(profilePictureUpload.previewUrl);
+    }
+
+    setProfilePictureUpload({ file, previewUrl: URL.createObjectURL(file) });
+    setError(null);
+  };
+
+  const setCoverImageFile = (file: File) => {
+    if (coverPhotoUpload) {
+      URL.revokeObjectURL(coverPhotoUpload.previewUrl);
+    }
+
+    setCoverPhotoUpload({ file, previewUrl: URL.createObjectURL(file) });
+    setError(null);
+  };
 
   const handleContinue = () => {
     setError(null);
@@ -112,9 +266,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     if (step === 3) {
-      const validPortfolio = portfolioUrls.map((item) => item.trim()).filter(Boolean);
-      if (validPortfolio.length < 5) {
-        setError('Please add at least 5 portfolio image URLs to continue.');
+      if (portfolioUploads.length < 5) {
+        setError('Please add at least 5 portfolio photos to continue.');
         return;
       }
       if (!location.trim()) {
@@ -132,9 +285,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       return;
     }
 
-    const validPortfolio = portfolioUrls.map((item) => item.trim()).filter(Boolean);
-    if (validPortfolio.length < 5) {
-      setError('Please add at least 5 portfolio image URLs.');
+    if (portfolioUploads.length < 5) {
+      setError('Please add at least 5 portfolio photos.');
       return;
     }
 
@@ -180,11 +332,36 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       .filter(Boolean)
       .join(' | ');
 
+    let uploadedProfilePictureUrl: string | null = null;
+    let uploadedCoverPhotoUrl: string | null = null;
+
+    if (profilePictureUpload) {
+      const uploadResponse = await DataService.uploadUserProfileImage(user.id, profilePictureUpload.file, 'avatar');
+      if (uploadResponse.error || !uploadResponse.publicUrl) {
+        setError((uploadResponse.error as any)?.message || 'Unable to upload your profile picture.');
+        setIsSaving(false);
+        return;
+      }
+
+      uploadedProfilePictureUrl = uploadResponse.publicUrl;
+    }
+
+    if (coverPhotoUpload) {
+      const uploadResponse = await DataService.uploadUserProfileImage(user.id, coverPhotoUpload.file, 'cover');
+      if (uploadResponse.error || !uploadResponse.publicUrl) {
+        setError((uploadResponse.error as any)?.message || 'Unable to upload your cover photo.');
+        setIsSaving(false);
+        return;
+      }
+
+      uploadedCoverPhotoUrl = uploadResponse.publicUrl;
+    }
+
     const userUpdate = await DataService.updateUser(user.id, {
       role: 'freelancer',
       full_name: displayName.trim(),
-      avatar_url: profilePictureUrl.trim() || null,
-      cover_url: coverPhotoUrl.trim() || null,
+      avatar_url: uploadedProfilePictureUrl || user.avatar_url || null,
+      cover_url: uploadedCoverPhotoUrl,
       location: location.trim(),
       location_latitude: locationLatitude,
       location_longitude: locationLongitude,
@@ -210,7 +387,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         skills: [...selectedServices, ...selectedSpecialties],
         styles: selectedSpecialties,
         experience_years: parseExperienceYears(experience),
-        portfolio_count: validPortfolio.length,
+        portfolio_count: portfolioUploads.length,
         is_available: isAvailable,
         updated_at: new Date().toISOString(),
       } as any);
@@ -230,7 +407,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         skills: [...selectedServices, ...selectedSpecialties],
         styles: selectedSpecialties,
         experience_years: parseExperienceYears(experience),
-        portfolio_count: validPortfolio.length,
+        portfolio_count: portfolioUploads.length,
         is_available: isAvailable,
       } as any);
 
@@ -244,7 +421,20 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     if (freelancerProfileId) {
-      const createPortfolioTasks = validPortfolio.slice(0, 20).map((url, index) =>
+      const uploadedPortfolioUrls: string[] = [];
+
+      for (const upload of portfolioUploads.slice(0, 20)) {
+        const uploadResponse = await DataService.uploadPortfolioImage(user.id, upload.file);
+        if (uploadResponse.error || !uploadResponse.publicUrl) {
+          setError((uploadResponse.error as any)?.message || 'Unable to upload portfolio photos.');
+          setIsSaving(false);
+          return;
+        }
+
+        uploadedPortfolioUrls.push(uploadResponse.publicUrl);
+      }
+
+      const createPortfolioTasks = uploadedPortfolioUrls.map((url, index) =>
         DataService.createPortfolioItem(freelancerProfileId!, {
           title: `${selectedServices[0] || 'Creative'} Portfolio ${index + 1}`,
           description: selectedSpecialties.length > 0 ? `${selectedSpecialties.join(', ')} showcase` : null,
@@ -312,24 +502,32 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                   placeholder="Emma Wong"
                 />
               </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Profile Picture URL</label>
-                <input
-                  value={profilePictureUrl}
-                  onChange={(event) => setProfilePictureUrl(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                  placeholder="https://..."
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Cover Photo URL</label>
-                <input
-                  value={coverPhotoUrl}
-                  onChange={(event) => setCoverPhotoUrl(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                  placeholder="https://..."
-                />
-              </div>
+              <ProfileImageDropzone
+                label="Profile Picture"
+                helper="Square images work best for your avatar."
+                upload={profilePictureUpload}
+                isDragging={isDraggingProfilePicture}
+                previewClassName="h-32 w-32 rounded-full object-cover shadow-lg ring-4 ring-white"
+                onDragChange={setIsDraggingProfilePicture}
+                onChange={setProfileImageFile}
+                onRemove={() => {
+                  if (profilePictureUpload) URL.revokeObjectURL(profilePictureUpload.previewUrl);
+                  setProfilePictureUpload(null);
+                }}
+              />
+              <ProfileImageDropzone
+                label="Cover Photo"
+                helper="Use a wide image that represents your work."
+                upload={coverPhotoUpload}
+                isDragging={isDraggingCoverPhoto}
+                previewClassName="h-full max-h-40 w-full rounded-xl object-cover shadow-md"
+                onDragChange={setIsDraggingCoverPhoto}
+                onChange={setCoverImageFile}
+                onRemove={() => {
+                  if (coverPhotoUpload) URL.revokeObjectURL(coverPhotoUpload.previewUrl);
+                  setCoverPhotoUpload(null);
+                }}
+              />
             </div>
           )}
 
@@ -467,29 +665,85 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
               </div>
 
               <div>
-                <p className="mb-2 text-sm font-semibold text-gray-700">Portfolio Upload URLs (minimum 5, recommended 10-20)</p>
-                <div className="space-y-2">
-                  {portfolioUrls.map((url, index) => (
-                    <input
-                      key={index}
-                      value={url}
-                      onChange={(event) =>
-                        setPortfolioUrls((current) =>
-                          current.map((item, itemIndex) => (itemIndex === index ? event.target.value : item))
-                        )
-                      }
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                      placeholder={`Portfolio image URL ${index + 1}`}
-                    />
-                  ))}
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700">Portfolio Photos</p>
+                    <p className="mt-1 text-xs text-gray-500">Add at least 5 images. Recommended: 10-20 of your best work.</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${portfolioUploads.length >= 5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {portfolioUploads.length}/5 minimum
+                  </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setPortfolioUrls((current) => [...current, ''])}
-                  className="mt-3 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700"
+
+                <label
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setIsDraggingPortfolio(true);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setIsDraggingPortfolio(true);
+                  }}
+                  onDragLeave={(event) => {
+                    event.preventDefault();
+                    setIsDraggingPortfolio(false);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setIsDraggingPortfolio(false);
+                    addPortfolioFiles(event.dataTransfer.files);
+                  }}
+                  className={`flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all ${
+                    isDraggingPortfolio
+                      ? 'border-gray-900 bg-gray-100 shadow-inner'
+                      : 'border-gray-300 bg-gray-50 hover:border-gray-500 hover:bg-white'
+                  }`}
                 >
-                  Add Another URL
-                </button>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      if (event.target.files) {
+                        addPortfolioFiles(event.target.files);
+                        event.target.value = '';
+                      }
+                    }}
+                  />
+                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-lg">
+                    <UploadCloud className="h-7 w-7" />
+                  </div>
+                  <p className="text-lg font-bold text-gray-900">Drag photos here or choose from your device</p>
+                  <p className="mt-2 max-w-md text-sm text-gray-500">JPG, PNG, or WebP images work best. You can add up to 20 portfolio photos.</p>
+                  <span className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-bold text-white shadow-md">
+                    <ImagePlus className="h-4 w-4" />
+                    Choose Photos
+                  </span>
+                </label>
+
+                {portfolioUploads.length > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+                    {portfolioUploads.map((upload, index) => (
+                      <div key={upload.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm">
+                        <img src={upload.previewUrl} alt={`Portfolio preview ${index + 1}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removePortfolioUpload(upload.id)}
+                          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-md transition-all hover:bg-gray-900 hover:text-white md:opacity-0 md:group-hover:opacity-100"
+                          aria-label={`Remove portfolio photo ${index + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        {index < 3 && (
+                          <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-gray-700 shadow-sm">
+                            Featured
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
