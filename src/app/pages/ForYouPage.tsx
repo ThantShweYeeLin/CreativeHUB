@@ -11,7 +11,6 @@ import {
   Heart,
   ImagePlus,
   LocateFixed,
-  Map,
   MapPin,
   MessageCircle,
   Paperclip,
@@ -87,6 +86,11 @@ interface FeedPost {
   } | null;
 }
 
+interface PlaceSuggestion {
+  name: string;
+  detail: string;
+}
+
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 const MAX_POST_LENGTH = 1200;
 
@@ -128,13 +132,16 @@ const labelOptions = [
 
 const emojiOptions = ['✨', '👏', '🔥', '💡', '🎉', '📸', '🎨', '🤝'];
 
-const suggestedLocations = [
-  'Bangkok, Thailand',
-  'Chiang Mai, Thailand',
-  'Phuket, Thailand',
-  'Pattaya, Thailand',
-  'CreativeHUB Studio',
-  'Remote / Online',
+const suggestedLocations: PlaceSuggestion[] = [
+  { name: 'Bangkok, Thailand', detail: 'Popular city · Thailand' },
+  { name: 'Siam Paragon', detail: 'Shopping center · Pathum Wan, Bangkok' },
+  { name: 'CentralWorld', detail: 'Shopping center · Ratchaprasong, Bangkok' },
+  { name: 'Assumption University Suvarnabhumi Campus', detail: 'University · Bang Bo District' },
+  { name: 'Chiang Mai, Thailand', detail: 'Popular city · Northern Thailand' },
+  { name: 'Phuket, Thailand', detail: 'Island province · Southern Thailand' },
+  { name: 'Hua Hin Beach', detail: 'Beach · Prachuap Khiri Khan' },
+  { name: 'CreativeHUB Studio', detail: 'Workspace · Bangkok' },
+  { name: 'Remote / Online', detail: 'Available anywhere' },
 ];
 
 const emptyComposerState: ComposerState = {
@@ -369,9 +376,9 @@ function CreatePostSheet({
                   className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 outline-none transition-all hover:bg-white hover:shadow-sm focus:ring-4 focus:ring-gray-100"
                 >
                   <span className={composer.location ? 'text-gray-900' : 'text-gray-400'}>
-                    {composer.location || 'Open map to choose location'}
+                    {composer.location || 'Search or choose a location'}
                   </span>
-                  <Map className="h-4 w-4 text-gray-500" />
+                  <MapPin className="h-4 w-4 text-gray-500" />
                 </button>
               </div>
               <label className="space-y-2">
@@ -491,24 +498,110 @@ function LocationPickerSheet({
 }) {
   const [query, setQuery] = useState(selectedLocation);
   const [geoStatus, setGeoStatus] = useState('');
+  const [liveLocations, setLiveLocations] = useState<PlaceSuggestion[]>([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [locationSearchMessage, setLocationSearchMessage] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setQuery(selectedLocation);
       setGeoStatus('');
+      setLiveLocations([]);
+      setLocationSearchMessage('');
     }
   }, [isOpen, selectedLocation]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      setLiveLocations([]);
+      setIsSearchingLocations(false);
+      setLocationSearchMessage('');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearchingLocations(true);
+      setLocationSearchMessage('');
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=12&q=${encodeURIComponent(trimmedQuery)}`,
+          {
+            headers: { Accept: 'application/json' },
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error('Location search failed');
+        }
+
+        const results = await response.json();
+        const places: PlaceSuggestion[] = (Array.isArray(results) ? results : []).map((place: any) => {
+          const address = place.address || {};
+          const name =
+            address.attraction ||
+            address.amenity ||
+            address.shop ||
+            address.tourism ||
+            address.building ||
+            address.road ||
+            address.suburb ||
+            address.city ||
+            address.town ||
+            address.village ||
+            place.name ||
+            trimmedQuery;
+          const detail = [address.road, address.suburb, address.city || address.town || address.village, address.state, address.country]
+            .filter(Boolean)
+            .join(', ');
+
+          return {
+            name,
+            detail: detail || place.display_name || 'Search result',
+          };
+        });
+
+        setLiveLocations(places);
+        setLocationSearchMessage(places.length ? '' : 'No matching places found. You can still use your typed location.');
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          setLiveLocations([]);
+          setLocationSearchMessage('Live place search is unavailable. You can still use your typed location.');
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsSearchingLocations(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [isOpen, query]);
 
   if (!isOpen) {
     return null;
   }
 
   const filteredLocations = suggestedLocations.filter((location) =>
-    location.toLowerCase().includes(query.trim().toLowerCase())
+    `${location.name} ${location.detail}`.toLowerCase().includes(query.trim().toLowerCase())
   );
 
-  const selectLocation = (location: string) => {
-    onSelect(location);
+  const displayLocations = query.trim().length >= 2
+    ? liveLocations.length
+      ? liveLocations
+      : filteredLocations
+    : suggestedLocations;
+
+  const selectLocation = (location: PlaceSuggestion) => {
+    onSelect(location.name);
     onClose();
   };
 
@@ -523,7 +616,7 @@ function LocationPickerSheet({
       (position) => {
         const latitude = position.coords.latitude.toFixed(5);
         const longitude = position.coords.longitude.toFixed(5);
-        selectLocation(`Current location (${latitude}, ${longitude})`);
+        selectLocation({ name: `Current location (${latitude}, ${longitude})`, detail: 'Using your device location' });
       },
       () => setGeoStatus('Could not access your location. Please search or select a place.'),
       { enableHighAccuracy: true, timeout: 8000 }
@@ -531,82 +624,91 @@ function LocationPickerSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm animate-in fade-in-0">
-      <div className="fixed inset-x-0 bottom-0 max-h-[92vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl animate-in slide-in-from-bottom-8 md:inset-y-8 md:left-1/2 md:w-[720px] md:-translate-x-1/2 md:rounded-3xl">
-        <div className="flex max-h-[92vh] flex-col">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
-              <X className="h-5 w-5" />
-            </button>
-            <div className="text-center">
-              <h2 className="text-lg font-bold text-gray-950">Choose Location</h2>
-              <p className="text-xs font-medium text-gray-500">Search or tap the map preview</p>
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-md animate-in fade-in-0">
+      <div className="fixed inset-x-0 bottom-0 max-h-[94vh] overflow-hidden rounded-t-[2rem] bg-[#111619] text-white shadow-2xl animate-in slide-in-from-bottom-8 md:inset-y-8 md:left-1/2 md:w-[560px] md:-translate-x-1/2 md:rounded-[2rem]">
+        <div className="flex max-h-[94vh] flex-col">
+          <div className="px-5 pb-4 pt-7">
+            <div className="mx-auto mb-5 h-1 w-12 rounded-full bg-gray-500" />
+            <div className="mb-7 flex items-center justify-between">
+              <button
+                onClick={useCurrentLocation}
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white shadow-inner transition-colors hover:bg-white/10"
+                aria-label="Use current location"
+              >
+                <LocateFixed className="h-7 w-7 fill-white" />
+              </button>
+              <h2 className="text-xl font-bold text-white">Add Place</h2>
+              <button
+                onClick={onClose}
+                className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10"
+                aria-label="Close locations"
+              >
+                <X className="h-8 w-8" />
+              </button>
             </div>
-            <button
-              onClick={() => query.trim() && selectLocation(query.trim())}
-              disabled={!query.trim()}
-              className="rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-md disabled:opacity-40"
-            >
-              Select
-            </button>
-          </div>
 
-          <div className="overflow-y-auto px-5 py-5">
-            <div className="relative mb-4">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <div className="mb-6 text-center">
+              <h3 className="text-lg font-bold text-white">Pick where this post belongs</h3>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-5 text-gray-400">
+                Your audience can see the place attached to this post and open it from the feed.
+              </p>
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-6 w-6 -translate-y-1/2 text-gray-400" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search for a place, studio, city, or venue"
-                className="w-full rounded-2xl border border-gray-200 bg-gray-50 py-3 pl-12 pr-4 text-sm font-medium outline-none transition-all focus:bg-white focus:ring-4 focus:ring-gray-100"
+                placeholder="Search"
+                autoFocus
+                className="h-16 w-full rounded-2xl border border-transparent bg-[#293039] py-3 pl-14 pr-12 text-xl font-medium text-white outline-none placeholder:text-gray-400 focus:border-white/10 focus:bg-[#303842]"
               />
-            </div>
-
-            <div className="relative mb-4 h-72 overflow-hidden rounded-3xl border border-gray-200 bg-[linear-gradient(90deg,#edf2f7_1px,transparent_1px),linear-gradient(#edf2f7_1px,transparent_1px)] bg-[size:44px_44px] shadow-inner">
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-sky-50 to-white" />
-              <div className="absolute left-[-10%] top-[34%] h-10 w-[120%] rotate-[-10deg] rounded-full bg-white/90 shadow-sm" />
-              <div className="absolute left-[8%] top-[14%] h-20 w-28 rounded-[2rem] bg-emerald-100/80" />
-              <div className="absolute bottom-[12%] right-[10%] h-24 w-36 rounded-[2rem] bg-blue-100/80" />
-              <button
-                onClick={() => selectLocation(query.trim() || 'Selected map pin')}
-                className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2"
-              >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-950 text-white shadow-2xl ring-8 ring-white/80 transition-transform hover:scale-110">
-                  <MapPin className="h-7 w-7 fill-white" />
-                </span>
-                <span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-gray-900 shadow-lg">
-                  {query.trim() || 'Move search to pick'}
-                </span>
-              </button>
-              <div className="absolute bottom-4 left-4 rounded-2xl bg-white/90 px-4 py-3 text-xs font-semibold text-gray-600 shadow-lg backdrop-blur">
-                Map-style preview
-              </div>
-            </div>
-
-            <button
-              onClick={useCurrentLocation}
-              className="mb-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-800 shadow-sm transition-all hover:shadow-md"
-            >
-              <LocateFixed className="h-4 w-4" />
-              Use current location
-            </button>
-            {geoStatus && <p className="mb-3 text-center text-xs font-medium text-gray-500">{geoStatus}</p>}
-
-            <div className="space-y-2">
-              {(filteredLocations.length ? filteredLocations : suggestedLocations).map((location) => (
+              {query && (
                 <button
-                  key={location}
-                  onClick={() => selectLocation(location)}
-                  className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-semibold text-gray-800 transition-all hover:border-gray-300 hover:shadow-sm"
+                  onClick={() => setQuery('')}
+                  className="absolute right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-gray-500/40 text-gray-200"
+                  aria-label="Clear location search"
                 >
-                  <span className="flex items-center gap-3">
-                    <MapPin className="h-4 w-4 text-gray-500" />
-                    {location}
-                  </span>
-                  {selectedLocation === location && <Check className="h-4 w-4 text-gray-900" />}
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {(geoStatus || isSearchingLocations || locationSearchMessage) && (
+              <p className="mt-3 text-center text-xs font-medium text-gray-400">
+                {geoStatus || (isSearchingLocations ? 'Searching places...' : locationSearchMessage)}
+              </p>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-5 pb-7">
+            <div className="space-y-1">
+              {displayLocations.map((location, index) => (
+                <button
+                  key={`${location.name}-${index}`}
+                  onClick={() => selectLocation(location)}
+                  className="w-full rounded-2xl px-1 py-3 text-left transition-colors hover:bg-white/5"
+                >
+                  <span className="block text-[19px] font-medium leading-6 text-white">{location.name}</span>
+                  {location.detail && (
+                    <span className="mt-1 block text-[15px] font-medium leading-5 text-gray-400">{location.detail}</span>
+                  )}
                 </button>
               ))}
             </div>
+
+            {query.trim() && !displayLocations.some((location) => location.name.toLowerCase() === query.trim().toLowerCase()) && (
+              <button
+                onClick={() => selectLocation({ name: query.trim(), detail: 'Custom location' })}
+                className="mt-3 flex w-full items-center justify-between rounded-2xl bg-white/5 px-4 py-4 text-left"
+              >
+                <span>
+                  <span className="block text-lg font-semibold text-white">{query.trim()}</span>
+                  <span className="mt-1 block text-sm text-gray-400">Tag this typed place</span>
+                </span>
+                <Check className="h-5 w-5 text-white" />
+              </button>
+            )}
           </div>
         </div>
       </div>
