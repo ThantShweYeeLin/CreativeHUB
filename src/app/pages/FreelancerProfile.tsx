@@ -33,6 +33,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -132,8 +134,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         if (isMounted && !favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
+
+        const followResponse = await DataService.isFollowing(user.id, targetId);
+        if (isMounted && !followResponse.error) {
+          setIsFollowing(followResponse.isFollowing);
+        }
       } else {
         setIsFavorited(false);
+        setIsFollowing(false);
       }
 
       const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
@@ -191,6 +199,28 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     setIsFavorited((current) => !current);
+  };
+
+  const handleFollowToggle = async () => {
+    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
+      return;
+    }
+
+    setError(null);
+    setIsFollowLoading(true);
+
+    const response = isFollowing
+      ? await DataService.unfollowUser(user.id, targetFreelancerUserId)
+      : await DataService.followUser(user.id, targetFreelancerUserId);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update follow status.');
+      setIsFollowLoading(false);
+      return;
+    }
+
+    setIsFollowing((current) => !current);
+    setIsFollowLoading(false);
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -363,6 +393,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
 
                 <div className="flex flex-wrap gap-3">
+                  {user?.id !== targetFreelancerUserId && (
+                    <button
+                      onClick={() => void handleFollowToggle()}
+                      disabled={isFollowLoading}
+                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${isFollowing ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : 'bg-gray-900 text-white hover:shadow-lg'} disabled:opacity-60`}
+                    >
+                      {isFollowLoading ? 'Updating...' : isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                  )}
+
                   {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={handleFavoriteToggle}

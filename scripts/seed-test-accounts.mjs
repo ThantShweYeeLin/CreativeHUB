@@ -245,6 +245,38 @@ const testAccounts = [
   },
 ];
 
+const sampleClientPostsByEmail = {
+  'mia.client@creativehub.test': [
+    {
+      caption: 'Need a product photographer in Bangkok this weekend for a 12-look e-commerce set. Fast turnaround preferred.',
+      image_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80',
+      is_published: true,
+    },
+    {
+      caption: 'Hiring a motion designer for a 20-second campaign teaser. Please share reels and availability for next week.',
+      image_url: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=80',
+      is_published: true,
+    },
+  ],
+  'noah.client@creativehub.test': [
+    {
+      caption: 'Looking for a makeup artist for a fashion lookbook in Chiang Mai. One-day booking, studio already secured.',
+      image_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
+      is_published: true,
+    },
+    {
+      caption: 'Seeking a brand designer to refresh packaging visuals and social launch cards. Delivery in 10 days.',
+      image_url: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=1200&q=80',
+      is_published: true,
+    },
+  ],
+};
+
+function isMissingClientPostsTable(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('client_posts') && (message.includes('schema cache') || message.includes('does not exist'));
+}
+
 async function findUserByEmail(email) {
   let page = 1;
 
@@ -394,15 +426,75 @@ async function ensurePortfolios(freelancerId, account) {
   }
 }
 
+async function ensureClientPosts(clientId, posts) {
+  if (!clientId || !posts?.length) {
+    return;
+  }
+
+  const captions = posts.map((post) => post.caption);
+  const { data: existingPosts, error: existingError } = await supabase
+    .from('client_posts')
+    .select('caption')
+    .eq('client_id', clientId)
+    .in('caption', captions);
+
+  if (existingError) {
+    if (isMissingClientPostsTable(existingError)) {
+      return false;
+    }
+    throw existingError;
+  }
+
+  const existingCaptions = new Set((existingPosts || []).map((item) => item.caption));
+  const missingPosts = posts
+    .filter((post) => !existingCaptions.has(post.caption))
+    .map((post) => ({
+      client_id: clientId,
+      caption: post.caption,
+      image_url: post.image_url,
+      is_published: post.is_published,
+    }));
+
+  if (!missingPosts.length) {
+    return;
+  }
+
+  const { error } = await supabase.from('client_posts').insert(missingPosts);
+  if (error) {
+    if (isMissingClientPostsTable(error)) {
+      return false;
+    }
+    throw error;
+  }
+
+  return true;
+}
+
 async function main() {
   console.log(`Seeding ${testAccounts.length} CreativeHUB test accounts...`);
+  const userIdByEmail = new Map();
 
   for (const account of testAccounts) {
     const user = await ensureAuthUser(account);
     await ensurePublicUser(user, account);
     const freelancerId = await ensureFreelancerProfile(user.id, account);
     await ensurePortfolios(freelancerId, account);
+    userIdByEmail.set(account.email, user.id);
     console.log(`- ${account.email} (${account.role}) ready`);
+  }
+
+  for (const [email, posts] of Object.entries(sampleClientPostsByEmail)) {
+    const userId = userIdByEmail.get(email);
+    if (!userId) {
+      continue;
+    }
+
+    const seeded = await ensureClientPosts(userId, posts);
+    if (seeded) {
+      console.log(`- seeded ${posts.length} test posts for ${email}`);
+    } else {
+      console.log(`- skipped post seed for ${email} (client_posts table is not available)`);
+    }
   }
 
   console.log(`\nShared password: ${defaultPassword}`);

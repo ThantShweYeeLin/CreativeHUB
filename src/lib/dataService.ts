@@ -8,6 +8,15 @@ type Booking = Database['public']['Tables']['bookings']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
 type Favorite = Database['public']['Tables']['favorites']['Row'];
 
+export interface UserSearchResult {
+  id: string;
+  full_name: string | null;
+  email: string;
+  avatar_url: string | null;
+  role: 'freelancer' | 'client';
+  location: string | null;
+}
+
 export class DataService {
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
@@ -76,6 +85,69 @@ export class DataService {
       .eq('email', email)
       .single();
     return { data, error };
+  }
+
+  static async searchUsers(query: string, options?: { excludeUserId?: string; limit?: number }) {
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      return { data: [] as UserSearchResult[], error: null };
+    }
+
+    const limit = options?.limit ?? 12;
+
+    let usersQuery = supabase
+      .from('users')
+      .select('id, email, full_name, avatar_url, role, location')
+      .or(`full_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
+      .limit(limit);
+
+    if (options?.excludeUserId) {
+      usersQuery = usersQuery.neq('id', options.excludeUserId);
+    }
+
+    const { data, error } = await usersQuery;
+    return { data: (data || []) as UserSearchResult[], error };
+  }
+
+  static async getFollowingIds(userId: string) {
+    const { data, error } = await supabase
+      .from('followers')
+      .select('following_id')
+      .eq('follower_id', userId);
+
+    return {
+      data: (data || []).map((row: any) => String(row.following_id)),
+      error,
+    };
+  }
+
+  static async isFollowing(userId: string, targetUserId: string) {
+    const { data, error } = await supabase
+      .from('followers')
+      .select('id')
+      .eq('follower_id', userId)
+      .eq('following_id', targetUserId)
+      .maybeSingle();
+
+    return { isFollowing: !!data, error };
+  }
+
+  static async followUser(userId: string, targetUserId: string) {
+    const { error } = await supabase
+      .from('followers')
+      .insert({ follower_id: userId, following_id: targetUserId });
+
+    return { error };
+  }
+
+  static async unfollowUser(userId: string, targetUserId: string) {
+    const { error } = await supabase
+      .from('followers')
+      .delete()
+      .eq('follower_id', userId)
+      .eq('following_id', targetUserId);
+
+    return { error };
   }
 
   // FREELANCER PROFILES
@@ -500,7 +572,7 @@ export class DataService {
 
     let query = supabase
       .from('notifications')
-      .select('*')
+      .select('*, actor:actor_id(id, full_name, avatar_url)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);

@@ -70,6 +70,7 @@ interface FeedPost {
   likes: number;
   commentsCount: number;
   timeAgo: string;
+  createdAtRaw?: string;
   isLiked: boolean;
   isSaved: boolean;
   isClientPost?: boolean;
@@ -719,6 +720,11 @@ function LocationPickerSheet({
 export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
+  const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
   const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -730,6 +736,63 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
 
   const userName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'Creative member');
   const userAvatar = user?.avatar_url || fallbackProfileImage;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFollowing() {
+      if (!user?.id) {
+        setFollowingIds(new Set());
+        return;
+      }
+
+      const response = await DataService.getFollowingIds(user.id);
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setFollowingIds(new Set());
+        return;
+      }
+
+      setFollowingIds(new Set(response.data || []));
+    }
+
+    loadFollowing();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const timeoutId = window.setTimeout(async () => {
+      const query = userSearchQuery.trim();
+      if (query.length < 2) {
+        setUserSearchResults([]);
+        setIsUserSearchLoading(false);
+        return;
+      }
+
+      setIsUserSearchLoading(true);
+      const response = await DataService.searchUsers(query, { excludeUserId: user?.id, limit: 8 });
+
+      if (!isMounted) {
+        return;
+      }
+
+      setUserSearchResults(response.error ? [] : response.data || []);
+      setIsUserSearchLoading(false);
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [userSearchQuery, user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -774,6 +837,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           likes: project.likes ?? Math.max(5, Math.round(freelancer.rating * 30) + index * 3),
           commentsCount: project.comments ?? Math.max(1, Math.round(freelancer.totalReviews / 4) + index),
           timeAgo: toTimeAgo(project.createdAt),
+          createdAtRaw: project.createdAt,
           isLiked: false,
           isSaved: false,
         }));
@@ -795,17 +859,73 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           likes: 0,
           commentsCount: 0,
           timeAgo: toTimeAgo(post.created_at),
+          createdAtRaw: post.created_at,
           isLiked: false,
           isSaved: false,
           isClientPost: true,
         };
       });
 
+      const demoPosts: FeedPost[] = [
+        {
+          id: 'demo-client-post-1',
+          authorId: 'demo-client-1',
+          authorName: 'Demo Client',
+          username: 'demo_client',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Looking for a photographer for a street style campaign in Bangkok.',
+          likes: 6,
+          commentsCount: 2,
+          timeAgo: 'Just now',
+          createdAtRaw: new Date().toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+        {
+          id: 'demo-client-post-2',
+          authorId: 'demo-client-2',
+          authorName: 'Demo Brand Team',
+          username: 'demo_brand_team',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Seeking a motion designer for a short-form launch teaser next week.',
+          likes: 4,
+          commentsCount: 1,
+          timeAgo: 'Just now',
+          createdAtRaw: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+        {
+          id: 'demo-client-post-3',
+          authorId: 'demo-client-3',
+          authorName: 'Demo Events Co.',
+          username: 'demo_events',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Need a makeup artist for an editorial shoot this Friday.',
+          likes: 9,
+          commentsCount: 3,
+          timeAgo: '1h ago',
+          createdAtRaw: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+      ];
+
       if (!isMounted) {
         return;
       }
 
-      setPosts([...clientPosts, ...generatedPosts]);
+      const combinedPosts = [...clientPosts, ...generatedPosts];
+      setPosts(combinedPosts.length > 0 ? combinedPosts : demoPosts);
       setIsLoading(false);
     }
 
@@ -814,9 +934,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user?.id]);
 
-  const sortedPosts = useMemo(() => posts, [posts]);
+  const sortedPosts = useMemo(() => {
+    const source = activeFeedTab === 'following'
+      ? posts.filter((post) => followingIds.has(post.authorId))
+      : posts;
+
+    return [...source].sort((a, b) => {
+      const left = a.createdAtRaw ? new Date(a.createdAtRaw).getTime() : 0;
+      const right = b.createdAtRaw ? new Date(b.createdAtRaw).getTime() : 0;
+      return right - left;
+    });
+  }, [posts, activeFeedTab, followingIds]);
 
   const handleLike = (postId: string) => {
     setPosts((current) =>
@@ -893,6 +1023,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || composer.gifUrl.trim() || null;
     let createdId = `local-post-${Date.now()}`;
     let createdAt = 'Just now';
+    let createdAtRaw = new Date().toISOString();
 
     if (user.role === 'client') {
       const response = await DataService.createClientPost({
@@ -910,6 +1041,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       if (response.data) {
         createdId = `client-post-${(response.data as any).id}`;
         createdAt = toTimeAgo((response.data as any).created_at);
+        createdAtRaw = String((response.data as any).created_at || createdAtRaw);
       }
     }
 
@@ -928,6 +1060,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       likes: 0,
       commentsCount: 0,
       timeAgo: createdAt,
+      createdAtRaw,
       isLiked: false,
       isSaved: false,
       isClientPost: user.role === 'client',
@@ -953,6 +1086,63 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         <div className="mb-6 px-4 md:mb-8">
           <h1 className="mb-2 text-3xl font-bold text-gray-900 md:text-4xl">For You</h1>
           <p className="text-sm text-gray-600 md:text-base">Live creative feed from the CreativeHUB community</p>
+
+          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={userSearchQuery}
+                onChange={(event) => setUserSearchQuery(event.target.value)}
+                placeholder="Search users by name or email"
+                className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-gray-300 focus:bg-white"
+              />
+            </div>
+
+            {(userSearchQuery.trim().length >= 2 || isUserSearchLoading) && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                {isUserSearchLoading ? (
+                  <p className="px-3 py-3 text-sm text-gray-500">Searching users...</p>
+                ) : userSearchResults.length === 0 ? (
+                  <p className="px-3 py-3 text-sm text-gray-500">No users found.</p>
+                ) : (
+                  userSearchResults.map((result: any) => (
+                    <button
+                      key={String(result.id)}
+                      onClick={() => {
+                        setUserSearchQuery('');
+                        setUserSearchResults([]);
+                        onViewProfile?.(String(result.id));
+                      }}
+                      className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                    >
+                      <div className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-gray-200">
+                        <ImageWithFallback src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} className="h-full w-full object-cover" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
+                        <p className="truncate text-xs text-gray-500">{result.email}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
+            <button
+              onClick={() => setActiveFeedTab('for-you')}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'for-you' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              For You
+            </button>
+            <button
+              onClick={() => setActiveFeedTab('following')}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'following' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+            >
+              Following
+            </button>
+          </div>
         </div>
 
         <ComposerLauncher
@@ -977,7 +1167,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         {!isLoading && sortedPosts.length === 0 && (
           <div className="mx-4 rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
             <h2 className="mb-2 text-xl font-bold text-gray-900">No feed posts yet</h2>
-            <p className="text-gray-600">Client requests, freelancer showcases, and community updates will appear here.</p>
+            <p className="text-gray-600">
+              {activeFeedTab === 'following'
+                ? 'Follow creators from their profile to see posts here.'
+                : 'Client requests, freelancer showcases, and community updates will appear here.'}
+            </p>
           </div>
         )}
 
