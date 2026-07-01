@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { CheckCircle2, ChevronLeft, ImagePlus, UploadCloud, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
