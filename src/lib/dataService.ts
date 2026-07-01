@@ -237,11 +237,11 @@ export class DataService {
 
     if (
       firstAttempt.error &&
-      this.hasMissingLocationColumnError(firstAttempt.error) &&
       (Object.prototype.hasOwnProperty.call(updates, 'location_latitude') ||
         Object.prototype.hasOwnProperty.call(updates, 'location_longitude') ||
         Object.prototype.hasOwnProperty.call(updates, 'location_place_id'))
     ) {
+      // If the DB schema is missing location columns, retry without them so onboarding can complete.
       const { location_latitude: _lat, location_longitude: _lng, location_place_id: _pid, ...safeUpdates } = updates as any;
 
       const fallbackAttempt = await supabase
