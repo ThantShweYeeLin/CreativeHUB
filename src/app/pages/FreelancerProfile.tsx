@@ -30,11 +30,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [activeProjects, setActiveProjects] = useState(0);
+  const [completedProjects, setCompletedProjects] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -134,14 +135,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         if (isMounted && !favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
-
-        const followResponse = await DataService.isFollowing(user.id, targetId);
-        if (isMounted && !followResponse.error) {
-          setIsFollowing(followResponse.isFollowing);
-        }
       } else {
         setIsFavorited(false);
-        setIsFollowing(false);
+      }
+
+      const followCountsResponse = await DataService.getFollowCounts(targetId);
+      if (isMounted && !followCountsResponse.error) {
+        setFollowCounts({
+          followers: followCountsResponse.followerCount,
+          following: followCountsResponse.followingCount,
+        });
+      }
+
+      const bookingsResponse = await DataService.getFreelancerBookings(targetId);
+      if (isMounted && !bookingsResponse.error) {
+        const bookingRows = bookingsResponse.data || [];
+        setActiveProjects(
+          bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
+        );
+        setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
       }
 
       const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
@@ -199,28 +211,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     setIsFavorited((current) => !current);
-  };
-
-  const handleFollowToggle = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    setError(null);
-    setIsFollowLoading(true);
-
-    const response = isFollowing
-      ? await DataService.unfollowUser(user.id, targetFreelancerUserId)
-      : await DataService.followUser(user.id, targetFreelancerUserId);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to update follow status.');
-      setIsFollowLoading(false);
-      return;
-    }
-
-    setIsFollowing((current) => !current);
-    setIsFollowLoading(false);
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -390,19 +380,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       <span>{profile?.email || 'Email unavailable'}</span>
                     </div>
                   </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{followCounts.followers}</span>
+                      <span>Followers</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-gray-900">{followCounts.following}</span>
+                      <span>Following</span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {user?.id !== targetFreelancerUserId && (
-                    <button
-                      onClick={() => void handleFollowToggle()}
-                      disabled={isFollowLoading}
-                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${isFollowing ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : 'bg-gray-900 text-white hover:shadow-lg'} disabled:opacity-60`}
-                    >
-                      {isFollowLoading ? 'Updating...' : isFollowing ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-
                   {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={handleFavoriteToggle}
@@ -433,7 +424,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
               </div>
 
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4 border-y border-gray-200 py-5">
+              <div className="mt-6 grid grid-cols-2 md:grid-cols-6 gap-4 border-y border-gray-200 py-5">
                 <div>
                   <div className="flex items-center gap-2 text-gray-700">
                     <Star className="w-4 h-4 md:w-5 md:h-5 fill-yellow-400 text-yellow-400" />
@@ -461,6 +452,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <span className="font-semibold text-gray-900">{freelancerProfile?.hourly_rate ? `฿${freelancerProfile.hourly_rate}/hr` : 'Custom'}</span>
                   </div>
                   <p className="mt-1 text-sm text-gray-500">starting rate</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
+                    <span className="font-semibold text-gray-900">{activeProjects}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">active projects</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
+                    <span className="font-semibold text-gray-900">{completedProjects}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">completed projects</p>
                 </div>
               </div>
 

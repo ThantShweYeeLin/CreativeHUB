@@ -1,6 +1,7 @@
 import { Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -19,6 +20,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const [bookings, setBookings] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [formValues, setFormValues] = useState({
     full_name: '',
     location: '',
@@ -48,10 +50,11 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       setIsLoading(true);
       setError(null);
 
-      const [profileResponse, bookingsResponse] = await Promise.all([
-        DataService.getUser(user.id),
-        DataService.getClientBookings(user.id),
-      ]);
+      const profileResponse = await DataService.getUser(user.id);
+      // Load bookings depending on role (client vs freelancer)
+      const bookingsResponse = profileResponse.data?.role === 'freelancer' || user?.role === 'freelancer'
+        ? await DataService.getFreelancerBookings(user.id)
+        : await DataService.getClientBookings(user.id);
 
       const postsResponse = await DataService.getClientPostsByClientId(user.id, 20);
 
@@ -71,6 +74,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           location_place_id: profileResponse.data?.location_place_id ?? null,
           bio: profileResponse.data?.bio || '',
         });
+
+        const followCountsResponse = await DataService.getFollowCounts(user.id);
+        if (isMounted && !followCountsResponse.error) {
+          setFollowCounts({
+            followers: followCountsResponse.followerCount,
+            following: followCountsResponse.followingCount,
+          });
+        }
       }
 
       if (bookingsResponse.error) {
@@ -103,21 +114,21 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     };
   }, [user?.id]);
 
-  const completedBookings = bookings.filter((booking) => booking.status === 'completed').length;
-  const activeBookings = bookings.filter((booking) =>
-    ['pending', 'confirmed', 'in_progress'].includes(booking.status)
-  ).length;
   const recentBookings = bookings.slice(0, 3);
   const displayName = profile?.full_name || user?.fullName || 'CreativeHUB Client';
   const username = profile?.email ? `@${profile.email.split('@')[0]}` : '@client';
   const avatarUrl = profile?.avatar_url || user?.avatar_url || DEFAULT_AVATAR_URL;
   const coverUrl = profile?.cover_url || '';
   const location = profile?.location || 'Location not added';
-  const rating = Number(profile?.rating || 0);
-  const totalReviews = Number(profile?.total_reviews || 0);
   const locationLatitude = profile?.location_latitude ?? formValues.location_latitude;
   const locationLongitude = profile?.location_longitude ?? formValues.location_longitude;
   const hasPreciseLocation = locationLatitude !== null && locationLongitude !== null;
+  const isFreelancer = (profile?.role || user?.role) === 'freelancer';
+  const rating = Number(profile?.rating || 0);
+  const totalReviews = Number(profile?.total_reviews || 0);
+  const activeBookings = bookings.filter((booking) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length;
+  const completedBookings = bookings.filter((booking) => booking.status === 'completed').length;
+  const navigate = useNavigate();
 
   const resolveLocation = async (locationText: string) => {
     const result = await geocodeAddress(locationText.trim());
@@ -492,19 +503,37 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-xs md:text-sm">
-                  <div>
-                    <span className="font-semibold text-gray-900">Active Projects:</span>{' '}
-                    <span className="text-green-600 font-bold">{activeBookings}</span>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-900">Completed Projects:</span>{' '}
-                    <span className="text-gray-900 font-bold">{completedBookings}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold">{rating > 0 ? rating.toFixed(1) : 'No ratings yet'}</span>
-                  </div>
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-xs md:text-sm text-gray-600">
+                  {isFreelancer ? (
+                    <>
+                      <div>
+                        <span className="font-semibold text-gray-900">Active Projects:</span>{' '}
+                        <span className="text-green-600 font-bold">{activeBookings}</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-900">Completed Projects:</span>{' '}
+                        <span className="text-gray-900 font-bold">{completedBookings}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
+                        <span className="font-semibold">{rating > 0 ? rating.toFixed(1) : 'No ratings yet'}</span>
+                      </div>
+                      <div>
+                        <button onClick={() => navigate('/my-bookings')} className="ml-2 rounded-lg bg-gray-900 px-3 py-1 text-white text-sm font-semibold">View Projects</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{followCounts.followers}</span>
+                        <span>Followers</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{followCounts.following}</span>
+                        <span>Following</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -593,10 +622,6 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-sm md:text-base truncate">{profile?.email || user?.email || 'Not added yet'}</div>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Reviews</label>
-              <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">{totalReviews}</div>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Joined</label>

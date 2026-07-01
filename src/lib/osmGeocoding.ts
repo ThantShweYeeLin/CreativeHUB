@@ -11,42 +11,58 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     return null;
   }
 
-  const params = new URLSearchParams({
-    format: 'json',
-    limit: '1',
-    q: value,
-  });
+  async function tryQuery(q: string) {
+    const params = new URLSearchParams({
+      format: 'json',
+      limit: '1',
+      q,
+    });
 
-  const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
-    headers: {
-      Accept: 'application/json',
-    },
-  });
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
+      headers: {
+        Accept: 'application/json',
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error('Unable to contact OpenStreetMap geocoding service.');
+    if (!response.ok) {
+      throw new Error('Unable to contact OpenStreetMap geocoding service.');
+    }
+
+    const results = (await response.json()) as Array<{ lat: string; lon: string; display_name: string; osm_id?: number }>;
+    const first = results[0];
+    if (!first) return null;
+
+    const latitude = Number(first.lat);
+    const longitude = Number(first.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    return {
+      latitude,
+      longitude,
+      formattedAddress: first.display_name,
+      placeId: typeof first.osm_id === 'number' ? String(first.osm_id) : null,
+    } as GeocodeResult;
   }
 
-  const results = (await response.json()) as Array<{ lat: string; lon: string; display_name: string; osm_id?: number }>;
-  const first = results[0];
+  // Primary try
+  const primary = await tryQuery(value);
+  if (primary) return primary;
 
-  if (!first) {
-    return null;
+  // Normalization / fallbacks
+  const normalized = value.replace(/\s*,\s*/g, ', ').replace(/chiang\s?mai/ig, 'Chiang Mai');
+
+  if (normalized !== value) {
+    const tryNorm = await tryQuery(normalized);
+    if (tryNorm) return tryNorm;
   }
 
-  const latitude = Number(first.lat);
-  const longitude = Number(first.lon);
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return null;
+  // If country not present, try appending Thailand for common Chiang Mai entry or general fallback
+  if (!/thailand/i.test(value)) {
+    const tryWithCountry = await tryQuery(`${value}, Thailand`);
+    if (tryWithCountry) return tryWithCountry;
   }
 
-  return {
-    latitude,
-    longitude,
-    formattedAddress: first.display_name,
-    placeId: typeof first.osm_id === 'number' ? String(first.osm_id) : null,
-  };
+  return null;
 }
 
 export async function reverseGeocode(latitude: number, longitude: number): Promise<GeocodeResult | null> {

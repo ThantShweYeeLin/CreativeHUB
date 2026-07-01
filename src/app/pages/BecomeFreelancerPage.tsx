@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronLeft, ImagePlus, UploadCloud, X } from 'lucide-rea
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
+import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
@@ -175,6 +176,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [availability, setAvailability] = useState('Available');
   const [workingDays, setWorkingDays] = useState('Flexible');
   const [location, setLocation] = useState('');
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [locationPlaceId, setLocationPlaceId] = useState<string | null>(null);
+  const [liveLocations, setLiveLocations] = useState<Array<{ name: string; detail?: string; lat?: number; lon?: number; placeId?: string | null }>>([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [locationSearchMessage, setLocationSearchMessage] = useState('');
   const [portfolioUploads, setPortfolioUploads] = useState<PortfolioUpload[]>([]);
   const [isDraggingPortfolio, setIsDraggingPortfolio] = useState(false);
   const [instagram, setInstagram] = useState('');
@@ -210,6 +218,64 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       return [...current, ...nextUploads];
     });
   };
+
+  useEffect(() => {
+    const trimmed = location.trim();
+    if (trimmed.length < 2) {
+      setLiveLocations([]);
+      setIsSearchingLocations(false);
+      setLocationSearchMessage('');
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setIsSearchingLocations(true);
+      setLocationSearchMessage('');
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(trimmed)}`,
+          { headers: { Accept: 'application/json' }, signal: controller.signal }
+        );
+
+        if (!response.ok) throw new Error('Location search failed');
+
+        const results = await response.json();
+        const places = (Array.isArray(results) ? results : []).map((place: any) => {
+          const address = place.address || {};
+          const name =
+            address.road || address.suburb || address.city || address.town || address.village || place.display_name || trimmed;
+          const detail = [address.road, address.suburb, address.city || address.town || address.village, address.state, address.country]
+            .filter(Boolean)
+            .join(', ');
+
+          return {
+            name: place.display_name || name,
+            detail: detail || place.display_name,
+            lat: Number(place.lat),
+            lon: Number(place.lon),
+            placeId: typeof place.osm_id === 'number' ? String(place.osm_id) : null,
+          };
+        });
+
+        setLiveLocations(places);
+        setLocationSearchMessage(places.length ? '' : 'No matching places found. You can still use your typed location.');
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          setLiveLocations([]);
+          setLocationSearchMessage('Live place search is unavailable. You can still use your typed location.');
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingLocations(false);
+      }
+    }, 300);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [location]);
 
   const removePortfolioUpload = (uploadId: string) => {
     setPortfolioUploads((current) => {
@@ -293,11 +359,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setError(null);
     setIsSaving(true);
 
-    let locationLatitude: number | null = null;
-    let locationLongitude: number | null = null;
-    let locationPlaceId: string | null = null;
+    // Prefer explicit picker values if user selected a point, otherwise geocode the typed location
+    let resolvedLat = locationLatitude;
+    let resolvedLng = locationLongitude;
+    let resolvedPlaceId = locationPlaceId;
 
-    if (location.trim()) {
+    if ((!resolvedLat || !resolvedLng) && location.trim()) {
       try {
         const resolved = await geocodeAddress(location.trim());
         if (!resolved) {
@@ -306,9 +373,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           return;
         }
 
-        locationLatitude = resolved.latitude;
-        locationLongitude = resolved.longitude;
-        locationPlaceId = resolved.placeId;
+        resolvedLat = resolved.latitude;
+        resolvedLng = resolved.longitude;
+        resolvedPlaceId = resolved.placeId;
       } catch (resolveError) {
         setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve your location.');
         setIsSaving(false);
@@ -357,15 +424,20 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       uploadedCoverPhotoUrl = uploadResponse.publicUrl;
     }
 
+    // if user picked a point via the picker, prefer those values
+    if (locationLatitude && locationLongitude) {
+      // already set in resolvedLat/..., but also persist them into variables used below
+    }
+
     const userUpdate = await DataService.updateUser(user.id, {
       role: 'freelancer',
       full_name: displayName.trim(),
       avatar_url: uploadedProfilePictureUrl || user.avatar_url || null,
       cover_url: uploadedCoverPhotoUrl,
       location: location.trim(),
-      location_latitude: locationLatitude,
-      location_longitude: locationLongitude,
-      location_place_id: locationPlaceId,
+      location_latitude: resolvedLat,
+      location_longitude: resolvedLng,
+      location_place_id: resolvedPlaceId,
       bio: bio.trim() || null,
       updated_at: new Date().toISOString(),
     } as any);
@@ -375,6 +447,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       setIsSaving(false);
       return;
     }
+
+    // close picker if open
+    setIsLocationPickerOpen(false);
 
     const existingProfile = await DataService.getFreelancerProfile(user.id);
     let freelancerProfileId = existingProfile.data?.id as string | undefined;
@@ -655,12 +730,49 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
-                  <input
-                    value={location}
-                    onChange={(event) => setLocation(event.target.value)}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                    placeholder="Bangkok, Thailand"
-                  />
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        value={location}
+                        onChange={(event) => setLocation(event.target.value)}
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                        placeholder="Bangkok, Thailand"
+                      />
+
+                      {(liveLocations.length > 0 || locationSearchMessage) && (
+                        <div className="absolute left-0 right-0 z-20 mt-2 max-h-56 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                          {liveLocations.map((place, idx) => (
+                            <button
+                              key={`${place.name}-${idx}`}
+                              onClick={() => {
+                                setLocation(place.name);
+                                if (typeof place.lat === 'number') setLocationLatitude(place.lat);
+                                if (typeof place.lon === 'number') setLocationLongitude(place.lon);
+                                setLocationPlaceId(place.placeId ?? null);
+                                setLiveLocations([]);
+                                setLocationSearchMessage('');
+                              }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-50"
+                            >
+                              <div className="text-sm font-medium text-gray-900">{place.name}</div>
+                              {place.detail && <div className="mt-1 text-xs text-gray-500">{place.detail}</div>}
+                            </button>
+                          ))}
+
+                          {locationSearchMessage && (
+                            <div className="px-4 py-3 text-xs text-gray-500">{locationSearchMessage}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsLocationPickerOpen(true)}
+                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Pick
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -818,6 +930,28 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           </div>
         </div>
       </div>
+      {isLocationPickerOpen && (
+        <LeafletLocationPicker
+          initialPoint={
+            locationLatitude !== null && locationLongitude !== null
+              ? {
+                  latitude: locationLatitude,
+                  longitude: locationLongitude,
+                  formattedAddress: location,
+                  placeId: locationPlaceId,
+                }
+              : null
+          }
+          onCancel={() => setIsLocationPickerOpen(false)}
+          onConfirm={(point) => {
+            setLocation(point.formattedAddress);
+            setLocationLatitude(point.latitude);
+            setLocationLongitude(point.longitude);
+            setLocationPlaceId(point.placeId);
+            setIsLocationPickerOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

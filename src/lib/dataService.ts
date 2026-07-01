@@ -121,6 +121,25 @@ export class DataService {
     };
   }
 
+  static async getFollowCounts(userId: string) {
+    const [followersResponse, followingResponse] = await Promise.all([
+      supabase
+        .from('followers')
+        .select('id', { count: 'exact', head: true })
+        .eq('following_id', userId),
+      supabase
+        .from('followers')
+        .select('id', { count: 'exact', head: true })
+        .eq('follower_id', userId),
+    ]);
+
+    return {
+      followerCount: followersResponse.count || 0,
+      followingCount: followingResponse.count || 0,
+      error: followersResponse.error || followingResponse.error,
+    };
+  }
+
   static async isFollowing(userId: string, targetUserId: string) {
     const { data, error } = await supabase
       .from('followers')
@@ -242,13 +261,17 @@ export class DataService {
       (error as any).message?.toLowerCase().includes("could not find the 'cover_url' column") &&
       Object.prototype.hasOwnProperty.call(updates, 'cover_url')
     ) {
-      return {
-        data: null,
-        error: {
-          message:
-            'Missing users.cover_url column. Run: alter table public.users add column if not exists cover_url text; then retry.',
-        } as any,
-      };
+      // Try fallback: remove cover_url and retry update to avoid blocking the UI when DB column is missing
+      const { cover_url: _cv, ...safeUpdates } = updates as any;
+
+      const fallbackAttempt = await supabase
+        .from('users')
+        .update(safeUpdates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
     }
 
     return { data, error };
