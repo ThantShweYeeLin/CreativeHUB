@@ -1,4 +1,4 @@
-import { Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Star } from 'lucide-react';
+import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -19,7 +19,11 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
   const [posts, setPosts] = useState<any[]>([]);
-  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
+  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
+  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [formValues, setFormValues] = useState({
     full_name: '',
@@ -93,12 +97,21 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       if (!postsResponse.error) {
         const loadedPosts = postsResponse.data || [];
         setPosts(loadedPosts);
-        const nextEngagement: Record<string, { likes: number; comments: number; liked: boolean }> = {};
+        const statsResponse = await DataService.getClientPostEngagementStats(
+          loadedPosts.map((post: any) => String(post.id)),
+          user?.id
+        );
+        const statsById = new Map((statsResponse.data || []).map((item: any) => [String(item.post_id), item]));
+        const nextEngagement: Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }> = {};
         loadedPosts.forEach((post: any) => {
-          nextEngagement[post.id] = {
-            likes: Math.max(0, Number(post.likes_count || 0)),
-            comments: Math.max(0, Number(post.comments_count || 0)),
-            liked: false,
+          const stats = statsById.get(String(post.id));
+          nextEngagement[String(post.id)] = {
+            likes: Math.max(0, Number(stats?.likes || 0)),
+            comments: Math.max(0, Number(stats?.comments || 0)),
+            shares: Math.max(0, Number(stats?.shares || 0)),
+            saves: Math.max(0, Number(stats?.saves || 0)),
+            liked: !!stats?.liked_by_me,
+            saved: !!stats?.saved_by_me,
           };
         });
         setPostEngagement(nextEngagement);
@@ -128,6 +141,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const totalReviews = Number(profile?.total_reviews || 0);
   const activeBookings = bookings.filter((booking) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length;
   const completedBookings = bookings.filter((booking) => booking.status === 'completed').length;
+  const focusedPost = posts.find((post) => String(post.id) === focusedPostId) || null;
   const navigate = useNavigate();
 
   const resolveLocation = async (locationText: string) => {
@@ -218,9 +232,10 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     }).format(Number(amount));
   };
 
-  const togglePostLike = (postId: string) => {
+  const togglePostLike = async (postId: string) => {
+    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      const existing = current[postId] || engagement;
       return {
         ...current,
         [postId]: {
@@ -230,11 +245,132 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         },
       };
     });
+
+    if (!user?.id) {
+      return;
+    }
+
+    const response = await DataService.toggleClientPostLike(user.id, postId, engagement.liked);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update like status.');
+      setPostEngagement((current) => {
+        const existing = current[postId] || engagement;
+        return {
+          ...current,
+          [postId]: {
+            ...existing,
+            liked: engagement.liked,
+            likes: engagement.liked ? existing.likes + 1 : Math.max(0, existing.likes - 1),
+          },
+        };
+      });
+    }
   };
 
-  const addPostComment = (postId: string) => {
+  const togglePostSave = async (postId: string) => {
+    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      const existing = current[postId] || engagement;
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          saved: !existing.saved,
+          saves: existing.saved ? Math.max(0, existing.saves - 1) : existing.saves + 1,
+        },
+      };
+    });
+
+    if (!user?.id) {
+      return;
+    }
+
+    const response = await DataService.toggleClientPostSave(user.id, postId, engagement.saved);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update save status.');
+      setPostEngagement((current) => {
+        const existing = current[postId] || engagement;
+        return {
+          ...current,
+          [postId]: {
+            ...existing,
+            saved: engagement.saved,
+            saves: engagement.saved ? existing.saves + 1 : Math.max(0, existing.saves - 1),
+          },
+        };
+      });
+    }
+  };
+
+  const sharePost = async (postId: string) => {
+    const shareUrl = `${window.location.origin}/profile/${user?.id || ''}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // Ignore clipboard failures.
+    }
+
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          shares: existing.shares + 1,
+        },
+      };
+    });
+
+    if (!user?.id) {
+      return;
+    }
+
+    const response = await DataService.recordClientPostShare(user.id, postId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to record share.');
+      setPostEngagement((current) => {
+        const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+        return {
+          ...current,
+          [postId]: {
+            ...existing,
+            shares: Math.max(0, existing.shares - 1),
+          },
+        };
+      });
+    }
+  };
+
+  const openPostFocus = async (postId: string) => {
+    setFocusedPostId(postId);
+    const response = await DataService.getClientPostComments(postId, 100);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load comments.');
+      return;
+    }
+    setCommentsByPostId((current) => ({ ...current, [postId]: response.data || [] }));
+  };
+
+  const submitComment = async (postId: string) => {
+    const draft = (commentDraftByPostId[postId] || '').trim();
+    if (!draft || !user?.id) {
+      return;
+    }
+
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
+    const response = await DataService.addClientPostComment(user.id, postId, draft);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add comment.');
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      return;
+    }
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [postId]: [...(current[postId] || []), response.data],
+    }));
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
         ...current,
         [postId]: {
@@ -243,6 +379,53 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         },
       };
     });
+    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+  };
+
+  const deletePost = async (postId: string) => {
+    if (!user?.id) {
+      return;
+    }
+
+    const targetPost = posts.find((post) => String(post.id) === postId);
+    if (!targetPost || String(targetPost.client_id) !== user.id) {
+      return;
+    }
+
+    const confirmed = window.confirm('Delete this post? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await DataService.deleteClientPost(postId, user.id);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to delete post.');
+      return;
+    }
+
+    setPosts((current) => current.filter((post) => String(post.id) !== postId));
+    setPostEngagement((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setCommentsByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setCommentDraftByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setIsSubmittingCommentByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setFocusedPostId(null);
   };
 
   const handleSaveProfile = async () => {
@@ -656,26 +839,35 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
 
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               {posts.map((post) => {
-                const engagement = postEngagement[post.id] || { likes: 0, comments: 0, liked: false };
+                const postId = String(post.id);
+                const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
                 return (
                   <article key={post.id} className="overflow-hidden rounded-xl border border-gray-200 bg-gray-50">
-                    <div className="aspect-[4/3] bg-white">
+                    <button type="button" onClick={() => void openPostFocus(postId)} className="aspect-[4/3] w-full bg-white text-left">
                       <ImageWithFallback
                         src={post.image_url || avatarUrl}
                         alt={post.caption || 'Post'}
                         className="h-full w-full object-cover"
                       />
-                    </div>
+                    </button>
                     <div className="p-4">
                       <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
-                      <div className="mt-3 flex items-center gap-3 text-sm text-gray-700">
-                        <button type="button" onClick={() => togglePostLike(post.id)} className="inline-flex items-center gap-1">
+                      <div className="mt-3 flex items-center gap-3 text-sm text-gray-700 flex-wrap">
+                        <button type="button" onClick={() => void togglePostLike(postId)} className="inline-flex items-center gap-1">
                           <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
                           {engagement.likes}
                         </button>
-                        <button type="button" onClick={() => addPostComment(post.id)} className="inline-flex items-center gap-1">
+                        <button type="button" onClick={() => void openPostFocus(postId)} className="inline-flex items-center gap-1">
                           <MessageCircle className="h-4 w-4" />
                           {engagement.comments}
+                        </button>
+                        <button type="button" onClick={() => void sharePost(postId)} className="inline-flex items-center gap-1">
+                          <Share2 className="h-4 w-4" />
+                          {engagement.shares}
+                        </button>
+                        <button type="button" onClick={() => void togglePostSave(postId)} className="inline-flex items-center gap-1">
+                          <Bookmark className={`h-4 w-4 ${engagement.saved ? 'fill-gray-900 text-gray-900' : ''}`} />
+                          {engagement.saves}
                         </button>
                       </div>
                     </div>
@@ -686,6 +878,109 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           </div>
         )}
       </div>
+
+      {focusedPost && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setFocusedPostId(null)}
+              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="max-h-[55vh] overflow-hidden bg-gray-100">
+              <ImageWithFallback
+                src={focusedPost.image_url || avatarUrl}
+                alt={focusedPost.caption || 'Post image'}
+                className="h-full max-h-[55vh] w-full object-contain"
+              />
+            </div>
+
+            <div className="max-h-[40vh] overflow-y-auto p-5">
+              <p className="mb-4 whitespace-pre-line text-sm text-gray-800">{focusedPost.caption || 'No caption'}</p>
+              {(() => {
+                const postId = String(focusedPost.id);
+                const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+                return (
+                  <>
+                    {user?.id && String(focusedPost.client_id) === user.id && (
+                      <div className="mb-3 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void deletePost(postId)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                    <div className="mb-4 flex items-center gap-4 border-y border-gray-200 py-3">
+                      <button onClick={() => void togglePostLike(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Heart className={`h-5 w-5 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
+                        {engagement.likes}
+                      </button>
+                      <button onClick={() => void openPostFocus(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <MessageCircle className="h-5 w-5" />
+                        {engagement.comments}
+                      </button>
+                      <button onClick={() => void sharePost(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Share2 className="h-5 w-5" />
+                        {engagement.shares}
+                      </button>
+                      <button onClick={() => void togglePostSave(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        <Bookmark className={`h-5 w-5 ${engagement.saved ? 'fill-gray-900 text-gray-900' : ''}`} />
+                        {engagement.saves}
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      {(commentsByPostId[postId] || []).length === 0 ? (
+                        <p className="text-sm text-gray-500">No comments yet.</p>
+                      ) : (
+                        (commentsByPostId[postId] || []).map((comment: any) => (
+                          <div key={comment.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span className="font-semibold text-gray-800">{comment.user?.full_name || 'User'}</span>
+                              <span>•</span>
+                              <span>{new Date(comment.created_at).toLocaleString()}</span>
+                            </div>
+                            <p className="mt-1 text-sm text-gray-800">{comment.content}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <input
+                        value={commentDraftByPostId[postId] || ''}
+                        onChange={(event) =>
+                          setCommentDraftByPostId((current) => ({
+                            ...current,
+                            [postId]: event.target.value,
+                          }))
+                        }
+                        placeholder="Write a comment..."
+                        className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void submitComment(postId)}
+                        disabled={!!isSubmittingCommentByPostId[postId]}
+                        className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        {isSubmittingCommentByPostId[postId] ? 'Sending...' : 'Comment'}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isLocationPickerOpen && (
         <LeafletLocationPicker

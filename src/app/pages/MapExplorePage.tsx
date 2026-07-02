@@ -126,6 +126,18 @@ function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number) {
   return earthRadiusKm * c;
 }
 
+function formatDistanceAway(distance: number) {
+  if (!Number.isFinite(distance)) {
+    return null;
+  }
+
+  if (distance < 1) {
+    return `${Math.max(100, Math.round(distance * 1000))} m away`;
+  }
+
+  return `${distance.toFixed(1)} km away`;
+}
+
 function inBudgetBand(hourlyRate: number | undefined, band: BudgetBand) {
   if (band === 'all') return true;
   if (!Number.isFinite(hourlyRate)) return false;
@@ -151,6 +163,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
   const [budgetBand, setBudgetBand] = useState<BudgetBand>('all');
   const [distanceLimitKm, setDistanceLimitKm] = useState<number | null>(null);
   const [clientLocation, setClientLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const [locationSource, setLocationSource] = useState<'profile' | 'device' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -228,6 +241,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           lng: userLng,
           label: userResponse.data.location || 'Your location',
         });
+        setLocationSource('profile');
       } else {
         const userLocationText = userResponse.data?.location || '';
         if (userLocationText) {
@@ -238,11 +252,14 @@ export function MapView({ onViewProfile }: MapViewProps) {
               lng: geocodedUserLocation.longitude,
               label: geocodedUserLocation.formattedAddress,
             });
+            setLocationSource('profile');
           } else {
             setClientLocation(null);
+            setLocationSource(null);
           }
         } else {
           setClientLocation(null);
+          setLocationSource(null);
         }
       }
 
@@ -255,6 +272,65 @@ export function MapView({ onViewProfile }: MapViewProps) {
       isMounted = false;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) {
+          return;
+        }
+
+        setClientLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          label: 'Current location',
+        });
+        setLocationSource('device');
+      },
+      () => {
+        // Keep profile-based location when device location is unavailable or denied.
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 120000,
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  const distanceByFreelancerId = useMemo(() => {
+    const map = new Map<string, number>();
+
+    if (!clientLocation) {
+      return map;
+    }
+
+    for (const freelancer of freelancers) {
+      if (Number.isFinite(freelancer.latitude) && Number.isFinite(freelancer.longitude)) {
+        map.set(
+          freelancer.id,
+          distanceKm(
+            clientLocation.lat,
+            clientLocation.lng,
+            freelancer.latitude as number,
+            freelancer.longitude as number
+          )
+        );
+      }
+    }
+
+    return map;
+  }, [freelancers, clientLocation]);
 
   const filteredFreelancers = useMemo(() => {
     const allProfessionsSelected = selectedProfessions.length === professionFilters.length;
@@ -280,12 +356,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
       }
 
       if (distanceLimitKm && clientLocation) {
-        const freelancerDistance = distanceKm(
-          clientLocation.lat,
-          clientLocation.lng,
-          freelancer.latitude as number,
-          freelancer.longitude as number
-        );
+        const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
+        if (!Number.isFinite(freelancerDistance)) {
+          return false;
+        }
         if (freelancerDistance > distanceLimitKm) {
           return false;
         }
@@ -293,7 +367,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       return true;
     });
-  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand, distanceLimitKm, clientLocation]);
+  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand, distanceLimitKm, clientLocation, distanceByFreelancerId]);
 
   const selectedFreelancer = filteredFreelancers.find((freelancer) => freelancer.id === selectedId) || null;
 
@@ -354,42 +428,56 @@ export function MapView({ onViewProfile }: MapViewProps) {
         )}
 
         {filtersExpanded && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div className="space-y-6">
           <div>
             <h3 className="mb-3 text-sm font-bold text-gray-900">Filter by Profession</h3>
-            <div className="space-y-2 text-sm">
-              {professionFilters.map((profession) => (
-                <label key={profession} className="flex items-center gap-2 text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedProfessions.includes(profession)}
-                    onChange={() => toggleProfession(profession)}
-                  />
-                  {profession}
-                </label>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              {professionFilters.map((profession) => {
+                const isSelected = selectedProfessions.includes(profession);
+                return (
+                  <button
+                    key={profession}
+                    type="button"
+                    onClick={() => toggleProfession(profession)}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {profession}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
             <h3 className="mb-3 text-sm font-bold text-gray-900">Availability Filter</h3>
-            <div className="space-y-2 text-sm">
-              {availabilityFilters.map((availability) => (
-                <label key={availability.key} className="flex items-center gap-2 text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={selectedAvailability.includes(availability.key)}
-                    onChange={() => toggleAvailability(availability.key)}
-                  />
-                  <span>{availability.dot} {availability.label}</span>
-                </label>
-              ))}
+            <div className="flex flex-wrap gap-2">
+              {availabilityFilters.map((availability) => {
+                const isSelected = selectedAvailability.includes(availability.key);
+                return (
+                  <button
+                    key={availability.key}
+                    type="button"
+                    onClick={() => toggleAvailability(availability.key)}
+                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {availability.dot} {availability.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
             <h3 className="mb-3 text-sm font-bold text-gray-900">Budget Filter</h3>
-            <div className="space-y-2 text-sm">
+            <div className="flex flex-wrap gap-2">
               {[
                 { key: 'all' as const, label: 'All' },
                 { key: 'under-100' as const, label: '< $100' },
@@ -397,47 +485,70 @@ export function MapView({ onViewProfile }: MapViewProps) {
                 { key: '300-500' as const, label: '$300-$500' },
                 { key: '500-plus' as const, label: '$500+' },
               ].map((band) => (
-                <label key={band.key} className="flex items-center gap-2 text-gray-700">
-                  <input
-                    type="radio"
-                    name="budget-band"
-                    checked={budgetBand === band.key}
-                    onChange={() => setBudgetBand(band.key)}
-                  />
+                <button
+                  key={band.key}
+                  type="button"
+                  onClick={() => setBudgetBand(band.key)}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                    budgetBand === band.key
+                      ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
                   {band.label}
-                </label>
+                </button>
               ))}
             </div>
           </div>
 
           <div>
             <h3 className="mb-3 text-sm font-bold text-gray-900">Distance Filter</h3>
-            <div className="space-y-2 text-sm">
-              <label className="flex items-center gap-2 text-gray-700">
-                <input
-                  type="radio"
-                  name="distance-filter"
-                  checked={distanceLimitKm === null}
-                  onChange={() => setDistanceLimitKm(null)}
-                />
+            <div className="flex flex-wrap gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setDistanceLimitKm(null)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                  distanceLimitKm === null
+                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
                 Any distance
-              </label>
+              </button>
               {distanceFilters.map((distance) => (
-                <label key={distance} className="flex items-center gap-2 text-gray-700">
-                  <input
-                    type="radio"
-                    name="distance-filter"
-                    checked={distanceLimitKm === distance}
-                    onChange={() => setDistanceLimitKm(distance)}
-                    disabled={!clientLocation}
-                  />
+                <button
+                  key={distance}
+                  type="button"
+                  onClick={() => setDistanceLimitKm(distance)}
+                  disabled={!clientLocation}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
+                    distanceLimitKm === distance
+                      ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
                   Within {distance} km
-                </label>
+                </button>
               ))}
               {!clientLocation && (
                 <p className="text-xs text-gray-500">Set your profile location to enable distance filtering.</p>
               )}
             </div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProfessions([...professionFilters]);
+                setSelectedAvailability(['available', 'busy', 'unavailable']);
+                setBudgetBand('all');
+                setDistanceLimitKm(null);
+              }}
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+            >
+              Reset Map Filters
+            </button>
           </div>
         </div>
         )}
@@ -462,7 +573,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               <Marker position={[clientLocation.lat, clientLocation.lng]} icon={clientMarkerIcon}>
                 <Popup>
                   <div className="text-sm">
-                    <p className="font-bold text-gray-900">Your Location</p>
+                    <p className="font-bold text-gray-900">Your Location {locationSource === 'device' ? '(Live)' : ''}</p>
                     <p className="text-gray-600">{clientLocation.label}</p>
                   </div>
                 </Popup>
@@ -491,6 +602,11 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   <h4 className="text-base font-bold text-gray-900">{freelancer.fullName}</h4>
                   <p className="text-sm text-gray-600">{freelancer.profession}</p>
                   <p className="mt-1 text-xs text-gray-500">{freelancer.location}</p>
+                  {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
+                    <p className="mt-1 text-xs font-semibold text-blue-700">
+                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number)}
+                    </p>
+                  ) : null}
                   <div className="mt-2 flex items-center gap-3 text-xs text-gray-700">
                     <span>★ {freelancer.rating.toFixed(1)}</span>
                     <span>{freelancer.totalProjects} projects</span>
@@ -515,6 +631,11 @@ export function MapView({ onViewProfile }: MapViewProps) {
             OpenStreetMap Live View
           </div>
           <p className="mt-1 text-xs text-gray-600">{filteredFreelancers.length} freelancers match filters</p>
+          {clientLocation ? (
+            <p className="mt-0.5 text-xs text-gray-500">
+              Location source: {locationSource === 'device' ? 'Current device GPS' : 'Profile location'}
+            </p>
+          ) : null}
         </div>
 
         {(isLoading || errorMessage || (!isLoading && !errorMessage && filteredFreelancers.length === 0)) && (
@@ -574,6 +695,11 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   <h3 className="truncate text-base font-bold text-gray-900">{freelancer.fullName}</h3>
                   <p className="truncate text-xs text-gray-600">{freelancer.profession}</p>
                   <p className="mt-1 truncate text-xs text-gray-500">{freelancer.location}</p>
+                  {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
+                    <p className="mt-1 text-xs font-semibold text-blue-700">
+                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number)}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-700">

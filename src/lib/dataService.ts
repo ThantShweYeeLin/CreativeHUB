@@ -785,6 +785,94 @@ export class DataService {
     };
   }
 
+  static async getClientPostEngagementStats(postIds: string[], userId?: string) {
+    if (postIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const [likesResponse, commentsResponse, sharesResponse, savesResponse] = await Promise.all([
+      supabase
+        .from('client_post_likes')
+        .select('post_id, user_id')
+        .in('post_id', postIds),
+      supabase
+        .from('client_post_comments')
+        .select('post_id')
+        .in('post_id', postIds),
+      supabase
+        .from('client_post_shares' as any)
+        .select('post_id, user_id')
+        .in('post_id', postIds),
+      supabase
+        .from('client_post_saves' as any)
+        .select('post_id, user_id')
+        .in('post_id', postIds),
+    ]);
+
+    const likesError = likesResponse.error;
+    const commentsError = commentsResponse.error;
+    if (likesError || commentsError) {
+      return { data: null, error: likesError || commentsError };
+    }
+
+    const sharesTableMissing = !!sharesResponse.error && this.isMissingOptionalClientPostTable(sharesResponse.error, 'client_post_shares');
+    const savesTableMissing = !!savesResponse.error && this.isMissingOptionalClientPostTable(savesResponse.error, 'client_post_saves');
+
+    if (sharesResponse.error && !sharesTableMissing) {
+      return { data: null, error: sharesResponse.error };
+    }
+
+    if (savesResponse.error && !savesTableMissing) {
+      return { data: null, error: savesResponse.error };
+    }
+
+    const likesByPost: Record<string, number> = {};
+    const commentsByPost: Record<string, number> = {};
+    const sharesByPost: Record<string, number> = {};
+    const savesByPost: Record<string, number> = {};
+    const likedByMe: Record<string, boolean> = {};
+    const savedByMe: Record<string, boolean> = {};
+
+    (likesResponse.data || []).forEach((item: any) => {
+      likesByPost[item.post_id] = (likesByPost[item.post_id] || 0) + 1;
+      if (userId && item.user_id === userId) {
+        likedByMe[item.post_id] = true;
+      }
+    });
+
+    (commentsResponse.data || []).forEach((item: any) => {
+      commentsByPost[item.post_id] = (commentsByPost[item.post_id] || 0) + 1;
+    });
+
+    ((sharesResponse.data || []) as any[]).forEach((item: any) => {
+      sharesByPost[item.post_id] = (sharesByPost[item.post_id] || 0) + 1;
+    });
+
+    ((savesResponse.data || []) as any[]).forEach((item: any) => {
+      savesByPost[item.post_id] = (savesByPost[item.post_id] || 0) + 1;
+      if (userId && item.user_id === userId) {
+        savedByMe[item.post_id] = true;
+      }
+    });
+
+    return {
+      data: postIds.map((postId) => ({
+        post_id: postId,
+        likes: likesByPost[postId] || 0,
+        comments: commentsByPost[postId] || 0,
+        shares: sharesByPost[postId] || 0,
+        saves: savesByPost[postId] || 0,
+        liked_by_me: !!likedByMe[postId],
+        saved_by_me: !!savedByMe[postId],
+      })),
+      error: null,
+      missingTables: {
+        client_post_shares: sharesTableMissing,
+        client_post_saves: savesTableMissing,
+      },
+    };
+  }
+
   static async getClientPostComments(postId: string, limit = 40) {
     const { data, error } = await supabase
       .from('client_post_comments')
@@ -828,6 +916,57 @@ export class DataService {
       .single();
 
     return { data, error };
+  }
+
+  static async toggleClientPostSave(userId: string, postId: string, currentlySaved: boolean) {
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from('client_post_saves' as any)
+        .delete()
+        .eq('user_id', userId)
+        .eq('post_id', postId);
+
+      if (error && this.isMissingOptionalClientPostTable(error, 'client_post_saves')) {
+        return { saved: currentlySaved, error: null, tableMissing: true };
+      }
+
+      return { saved: false, error, tableMissing: false };
+    }
+
+    const { error } = await supabase
+      .from('client_post_saves' as any)
+      .insert({ user_id: userId, post_id: postId });
+
+    if (error && this.isMissingOptionalClientPostTable(error, 'client_post_saves')) {
+      return { saved: currentlySaved, error: null, tableMissing: true };
+    }
+
+    if (error && error.code !== '23505') {
+      return { saved: currentlySaved, error, tableMissing: false };
+    }
+
+    return { saved: true, error: null, tableMissing: false };
+  }
+
+  static async recordClientPostShare(userId: string, postId: string) {
+    const { error } = await supabase
+      .from('client_post_shares' as any)
+      .insert({ user_id: userId, post_id: postId });
+
+    if (error && this.isMissingOptionalClientPostTable(error, 'client_post_shares')) {
+      return { shared: false, error: null, tableMissing: true };
+    }
+
+    if (error && error.code !== '23505') {
+      return { shared: false, error, tableMissing: false };
+    }
+
+    return { shared: true, error: null, tableMissing: false };
+  }
+
+  private static isMissingOptionalClientPostTable(error: unknown, tableName: string) {
+    const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
+    return message.includes(tableName.toLowerCase()) && (message.includes('schema cache') || message.includes('does not exist'));
   }
 
   static async getActiveOrLatestBookingBetweenUsers(userAId: string, userBId: string) {
@@ -894,6 +1033,16 @@ export class DataService {
       .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
       .single();
     return { data, error };
+  }
+
+  static async deleteClientPost(postId: string, userId: string) {
+    const { error } = await supabase
+      .from('client_posts')
+      .delete()
+      .eq('id', postId)
+      .eq('client_id', userId);
+
+    return { error };
   }
 
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {

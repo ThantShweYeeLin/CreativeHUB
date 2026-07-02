@@ -297,6 +297,19 @@ create policy "Clients can create own posts" on public.client_posts
 create policy "Clients can update own posts" on public.client_posts
   for update using (auth.uid() = client_id);
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_posts'
+      and policyname = 'Clients can delete own posts'
+  ) then
+    create policy "Clients can delete own posts" on public.client_posts
+      for delete using (auth.uid() = client_id);
+  end if;
+end $$;
+
 -- Reviews: reviewer/reviewee can read, reviewer can insert
 create policy "Users can view own related reviews" on public.reviews
   for select using (auth.uid() = reviewer_id or auth.uid() = reviewee_id);
@@ -321,8 +334,26 @@ create table public.client_post_comments (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+create table if not exists public.client_post_shares (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(post_id, user_id)
+);
+
+create table if not exists public.client_post_saves (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(post_id, user_id)
+);
+
 alter table public.client_post_likes enable row level security;
 alter table public.client_post_comments enable row level security;
+alter table public.client_post_shares enable row level security;
+alter table public.client_post_saves enable row level security;
 
 create policy "Users can read client post likes" on public.client_post_likes
   for select using (true);
@@ -339,6 +370,71 @@ create policy "Users can read client post comments" on public.client_post_commen
 create policy "Users can comment as themselves" on public.client_post_comments
   for insert with check (auth.uid() = user_id);
 
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_post_shares'
+      and policyname = 'Users can read client post shares'
+  ) then
+    create policy "Users can read client post shares" on public.client_post_shares
+      for select using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_post_shares'
+      and policyname = 'Users can share as themselves'
+  ) then
+    create policy "Users can share as themselves" on public.client_post_shares
+      for insert with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_post_saves'
+      and policyname = 'Users can read client post saves'
+  ) then
+    create policy "Users can read client post saves" on public.client_post_saves
+      for select using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_post_saves'
+      and policyname = 'Users can save as themselves'
+  ) then
+    create policy "Users can save as themselves" on public.client_post_saves
+      for insert with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'client_post_saves'
+      and policyname = 'Users can unsave as themselves'
+  ) then
+    create policy "Users can unsave as themselves" on public.client_post_saves
+      for delete using (auth.uid() = user_id);
+  end if;
+end $$;
+
 -- Indexes for performance
 create index idx_freelancer_profiles_user_id on public.freelancer_profiles(user_id);
 create index idx_portfolios_freelancer_id on public.portfolios(freelancer_id);
@@ -353,6 +449,8 @@ create index idx_notifications_user_id on public.notifications(user_id);
 create index idx_requests_client_id on public.requests(client_id);
 create index idx_requests_freelancer_id on public.requests(freelancer_id);
 create index idx_client_posts_client_id on public.client_posts(client_id);
+create index if not exists idx_client_post_shares_post_id on public.client_post_shares(post_id);
+create index if not exists idx_client_post_saves_post_id on public.client_post_saves(post_id);
 
 -- insert policy for users to create their own profile upon sign up --
 create policy "Users can insert own record" 

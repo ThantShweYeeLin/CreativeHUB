@@ -33,12 +33,40 @@ const locationOptions = [
   'Others'
 ];
 
+const PRICE_MIN = 0;
+const PRICE_MAX = 10000;
+const PRICE_STEP = 100;
+
+const budgetPresets: Array<{ label: string; range: [number, number] }> = [
+  { label: 'Any Budget', range: [0, 10000] },
+  { label: 'Under 2,000', range: [0, 2000] },
+  { label: '2,000 - 5,000', range: [2000, 5000] },
+  { label: '5,000 - 8,000', range: [5000, 8000] },
+  { label: '8,000+', range: [8000, 10000] },
+];
+
 export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps) {
   const [filters, setFilters] = useState<FilterState>({
     services: [],
-    priceRange: [1000, 5000],
+    priceRange: [PRICE_MIN, PRICE_MAX],
     locations: []
   });
+
+  const setMinPrice = (value: number) => {
+    const safeMin = Math.max(PRICE_MIN, Math.min(value, filters.priceRange[1]));
+    setFilters((prev) => ({
+      ...prev,
+      priceRange: [safeMin, prev.priceRange[1]],
+    }));
+  };
+
+  const setMaxPrice = (value: number) => {
+    const safeMax = Math.min(PRICE_MAX, Math.max(value, filters.priceRange[0]));
+    setFilters((prev) => ({
+      ...prev,
+      priceRange: [prev.priceRange[0], safeMax],
+    }));
+  };
 
   const toggleService = (service: string) => {
     setFilters(prev => ({
@@ -105,54 +133,64 @@ export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps)
           <div>
             <h3 className="text-xl font-bold text-gray-900 mb-4">Price Range (THB)</h3>
             <div className="space-y-6">
-              <div className="relative pt-6">
-                {/* Range slider */}
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.priceRange[0]}
-                  onChange={(e) => setFilters(prev => ({
-                    ...prev,
-                    priceRange: [parseInt(e.target.value), prev.priceRange[1]]
-                  }))}
-                  className="absolute w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-900"
-                  style={{ zIndex: filters.priceRange[0] > filters.priceRange[1] ? 2 : 1 }}
-                />
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.priceRange[1]}
-                  onChange={(e) => setFilters(prev => ({
-                    ...prev,
-                    priceRange: [prev.priceRange[0], parseInt(e.target.value)]
-                  }))}
-                  className="absolute w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer accent-gray-900"
-                  style={{ zIndex: filters.priceRange[1] < filters.priceRange[0] ? 2 : 1 }}
-                />
+              <div className="flex flex-wrap gap-2">
+                {budgetPresets.map((preset) => {
+                  const isActive =
+                    filters.priceRange[0] === preset.range[0] &&
+                    filters.priceRange[1] === preset.range[1];
+                  return (
+                    <button
+                      key={preset.label}
+                      onClick={() => setFilters((prev) => ({ ...prev, priceRange: preset.range }))}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Price display */}
-              <div className="flex items-center justify-between gap-4 mt-12">
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 rounded-xl border-2 border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
                   <DollarSign className="w-5 h-5 text-gray-900" />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Min</div>
-                    <div className="text-xl font-bold text-gray-900">{filters.priceRange[0].toLocaleString()}</div>
+                    <input
+                      type="number"
+                      min={PRICE_MIN}
+                      max={PRICE_MAX}
+                      step={PRICE_STEP}
+                      value={filters.priceRange[0]}
+                      onChange={(e) => setMinPrice(Number(e.target.value || PRICE_MIN))}
+                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                    />
                   </div>
                 </div>
-                <div className="w-12 h-0.5 bg-gray-300" />
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 rounded-xl border-2 border-gray-200">
+                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
                   <DollarSign className="w-5 h-5 text-gray-900" />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Max</div>
-                    <div className="text-xl font-bold text-gray-900">{filters.priceRange[1].toLocaleString()}</div>
+                    <input
+                      type="number"
+                      min={PRICE_MIN}
+                      max={PRICE_MAX}
+                      step={PRICE_STEP}
+                      value={filters.priceRange[1]}
+                      onChange={(e) => setMaxPrice(Number(e.target.value || PRICE_MAX))}
+                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                    />
                   </div>
                 </div>
               </div>
+
+              <p className="text-sm text-gray-500">
+                Tip: Choose a preset for quick filtering, or type your exact minimum and maximum budget.
+              </p>
             </div>
           </div>
 
@@ -183,7 +221,7 @@ export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps)
         {/* Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-6 rounded-b-3xl flex items-center justify-between">
           <button
-            onClick={() => setFilters({ services: [], priceRange: [1000, 5000], locations: [] })}
+            onClick={() => setFilters({ services: [], priceRange: [PRICE_MIN, PRICE_MAX], locations: [] })}
             className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors"
           >
             Clear All

@@ -95,6 +95,22 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
   );
 }
 
+const knownLocations = ['bangkok', 'chiang mai', 'pattaya', 'phuket', 'nakhon ratchasima', 'khon kaen', 'udon thani'];
+
+const serviceKeywords: Record<string, string[]> = {
+  'Photography': ['photography', 'photographer', 'photo', 'portrait', 'studio'],
+  'Fashion & Styling': ['fashion', 'styling', 'stylist', 'wardrobe', 'editorial'],
+  'Videography': ['videography', 'videographer', 'video', 'cinematic', 'editing'],
+  'Graphic Design': ['graphic design', 'designer', 'branding', 'logo', 'visual identity', 'illustration'],
+  'Makeup & Beauty': ['makeup', 'beauty', 'hairstyle', 'hair', 'bridal', 'cosmetic'],
+  'Wedding Planning': ['wedding', 'wedding planning', 'planner', 'event planning'],
+  'Others': ['creative', 'freelancer'],
+};
+
+function normalizeText(value: string | null | undefined) {
+  return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
+}
+
 export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
@@ -149,7 +165,7 @@ export function ExplorePage() {
       specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
       rating: Number(profile.users?.rating || 0),
       reviews: Number(profile.users?.total_reviews || 0),
-      image: DEFAULT_AVATAR_URL,
+      image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
       location: profile.users?.location || undefined,
     }));
   }, [freelancers]);
@@ -161,25 +177,52 @@ export function ExplorePage() {
 
     return profiles.filter((profile) => {
       const source = mapById.get(profile.id);
-      const combinedText = `${profile.specialty} ${source?.title || ''} ${(source?.skills || []).join(' ')}`.toLowerCase();
+      const combinedText = normalizeText(
+        [
+          profile.name,
+          profile.specialty,
+          source?.title,
+          source?.description,
+          ...(source?.skills || []),
+          ...(source?.styles || []),
+          profile.location,
+        ].join(' ')
+      );
+
+      const queryMatch =
+        searchQuery.trim().length === 0 ||
+        combinedText.includes(normalizeText(searchQuery));
 
       const serviceMatch =
         filters.services.length === 0 ||
-        filters.services.some((service) => combinedText.includes(service.toLowerCase().replace('&', 'and')));
+        filters.services.some((service) => {
+          const keywords = serviceKeywords[service] || [service];
+          return keywords.some((keyword) => combinedText.includes(normalizeText(keyword)));
+        });
+
+      const normalizedLocation = normalizeText(profile.location);
+      const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
 
       const locationMatch =
         filters.locations.length === 0 ||
-        filters.locations.some((location) =>
-          (profile.location || '').toLowerCase().includes(location.toLowerCase())
-        );
+        filters.locations.some((location) => {
+          const normalizedSelectedLocation = normalizeText(location);
+          if (normalizedSelectedLocation === 'others') {
+            return !!normalizedLocation && !isKnownLocation;
+          }
+          return normalizedLocation.includes(normalizedSelectedLocation);
+        });
 
-      const hourlyRate = Number(source?.hourly_rate ?? 0);
+      const hourlyRate = Number(source?.hourly_rate);
       const [minPrice, maxPrice] = filters.priceRange;
-      const priceMatch = hourlyRate === 0 ? true : hourlyRate >= minPrice && hourlyRate <= maxPrice;
+      const isDefaultPriceFilter = minPrice === 0 && maxPrice === 10000;
+      const priceMatch = Number.isFinite(hourlyRate)
+        ? hourlyRate >= minPrice && hourlyRate <= maxPrice
+        : isDefaultPriceFilter;
 
-      return serviceMatch && locationMatch && priceMatch;
+      return queryMatch && serviceMatch && locationMatch && priceMatch;
     });
-  }, [profiles, freelancers, filters]);
+  }, [profiles, freelancers, filters, searchQuery]);
 
   const sectionFor = (keywords: string[]) => {
     return filteredProfiles.filter((profile) => {

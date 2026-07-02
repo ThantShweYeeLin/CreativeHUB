@@ -21,6 +21,7 @@ import {
   Smile,
   Sparkles,
   Tag,
+  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -72,6 +73,8 @@ interface FeedPost {
   caption: string;
   likes: number;
   commentsCount: number;
+  sharesCount: number;
+  savesCount: number;
   timeAgo: string;
   createdAtRaw?: string;
   isLiked: boolean;
@@ -87,6 +90,17 @@ interface FeedPost {
   poll?: {
     question: string;
     options: string[];
+  } | null;
+}
+
+interface PostComment {
+  id: string;
+  content: string;
+  created_at: string;
+  user?: {
+    id?: string;
+    full_name?: string;
+    avatar_url?: string;
   } | null;
 }
 
@@ -733,7 +747,10 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
-  const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, PostComment[]>>({});
+  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -877,6 +894,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           caption: project.description || `${project.title} by ${freelancer.fullName}.`,
           likes: project.likes ?? Math.max(5, Math.round(freelancer.rating * 30) + index * 3),
           commentsCount: project.comments ?? Math.max(1, Math.round(freelancer.totalReviews / 4) + index),
+          sharesCount: 0,
+          savesCount: 0,
           timeAgo: toTimeAgo(project.createdAt),
           createdAtRaw: project.createdAt,
           isLiked: false,
@@ -886,7 +905,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
 
       const rawClientPosts = clientPostsTableMissing ? [] : (clientPostsResponse.data || []);
       const clientPostStatsResponse = rawClientPosts.length > 0
-        ? await DataService.getClientPostLikeStats(rawClientPosts.map((post: any) => String(post.id)), user?.id)
+        ? await DataService.getClientPostEngagementStats(rawClientPosts.map((post: any) => String(post.id)), user?.id)
         : { data: [], error: null };
 
       const clientPostStatsById = new Map(
@@ -910,10 +929,12 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           caption: post.caption,
           likes: Math.max(0, Number(postStats?.likes || 0)),
           commentsCount: Math.max(0, Number(postStats?.comments || 0)),
+          sharesCount: Math.max(0, Number(postStats?.shares || 0)),
+          savesCount: Math.max(0, Number(postStats?.saves || 0)),
           timeAgo: toTimeAgo(post.created_at),
           createdAtRaw: post.created_at,
           isLiked: !!postStats?.liked_by_me,
-          isSaved: false,
+          isSaved: !!postStats?.saved_by_me,
           isClientPost: true,
         };
       });
@@ -945,6 +966,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       return right - left;
     });
   }, [posts, activeFeedTab, followingIds]);
+
+  const focusedPost = useMemo(
+    () => posts.find((post) => post.id === focusedPostId) || null,
+    [posts, focusedPostId]
+  );
 
   const handleLike = async (postId: string) => {
     const targetPost = posts.find((post) => post.id === postId);
@@ -998,17 +1024,221 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     }
   };
 
-  const handleSave = (postId: string) => {
+  const loadCommentsForPost = async (postId: string) => {
+    const targetPost = posts.find((item) => item.id === postId);
+    if (!targetPost?.isClientPost) {
+      setCommentsByPostId((current) => ({ ...current, [postId]: [] }));
+      return;
+    }
+
+    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
+    const response = await DataService.getClientPostComments(persistedPostId, 100);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load comments.');
+      return;
+    }
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [postId]: (response.data || []).map((item: any) => ({
+        id: String(item.id),
+        content: String(item.content || ''),
+        created_at: String(item.created_at || new Date().toISOString()),
+        user: item.user || null,
+      })),
+    }));
+  };
+
+  const openPostFocus = async (postId: string) => {
+    setFocusedPostId(postId);
+    await loadCommentsForPost(postId);
+  };
+
+  const handleSave = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost) {
+      return;
+    }
+
+    const currentlySaved = targetPost.isSaved;
+
     setPosts((current) =>
       current.map((post) =>
-        post.id === postId ? { ...post, isSaved: !post.isSaved } : post
+        post.id === postId
+          ? {
+              ...post,
+              isSaved: !post.isSaved,
+              savesCount: post.isSaved ? Math.max(0, post.savesCount - 1) : post.savesCount + 1,
+            }
+          : post
       )
     );
+
+    if (!targetPost.isClientPost || !user?.id) {
+      return;
+    }
+
+    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
+    const response = await DataService.toggleClientPostSave(user.id, persistedPostId, currentlySaved);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update save status.');
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId
+            ? {
+                ...post,
+                isSaved: currentlySaved,
+                savesCount: currentlySaved ? post.savesCount + 1 : Math.max(0, post.savesCount - 1),
+              }
+            : post
+        )
+      );
+    }
   };
 
   const handleShare = async (postId: string) => {
-    const shareUrl = `${window.location.origin}/profile/${postId.split('-')[0]}`;
-    await navigator.clipboard.writeText(shareUrl);
+    const targetPost = posts.find((post) => post.id === postId);
+    const targetAuthorId = targetPost?.authorId || postId.split('-')[0];
+    const shareUrl = `${window.location.origin}/profile/${targetAuthorId}`;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      // Ignore clipboard issues and still record share intent.
+    }
+
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === postId ? { ...post, sharesCount: post.sharesCount + 1 } : post
+      )
+    );
+
+    if (!targetPost?.isClientPost || !user?.id) {
+      return;
+    }
+
+    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
+    const response = await DataService.recordClientPostShare(user.id, persistedPostId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to record share.');
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId ? { ...post, sharesCount: Math.max(0, post.sharesCount - 1) } : post
+        )
+      );
+    }
+  };
+
+  const handleSubmitComment = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    const draft = (commentDraftByPostId[postId] || '').trim();
+
+    if (!targetPost || !draft || !user?.id) {
+      return;
+    }
+
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
+
+    if (!targetPost.isClientPost) {
+      const localComment: PostComment = {
+        id: `local-comment-${Date.now()}`,
+        content: draft,
+        created_at: new Date().toISOString(),
+        user: {
+          id: user.id,
+          full_name: user.fullName,
+          avatar_url: user.avatar_url,
+        },
+      };
+
+      setCommentsByPostId((current) => ({
+        ...current,
+        [postId]: [...(current[postId] || []), localComment],
+      }));
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post
+        )
+      );
+      setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      return;
+    }
+
+    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
+    const response = await DataService.addClientPostComment(user.id, persistedPostId, draft);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add comment.');
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      return;
+    }
+
+    const addedComment = response.data as any;
+    const nextComment: PostComment = {
+      id: String(addedComment?.id || `comment-${Date.now()}`),
+      content: String(addedComment?.content || draft),
+      created_at: String(addedComment?.created_at || new Date().toISOString()),
+      user: addedComment?.user || {
+        id: user.id,
+        full_name: user.fullName,
+        avatar_url: user.avatar_url,
+      },
+    };
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [postId]: [...(current[postId] || []), nextComment],
+    }));
+    setPosts((current) =>
+      current.map((post) =>
+        post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post
+      )
+    );
+    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+  };
+
+  const handleDeletePost = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost || !user?.id || targetPost.authorId !== user.id) {
+      return;
+    }
+
+    const confirmed = window.confirm('Delete this post? This action cannot be undone.');
+    if (!confirmed) {
+      return;
+    }
+
+    if (targetPost.isClientPost) {
+      const persistedPostId = postId.replace(/^client-post-/, '');
+      if (persistedPostId !== postId) {
+        const response = await DataService.deleteClientPost(persistedPostId, user.id);
+        if (response.error) {
+          setError((response.error as any).message || 'Unable to delete post.');
+          return;
+        }
+      }
+    }
+
+    setPosts((current) => current.filter((post) => post.id !== postId));
+    setCommentsByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setCommentDraftByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setIsSubmittingCommentByPostId((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setFocusedPostId(null);
   };
 
   const handleAddFiles = (files: FileList | null) => {
@@ -1110,8 +1340,18 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       username: ((user.email || userName).split('@')[0] || userName).toLowerCase().replace(/\s+/g, '_'),
       avatar: userAvatar,
       specialty: user.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
-        image: uploadedImageUrl ?? firstMediaPreview,
-        mediaType: mediaType ?? (firstFileAttachment?.type.startsWith('video/') ? 'video' : 'image'),
+      image: uploadedImageUrl ?? firstMediaPreview,
+      mediaType: mediaType ?? (firstFileAttachment?.type.startsWith('video/') ? 'video' : 'image'),
+      caption: composer.text.trim() || caption,
+      likes: 0,
+      commentsCount: 0,
+      sharesCount: 0,
+      savesCount: 0,
+      timeAgo: createdAt,
+      createdAtRaw,
+      isLiked: false,
+      isSaved: false,
+      isClientPost: true,
       location: composer.location.trim() || undefined,
       hashtags,
       mentions,
@@ -1273,13 +1513,17 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
               )}
 
               {post.image && (
-                <div className="relative aspect-square bg-gray-100">
+                <button
+                  type="button"
+                  onClick={() => void openPostFocus(post.id)}
+                  className="relative aspect-square w-full bg-gray-100 text-left"
+                >
                   {post.mediaType === 'video' ? (
                     <video src={post.image} className="h-full w-full object-cover" controls />
                   ) : (
                     <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
                   )}
-                </div>
+                </button>
               )}
 
               <div className="px-4 py-3 md:px-6 md:py-4">
@@ -1290,7 +1534,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                       <span className="font-semibold text-gray-900">{post.likes}</span>
                     </button>
                     <button
-                      onClick={() => setExpandedCommentsForPost((current) => current === post.id ? null : post.id)}
+                      onClick={() => void openPostFocus(post.id)}
                       className="group flex items-center gap-2 transition-all"
                     >
                       <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
@@ -1298,14 +1542,27 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     </button>
                     <button onClick={() => void handleShare(post.id)} className="group flex items-center gap-2 transition-all">
                       <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
+                      <span className="font-semibold text-gray-900">{post.sharesCount}</span>
                     </button>
                   </div>
-                  <button onClick={() => handleSave(post.id)} className="transition-all">
+                  <button onClick={() => void handleSave(post.id)} className="transition-all flex items-center gap-2">
                     <Bookmark className={`h-6 w-6 transition-all ${post.isSaved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
+                    <span className="font-semibold text-gray-900">{post.savesCount}</span>
                   </button>
                 </div>
 
-                <div className="mb-4 space-y-3">
+                <div
+                  className="mb-4 w-full space-y-3 text-left cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void openPostFocus(post.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      void openPostFocus(post.id);
+                    }
+                  }}
+                >
                   <p className="whitespace-pre-line text-gray-900">
                     <button
                       onClick={() => {
@@ -1346,17 +1603,115 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     </div>
                   )}
                 </div>
-
-                {expandedCommentsForPost === post.id && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    Comment threads are not yet enabled for this feed item.
-                  </div>
-                )}
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      {focusedPost && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setFocusedPostId(null)}
+              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {focusedPost.image && (
+              <div className="max-h-[55vh] overflow-hidden bg-gray-100">
+                {focusedPost.mediaType === 'video' ? (
+                  <video src={focusedPost.image} controls className="h-full max-h-[55vh] w-full object-contain" />
+                ) : (
+                  <ImageWithFallback src={focusedPost.image} alt={focusedPost.caption} className="h-full max-h-[55vh] w-full object-contain" />
+                )}
+              </div>
+            )}
+
+            <div className="max-h-[40vh] overflow-y-auto p-5">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <span className="font-semibold text-gray-900">@{focusedPost.username}</span>
+                  <span>•</span>
+                  <span>{focusedPost.timeAgo}</span>
+                </div>
+                {user?.id === focusedPost.authorId && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeletePost(focusedPost.id)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              <p className="mb-4 whitespace-pre-line text-sm text-gray-800">{sanitizeCaption(focusedPost.caption)}</p>
+
+              <div className="mb-4 flex items-center gap-4 border-y border-gray-200 py-3">
+                <button onClick={() => void handleLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                  {focusedPost.likes}
+                </button>
+                <button onClick={() => { void openPostFocus(focusedPost.id); }} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <MessageCircle className="h-5 w-5" />
+                  {focusedPost.commentsCount}
+                </button>
+                <button onClick={() => void handleShare(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Share2 className="h-5 w-5" />
+                  {focusedPost.sharesCount}
+                </button>
+                <button onClick={() => void handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Bookmark className={`h-5 w-5 ${focusedPost.isSaved ? 'fill-gray-900 text-gray-900' : ''}`} />
+                  {focusedPost.savesCount}
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {(commentsByPostId[focusedPost.id] || []).length === 0 ? (
+                  <p className="text-sm text-gray-500">No comments yet.</p>
+                ) : (
+                  (commentsByPostId[focusedPost.id] || []).map((comment) => (
+                    <div key={comment.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-semibold text-gray-800">{comment.user?.full_name || 'User'}</span>
+                        <span>•</span>
+                        <span>{toTimeAgo(comment.created_at)}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-gray-800">{comment.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  value={commentDraftByPostId[focusedPost.id] || ''}
+                  onChange={(event) =>
+                    setCommentDraftByPostId((current) => ({
+                      ...current,
+                      [focusedPost.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Write a comment..."
+                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSubmitComment(focusedPost.id)}
+                  disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
+                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <CreatePostSheet
         isOpen={isComposerOpen}
