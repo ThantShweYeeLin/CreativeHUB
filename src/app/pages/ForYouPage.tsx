@@ -61,6 +61,7 @@ interface ComposerState {
 interface FeedPost {
   id: string;
   authorId: string;
+  authorRole?: 'client' | 'freelancer';
   authorName: string;
   username: string;
   avatar: string;
@@ -861,6 +862,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         return projectItems.map((project, index) => ({
           id: `${authorId}-${project.id}`,
           authorId,
+          authorRole: 'freelancer' as const,
           authorName: freelancer.fullName,
           username,
           avatar: freelancer.profileImage || fallbackProfileImage,
@@ -876,89 +878,46 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         }));
       }).slice(0, 30);
 
-      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map((post: any) => {
+      const rawClientPosts = clientPostsTableMissing ? [] : (clientPostsResponse.data || []);
+      const clientPostStatsResponse = rawClientPosts.length > 0
+        ? await DataService.getClientPostLikeStats(rawClientPosts.map((post: any) => String(post.id)), user?.id)
+        : { data: [], error: null };
+
+      const clientPostStatsById = new Map(
+        (clientPostStatsResponse.data || []).map((item: any) => [String(item.post_id), item])
+      );
+
+      const clientPosts: FeedPost[] = rawClientPosts.map((post: any) => {
         const authorName = post.client?.full_name || 'Client';
         const username = (post.client?.email || 'client').split('@')[0];
+        const postStats = clientPostStatsById.get(String(post.id));
 
         return {
           id: `client-post-${post.id}`,
           authorId: post.client_id,
+          authorRole: (post.client?.role || 'client') as 'client' | 'freelancer',
           authorName,
           username,
           avatar: post.client?.avatar_url || fallbackProfileImage,
-          specialty: 'Client Brief',
+          specialty: post.client?.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
           image: post.image_url || null,
           caption: post.caption,
-          likes: 0,
-          commentsCount: 0,
+          likes: Math.max(0, Number(postStats?.likes || 0)),
+          commentsCount: Math.max(0, Number(postStats?.comments || 0)),
           timeAgo: toTimeAgo(post.created_at),
           createdAtRaw: post.created_at,
-          isLiked: false,
+          isLiked: !!postStats?.liked_by_me,
           isSaved: false,
           isClientPost: true,
         };
       });
 
-      const demoPosts: FeedPost[] = [
-        {
-          id: 'demo-client-post-1',
-          authorId: 'demo-client-1',
-          authorName: 'Demo Client',
-          username: 'demo_client',
-          avatar: fallbackProfileImage,
-          specialty: 'Client Brief',
-          image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80',
-          caption: 'Demo post: Looking for a photographer for a street style campaign in Bangkok.',
-          likes: 6,
-          commentsCount: 2,
-          timeAgo: 'Just now',
-          createdAtRaw: new Date().toISOString(),
-          isLiked: false,
-          isSaved: false,
-          isClientPost: true,
-        },
-        {
-          id: 'demo-client-post-2',
-          authorId: 'demo-client-2',
-          authorName: 'Demo Brand Team',
-          username: 'demo_brand_team',
-          avatar: fallbackProfileImage,
-          specialty: 'Client Brief',
-          image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=80',
-          caption: 'Demo post: Seeking a motion designer for a short-form launch teaser next week.',
-          likes: 4,
-          commentsCount: 1,
-          timeAgo: 'Just now',
-          createdAtRaw: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-          isLiked: false,
-          isSaved: false,
-          isClientPost: true,
-        },
-        {
-          id: 'demo-client-post-3',
-          authorId: 'demo-client-3',
-          authorName: 'Demo Events Co.',
-          username: 'demo_events',
-          avatar: fallbackProfileImage,
-          specialty: 'Client Brief',
-          image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
-          caption: 'Demo post: Need a makeup artist for an editorial shoot this Friday.',
-          likes: 9,
-          commentsCount: 3,
-          timeAgo: '1h ago',
-          createdAtRaw: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-          isLiked: false,
-          isSaved: false,
-          isClientPost: true,
-        },
-      ];
-
       if (!isMounted) {
         return;
       }
 
-      const combinedPosts = [...clientPosts, ...generatedPosts];
-      setPosts(combinedPosts.length > 0 ? combinedPosts : demoPosts);
+      const combinedPosts = clientPosts.length > 0 ? clientPosts : generatedPosts;
+      setPosts(combinedPosts);
       setIsLoading(false);
     }
 
@@ -981,7 +940,14 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     });
   }, [posts, activeFeedTab, followingIds]);
 
-  const handleLike = (postId: string) => {
+  const handleLike = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost) {
+      return;
+    }
+
+    const currentlyLiked = targetPost.isLiked;
+
     setPosts((current) =>
       current.map((post) =>
         post.id === postId
@@ -989,6 +955,41 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           : post
       )
     );
+
+    if (!targetPost.isClientPost || !user?.id) {
+      return;
+    }
+
+    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
+    const response = await DataService.toggleClientPostLike(user.id, persistedPostId, currentlyLiked);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update like status.');
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId
+            ? { ...post, isLiked: currentlyLiked, likes: currentlyLiked ? post.likes + 1 : Math.max(0, post.likes - 1) }
+            : post
+        )
+      );
+      return;
+    }
+
+    if (response.liked !== undefined) {
+      setPosts((current) =>
+        current.map((post) => {
+          if (post.id !== postId || post.isLiked === response.liked) {
+            return post;
+          }
+
+          return {
+            ...post,
+            isLiked: response.liked,
+            likes: response.liked ? post.likes + 1 : Math.max(0, post.likes - 1),
+          };
+        })
+      );
+    }
   };
 
   const handleSave = (postId: string) => {
@@ -1058,24 +1059,22 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     let createdAt = 'Just now';
     let createdAtRaw = new Date().toISOString();
 
-    if (user.role === 'client') {
-      const response = await DataService.createClientPost({
-        client_id: user.id,
-        caption,
-        image_url: firstMedia,
-      });
+    const response = await DataService.createClientPost({
+      client_id: user.id,
+      caption,
+      image_url: firstMedia,
+    });
 
-      if (response.error && !isMissingClientPostsTable(response.error)) {
-        setError((response.error as any)?.message || 'Unable to publish post.');
-        setIsPublishing(false);
-        return;
-      }
+    if (response.error && !isMissingClientPostsTable(response.error)) {
+      setError((response.error as any)?.message || 'Unable to publish post.');
+      setIsPublishing(false);
+      return;
+    }
 
-      if (response.data) {
-        createdId = `client-post-${(response.data as any).id}`;
-        createdAt = toTimeAgo((response.data as any).created_at);
-        createdAtRaw = String((response.data as any).created_at || createdAtRaw);
-      }
+    if (response.data) {
+      createdId = `client-post-${(response.data as any).id}`;
+      createdAt = toTimeAgo((response.data as any).created_at);
+      createdAtRaw = String((response.data as any).created_at || createdAtRaw);
     }
 
     const hashtags = splitList(composer.hashtags, '#');
@@ -1084,10 +1083,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     const newFeedPost: FeedPost = {
       id: createdId,
       authorId: user.id,
+      authorRole: (user.role || 'client') as 'client' | 'freelancer',
       authorName: userName,
       username: ((user.email || userName).split('@')[0] || userName).toLowerCase().replace(/\s+/g, '_'),
       avatar: userAvatar,
-      specialty: user.role === 'client' ? 'Client Brief' : 'Creative Update',
+      specialty: user.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
       image: firstMedia,
       caption: composer.text.trim() || caption,
       likes: 0,
@@ -1096,7 +1096,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       createdAtRaw,
       isLiked: false,
       isSaved: false,
-      isClientPost: user.role === 'client',
+      isClientPost: true,
       location: composer.location.trim() || undefined,
       hashtags,
       mentions,
@@ -1215,9 +1215,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 <div className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80">
                   <button
                     onClick={() => {
-                      if (!post.isClientPost) {
-                        onViewProfile?.(post.authorId);
-                      }
+                      onViewProfile?.(post.authorId);
                     }}
                     className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
                   >
@@ -1294,7 +1292,12 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
 
                 <div className="mb-4 space-y-3">
                   <p className="whitespace-pre-line text-gray-900">
-                    <button onClick={() => onViewProfile?.(post.authorId)} className="font-bold transition-colors hover:text-gray-900">
+                    <button
+                      onClick={() => {
+                        onViewProfile?.(post.authorId);
+                      }}
+                      className="font-bold transition-colors hover:text-gray-900"
+                    >
                       @{post.username}
                     </button>{' '}
                     <span>{post.caption}</span>

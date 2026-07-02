@@ -504,6 +504,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-xs md:text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{followCounts.followers}</span>
+                    <span>Followers</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{followCounts.following}</span>
+                    <span>Following</span>
+                  </div>
                   {isFreelancer ? (
                     <>
                       <div>
@@ -522,18 +530,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                         <button onClick={() => navigate('/my-bookings')} className="ml-2 rounded-lg bg-gray-900 px-3 py-1 text-white text-sm font-semibold">View Projects</button>
                       </div>
                     </>
-                  ) : (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">{followCounts.followers}</span>
-                        <span>Followers</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">{followCounts.following}</span>
-                        <span>Following</span>
-                      </div>
-                    </>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>

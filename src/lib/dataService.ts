@@ -27,6 +27,25 @@ export class DataService {
     );
   }
 
+  private static hasMissingFollowersTableError(error: unknown) {
+    const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
+    return message.includes('public.followers') || (message.includes('followers') && message.includes('schema cache'));
+  }
+
+  private static mapFollowersTableError<T extends { error: any }>(result: T): T {
+    if (!this.hasMissingFollowersTableError(result.error)) {
+      return result;
+    }
+
+    return {
+      ...result,
+      error: {
+        message:
+          'Follow system table is missing (public.followers). Run the Followers section in supabase/schema.sql, then refresh and try again.',
+      },
+    };
+  }
+
   private static async getAllFreelancersQuery(
     limit: number,
     offset: number,
@@ -115,10 +134,10 @@ export class DataService {
       .select('following_id')
       .eq('follower_id', userId);
 
-    return {
+    return this.mapFollowersTableError({
       data: (data || []).map((row: any) => String(row.following_id)),
       error,
-    };
+    });
   }
 
   static async getFollowCounts(userId: string) {
@@ -133,11 +152,11 @@ export class DataService {
         .eq('follower_id', userId),
     ]);
 
-    return {
+    return this.mapFollowersTableError({
       followerCount: followersResponse.count || 0,
       followingCount: followingResponse.count || 0,
       error: followersResponse.error || followingResponse.error,
-    };
+    });
   }
 
   static async isFollowing(userId: string, targetUserId: string) {
@@ -146,17 +165,20 @@ export class DataService {
       .select('id')
       .eq('follower_id', userId)
       .eq('following_id', targetUserId)
-      .maybeSingle();
+      .limit(1);
 
-    return { isFollowing: !!data, error };
+    return this.mapFollowersTableError({ isFollowing: !!(data && data.length > 0), error });
   }
 
   static async followUser(userId: string, targetUserId: string) {
     const { error } = await supabase
       .from('followers')
-      .insert({ follower_id: userId, following_id: targetUserId });
+      .upsert(
+        { follower_id: userId, following_id: targetUserId },
+        { onConflict: 'follower_id,following_id', ignoreDuplicates: true }
+      );
 
-    return { error };
+    return this.mapFollowersTableError({ error });
   }
 
   static async unfollowUser(userId: string, targetUserId: string) {
@@ -166,7 +188,7 @@ export class DataService {
       .eq('follower_id', userId)
       .eq('following_id', targetUserId);
 
-    return { error };
+    return this.mapFollowersTableError({ error });
   }
 
   // FREELANCER PROFILES
@@ -678,7 +700,7 @@ export class DataService {
   static async getClientPosts(limit = 30) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -688,7 +710,7 @@ export class DataService {
   static async getClientPostsByClientId(clientId: string, limit = 20) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
       .eq('client_id', clientId)
       .eq('is_published', true)
       .order('created_at', { ascending: false })
@@ -847,7 +869,7 @@ export class DataService {
         ...post,
         is_published: post.is_published ?? true,
       })
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
       .single();
     return { data, error };
   }

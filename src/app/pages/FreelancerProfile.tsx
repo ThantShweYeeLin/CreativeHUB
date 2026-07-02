@@ -206,6 +206,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const isTargetFreelancer = profile?.role === 'freelancer' || !!freelancerProfile;
 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
 
@@ -444,6 +445,35 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
 
                 <div className="flex flex-wrap gap-3 items-center">
+                  {user?.id !== targetFreelancerUserId && (
+                    <button
+                      type="button"
+                      onClick={handleFavoriteToggle}
+                      className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      <Heart className={`w-6 h-6 ${isFavorited ? 'fill-current' : ''}`} />
+                    </button>
+                  )}
+
+                  {requestStatus === 'accepted' && isTargetFreelancer ? (
+                    <button
+                      onClick={onOpenChat}
+                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Open Chat
+                    </button>
+                  ) : (
+                    user?.id !== targetFreelancerUserId && isTargetFreelancer && (
+                      <button
+                        onClick={() => setShowBookingForm(true)}
+                        className="px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
+                      >
+                        Request Booking
+                      </button>
+                    )
+                  )}
+
                   {user?.id && user.id !== targetFreelancerUserId && (
                     <button
                       type="button"
@@ -462,41 +492,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <span className="rounded-full bg-green-100 px-3 py-2 text-xs font-semibold text-green-700">
                       Follows you
                     </span>
-                  )}
-                  {user?.id !== targetFreelancerUserId && (
-                    <button
-                      onClick={handleFavoriteToggle}
-                      className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                      <Heart className={`w-6 h-6 ${isFavorited ? 'fill-current' : ''}`} />
-                    </button>
-                  )}
-                  {user?.id !== targetFreelancerUserId && (
-                    <button
-                      onClick={handleFavoriteToggle}
-                      className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-                    >
-                      <Heart className={`w-6 h-6 ${isFavorited ? 'fill-current' : ''}`} />
-                    </button>
-                  )}
-
-                  {requestStatus === 'accepted' ? (
-                    <button
-                      onClick={onOpenChat}
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                      Open Chat
-                    </button>
-                  ) : (
-                    user?.id !== targetFreelancerUserId && (
-                      <button
-                        onClick={() => setShowBookingForm(true)}
-                        className="px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
-                      >
-                        Request Booking
-                      </button>
-                    )
                   )}
                 </div>
               </div>

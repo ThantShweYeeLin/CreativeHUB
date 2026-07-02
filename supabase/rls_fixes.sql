@@ -3,6 +3,26 @@
 
 alter table if exists public.favorites enable row level security;
 alter table if exists public.requests enable row level security;
+alter table if exists public.freelancer_profiles enable row level security;
+
+-- Freelancer profiles policies
+DO $$
+BEGIN
+  CREATE POLICY "Users can create own freelancer profile"
+    ON public.freelancer_profiles
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER POLICY "Users can update own freelancer profile"
+    ON public.freelancer_profiles
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
 
 -- Favorites policies
 DO $$

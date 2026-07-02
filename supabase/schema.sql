@@ -116,6 +116,60 @@ create table public.favorites (
   unique(user_id, freelancer_id)
 );
 
+-- Followers
+create table if not exists public.followers (
+  id uuid default uuid_generate_v4() primary key,
+  follower_id uuid references public.users on delete cascade not null,
+  following_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(follower_id, following_id),
+  check (follower_id <> following_id)
+);
+
+alter table if exists public.followers enable row level security;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'followers'
+      and policyname = 'Follows are visible'
+  ) then
+    create policy "Follows are visible" on public.followers
+      for select using (true);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'followers'
+      and policyname = 'Users follow as themselves'
+  ) then
+    create policy "Users follow as themselves" on public.followers
+      for insert with check (auth.uid() = follower_id);
+  end if;
+end $$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename = 'followers'
+      and policyname = 'Users unfollow as themselves'
+  ) then
+    create policy "Users unfollow as themselves" on public.followers
+      for delete using (auth.uid() = follower_id);
+  end if;
+end $$;
+
+create index if not exists idx_followers_following on public.followers(following_id);
+create index if not exists idx_followers_follower on public.followers(follower_id);
+
 -- Reviews
 create table public.reviews (
   id uuid default uuid_generate_v4() primary key,
@@ -175,8 +229,12 @@ create policy "Users can update own record" on public.users
 create policy "Freelancer profiles are viewable by everyone" on public.freelancer_profiles
   for select using (true);
 
+create policy "Users can create own freelancer profile" on public.freelancer_profiles
+  for insert with check (auth.uid() = user_id);
+
 create policy "Users can update own freelancer profile" on public.freelancer_profiles
-  for update using (auth.uid() = user_id);
+  for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- Portfolios: public read
 create policy "Portfolios are viewable by everyone" on public.portfolios
