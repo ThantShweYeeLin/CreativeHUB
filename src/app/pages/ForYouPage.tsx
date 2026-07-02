@@ -41,6 +41,7 @@ interface ComposerAttachment {
   name: string;
   type: string;
   previewUrl: string | null;
+  file?: File;
 }
 
 interface ComposerState {
@@ -67,6 +68,7 @@ interface FeedPost {
   avatar: string;
   specialty: string;
   image: string | null;
+  mediaType?: 'image' | 'video';
   caption: string;
   likes: number;
   commentsCount: number;
@@ -188,15 +190,19 @@ function buildCaption(state: ComposerState) {
   const details = [
     state.location ? `Location: ${state.location}` : '',
     state.category ? `Category: ${state.category}` : '',
-    state.visibility ? `Visibility: ${state.visibility}` : '',
-    state.labels.length ? `Tags: ${state.labels.join(', ')}` : '',
-    state.taggedPeople ? `With: ${state.taggedPeople}` : '',
-    state.hashtags ? `Hashtags: ${splitList(state.hashtags, '#').join(' ')}` : '',
+      state.visibility && state.visibility !== 'Public' ? `Visibility: ${state.visibility}` : '',
     state.mentions ? `Mentions: ${splitList(state.mentions, '@').join(' ')}` : '',
     state.pollQuestion ? `Poll: ${state.pollQuestion} (${splitList(state.pollOptions).join(' / ')})` : '',
   ].filter(Boolean);
 
   return [state.text.trim(), ...details].filter(Boolean).join('\n\n');
+}
+
+function sanitizeCaption(caption: string) {
+  return caption
+    .replace(/(^|\n)\s*Visibility:\s*Public\s*(?=\n|$)/gi, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
 }
 
 function isMissingClientPostsTable(error: unknown) {
@@ -1012,6 +1018,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       name: file.name,
       type: file.type || 'application/octet-stream',
       previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : null,
+      file,
     }));
 
     setComposer((current) => ({
@@ -1054,15 +1061,30 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     setIsPublishing(true);
     setError(null);
 
-    const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || composer.gifUrl.trim() || null;
+    const firstFileAttachment = composer.attachments.find((attachment) => attachment.file);
+    const firstMediaPreview = firstFileAttachment?.previewUrl || composer.gifUrl.trim() || null;
     let createdId = `local-post-${Date.now()}`;
     let createdAt = 'Just now';
     let createdAtRaw = new Date().toISOString();
 
+    let uploadedImageUrl: string | null = null;
+    let mediaType: 'image' | 'video' | undefined = undefined;
+
+    if (firstFileAttachment?.file) {
+      const uploadResponse = await DataService.uploadClientPostMedia(user.id, firstFileAttachment.file);
+      if (uploadResponse.error || !uploadResponse.publicUrl) {
+        setError((uploadResponse.error as any)?.message || 'Unable to upload your post media.');
+        setIsPublishing(false);
+        return;
+      }
+      uploadedImageUrl = uploadResponse.publicUrl;
+      mediaType = firstFileAttachment.type.startsWith('video/') ? 'video' : 'image';
+    }
+
     const response = await DataService.createClientPost({
       client_id: user.id,
       caption,
-      image_url: firstMedia,
+      image_url: uploadedImageUrl ?? firstMediaPreview,
     });
 
     if (response.error && !isMissingClientPostsTable(response.error)) {
@@ -1088,15 +1110,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       username: ((user.email || userName).split('@')[0] || userName).toLowerCase().replace(/\s+/g, '_'),
       avatar: userAvatar,
       specialty: user.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
-      image: firstMedia,
-      caption: composer.text.trim() || caption,
-      likes: 0,
-      commentsCount: 0,
-      timeAgo: createdAt,
-      createdAtRaw,
-      isLiked: false,
-      isSaved: false,
-      isClientPost: true,
+        image: uploadedImageUrl ?? firstMediaPreview,
+        mediaType: mediaType ?? (firstFileAttachment?.type.startsWith('video/') ? 'video' : 'image'),
       location: composer.location.trim() || undefined,
       hashtags,
       mentions,
@@ -1252,14 +1267,14 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-6">
                   {post.location && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.location}</span>}
                   {post.category && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.category}</span>}
-                  {post.visibility && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
+                  {post.visibility && post.visibility !== 'Public' && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
                   {post.labels?.map((label) => <span key={label} className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
                 </div>
               )}
 
               {post.image && (
                 <div className="relative aspect-square bg-gray-100">
-                  {post.image.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/') ? (
+                  {post.mediaType === 'video' ? (
                     <video src={post.image} className="h-full w-full object-cover" controls />
                   ) : (
                     <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
@@ -1300,7 +1315,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     >
                       @{post.username}
                     </button>{' '}
-                    <span>{post.caption}</span>
+                    <span>{sanitizeCaption(post.caption)}</span>
                   </p>
                   {((post.hashtags?.length ?? 0) > 0 || (post.mentions?.length ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-2 text-sm font-semibold">

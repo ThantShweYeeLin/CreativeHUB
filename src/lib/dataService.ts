@@ -343,6 +343,28 @@ export class DataService {
     return { publicUrl: data.publicUrl, error: null };
   }
 
+  static async uploadClientPostMedia(userId: string, file: File) {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const filePath = `${userId}/client-post-${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
+
+    if (error) {
+      return { publicUrl: null, error };
+    }
+
+    const { data } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
+  }
+
   // PORTFOLIOS
   static async getFreelancerPortfolio(freelancerId: string) {
     const { data, error } = await supabase

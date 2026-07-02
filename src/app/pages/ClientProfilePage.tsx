@@ -537,29 +537,6 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           </div>
         </div>
 
-        {hasPreciseLocation && (
-          <div className="mb-6 overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl">
-            <div className="flex items-center justify-between px-4 py-4 md:px-6 border-b border-gray-200">
-              <div>
-                <h2 className="text-lg font-bold text-gray-900">Precise Location</h2>
-                <p className="text-sm text-gray-600">Your profile location as shown on the map.</p>
-              </div>
-              <div className="text-right text-xs text-gray-500">
-                <p>{locationLatitude?.toFixed(6)}</p>
-                <p>{locationLongitude?.toFixed(6)}</p>
-              </div>
-            </div>
-            <div className="h-[260px] md:h-[360px]">
-              <LeafletLocationPreview
-                latitude={locationLatitude as number}
-                longitude={locationLongitude as number}
-                title={displayName}
-                subtitle={location}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Personal Info Section */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 md:p-8 mb-6 md:mb-8">
           <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Personal Info</h3>
@@ -569,9 +546,9 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
               <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 capitalize">{profile?.role || user?.role || 'client'}</div>
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Precise Location</label>
-              {isEditMode ? (
+            {isEditMode && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Location</label>
                 <div className="space-y-3">
                   <input
                     value={formValues.location}
@@ -602,20 +579,11 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                     )}
                   </div>
                   <p className="text-xs text-gray-500">
-                    Enter an exact address so the map can place your profile precisely.
+                    Enter an address so the map can place your profile precisely.
                   </p>
                 </div>
-              ) : (
-                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
-                  {location}
-                  {hasPreciseLocation && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      {locationLatitude?.toFixed(6)}, {locationLongitude?.toFixed(6)}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 text-sm md:text-base truncate">{profile?.email || user?.email || 'Not added yet'}</div>
