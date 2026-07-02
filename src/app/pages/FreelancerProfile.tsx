@@ -31,6 +31,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [isFollowingTarget, setIsFollowingTarget] = useState(false);
+  const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
+  const [isFollowActionPending, setIsFollowActionPending] = useState(false);
   const [activeProjects, setActiveProjects] = useState(0);
   const [completedProjects, setCompletedProjects] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -135,8 +138,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         if (isMounted && !favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
+
+        const followingResponse = await DataService.isFollowing(user.id, targetId);
+        if (isMounted && !followingResponse.error) {
+          setIsFollowingTarget(followingResponse.isFollowing);
+        }
+
+        const followedByResponse = await DataService.isFollowing(targetId, user.id);
+        if (isMounted && !followedByResponse.error) {
+          setIsFollowedByTarget(followedByResponse.isFollowing);
+        }
       } else {
         setIsFavorited(false);
+        setIsFollowingTarget(false);
+        setIsFollowedByTarget(false);
       }
 
       const followCountsResponse = await DataService.getFollowCounts(targetId);
@@ -211,6 +226,41 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     setIsFavorited((current) => !current);
+  };
+
+  const handleFollowToggle = async () => {
+    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
+      return;
+    }
+
+    setError(null);
+    setIsFollowActionPending(true);
+
+    try {
+      const targetIsFollowingMe = isFollowedByTarget;
+      if (isFollowingTarget) {
+        const response = await DataService.unfollowUser(user.id, targetFreelancerUserId);
+        if (response.error) throw response.error;
+        setIsFollowingTarget(false);
+      } else {
+        const response = await DataService.followUser(user.id, targetFreelancerUserId);
+        if (response.error) throw response.error;
+        setIsFollowingTarget(true);
+      }
+
+      setFollowCounts((current) => ({
+        followers: current.followers + (isFollowingTarget ? -1 : 1),
+        following: current.following,
+      }));
+
+      if (!isFollowingTarget && targetIsFollowingMe) {
+        setSuccessMessage('You are now connected.');
+      }
+    } catch (followError) {
+      setError((followError as any).message || 'Unable to update follow status.');
+    } finally {
+      setIsFollowActionPending(false);
+    }
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -393,7 +443,34 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                  {user?.id && user.id !== targetFreelancerUserId && (
+                    <button
+                      type="button"
+                      onClick={handleFollowToggle}
+                      disabled={isFollowActionPending}
+                      className={`rounded-xl px-5 py-3 text-sm font-semibold transition ${
+                        isFollowingTarget
+                          ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                          : 'bg-gray-900 text-white hover:bg-black'
+                      } ${isFollowActionPending ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      {isFollowingTarget ? 'Following' : 'Follow'}
+                    </button>
+                  )}
+                  {user?.id && user.id !== targetFreelancerUserId && isFollowedByTarget && (
+                    <span className="rounded-full bg-green-100 px-3 py-2 text-xs font-semibold text-green-700">
+                      Follows you
+                    </span>
+                  )}
+                  {user?.id !== targetFreelancerUserId && (
+                    <button
+                      onClick={handleFavoriteToggle}
+                      className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                    >
+                      <Heart className={`w-6 h-6 ${isFavorited ? 'fill-current' : ''}`} />
+                    </button>
+                  )}
                   {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={handleFavoriteToggle}
