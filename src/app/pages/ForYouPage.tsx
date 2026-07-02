@@ -722,6 +722,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followActionPendingIds, setFollowActionPendingIds] = useState<Set<string>>(new Set());
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
@@ -765,6 +766,38 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       isMounted = false;
     };
   }, [user?.id]);
+
+  const handleToggleFollow = async (creatorId: string, currentlyFollowing: boolean) => {
+    if (!user?.id || user.id === creatorId) {
+      return;
+    }
+
+    setFollowActionPendingIds((current) => new Set(current).add(creatorId));
+
+    try {
+      if (currentlyFollowing) {
+        const response = await DataService.unfollowUser(user.id, creatorId);
+        if (response.error) throw response.error;
+        setFollowingIds((current) => {
+          const next = new Set(current);
+          next.delete(creatorId);
+          return next;
+        });
+      } else {
+        const response = await DataService.followUser(user.id, creatorId);
+        if (response.error) throw response.error;
+        setFollowingIds((current) => new Set(current).add(creatorId));
+      }
+    } catch (followError) {
+      setError((followError as any).message || 'Unable to update follow status.');
+    } finally {
+      setFollowActionPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(creatorId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -1179,22 +1212,41 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           {sortedPosts.map((post) => (
             <div key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg md:rounded-3xl">
               <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-                <button
-                  onClick={() => {
-                    if (!post.isClientPost) {
-                      onViewProfile?.(post.authorId);
-                    }
-                  }}
-                  className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
-                >
-                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white">
-                    <ImageWithFallback src={post.avatar} alt={post.authorName} className="h-full w-full object-cover" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
-                    <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
-                  </div>
-                </button>
+                <div className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80">
+                  <button
+                    onClick={() => {
+                      if (!post.isClientPost) {
+                        onViewProfile?.(post.authorId);
+                      }
+                    }}
+                    className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
+                  >
+                    <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white">
+                      <ImageWithFallback src={post.avatar} alt={post.authorName} className="h-full w-full object-cover" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
+                      <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
+                    </div>
+                  </button>
+                  {user?.id && user.id !== post.authorId && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleToggleFollow(post.authorId, followingIds.has(post.authorId));
+                      }}
+                      disabled={followActionPendingIds.has(post.authorId)}
+                      className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
+                        followingIds.has(post.authorId)
+                          ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
+                          : 'bg-gray-900 text-white hover:bg-black'
+                      } ${followActionPendingIds.has(post.authorId) ? 'opacity-60 cursor-not-allowed' : ''}`}
+                    >
+                      {followingIds.has(post.authorId) ? 'Following' : 'Follow'}
+                    </button>
+                  )}
+                </div>
                 <span className="ml-3 flex-shrink-0 text-sm text-gray-500">{post.timeAgo}</span>
               </div>
 
