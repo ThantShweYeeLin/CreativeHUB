@@ -12,7 +12,8 @@ export function SignUpPageWithRouting() {
       navigate(role === 'freelancer' ? '/onboarding/freelancer' : '/onboarding/client');
     } catch (error) {
       console.error('Sign up failed:', error);
-      // Error will be displayed by the SignUpPage component
+      // Re-throw so the SignUpPage component can catch and display the message
+      throw error;
     }
   };
 

@@ -1025,6 +1025,16 @@ export class DataService {
     return { data, error };
   }
 
+  static async deleteClientPost(postId: string, userId?: string) {
+    let query = supabase.from('client_posts').delete().eq('id', postId);
+    if (userId) {
+      query = query.eq('client_id', userId);
+    }
+
+    const { data, error } = await query.select();
+    return { data, error };
+  }
+
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {
     const { data, error } = await supabase
       .from('requests')

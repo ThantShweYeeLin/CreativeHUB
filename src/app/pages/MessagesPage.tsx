@@ -508,7 +508,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               {sharedPost.authorId && onViewProfile && (
                                 <button
                                   type="button"
-                                  onClick={() => onViewProfile(sharedPost.authorId)}
+                                  onClick={() => onViewProfile(sharedPost.authorId as string)}
                                   className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isMine ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'}`}
                                 >
                                   View post

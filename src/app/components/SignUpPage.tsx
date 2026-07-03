@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
+import { DataService } from '../../lib/dataService';
+import { authService } from '../../lib/authService';
 
 interface SignUpPageProps {
   onSignUp: (fullName: string, email: string, password: string, role: AccountType) => Promise<void>;
@@ -30,7 +32,28 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
     setError('');
     if (!fullName.trim()) { setError('Please enter your full name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
-    setStep(2);
+    // Check if email is already registered before proceeding to password step
+    (async () => {
+      try {
+        const resp = await DataService.getUserByEmail(email);
+        if (resp.error) {
+          // If there's an error checking, allow proceeding but log it
+          console.error('Email check failed', resp.error);
+          setStep(2);
+          return;
+        }
+
+        if (resp.data) {
+          setError('This email is already registered. Please sign in or use a different email.');
+          return;
+        }
+
+        setStep(2);
+      } catch (err) {
+        console.error('Email uniqueness check failed', err);
+        setStep(2);
+      }
+    })();
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -144,6 +167,8 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
             </div>
           )}
 
+          
+
           {step === 1 ? (
             <form onSubmit={handleStep1} className="space-y-4">
               {/* Account type */}
@@ -208,16 +233,36 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {[{ name: 'Google', icon: 'G' }, { name: 'Facebook', icon: 'f' }].map(({ name, icon }) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setError(`${name} sign up is not available yet.`)}
-                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-                  >
-                    <span className="font-bold">{icon}</span> {name}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setError('');
+                    try {
+                      const { error } = await authService.signInWithOAuth('google');
+                      if (error) setError(error instanceof Error ? error.message : 'Google sign-in failed');
+                    } catch (err) {
+                      setError('Google sign-in failed');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
+                >
+                  Google
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setError('');
+                    try {
+                      const { error } = await authService.signInWithOAuth('facebook');
+                      if (error) setError(error instanceof Error ? error.message : 'Facebook sign-in failed');
+                    } catch (err) {
+                      setError('Facebook sign-in failed');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
+                >
+                  Facebook
+                </button>
               </div>
             </form>
           ) : (

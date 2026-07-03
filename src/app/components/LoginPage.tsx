@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
+import { authService } from '../../lib/authService';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -148,19 +149,36 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
-            {[
-              { name: 'Google', icon: 'G' },
-              { name: 'Facebook', icon: 'f' },
-            ].map(({ name, icon }) => (
-              <button
-                key={name}
-                type="button"
-                onClick={() => setError(`${name} login is not available yet.`)}
-                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-              >
-                <span className="font-bold">{icon}</span> {name}
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                try {
+                  const { error } = await authService.signInWithOAuth('google');
+                  if (error) setError(error instanceof Error ? error.message : 'Google login failed');
+                } catch (err) {
+                  setError('Google login failed');
+                }
+              }}
+              className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
+            >
+              Google
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                setError('');
+                try {
+                  const { error } = await authService.signInWithOAuth('facebook');
+                  if (error) setError(error instanceof Error ? error.message : 'Facebook login failed');
+                } catch (err) {
+                  setError('Facebook login failed');
+                }
+              }}
+              className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
+            >
+              Facebook
+            </button>
           </div>
 
           <p className="mt-8 text-center text-sm text-gray-500">
