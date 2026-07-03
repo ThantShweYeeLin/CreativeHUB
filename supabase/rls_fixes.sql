@@ -4,6 +4,7 @@
 alter table if exists public.favorites enable row level security;
 alter table if exists public.requests enable row level security;
 alter table if exists public.freelancer_profiles enable row level security;
+alter table if exists public.conversations enable row level security;
 
 -- Freelancer profiles policies
 DO $$
@@ -87,6 +88,25 @@ BEGIN
     ON public.reviews
     FOR SELECT
     USING (auth.uid() = reviewer_id OR auth.uid() = reviewee_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Conversations policies
+DO $$
+BEGIN
+  CREATE POLICY "Users can view own conversations"
+    ON public.conversations
+    FOR SELECT
+    USING (auth.uid() = participant_1_id OR auth.uid() = participant_2_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can create own conversations"
+    ON public.conversations
+    FOR INSERT
+    WITH CHECK (auth.uid() = participant_1_id OR auth.uid() = participant_2_id);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

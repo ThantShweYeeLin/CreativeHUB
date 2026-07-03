@@ -35,6 +35,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const { user } = useAuth();
   const location = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
+  const [mutualUsers, setMutualUsers] = useState<any[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [messageInput, setMessageInput] = useState('');
@@ -53,6 +54,26 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
   useEffect(() => {
     let isMounted = true;
+
+    async function loadMutualUsers() {
+      if (!user?.id) {
+        if (isMounted) {
+          setMutualUsers([]);
+        }
+        return;
+      }
+
+      const response = await DataService.getMutualUsers(user.id);
+      if (!isMounted) {
+        return;
+      }
+
+      if (response.error) {
+        setMutualUsers([]);
+      } else {
+        setMutualUsers(response.data || []);
+      }
+    }
 
     async function loadConversations() {
       if (!user?.id) {
@@ -98,6 +119,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       setIsLoadingConversations(false);
     }
 
+    loadMutualUsers();
     loadConversations();
 
     return () => {
@@ -191,61 +213,26 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     };
   }, [selectedConversationId, conversations, user?.id]);
 
-  const canChat = bookingSession && bookingSession.status !== 'completed';
+  const activeConversation = selectedConversationId
+    ? (() => {
+        const conversation = conversations.find((item: any) => item.id === selectedConversationId);
+        if (!conversation) {
+          return null;
+        }
 
-  const handleEndSession = async () => {
-    if (!bookingSession?.id || !user?.id || !selectedConversation?.otherParticipantId || !selectedConversationId) {
-      return;
-    }
+        const participant1 = conversation.participant_1;
+        const participant2 = conversation.participant_2;
+        const otherParticipant = participant1?.id === user?.id ? participant2 : participant1;
 
-    setIsEndingSession(true);
-    setError(null);
-
-    const response = await DataService.completeBookingSession(bookingSession.id);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to end this session.');
-      setIsEndingSession(false);
-      return;
-    }
-
-    await DataService.sendMessage({
-      conversation_id: selectedConversationId,
-      sender_id: user.id,
-      recipient_id: selectedConversation.otherParticipantId,
-      content: 'Session ended. Booking marked as completed. Please leave a review for each other.',
-      read: false,
-    } as any);
-
-    setBookingSession(response.data || { ...bookingSession, status: 'completed' });
-    setIsEndingSession(false);
-  };
-
-  const handleSubmitReview = async () => {
-    if (!bookingSession?.id || !user?.id || !selectedConversation?.otherParticipantId) {
-      return;
-    }
-
-    setIsSubmittingReview(true);
-    setError(null);
-
-    const reviewResponse = await DataService.createReview({
-      booking_id: bookingSession.id,
-      reviewer_id: user.id,
-      reviewee_id: selectedConversation.otherParticipantId,
-      rating: reviewRating,
-      comment: reviewComment.trim() || null,
-    });
-
-    if (reviewResponse.error) {
-      setError((reviewResponse.error as any).message || 'Unable to submit review.');
-      setIsSubmittingReview(false);
-      return;
-    }
-
-    setHasSubmittedReview(true);
-    setReviewComment('');
-    setIsSubmittingReview(false);
-  };
+        return {
+          id: conversation.id,
+          otherParticipantId: otherParticipant?.id,
+          name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
+          avatar: otherParticipant?.avatar_url || fallbackProfileImage,
+          lastMessageAt: conversation.last_message_at,
+        };
+      })()
+    : null;
 
   const normalizedConversations = useMemo(() => {
     return conversations
@@ -265,8 +252,61 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       .filter((item) => !!item.otherParticipantId);
   }, [conversations, user?.id]);
 
-  const selectedConversation =
-    normalizedConversations.find((item) => item.id === selectedConversationId) || null;
+  const showBookingSessionControls = !!bookingSession && bookingSession.status !== 'completed';
+
+  const handleEndSession = async () => {
+    if (!bookingSession?.id || !user?.id || !activeConversation?.otherParticipantId || !selectedConversationId) {
+      return;
+    }
+
+    setIsEndingSession(true);
+    setError(null);
+
+    const response = await DataService.completeBookingSession(bookingSession.id);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to end this session.');
+      setIsEndingSession(false);
+      return;
+    }
+
+    await DataService.sendMessage({
+      conversation_id: selectedConversationId,
+      sender_id: user.id,
+      recipient_id: activeConversation.otherParticipantId,
+      content: 'Session ended. Booking marked as completed. Please leave a review for each other.',
+      read: false,
+    } as any);
+
+    setBookingSession(response.data || { ...bookingSession, status: 'completed' });
+    setIsEndingSession(false);
+  };
+
+  const handleSubmitReview = async () => {
+    if (!bookingSession?.id || !user?.id || !activeConversation?.otherParticipantId) {
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    setError(null);
+
+    const reviewResponse = await DataService.createReview({
+      booking_id: bookingSession.id,
+      reviewer_id: user.id,
+      reviewee_id: activeConversation.otherParticipantId,
+      rating: reviewRating,
+      comment: reviewComment.trim() || null,
+    });
+
+    if (reviewResponse.error) {
+      setError((reviewResponse.error as any).message || 'Unable to submit review.');
+      setIsSubmittingReview(false);
+      return;
+    }
+
+    setHasSubmittedReview(true);
+    setReviewComment('');
+    setIsSubmittingReview(false);
+  };
 
   const filteredConversations = normalizedConversations.filter((conversation) =>
     conversation.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
@@ -276,7 +316,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     if (
       !user?.id ||
       !selectedConversationId ||
-      !selectedConversation?.otherParticipantId ||
+      !activeConversation?.otherParticipantId ||
       !messageInput.trim()
     ) {
       return;
@@ -288,7 +328,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     const response = await DataService.sendMessage({
       conversation_id: selectedConversationId,
       sender_id: user.id,
-      recipient_id: selectedConversation.otherParticipantId,
+      recipient_id: activeConversation.otherParticipantId,
       content: messageInput.trim(),
       read: false,
     } as any);
@@ -309,6 +349,29 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     );
     setMessageInput('');
     setIsSending(false);
+  };
+
+  const openMutualConversation = async (mutualUserId: string) => {
+    if (!user?.id || !mutualUserId) {
+      return;
+    }
+
+    setError(null);
+    const response = await DataService.ensureConversation(user.id, mutualUserId);
+    if (response.error || !response.data) {
+      setError((response.error as any)?.message || 'Unable to start conversation.');
+      return;
+    }
+
+    setConversations((current) => {
+      const existingIndex = current.findIndex((conversation: any) => conversation.id === response.data.id);
+      if (existingIndex >= 0) {
+        return current;
+      }
+
+      return [response.data, ...current];
+    });
+    setSelectedConversationId(response.data.id);
   };
 
   return (
@@ -359,7 +422,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               )}
 
               {!isLoadingConversations && filteredConversations.length === 0 && (
-                <div className="p-6 text-center text-sm text-gray-600">No conversations yet.</div>
+                <div className="p-6 text-center text-sm text-gray-600">No conversations yet. Pick a mutual below to start one.</div>
               )}
 
               {filteredConversations.map((conversation) => (
@@ -387,11 +450,39 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   </div>
                 </button>
               ))}
+
+              {!searchQuery.trim() && mutualUsers.length > 0 && (
+                <div className="border-t border-gray-200">
+                  <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Mutuals</div>
+                  {mutualUsers.map((mutual) => (
+                    <button
+                      key={mutual.id}
+                      type="button"
+                      onClick={() => void openMutualConversation(mutual.id)}
+                      className="w-full border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-white shadow-sm">
+                          <ImageWithFallback
+                            src={mutual.avatar_url || fallbackProfileImage}
+                            alt={mutual.full_name || mutual.email}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="truncate font-semibold text-gray-900">{mutual.full_name || mutual.email}</h3>
+                          <p className="truncate text-xs text-gray-500">Tap to message</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
-            {!selectedConversation ? (
+            {!activeConversation ? (
               <div className="flex-1 flex items-center justify-center p-10 text-center">
                 <div>
                   <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -406,16 +497,16 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center gap-4">
                   <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm">
                     <ImageWithFallback
-                      src={selectedConversation.avatar}
-                      alt={selectedConversation.name}
+                      src={activeConversation.avatar}
+                      alt={activeConversation.name}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <div>
-                    <h2 className="font-bold text-gray-900">{selectedConversation.name}</h2>
+                    <h2 className="font-bold text-gray-900">{activeConversation.name}</h2>
                     <p className="text-sm text-gray-600">Direct conversation</p>
                   </div>
-                  {canChat && (
+                  {showBookingSessionControls && (
                     <button
                       type="button"
                       onClick={() => void handleEndSession()}
@@ -432,6 +523,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     You may now chat with this person.
                   </div>
                 ) : null}
+
+                {!bookingSession && (
+                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
+                    Mutuals can chat directly here.
+                  </div>
+                )}
 
                 {bookingSession?.status === 'completed' && (
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
@@ -485,6 +582,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   {messages.map((message) => {
                     const isMine = message.sender_id === user?.id;
                     const sharedPost = parseSharedPostMessage(String(message.content || ''));
+                    const sharedPostAuthorId = sharedPost?.authorId;
                     return (
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div
@@ -505,16 +603,20 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   {sharedPost.caption}
                                 </p>
                               )}
-                              {sharedPost.authorId && onViewProfile && (
+                              {sharedPostAuthorId && onViewProfile ? (
                                 <button
                                   type="button"
-                                  onClick={() => onViewProfile(sharedPost.authorId)}
+                                  onClick={() => {
+                                    if (sharedPostAuthorId) {
+                                      onViewProfile(sharedPostAuthorId);
+                                    }
+                                  }}
                                   className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isMine ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'}`}
                                 >
                                   View post
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </button>
-                              )}
+                              ) : null}
                             </div>
                           )}
                           {!sharedPost ? (
@@ -551,12 +653,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         }
                       }}
                       placeholder="Type a message..."
-                      disabled={!canChat}
+                      disabled={!activeConversation}
                       className="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
                     />
                     <button
                       onClick={() => void handleSendMessage()}
-                      disabled={!canChat || !messageInput.trim() || isSending}
+                      disabled={!activeConversation || !messageInput.trim() || isSending}
                       className="p-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-5 h-5" />
