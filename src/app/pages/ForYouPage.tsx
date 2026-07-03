@@ -1119,7 +1119,14 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setError(null);
 
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
-    const message = `Shared a post from ${sharingPost.authorName}:\n${shareUrl}\n\n${sharingPost.caption}`;
+    const sharedPostPayload = {
+      authorName: sharingPost.authorName,
+      authorId: sharingPost.authorId,
+      shareUrl,
+      caption: sharingPost.caption,
+      imageUrl: sharingPost.image || null,
+    };
+    const message = `SHARED_POST::${JSON.stringify(sharedPostPayload)}`;
 
     const recipients = mutualUsers.filter((mutual) => selectedShareRecipientIds.includes(mutual.id));
 

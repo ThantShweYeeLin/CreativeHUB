@@ -14,6 +14,30 @@ const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1
 
 function parseSharedPostMessage(content: string) {
   const trimmedContent = content.trim();
+
+  if (trimmedContent.startsWith('SHARED_POST::')) {
+    const rawPayload = trimmedContent.slice('SHARED_POST::'.length);
+    try {
+      const parsed = JSON.parse(rawPayload) as {
+        authorName?: string;
+        authorId?: string;
+        shareUrl?: string;
+        caption?: string;
+        imageUrl?: string | null;
+      };
+
+      return {
+        authorName: parsed.authorName || 'A post',
+        shareUrl: parsed.shareUrl || '',
+        caption: parsed.caption || '',
+        authorId: parsed.authorId || null,
+        imageUrl: parsed.imageUrl || null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   if (!trimmedContent.toLowerCase().startsWith('shared a post from ')) {
     return null;
   }
@@ -28,6 +52,7 @@ function parseSharedPostMessage(content: string) {
     shareUrl,
     caption,
     authorId: profileMatch?.[1] || null,
+    imageUrl: null,
   };
 }
 
@@ -598,8 +623,17 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               <p className={`mt-1 ${isMine ? 'text-white/80' : 'text-gray-600'}`}>
                                 {sharedPost.authorName || 'A post'} was shared to you.
                               </p>
+                              {sharedPost.imageUrl && (
+                                <div className="mt-3 overflow-hidden rounded-xl border border-white/20 bg-black/5">
+                                  <ImageWithFallback
+                                    src={sharedPost.imageUrl}
+                                    alt={sharedPost.caption || 'Shared post image'}
+                                    className="h-48 w-full object-cover"
+                                  />
+                                </div>
+                              )}
                               {sharedPost.caption && (
-                                <p className={`mt-2 line-clamp-3 whitespace-pre-wrap text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
+                                <p className={`mt-2 whitespace-pre-wrap text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
                                   {sharedPost.caption}
                                 </p>
                               )}
@@ -613,7 +647,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   }}
                                   className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isMine ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'}`}
                                 >
-                                  View post
+                                  View profile
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </button>
                               ) : null}
@@ -621,11 +655,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           )}
                           {!sharedPost ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                          ) : (
-                            <p className={`text-sm ${isMine ? 'text-white/80' : 'text-gray-700'}`}>
-                              Shared post sent to this conversation.
-                            </p>
-                          )}
+                          ) : null}
                           <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
                             {message.created_at
                               ? new Date(message.created_at).toLocaleTimeString([], {
