@@ -1,17 +1,39 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, MessageCircle, Search, Send } from 'lucide-react';
+import { useLocation } from 'react-router';
+import { ChevronLeft, ExternalLink, MessageCircle, Search, Send } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 
 interface MessagesPageProps {
   onBack: () => void;
+  onViewProfile?: (id: string) => void;
 }
 
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
 
-export function MessagesPage({ onBack }: MessagesPageProps) {
+function parseSharedPostMessage(content: string) {
+  const trimmedContent = content.trim();
+  if (!trimmedContent.toLowerCase().startsWith('shared a post from ')) {
+    return null;
+  }
+
+  const [firstLine = '', shareUrl = '', ...rest] = trimmedContent.split('\n');
+  const authorName = firstLine.replace(/^shared a post from\s+/i, '').replace(/:$/, '').trim();
+  const caption = rest.join('\n').trim();
+  const profileMatch = shareUrl.match(/\/profile\/([^/?#]+)/i);
+
+  return {
+    authorName,
+    shareUrl,
+    caption,
+    authorId: profileMatch?.[1] || null,
+  };
+}
+
+export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -27,6 +49,7 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const openConversationWithUserId = (location.state as { openConversationWithUserId?: string } | null)?.openConversationWithUserId || null;
 
   useEffect(() => {
     let isMounted = true;
@@ -54,9 +77,22 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
       } else {
         const items = response.data || [];
         setConversations(items);
-        setSelectedConversationId((current) =>
-          current && items.some((item: any) => item.id === current) ? current : items[0]?.id ?? null
-        );
+
+        const preferredConversation = openConversationWithUserId
+          ? items.find((conversation: any) => {
+              const participant1Id = conversation.participant_1?.id;
+              const participant2Id = conversation.participant_2?.id;
+              return participant1Id === openConversationWithUserId || participant2Id === openConversationWithUserId;
+            })
+          : null;
+
+        setSelectedConversationId((current) => {
+          if (current && items.some((item: any) => item.id === current)) {
+            return current;
+          }
+
+          return preferredConversation?.id ?? items[0]?.id ?? null;
+        });
       }
 
       setIsLoadingConversations(false);
@@ -67,7 +103,7 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
     return () => {
       isMounted = false;
     };
-  }, [user?.id]);
+  }, [openConversationWithUserId, user?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -448,6 +484,7 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
 
                   {messages.map((message) => {
                     const isMine = message.sender_id === user?.id;
+                    const sharedPost = parseSharedPostMessage(String(message.content || ''));
                     return (
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div
@@ -457,7 +494,36 @@ export function MessagesPage({ onBack }: MessagesPageProps) {
                               : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none shadow-sm'
                           }`}
                         >
-                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          {sharedPost && (
+                            <div className="mb-3 rounded-2xl border border-white/20 bg-white/10 p-3 text-sm">
+                              <p className="font-semibold">Shared post</p>
+                              <p className={`mt-1 ${isMine ? 'text-white/80' : 'text-gray-600'}`}>
+                                {sharedPost.authorName || 'A post'} was shared to you.
+                              </p>
+                              {sharedPost.caption && (
+                                <p className={`mt-2 line-clamp-3 whitespace-pre-wrap text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
+                                  {sharedPost.caption}
+                                </p>
+                              )}
+                              {sharedPost.authorId && onViewProfile && (
+                                <button
+                                  type="button"
+                                  onClick={() => onViewProfile(sharedPost.authorId)}
+                                  className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isMine ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'}`}
+                                >
+                                  View post
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {!sharedPost ? (
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                          ) : (
+                            <p className={`text-sm ${isMine ? 'text-white/80' : 'text-gray-700'}`}>
+                              Shared post sent to this conversation.
+                            </p>
+                          )}
                           <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
                             {message.created_at
                               ? new Date(message.created_at).toLocaleTimeString([], {

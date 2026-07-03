@@ -32,6 +32,7 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface ForYouPageProps {
   onViewProfile?: (freelancerId: string) => void;
+  onOpenMessages?: (recipientId?: string) => void;
 }
 
 type Visibility = 'Public' | 'Followers' | 'Connections';
@@ -85,6 +86,17 @@ interface FeedPost {
     question: string;
     options: string[];
   } | null;
+}
+
+interface FeedComment {
+  id: string;
+  content: string;
+  created_at: string;
+  user?: {
+    id: string;
+    full_name: string | null;
+    avatar_url: string | null;
+  };
 }
 
 interface PlaceSuggestion {
@@ -717,7 +729,7 @@ function LocationPickerSheet({
   );
 }
 
-export function ForYouPage({ onViewProfile }: ForYouPageProps) {
+export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
@@ -726,6 +738,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
   const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
+  const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
+  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -862,8 +879,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           specialty: 'Client Brief',
           image: post.image_url || null,
           caption: post.caption,
-          likes: 0,
-          commentsCount: 0,
+          likes: Math.max(0, Number(post.likes_count || 0)),
+          commentsCount: Math.max(0, Number(post.comments_count || 0)),
           timeAgo: toTimeAgo(post.created_at),
           createdAtRaw: post.created_at,
           isLiked: false,
@@ -954,6 +971,11 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     });
   }, [posts, activeFeedTab, followingIds]);
 
+  const focusedPost = useMemo(
+    () => posts.find((post) => post.id === focusedPostId) || null,
+    [posts, focusedPostId]
+  );
+
   const handleLike = (postId: string) => {
     setPosts((current) =>
       current.map((post) =>
@@ -970,6 +992,85 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         post.id === postId ? { ...post, isSaved: !post.isSaved } : post
       )
     );
+  };
+
+  const handleCommentToggle = async (postId: string) => {
+    setFocusedPostId(postId);
+
+    const existingComments = commentsByPostId[postId];
+    if (existingComments) {
+      return;
+    }
+
+    await loadCommentsForPost(postId);
+  };
+
+  const submitComment = async (postId: string) => {
+    const draft = (commentDraftByPostId[postId] || '').trim();
+    const post = posts.find((item) => item.id === postId);
+
+    if (!draft || !user?.id || !post?.isClientPost) {
+      return;
+    }
+
+    const clientPostId = postId.replace(/^client-post-/, '');
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
+
+    const response = await DataService.addClientPostComment(user.id, clientPostId, draft);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add comment.');
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      return;
+    }
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [postId]: [...(current[postId] || []), response.data],
+    }));
+    setPosts((current) =>
+      current.map((item) =>
+        item.id === postId ? { ...item, commentsCount: item.commentsCount + 1 } : item
+      )
+    );
+    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+  };
+
+  const openPostFocus = (postId: string) => {
+    setFocusedPostId(postId);
+  };
+
+  const closePostFocus = () => {
+    setFocusedPostId(null);
+  };
+
+  const loadCommentsForPost = async (postId: string) => {
+    if (loadingCommentsByPostId[postId]) {
+      return;
+    }
+
+    const post = posts.find((item) => item.id === postId);
+    if (!post) {
+      return;
+    }
+
+    if (!post.isClientPost) {
+      setCommentsByPostId((current) => ({ ...current, [postId]: [] }));
+      return;
+    }
+
+    const clientPostId = postId.replace(/^client-post-/, '');
+    setLoadingCommentsByPostId((current) => ({ ...current, [postId]: true }));
+
+    const response = await DataService.getClientPostComments(clientPostId, 100);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load comments.');
+      setCommentsByPostId((current) => ({ ...current, [postId]: [] }));
+    } else {
+      setCommentsByPostId((current) => ({ ...current, [postId]: response.data || [] }));
+    }
+
+    setLoadingCommentsByPostId((current) => ({ ...current, [postId]: false }));
   };
 
   const handleShare = async (postId: string) => {
@@ -1040,6 +1141,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     setSharingPost(null);
     setMutualUsers([]);
     setSelectedShareRecipientIds([]);
+
+    onOpenMessages?.(recipients[0]?.id);
   };
 
   const handleAddFiles = (files: FileList | null) => {
@@ -1277,31 +1380,42 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
               )}
 
               {post.image && (
-                <div className="relative aspect-square bg-gray-100">
+                <button type="button" onClick={() => openPostFocus(post.id)} className="relative block aspect-square w-full bg-gray-100 text-left">
                   {post.image.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/') ? (
                     <video src={post.image} className="h-full w-full object-cover" controls />
                   ) : (
                     <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
                   )}
-                </div>
+                </button>
               )}
 
               <div className="px-4 py-3 md:px-6 md:py-4">
                 <div className="mb-3 flex items-center justify-between md:mb-4">
                   <div className="flex items-center gap-4">
-                    <button onClick={() => handleLike(post.id)} className="group flex items-center gap-2 transition-all">
+                    <button onClick={() => handleLike(post.id)} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
                       <Heart className={`h-7 w-7 transition-all ${post.isLiked ? 'fill-red-500 text-red-500 scale-110' : 'text-gray-700 group-hover:scale-110'}`} />
                       <span className="font-semibold text-gray-900">{post.likes}</span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Like</span>
                     </button>
                     <button
-                      onClick={() => setExpandedCommentsForPost((current) => current === post.id ? null : post.id)}
-                      className="group flex items-center gap-2 transition-all"
+                      onClick={() => {
+                        setExpandedCommentsForPost((current) => {
+                          const next = current === post.id ? null : post.id;
+                          if (next === post.id) {
+                            void loadCommentsForPost(post.id);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
                     >
                       <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
                       <span className="font-semibold text-gray-900">{post.commentsCount}</span>
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Comment</span>
                     </button>
-                    <button onClick={() => void handleShare(post.id)} className="group flex items-center gap-2 transition-all">
+                    <button onClick={() => void handleShare(post.id)} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
                       <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
                     </button>
                   </div>
                   <button onClick={() => handleSave(post.id)} className="transition-all">
@@ -1310,12 +1424,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 </div>
 
                 <div className="mb-4 space-y-3">
-                  <p className="whitespace-pre-line text-gray-900">
-                    <button onClick={() => onViewProfile?.(post.authorId)} className="font-bold transition-colors hover:text-gray-900">
+                  <div onClick={() => openPostFocus(post.id)} className="cursor-zoom-in whitespace-pre-line text-gray-900">
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onViewProfile?.(post.authorId);
+                      }}
+                      className="font-bold transition-colors hover:text-gray-900"
+                    >
                       @{post.username}
                     </button>{' '}
                     <span>{post.caption}</span>
-                  </p>
+                  </div>
                   {((post.hashtags?.length ?? 0) > 0 || (post.mentions?.length ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-2 text-sm font-semibold">
                       {post.hashtags?.map((tag) => <span key={tag} className="text-gray-900">{tag}</span>)}
@@ -1347,8 +1468,29 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 </div>
 
                 {expandedCommentsForPost === post.id && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                    Comment threads are not yet enabled for this feed item.
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                    {post.isClientPost ? (
+                      <div className="space-y-3">
+                        {loadingCommentsByPostId[post.id] ? (
+                          <p className="text-gray-500">Loading comments...</p>
+                        ) : (commentsByPostId[post.id] || []).length === 0 ? (
+                          <p className="text-gray-500">No comments yet.</p>
+                        ) : (
+                          (commentsByPostId[post.id] || []).map((comment) => (
+                            <div key={comment.id} className="rounded-2xl bg-white px-3 py-2 shadow-sm">
+                              <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                                <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
+                                <span>•</span>
+                                <span>{new Date(comment.created_at).toLocaleString()}</span>
+                              </div>
+                              <p className="whitespace-pre-wrap text-sm text-gray-800">{comment.content}</p>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    ) : (
+                      <p>Comments are not available for this post yet.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -1356,6 +1498,118 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           ))}
         </div>
       </div>
+
+      {focusedPost && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={closePostFocus}
+              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="max-h-[60vh] overflow-hidden bg-gray-100">
+              {focusedPost.image && focusedPost.image.startsWith('blob:') && focusedPost.attachments?.find((attachment) => attachment.previewUrl === focusedPost.image)?.type.startsWith('video/') ? (
+                <video src={focusedPost.image} className="max-h-[60vh] w-full object-contain" controls />
+              ) : (
+                <ImageWithFallback src={focusedPost.image || fallbackProfileImage} alt={focusedPost.caption} className="max-h-[60vh] w-full object-contain" />
+              )}
+            </div>
+
+            <div className="max-h-[35vh] overflow-y-auto p-5">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={() => onViewProfile?.(focusedPost.authorId)}
+                  className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
+                >
+                  <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
+                    <ImageWithFallback src={focusedPost.avatar} alt={focusedPost.authorName} className="h-full w-full object-cover" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{focusedPost.authorName}</p>
+                    <p className="text-xs text-gray-500">@{focusedPost.username} • {focusedPost.specialty}</p>
+                  </div>
+                </button>
+                <span className="text-xs text-gray-500">{focusedPost.timeAgo}</span>
+              </div>
+
+              <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption}</p>
+
+              <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
+                <button onClick={() => void handleLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
+                  {focusedPost.likes}
+                </button>
+                <button onClick={() => void handleCommentToggle(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <MessageCircle className="h-5 w-5 text-gray-700" />
+                  {focusedPost.commentsCount}
+                </button>
+                <button onClick={() => void handleShare(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Share2 className="h-5 w-5 text-gray-700" />
+                  Share
+                </button>
+                <button onClick={() => handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Bookmark className={`h-5 w-5 ${focusedPost.isSaved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />
+                  Save
+                </button>
+              </div>
+
+              {focusedPost.location && (
+                <div className="mt-3 rounded-2xl bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                  {focusedPost.location}
+                </div>
+              )}
+
+              <div className="mt-5 space-y-3">
+                <p className="text-sm font-semibold text-gray-900">Comments</p>
+                {loadingCommentsByPostId[focusedPost.id] ? (
+                  <p className="text-sm text-gray-500">Loading comments...</p>
+                ) : (commentsByPostId[focusedPost.id] || []).length === 0 ? (
+                  <p className="text-sm text-gray-500">No comments yet.</p>
+                ) : (
+                  (commentsByPostId[focusedPost.id] || []).map((comment) => (
+                    <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                      <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
+                        <span>•</span>
+                        <span>{new Date(comment.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap">{comment.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {focusedPost.isClientPost && (
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={commentDraftByPostId[focusedPost.id] || ''}
+                    onChange={(event) =>
+                      setCommentDraftByPostId((current) => ({
+                        ...current,
+                        [focusedPost.id]: event.target.value,
+                      }))
+                    }
+                    placeholder="Write a comment..."
+                    className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void submitComment(focusedPost.id)}
+                    disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
+                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                  >
+                    {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isShareSheetOpen && sharingPost && (
         <div className="fixed inset-0 z-[70] animate-in fade-in-0 bg-black/50 backdrop-blur-sm">

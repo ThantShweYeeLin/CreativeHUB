@@ -124,7 +124,10 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <ForYouPage onViewProfile={(id) => navigate(`/profile/${id}`)} />
+                  <ForYouPage
+                    onViewProfile={(id) => navigate(`/profile/${id}`)}
+                    onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
+                  />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -179,7 +182,7 @@ export default function App() {
             path="/messages"
             element={
               <ProtectedRoute>
-                <MessagesPage onBack={() => navigate(-1)} />
+                <MessagesPage onBack={() => navigate(-1)} onViewProfile={(id) => navigate(`/profile/${id}`)} />
               </ProtectedRoute>
             }
           />

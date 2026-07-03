@@ -764,7 +764,13 @@ export class DataService {
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
-    return { data, error };
+
+    if (error || !data || data.length === 0) {
+      return { data, error };
+    }
+
+    const enriched = await this.enrichClientPostsWithEngagement(data);
+    return { data: enriched, error: null };
   }
 
   static async getClientPostsByClientId(clientId: string, limit = 20) {
@@ -775,7 +781,33 @@ export class DataService {
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
-    return { data, error };
+
+    if (error || !data || data.length === 0) {
+      return { data, error };
+    }
+
+    const enriched = await this.enrichClientPostsWithEngagement(data);
+    return { data: enriched, error: null };
+  }
+
+  private static async enrichClientPostsWithEngagement(posts: any[]) {
+    const postIds = posts.map((post) => String(post.id));
+    const statsResponse = await this.getClientPostEngagementStats(postIds);
+
+    if (statsResponse.error || !statsResponse.data) {
+      return posts;
+    }
+
+    const statsById = new Map(statsResponse.data.map((item: any) => [String(item.post_id), item]));
+
+    return posts.map((post) => {
+      const stats = statsById.get(String(post.id));
+      return {
+        ...post,
+        likes_count: Math.max(Number(post.likes_count || 0), Number(stats?.likes || 0)),
+        comments_count: Math.max(Number(post.comments_count || 0), Number(stats?.comments || 0)),
+      };
+    });
   }
 
   static async getClientPostLikeStats(postIds: string[], userId?: string) {
