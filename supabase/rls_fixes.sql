@@ -136,8 +136,25 @@ create table if not exists public.client_post_comments (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+create table if not exists public.client_post_saves (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(post_id, user_id)
+);
+
+create table if not exists public.client_post_shares (
+  id uuid default uuid_generate_v4() primary key,
+  post_id uuid references public.client_posts on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 alter table if exists public.client_post_likes enable row level security;
 alter table if exists public.client_post_comments enable row level security;
+alter table if exists public.client_post_saves enable row level security;
+alter table if exists public.client_post_shares enable row level security;
 
 DO $$
 BEGIN
@@ -184,5 +201,60 @@ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+  CREATE POLICY "Users can read client post saves"
+    ON public.client_post_saves
+    FOR SELECT
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can save as themselves"
+    ON public.client_post_saves
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can unsave as themselves"
+    ON public.client_post_saves
+    FOR DELETE
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can read client post shares"
+    ON public.client_post_shares
+    FOR SELECT
+    USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can share as themselves"
+    ON public.client_post_shares
+    FOR INSERT
+    WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER POLICY "Users can share as themselves"
+    ON public.client_post_shares
+    WITH CHECK (auth.role() = 'authenticated' AND auth.uid() = user_id);
+EXCEPTION WHEN undefined_object THEN NULL;
+END $$;
+
 create index if not exists idx_client_post_likes_post_id on public.client_post_likes(post_id);
 create index if not exists idx_client_post_comments_post_id on public.client_post_comments(post_id);
+create index if not exists idx_client_post_saves_post_id on public.client_post_saves(post_id);
+create index if not exists idx_client_post_shares_post_id on public.client_post_shares(post_id);

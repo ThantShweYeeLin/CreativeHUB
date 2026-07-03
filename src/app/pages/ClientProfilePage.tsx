@@ -233,12 +233,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   };
 
   const togglePostLike = async (postId: string) => {
-    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    const engagement = postEngagement[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     setPostEngagement((current) => {
-      const existing = current[postId] || engagement;
+      const existing = current[stateKey] || engagement;
       return {
         ...current,
-        [postId]: {
+        [stateKey]: {
           ...existing,
           liked: !existing.liked,
           likes: existing.liked ? Math.max(0, existing.likes - 1) : existing.likes + 1,
@@ -250,14 +252,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       return;
     }
 
-    const response = await DataService.toggleClientPostLike(user.id, postId, engagement.liked);
+    const response = await DataService.toggleClientPostLike(user.id, apiPostId, engagement.liked);
     if (response.error) {
       setError((response.error as any).message || 'Unable to update like status.');
       setPostEngagement((current) => {
-        const existing = current[postId] || engagement;
+        const existing = current[stateKey] || engagement;
         return {
           ...current,
-          [postId]: {
+          [stateKey]: {
             ...existing,
             liked: engagement.liked,
             likes: engagement.liked ? existing.likes + 1 : Math.max(0, existing.likes - 1),
@@ -268,12 +270,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   };
 
   const togglePostSave = async (postId: string) => {
-    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    const engagement = postEngagement[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     setPostEngagement((current) => {
-      const existing = current[postId] || engagement;
+      const existing = current[stateKey] || engagement;
       return {
         ...current,
-        [postId]: {
+        [stateKey]: {
           ...existing,
           saved: !existing.saved,
           saves: existing.saved ? Math.max(0, existing.saves - 1) : existing.saves + 1,
@@ -285,14 +289,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       return;
     }
 
-    const response = await DataService.toggleClientPostSave(user.id, postId, engagement.saved);
+    const response = await DataService.toggleClientPostSave(user.id, apiPostId, engagement.saved);
     if (response.error) {
       setError((response.error as any).message || 'Unable to update save status.');
       setPostEngagement((current) => {
-        const existing = current[postId] || engagement;
+        const existing = current[stateKey] || engagement;
         return {
           ...current,
-          [postId]: {
+          [stateKey]: {
             ...existing,
             saved: engagement.saved,
             saves: engagement.saved ? existing.saves + 1 : Math.max(0, existing.saves - 1),
@@ -303,6 +307,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   };
 
   const sharePost = async (postId: string) => {
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
     const shareUrl = `${window.location.origin}/profile/${user?.id || ''}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -311,10 +317,10 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     }
 
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      const existing = current[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
         ...current,
-        [postId]: {
+        [stateKey]: {
           ...existing,
           shares: existing.shares + 1,
         },
@@ -325,14 +331,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       return;
     }
 
-    const response = await DataService.recordClientPostShare(user.id, postId);
+    const response = await DataService.recordClientPostShare(user.id, apiPostId);
     if (response.error) {
       setError((response.error as any).message || 'Unable to record share.');
       setPostEngagement((current) => {
-        const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+        const existing = current[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
         return {
           ...current,
-          [postId]: {
+          [stateKey]: {
             ...existing,
             shares: Math.max(0, existing.shares - 1),
           },
@@ -342,45 +348,49 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   };
 
   const openPostFocus = async (postId: string) => {
-    setFocusedPostId(postId);
-    const response = await DataService.getClientPostComments(postId, 100);
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    setFocusedPostId(stateKey);
+    const response = await DataService.getClientPostComments(apiPostId, 100);
     if (response.error) {
       setError((response.error as any).message || 'Unable to load comments.');
       return;
     }
-    setCommentsByPostId((current) => ({ ...current, [postId]: response.data || [] }));
+    setCommentsByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
   };
 
   const submitComment = async (postId: string) => {
-    const draft = (commentDraftByPostId[postId] || '').trim();
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    const draft = (commentDraftByPostId[stateKey] || '').trim();
     if (!draft || !user?.id) {
       return;
     }
 
-    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
-    const response = await DataService.addClientPostComment(user.id, postId, draft);
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: true }));
+    const response = await DataService.addClientPostComment(user.id, apiPostId, draft);
     if (response.error) {
       setError((response.error as any).message || 'Unable to add comment.');
-      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: false }));
       return;
     }
 
     setCommentsByPostId((current) => ({
       ...current,
-      [postId]: [...(current[postId] || []), response.data],
+      [stateKey]: [...(current[stateKey] || []), response.data],
     }));
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      const existing = current[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
         ...current,
-        [postId]: {
+        [stateKey]: {
           ...existing,
           comments: existing.comments + 1,
         },
       };
     });
-    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
-    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+    setCommentDraftByPostId((current) => ({ ...current, [stateKey]: '' }));
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: false }));
   };
 
   const deletePost = async (postId: string) => {

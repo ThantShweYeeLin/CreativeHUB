@@ -815,7 +815,12 @@ export class DataService {
       return { data: [], error: null };
     }
 
-    const [{ data: likes, error: likesError }, { data: comments, error: commentsError }] = await Promise.all([
+    const [
+      { data: likes, error: likesError },
+      { data: comments, error: commentsError },
+      { data: saves, error: savesError },
+      { data: shares, error: sharesError },
+    ] = await Promise.all([
       supabase
         .from('client_post_likes')
         .select('post_id, user_id')
@@ -824,10 +829,31 @@ export class DataService {
         .from('client_post_comments')
         .select('post_id')
         .in('post_id', postIds),
+      supabase
+        .from('client_post_saves')
+        .select('post_id, user_id')
+        .in('post_id', postIds),
+      supabase
+        .from('client_post_shares')
+        .select('post_id')
+        .in('post_id', postIds),
     ]);
+
+    const relationMissing = (error: any) => {
+      const message = String(error?.message || '').toLowerCase();
+      return message.includes('does not exist') || message.includes('schema cache');
+    };
 
     if (likesError || commentsError) {
       return { data: null, error: likesError || commentsError };
+    }
+
+    if (savesError && !relationMissing(savesError)) {
+      return { data: null, error: savesError };
+    }
+
+    if (sharesError && !relationMissing(sharesError)) {
+      return { data: null, error: sharesError };
     }
 
     const likesByPost: Record<string, number> = {};
@@ -844,15 +870,29 @@ export class DataService {
       commentsByPost[item.post_id] = (commentsByPost[item.post_id] || 0) + 1;
     });
 
+    const savesByPost: Record<string, number> = {};
+    const savedByMe: Record<string, boolean> = {};
+    (saves || []).forEach((item: any) => {
+      savesByPost[item.post_id] = (savesByPost[item.post_id] || 0) + 1;
+      if (userId && item.user_id === userId) {
+        savedByMe[item.post_id] = true;
+      }
+    });
+
+    const sharesByPost: Record<string, number> = {};
+    (shares || []).forEach((item: any) => {
+      sharesByPost[item.post_id] = (sharesByPost[item.post_id] || 0) + 1;
+    });
+
     return {
       data: postIds.map((postId) => ({
         post_id: postId,
         likes: likesByPost[postId] || 0,
         comments: commentsByPost[postId] || 0,
         liked_by_me: !!likedByMe[postId],
-        shares: 0,
-        saves: 0,
-        saved_by_me: false,
+        shares: sharesByPost[postId] || 0,
+        saves: savesByPost[postId] || 0,
+        saved_by_me: !!savedByMe[postId],
       })),
       error: null,
     };
@@ -862,12 +902,54 @@ export class DataService {
     return this.getClientPostLikeStats(postIds, userId);
   }
 
-  static async toggleClientPostSave(_userId: string, _postId: string, currentlySaved: boolean) {
-    return { saved: !currentlySaved, error: null };
+  static async toggleClientPostSave(userId: string, postId: string, currentlySaved: boolean) {
+    const relationMissing = (error: any) => {
+      const message = String(error?.message || '').toLowerCase();
+      return message.includes('does not exist') || message.includes('schema cache');
+    };
+
+    if (currentlySaved) {
+      const { error } = await supabase
+        .from('client_post_saves')
+        .delete()
+        .eq('user_id', userId)
+        .eq('post_id', postId);
+
+      if (error && relationMissing(error)) {
+        return { saved: false, error: null };
+      }
+
+      return { saved: false, error };
+    }
+
+    const { error } = await supabase
+      .from('client_post_saves')
+      .insert({ user_id: userId, post_id: postId });
+
+    if (error && error.code !== '23505' && !relationMissing(error)) {
+      return { saved: currentlySaved, error };
+    }
+
+    return { saved: true, error: null };
   }
 
-  static async recordClientPostShare(_userId: string, _postId: string) {
-    return { data: null, error: null };
+  static async recordClientPostShare(userId: string, postId: string) {
+    const relationMissing = (error: any) => {
+      const message = String(error?.message || '').toLowerCase();
+      return message.includes('does not exist') || message.includes('schema cache');
+    };
+
+    const { data, error } = await supabase
+      .from('client_post_shares')
+      .insert({ user_id: userId, post_id: postId })
+      .select()
+      .single();
+
+    if (error && relationMissing(error)) {
+      return { data: null, error: null };
+    }
+
+    return { data, error };
   }
 
   static async getClientPostComments(postId: string, limit = 40) {
