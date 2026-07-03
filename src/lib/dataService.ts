@@ -496,6 +496,119 @@ export class DataService {
     return { data, error };
   }
 
+  static async getClientPostPreviews(postIds: string[]) {
+    if (!postIds.length) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('id, caption, image_url, client_id')
+      .in('id', postIds);
+
+    return { data: data || [], error };
+  }
+
+  static async getClientPostsByAuthors(authorIds: string[]) {
+    if (!authorIds.length) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('id, caption, image_url, client_id, created_at')
+      .in('client_id', authorIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    return { data: data || [], error };
+  }
+
+  static async getMessageReactions(messageIds: string[]) {
+    if (!messageIds.length) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('message_id, user_id, reaction')
+      .in('message_id', messageIds);
+
+    const relationMissing = (err: any) => {
+      const message = String(err?.message || '').toLowerCase();
+      return message.includes('does not exist') || message.includes('schema cache');
+    };
+
+    if (error && relationMissing(error)) {
+      return { data: [], error: null };
+    }
+
+    return { data: data || [], error };
+  }
+
+  static async setMessageReaction(userId: string, messageId: string, reaction: string) {
+    const relationMissing = (err: any) => {
+      const message = String(err?.message || '').toLowerCase();
+      return message.includes('does not exist') || message.includes('schema cache');
+    };
+
+    const rlsDenied = (err: any) => {
+      const message = String(err?.message || '').toLowerCase();
+      return message.includes('row-level security policy') || err?.code === '42501';
+    };
+
+    const { data: existing, error: existingError } = await supabase
+      .from('message_reactions')
+      .select('id, reaction')
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingError && !relationMissing(existingError) && !rlsDenied(existingError)) {
+      return { data: null, error: existingError };
+    }
+
+    if (existing && existing.reaction === reaction) {
+      const { error } = await supabase
+        .from('message_reactions')
+        .delete()
+        .eq('id', existing.id);
+
+      if (error && !relationMissing(error) && !rlsDenied(error)) {
+        return { data: null, error };
+      }
+
+      return { data: { removed: true }, error: null };
+    }
+
+    if (existing) {
+      const { data, error } = await supabase
+        .from('message_reactions')
+        .update({ reaction })
+        .eq('id', existing.id)
+        .select('message_id, user_id, reaction')
+        .single();
+
+      if (error && !relationMissing(error) && !rlsDenied(error)) {
+        return { data: null, error };
+      }
+
+      return { data, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .insert({ message_id: messageId, user_id: userId, reaction })
+      .select('message_id, user_id, reaction')
+      .single();
+
+    if (error && !relationMissing(error) && !rlsDenied(error)) {
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  }
+
   static async sendMessage(message: Omit<Message, 'id' | 'created_at'>) {
     const { data, error } = await supabase
       .from('messages')
@@ -908,6 +1021,11 @@ export class DataService {
       return message.includes('does not exist') || message.includes('schema cache');
     };
 
+    const rlsDenied = (error: any) => {
+      const message = String(error?.message || '').toLowerCase();
+      return message.includes('row-level security policy') || error?.code === '42501';
+    };
+
     if (currentlySaved) {
       const { error } = await supabase
         .from('client_post_saves')
@@ -915,7 +1033,7 @@ export class DataService {
         .eq('user_id', userId)
         .eq('post_id', postId);
 
-      if (error && relationMissing(error)) {
+      if (error && (relationMissing(error) || rlsDenied(error))) {
         return { saved: false, error: null };
       }
 
@@ -926,7 +1044,7 @@ export class DataService {
       .from('client_post_saves')
       .insert({ user_id: userId, post_id: postId });
 
-    if (error && error.code !== '23505' && !relationMissing(error)) {
+    if (error && error.code !== '23505' && !relationMissing(error) && !rlsDenied(error)) {
       return { saved: currentlySaved, error };
     }
 
@@ -939,13 +1057,18 @@ export class DataService {
       return message.includes('does not exist') || message.includes('schema cache');
     };
 
+    const rlsDenied = (error: any) => {
+      const message = String(error?.message || '').toLowerCase();
+      return message.includes('row-level security policy') || error?.code === '42501';
+    };
+
     const { data, error } = await supabase
       .from('client_post_shares')
       .insert({ user_id: userId, post_id: postId })
       .select()
       .single();
 
-    if (error && relationMissing(error)) {
+    if (error && (relationMissing(error) || rlsDenied(error))) {
       return { data: null, error: null };
     }
 

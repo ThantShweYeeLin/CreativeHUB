@@ -290,25 +290,6 @@ class AuthService {
     return { data, error };
   }
 
-  async signInWithOAuth(provider: 'google' | 'facebook') {
-    try {
-      const result = await supabase.auth.signInWithOAuth({ provider });
-      if (result.error) {
-        const raw = result.error as any;
-        const msg = raw?.message || raw?.msg || (typeof raw === 'string' ? raw : JSON.stringify(raw));
-        // Map common Supabase provider errors to friendly messages
-        if (msg && msg.toLowerCase().includes('provider is not enabled')) {
-          return { data: null, error: new Error(`${provider.charAt(0).toUpperCase() + provider.slice(1)} login is not available yet.`) };
-        }
-        return { data: null, error: new Error(String(msg)) };
-      }
-
-      return { data: result.data, error: null };
-    } catch (error) {
-      return { data: null, error: error instanceof Error ? error : new Error('OAuth sign-in failed') };
-    }
-  }
-
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
     return supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {

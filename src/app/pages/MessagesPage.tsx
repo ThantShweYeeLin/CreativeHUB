@@ -19,19 +19,26 @@ function parseSharedPostMessage(content: string) {
     const rawPayload = trimmedContent.slice('SHARED_POST::'.length);
     try {
       const parsed = JSON.parse(rawPayload) as {
+        postId?: string;
         authorName?: string;
         authorId?: string;
         shareUrl?: string;
         caption?: string;
         imageUrl?: string | null;
+        image?: string | null;
+        previewUrl?: string | null;
+        mediaUrl?: string | null;
       };
+
+      const parsedImage = parsed.imageUrl || parsed.image || parsed.previewUrl || parsed.mediaUrl || null;
 
       return {
         authorName: parsed.authorName || 'A post',
+        postId: parsed.postId || null,
         shareUrl: parsed.shareUrl || '',
         caption: parsed.caption || '',
         authorId: parsed.authorId || null,
-        imageUrl: parsed.imageUrl || null,
+        imageUrl: parsedImage,
       };
     } catch {
       return null;
@@ -63,6 +70,7 @@ function parseSharedPostMessage(content: string) {
 
   return {
     authorName,
+    postId: null,
     shareUrl,
     previewUrl,
     caption,
@@ -90,6 +98,9 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messageReactionsById, setMessageReactionsById] = useState<Record<string, { counts: Record<string, number>; mine: string | null }>>({});
+  const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null }>>({});
+  const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null }>>({});
   const openConversationWithUserId = (location.state as { openConversationWithUserId?: string } | null)?.openConversationWithUserId || null;
 
   useEffect(() => {
@@ -192,6 +203,87 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         const items = [...(response.data || [])].reverse();
         setMessages(items);
         await DataService.markMessagesAsRead(selectedConversationId, user.id);
+
+        const messageIds = items.map((item: any) => String(item.id));
+        const reactionsResponse = await DataService.getMessageReactions(messageIds);
+        if (!reactionsResponse.error) {
+          const next: Record<string, { counts: Record<string, number>; mine: string | null }> = {};
+          (reactionsResponse.data || []).forEach((row: any) => {
+            const messageId = String(row.message_id);
+            const emoji = String(row.reaction || '');
+            if (!emoji) return;
+
+            if (!next[messageId]) {
+              next[messageId] = { counts: {}, mine: null };
+            }
+
+            next[messageId].counts[emoji] = (next[messageId].counts[emoji] || 0) + 1;
+            if (String(row.user_id) === String(user.id)) {
+              next[messageId].mine = emoji;
+            }
+          });
+          setMessageReactionsById(next);
+        }
+
+        const postIds = items
+          .map((item: any) => parseSharedPostMessage(String(item.content || ''))?.postId)
+          .filter((value: any): value is string => !!value);
+
+        const uniquePostIds = Array.from(new Set(postIds));
+        if (uniquePostIds.length > 0) {
+          const previewResponse = await DataService.getClientPostPreviews(uniquePostIds);
+          if (!previewResponse.error) {
+            const previewMap: Record<string, { image_url: string | null; caption: string | null }> = {};
+            (previewResponse.data || []).forEach((row: any) => {
+              previewMap[String(row.id)] = {
+                image_url: row.image_url || null,
+                caption: row.caption || null,
+              };
+            });
+            setSharedPostPreviewById(previewMap);
+          }
+        }
+
+        const authorIds = Array.from(
+          new Set(
+            items
+              .map((item: any) => parseSharedPostMessage(String(item.content || ''))?.authorId)
+              .filter((value: any): value is string => !!value)
+          )
+        );
+
+        if (authorIds.length > 0) {
+          const candidatesResponse = await DataService.getClientPostsByAuthors(authorIds);
+          if (!candidatesResponse.error) {
+            const fallbackByMessageId: Record<string, { image_url: string | null; caption: string | null }> = {};
+            const candidates = candidatesResponse.data || [];
+
+            items.forEach((item: any) => {
+              const parsed = parseSharedPostMessage(String(item.content || ''));
+              if (!parsed || parsed.postId || parsed.imageUrl || parsed.previewUrl || !parsed.authorId) {
+                return;
+              }
+
+              const byAuthor = candidates.filter((row: any) => String(row.client_id) === String(parsed.authorId));
+              if (!byAuthor.length) {
+                return;
+              }
+
+              const normalizedCaption = String(parsed.caption || '').trim().toLowerCase();
+              const exactMatch = normalizedCaption
+                ? byAuthor.find((row: any) => String(row.caption || '').trim().toLowerCase() === normalizedCaption)
+                : null;
+              const matched = exactMatch || byAuthor[0];
+
+              fallbackByMessageId[String(item.id)] = {
+                image_url: matched?.image_url || null,
+                caption: matched?.caption || null,
+              };
+            });
+
+            setSharedPostFallbackByMessageId(fallbackByMessageId);
+          }
+        }
       }
 
       setIsLoadingMessages(false);
@@ -389,6 +481,45 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     );
     setMessageInput('');
     setIsSending(false);
+  };
+
+  const reactionChoices = ['👍', '❤️', '😂', '😮', '😢'];
+
+  const handleReactToMessage = async (messageId: string, emoji: string) => {
+    if (!user?.id) {
+      return;
+    }
+
+    const previous = messageReactionsById[messageId] || { counts: {}, mine: null };
+    const nextCounts = { ...previous.counts };
+
+    if (previous.mine) {
+      nextCounts[previous.mine] = Math.max(0, (nextCounts[previous.mine] || 0) - 1);
+      if (nextCounts[previous.mine] === 0) {
+        delete nextCounts[previous.mine];
+      }
+    }
+
+    const sameEmoji = previous.mine === emoji;
+    if (!sameEmoji) {
+      nextCounts[emoji] = (nextCounts[emoji] || 0) + 1;
+    }
+
+    setMessageReactionsById((current) => ({
+      ...current,
+      [messageId]: {
+        counts: nextCounts,
+        mine: sameEmoji ? null : emoji,
+      },
+    }));
+
+    const response = await DataService.setMessageReaction(user.id, messageId, emoji);
+    if (response.error) {
+      setMessageReactionsById((current) => ({
+        ...current,
+        [messageId]: previous,
+      }));
+    }
   };
 
   const openMutualConversation = async (mutualUserId: string) => {
@@ -623,6 +754,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     const isMine = message.sender_id === user?.id;
                     const sharedPost = parseSharedPostMessage(String(message.content || ''));
                     const sharedPostAuthorId = sharedPost?.authorId;
+                    const sharedPostId = sharedPost?.postId || null;
+                    const previewFromDb = sharedPostId ? sharedPostPreviewById[sharedPostId] : null;
+                    const fallbackFromAuthorCaption = sharedPostFallbackByMessageId[String(message.id)] || null;
+                    const resolvedPreview = sharedPost?.imageUrl || sharedPost?.previewUrl || previewFromDb?.image_url || fallbackFromAuthorCaption?.image_url || null;
+                    const resolvedCaption = sharedPost?.caption || previewFromDb?.caption || fallbackFromAuthorCaption?.caption || 'A post was shared with you.';
+                    const reactions = messageReactionsById[String(message.id)] || { counts: {}, mine: null };
                     return (
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div
@@ -656,17 +793,17 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               </div>
 
                               <div className="px-4 pb-4">
-                                <p className={`text-sm ${isMine ? 'text-white/90' : 'text-gray-800'} whitespace-pre-wrap`}>{sharedPost.caption || 'A post was shared with you.'}</p>
+                                <p className={`text-sm ${isMine ? 'text-white/90' : 'text-gray-800'} whitespace-pre-wrap`}>{resolvedCaption}</p>
                               </div>
 
-                              {(sharedPost.imageUrl || sharedPost.previewUrl) ? (
+                              {resolvedPreview ? (
                                 <div className="relative overflow-hidden bg-slate-900">
                                   <ImageWithFallback
-                                    src={sharedPost.imageUrl || sharedPost.previewUrl}
+                                    src={resolvedPreview}
                                     alt={sharedPost.authorName || 'Shared post preview'}
                                     className="h-80 w-full object-cover"
                                   />
-                                  {(sharedPost.imageUrl || sharedPost.previewUrl)?.match(/\.(mp4|mov|webm|ogg)(\?|$)/i) ? (
+                                  {resolvedPreview?.match(/\.(mp4|mov|webm|ogg)(\?|$)/i) ? (
                                     <div className="absolute inset-0 flex items-center justify-center bg-black/25">
                                       <div className="h-16 w-16 rounded-full bg-white/90 flex items-center justify-center">
                                         <svg viewBox="0 0 24 24" className="h-8 w-8 text-gray-900">
@@ -710,6 +847,30 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                 })
                               : ''}
                           </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            {Object.entries(reactions.counts).map(([emoji, count]) => (
+                              <button
+                                key={`${message.id}-${emoji}`}
+                                type="button"
+                                onClick={() => void handleReactToMessage(String(message.id), emoji)}
+                                className={`rounded-full border px-2 py-1 text-xs ${reactions.mine === emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700'}`}
+                              >
+                                {emoji} {count}
+                              </button>
+                            ))}
+
+                            {reactionChoices.map((emoji) => (
+                              <button
+                                key={`${message.id}-add-${emoji}`}
+                                type="button"
+                                onClick={() => void handleReactToMessage(String(message.id), emoji)}
+                                className="rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     );

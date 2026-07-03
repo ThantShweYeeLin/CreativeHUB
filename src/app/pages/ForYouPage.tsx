@@ -977,22 +977,66 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     [posts, focusedPostId]
   );
 
-  const handleLike = (postId: string) => {
+  const handleLike = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost) {
+      return;
+    }
+
+    const nextLiked = !targetPost.isLiked;
     setPosts((current) =>
       current.map((post) =>
         post.id === postId
-          ? { ...post, isLiked: !post.isLiked, likes: post.isLiked ? post.likes - 1 : post.likes + 1 }
+          ? { ...post, isLiked: nextLiked, likes: nextLiked ? post.likes + 1 : Math.max(0, post.likes - 1) }
           : post
       )
     );
+
+    if (!targetPost.isClientPost || !user?.id) {
+      return;
+    }
+
+    const clientPostId = postId.replace(/^client-post-/, '');
+    const response = await DataService.toggleClientPostLike(user.id, clientPostId, targetPost.isLiked);
+    if (response.error) {
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId
+            ? { ...post, isLiked: targetPost.isLiked, likes: targetPost.likes }
+            : post
+        )
+      );
+      setError((response.error as any).message || 'Unable to update like.');
+    }
   };
 
-  const handleSave = (postId: string) => {
+  const handleSave = async (postId: string) => {
+    const targetPost = posts.find((post) => post.id === postId);
+    if (!targetPost) {
+      return;
+    }
+
+    const nextSaved = !targetPost.isSaved;
     setPosts((current) =>
       current.map((post) =>
-        post.id === postId ? { ...post, isSaved: !post.isSaved } : post
+        post.id === postId ? { ...post, isSaved: nextSaved } : post
       )
     );
+
+    if (!targetPost.isClientPost || !user?.id) {
+      return;
+    }
+
+    const clientPostId = postId.replace(/^client-post-/, '');
+    const response = await DataService.toggleClientPostSave(user.id, clientPostId, targetPost.isSaved);
+    if (response.error) {
+      setPosts((current) =>
+        current.map((post) =>
+          post.id === postId ? { ...post, isSaved: targetPost.isSaved } : post
+        )
+      );
+      setError((response.error as any).message || 'Unable to update save.');
+    }
   };
 
   const handleCommentToggle = async (postId: string) => {
@@ -1010,23 +1054,39 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     const draft = (commentDraftByPostId[postId] || '').trim();
     const post = posts.find((item) => item.id === postId);
 
-    if (!draft || !user?.id || !post?.isClientPost) {
+    if (!draft || !user?.id || !post) {
       return;
     }
 
-    const clientPostId = postId.replace(/^client-post-/, '');
     setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
 
-    const response = await DataService.addClientPostComment(user.id, clientPostId, draft);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to add comment.');
-      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
-      return;
+    let nextComment: FeedComment | null = null;
+
+    if (post.isClientPost) {
+      const clientPostId = postId.replace(/^client-post-/, '');
+      const response = await DataService.addClientPostComment(user.id, clientPostId, draft);
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to add comment.');
+        setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+        return;
+      }
+      nextComment = response.data;
+    } else {
+      nextComment = {
+        id: `local-comment-${Date.now()}`,
+        content: draft,
+        created_at: new Date().toISOString(),
+        user: {
+          id: user.id,
+          full_name: user.fullName || user.email || 'You',
+          avatar_url: user.avatar_url || null,
+        },
+      };
     }
 
     setCommentsByPostId((current) => ({
       ...current,
-      [postId]: [...(current[postId] || []), response.data],
+      [postId]: [...(current[postId] || []), nextComment],
     }));
     setPosts((current) =>
       current.map((item) =>
@@ -1084,6 +1144,17 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       return;
     }
 
+    if (post.isClientPost) {
+      const clientPostId = postId.replace(/^client-post-/, '');
+      const shareRecord = await DataService.recordClientPostShare(user.id, clientPostId);
+      if (shareRecord.error) {
+        const message = String((shareRecord.error as any).message || '').toLowerCase();
+        if (!message.includes('row-level security policy')) {
+          setError((shareRecord.error as any).message || 'Unable to share this post.');
+        }
+      }
+    }
+
     setSharingPost(post);
     setIsShareSheetOpen(true);
     setIsLoadingMutualUsers(true);
@@ -1120,6 +1191,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
     const sharedPostPayload = {
+      postId: sharingPost.id.replace(/^client-post-/, ''),
       authorName: sharingPost.authorName,
       authorId: sharingPost.authorId,
       shareUrl,
@@ -1410,7 +1482,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <div className="px-4 py-3 md:px-6 md:py-4">
                 <div className="mb-3 flex items-center justify-between md:mb-4">
                   <div className="flex items-center gap-4">
-                    <button onClick={() => handleLike(post.id)} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
+                    <button onClick={() => void handleLike(post.id)} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
                       <Heart className={`h-7 w-7 transition-all ${post.isLiked ? 'fill-red-500 text-red-500 scale-110' : 'text-gray-700 group-hover:scale-110'}`} />
                       <span className="font-semibold text-gray-900">{post.likes}</span>
                       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Like</span>
@@ -1436,7 +1508,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
                     </button>
                   </div>
-                  <button onClick={() => handleSave(post.id)} className="transition-all">
+                  <button onClick={() => void handleSave(post.id)} className="transition-all">
                     <Bookmark className={`h-6 w-6 transition-all ${post.isSaved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
                   </button>
                 </div>
@@ -1569,7 +1641,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   <Share2 className="h-5 w-5 text-gray-700" />
                   Share
                 </button>
-                <button onClick={() => handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <button onClick={() => void handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <Bookmark className={`h-5 w-5 ${focusedPost.isSaved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />
                   Save
                 </button>

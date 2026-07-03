@@ -151,10 +151,20 @@ create table if not exists public.client_post_shares (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+create table if not exists public.message_reactions (
+  id uuid default uuid_generate_v4() primary key,
+  message_id uuid references public.messages on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  reaction text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(message_id, user_id)
+);
+
 alter table if exists public.client_post_likes enable row level security;
 alter table if exists public.client_post_comments enable row level security;
 alter table if exists public.client_post_saves enable row level security;
 alter table if exists public.client_post_shares enable row level security;
+alter table if exists public.message_reactions enable row level security;
 
 DO $$
 BEGIN
@@ -254,7 +264,63 @@ BEGIN
 EXCEPTION WHEN undefined_object THEN NULL;
 END $$;
 
+DO $$
+BEGIN
+  CREATE POLICY "Users can read message reactions"
+    ON public.message_reactions
+    FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM public.messages m
+        JOIN public.conversations c ON c.id = m.conversation_id
+        WHERE m.id = message_reactions.message_id
+          AND (c.participant_1_id = auth.uid() OR c.participant_2_id = auth.uid())
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can react as themselves"
+    ON public.message_reactions
+    FOR INSERT
+    WITH CHECK (
+      auth.uid() = user_id
+      AND EXISTS (
+        SELECT 1
+        FROM public.messages m
+        JOIN public.conversations c ON c.id = m.conversation_id
+        WHERE m.id = message_reactions.message_id
+          AND (c.participant_1_id = auth.uid() OR c.participant_2_id = auth.uid())
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can update own reactions"
+    ON public.message_reactions
+    FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can delete own reactions"
+    ON public.message_reactions
+    FOR DELETE
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 create index if not exists idx_client_post_likes_post_id on public.client_post_likes(post_id);
 create index if not exists idx_client_post_comments_post_id on public.client_post_comments(post_id);
 create index if not exists idx_client_post_saves_post_id on public.client_post_saves(post_id);
 create index if not exists idx_client_post_shares_post_id on public.client_post_shares(post_id);
+create index if not exists idx_message_reactions_message_id on public.message_reactions(message_id);
+create index if not exists idx_message_reactions_user_id on public.message_reactions(user_id);
