@@ -18,14 +18,29 @@ function parseSharedPostMessage(content: string) {
     return null;
   }
 
-  const [firstLine = '', shareUrl = '', ...rest] = trimmedContent.split('\n');
+  const lines = trimmedContent.split('\n').map((line) => line.trim());
+  const firstLine = lines[0] || '';
+  const shareUrl = lines[1] || '';
+  let previewUrl: string | null = null;
+  let captionStart = 2;
+
+  if (lines[2] && lines[2].startsWith('http')) {
+    previewUrl = lines[2];
+    captionStart = 3;
+  }
+
+  while (captionStart < lines.length && lines[captionStart] === '') {
+    captionStart += 1;
+  }
+
+  const caption = lines.slice(captionStart).join('\n').trim();
   const authorName = firstLine.replace(/^shared a post from\s+/i, '').replace(/:$/, '').trim();
-  const caption = rest.join('\n').trim();
   const profileMatch = shareUrl.match(/\/profile\/([^/?#]+)/i);
 
   return {
     authorName,
     shareUrl,
+    previewUrl,
     caption,
     authorId: profileMatch?.[1] || null,
   };
@@ -495,35 +510,75 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           }`}
                         >
                           {sharedPost && (
-                            <div className="mb-3 rounded-2xl border border-white/20 bg-white/10 p-3 text-sm">
-                              <p className="font-semibold">Shared post</p>
-                              <p className={`mt-1 ${isMine ? 'text-white/80' : 'text-gray-600'}`}>
-                                {sharedPost.authorName || 'A post'} was shared to you.
-                              </p>
-                              {sharedPost.caption && (
-                                <p className={`mt-2 line-clamp-3 whitespace-pre-wrap text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
-                                  {sharedPost.caption}
-                                </p>
-                              )}
-                              {sharedPost.authorId && onViewProfile && (
-                                <button
-                                  type="button"
-                                  onClick={() => onViewProfile(sharedPost.authorId as string)}
-                                  className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold ${isMine ? 'bg-white text-gray-900' : 'bg-gray-900 text-white'}`}
+                            <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-slate-700 bg-slate-950 text-white' : 'border-gray-200 bg-white text-gray-900'}`}>
+                              <div className="flex items-start justify-between gap-3 px-4 py-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                                    {sharedPost.authorName ? sharedPost.authorName.split(' ').map((part) => part[0]).slice(0, 2).join('') : 'P'}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="truncate text-sm font-semibold">{sharedPost.authorName || 'Shared post'}</div>
+                                    <div className={`truncate text-xs ${isMine ? 'text-slate-400' : 'text-gray-500'}`}>Shared post</div>
+                                  </div>
+                                </div>
+                                {sharedPost.authorId && onViewProfile && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onViewProfile(sharedPost.authorId as string)}
+                                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
+                                  >
+                                    View profile
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="px-4 pb-4">
+                                <p className={`text-sm ${isMine ? 'text-white/90' : 'text-gray-800'} whitespace-pre-wrap`}>{sharedPost.caption || 'A post was shared with you.'}</p>
+                              </div>
+
+                              {sharedPost.previewUrl ? (
+                                <div className="relative overflow-hidden bg-slate-900">
+                                  <ImageWithFallback
+                                    src={sharedPost.previewUrl}
+                                    alt={sharedPost.authorName || 'Shared post preview'}
+                                    className="h-80 w-full object-cover"
+                                  />
+                                  {sharedPost.previewUrl.match(/\.(mp4|mov|webm|ogg)(\?|$)/i) ? (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/25">
+                                      <div className="h-16 w-16 rounded-full bg-white/90 flex items-center justify-center">
+                                        <svg viewBox="0 0 24 24" className="h-8 w-8 text-gray-900">
+                                          <path d="M8 5v14l11-7z" fill="currentColor" />
+                                        </svg>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : null}
+
+                              <div className="flex flex-wrap gap-2 px-4 py-4">
+                                <a
+                                  href={sharedPost.shareUrl || '#'}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
                                 >
-                                  View post
-                                  <ExternalLink className="h-3.5 w-3.5" />
-                                </button>
-                              )}
+                                  Open post
+                                </a>
+                                {sharedPost.authorId && onViewProfile && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onViewProfile(sharedPost.authorId as string)}
+                                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}
+                                  >
+                                    View profile
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           )}
                           {!sharedPost ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                          ) : (
-                            <p className={`text-sm ${isMine ? 'text-white/80' : 'text-gray-700'}`}>
-                              Shared post sent to this conversation.
-                            </p>
-                          )}
+                          ) : null}
                           <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
                             {message.created_at
                               ? new Date(message.created_at).toLocaleTimeString([], {
@@ -551,12 +606,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         }
                       }}
                       placeholder="Type a message..."
-                      disabled={!canChat}
                       className="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
                     />
                     <button
                       onClick={() => void handleSendMessage()}
-                      disabled={!canChat || !messageInput.trim() || isSending}
+                      disabled={!messageInput.trim() || isSending}
                       className="p-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-5 h-5" />
