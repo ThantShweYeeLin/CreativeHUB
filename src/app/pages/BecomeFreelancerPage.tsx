@@ -185,6 +185,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [locationSearchMessage, setLocationSearchMessage] = useState('');
   const [portfolioUploads, setPortfolioUploads] = useState<PortfolioUpload[]>([]);
   const [isDraggingPortfolio, setIsDraggingPortfolio] = useState(false);
+  const [showProjectUploads, setShowProjectUploads] = useState(false);
   const [instagram, setInstagram] = useState('');
   const [behance, setBehance] = useState('');
   const [website, setWebsite] = useState('');
@@ -202,7 +203,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
 
     if (imageFiles.length === 0) {
-      setError('Please choose image files for your portfolio.');
+      setError('Please choose image files for your projects');
       return;
     }
 
@@ -332,10 +333,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     if (step === 3) {
-      if (portfolioUploads.length < 5) {
-        setError('Please add at least 5 portfolio photos to continue.');
-        return;
-      }
       if (!location.trim()) {
         setError('Location is required for map visibility.');
         return;
@@ -348,11 +345,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const handleFinish = async () => {
     if (!user?.id) {
       setError('Please sign in again to complete freelancer onboarding.');
-      return;
-    }
-
-    if (portfolioUploads.length < 5) {
-      setError('Please add at least 5 portfolio photos.');
       return;
     }
 
@@ -462,7 +454,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         skills: [...selectedServices, ...selectedSpecialties],
         styles: selectedSpecialties,
         experience_years: parseExperienceYears(experience),
-        portfolio_count: portfolioUploads.length,
+        portfolio_count: 0,
         is_available: isAvailable,
         updated_at: new Date().toISOString(),
       } as any);
@@ -482,7 +474,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         skills: [...selectedServices, ...selectedSpecialties],
         styles: selectedSpecialties,
         experience_years: parseExperienceYears(experience),
-        portfolio_count: portfolioUploads.length,
+        portfolio_count: 0,
         is_available: isAvailable,
       } as any);
 
@@ -495,33 +487,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       freelancerProfileId = createProfile.data.id;
     }
 
-    if (freelancerProfileId) {
-      const uploadedPortfolioUrls: string[] = [];
-
-      for (const upload of portfolioUploads.slice(0, 20)) {
-        const uploadResponse = await DataService.uploadPortfolioImage(user.id, upload.file);
-        if (uploadResponse.error || !uploadResponse.publicUrl) {
-          setError((uploadResponse.error as any)?.message || 'Unable to upload portfolio photos.');
-          setIsSaving(false);
-          return;
-        }
-
-        uploadedPortfolioUrls.push(uploadResponse.publicUrl);
-      }
-
-      const createPortfolioTasks = uploadedPortfolioUrls.map((url, index) =>
-        DataService.createPortfolioItem(freelancerProfileId!, {
-          title: `${selectedServices[0] || 'Creative'} Portfolio ${index + 1}`,
-          description: selectedSpecialties.length > 0 ? `${selectedSpecialties.join(', ')} showcase` : null,
-          image_urls: [url],
-          project_url: null,
-          tools_used: selectedServices,
-          featured: index < 3,
-        } as any)
-      );
-
-      await Promise.all(createPortfolioTasks);
-    }
+    void freelancerProfileId;
 
     localStorage.setItem(
       `creativehub:freelancer-onboarding:${user.id}`,
@@ -775,88 +741,99 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                   </div>
                 </div>
               </div>
-
-              <div>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700">Portfolio Photos</p>
-                    <p className="mt-1 text-xs text-gray-500">Add at least 5 images. Recommended: 10-20 of your best work.</p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${portfolioUploads.length >= 5 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                    {portfolioUploads.length}/5 minimum
-                  </span>
-                </div>
-
-                <label
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    setIsDraggingPortfolio(true);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setIsDraggingPortfolio(true);
-                  }}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    setIsDraggingPortfolio(false);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setIsDraggingPortfolio(false);
-                    addPortfolioFiles(event.dataTransfer.files);
-                  }}
-                  className={`flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all ${
-                    isDraggingPortfolio
-                      ? 'border-gray-900 bg-gray-100 shadow-inner'
-                      : 'border-gray-300 bg-gray-50 hover:border-gray-500 hover:bg-white'
-                  }`}
+              <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-600">
+                <button
+                  type="button"
+                  onClick={() => setShowProjectUploads((current) => !current)}
+                  className="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4"
                 >
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      if (event.target.files) {
-                        addPortfolioFiles(event.target.files);
-                        event.target.value = '';
-                      }
-                    }}
-                  />
-                  <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-lg">
-                    <UploadCloud className="h-7 w-7" />
-                  </div>
-                  <p className="text-lg font-bold text-gray-900">Drag photos here or choose from your device</p>
-                  <p className="mt-2 max-w-md text-sm text-gray-500">JPG, PNG, or WebP images work best. You can add up to 20 portfolio photos.</p>
-                  <span className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-bold text-white shadow-md">
-                    <ImagePlus className="h-4 w-4" />
-                    Choose Photos
-                  </span>
-                </label>
-
-                {portfolioUploads.length > 0 && (
-                  <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-                    {portfolioUploads.map((upload, index) => (
-                      <div key={upload.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm">
-                        <img src={upload.previewUrl} alt={`Portfolio preview ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removePortfolioUpload(upload.id)}
-                          className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-md transition-all hover:bg-gray-900 hover:text-white md:opacity-0 md:group-hover:opacity-100"
-                          aria-label={`Remove portfolio photo ${index + 1}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        {index < 3 && (
-                          <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-gray-700 shadow-sm">
-                            Featured
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  Project uploads are optional during setup. You can add work samples later from your freelancer dashboard.
+                </button>
               </div>
+
+              {showProjectUploads && (
+                <div>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">Project Uploads</p>
+                      <p className="mt-1 text-xs text-gray-500">Add project images to show the work you have done. Recommended: 10-20 of your best work.</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${portfolioUploads.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                      {portfolioUploads.length} uploaded
+                    </span>
+                  </div>
+
+                  <label
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      setIsDraggingPortfolio(true);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setIsDraggingPortfolio(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setIsDraggingPortfolio(false);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setIsDraggingPortfolio(false);
+                      addPortfolioFiles(event.dataTransfer.files);
+                    }}
+                    className={`flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all ${
+                      isDraggingPortfolio
+                        ? 'border-gray-900 bg-gray-100 shadow-inner'
+                        : 'border-gray-300 bg-gray-50 hover:border-gray-500 hover:bg-white'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(event) => {
+                        if (event.target.files) {
+                          addPortfolioFiles(event.target.files);
+                          event.target.value = '';
+                        }
+                      }}
+                    />
+                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-lg">
+                      <UploadCloud className="h-7 w-7" />
+                    </div>
+                    <p className="text-lg font-bold text-gray-900">Drag project images here or choose from your device</p>
+                    <p className="mt-2 max-w-md text-sm text-gray-500">JPG, PNG, or WebP images work best. You can add up to 20 project images.</p>
+                    <span className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-bold text-white shadow-md">
+                      <ImagePlus className="h-4 w-4" />
+                      Choose Projects
+                    </span>
+                  </label>
+
+                  {portfolioUploads.length > 0 && (
+                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
+                      {portfolioUploads.map((upload, index) => (
+                        <div key={upload.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm">
+                          <img src={upload.previewUrl} alt={`Project preview ${index + 1}`} className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removePortfolioUpload(upload.id)}
+                            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-md transition-all hover:bg-gray-900 hover:text-white md:opacity-0 md:group-hover:opacity-100"
+                            aria-label={`Remove project image ${index + 1}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                          {index < 3 && (
+                            <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-gray-700 shadow-sm">
+                              Featured
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

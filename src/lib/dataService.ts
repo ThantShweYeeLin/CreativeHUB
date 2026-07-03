@@ -17,6 +17,13 @@ export interface UserSearchResult {
   location: string | null;
 }
 
+export interface MutualUserResult {
+  id: string;
+  full_name: string | null;
+  email: string;
+  avatar_url: string | null;
+}
+
 export class DataService {
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
@@ -25,25 +32,6 @@ export class DataService {
       message.includes('location_longitude') ||
       message.includes('location_place_id')
     );
-  }
-
-  private static hasMissingFollowersTableError(error: unknown) {
-    const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
-    return message.includes('public.followers') || (message.includes('followers') && message.includes('schema cache'));
-  }
-
-  private static mapFollowersTableError<T extends { error: any }>(result: T): T {
-    if (!this.hasMissingFollowersTableError(result.error)) {
-      return result;
-    }
-
-    return {
-      ...result,
-      error: {
-        message:
-          'Follow system table is missing (public.followers). Run the Followers section in supabase/schema.sql, then refresh and try again.',
-      },
-    };
   }
 
   private static async getAllFreelancersQuery(
@@ -134,10 +122,10 @@ export class DataService {
       .select('following_id')
       .eq('follower_id', userId);
 
-    return this.mapFollowersTableError({
+    return {
       data: (data || []).map((row: any) => String(row.following_id)),
       error,
-    });
+    };
   }
 
   static async getFollowCounts(userId: string) {
@@ -152,11 +140,43 @@ export class DataService {
         .eq('follower_id', userId),
     ]);
 
-    return this.mapFollowersTableError({
+    return {
       followerCount: followersResponse.count || 0,
       followingCount: followingResponse.count || 0,
       error: followersResponse.error || followingResponse.error,
-    });
+    };
+  }
+
+  static async getMutualUsers(userId: string) {
+    const [followingResponse, followersResponse] = await Promise.all([
+      supabase.from('followers').select('following_id').eq('follower_id', userId),
+      supabase.from('followers').select('follower_id').eq('following_id', userId),
+    ]);
+
+    if (followingResponse.error) {
+      return { data: [] as MutualUserResult[], error: followingResponse.error };
+    }
+
+    if (followersResponse.error) {
+      return { data: [] as MutualUserResult[], error: followersResponse.error };
+    }
+
+    const followingIds = new Set((followingResponse.data || []).map((row: any) => String(row.following_id)));
+    const mutualIds = (followersResponse.data || [])
+      .map((row: any) => String(row.follower_id))
+      .filter((id: string) => followingIds.has(id));
+
+    if (mutualIds.length === 0) {
+      return { data: [] as MutualUserResult[], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, email, avatar_url')
+      .in('id', mutualIds)
+      .order('full_name', { ascending: true });
+
+    return { data: (data || []) as MutualUserResult[], error };
   }
 
   static async isFollowing(userId: string, targetUserId: string) {
@@ -165,20 +185,17 @@ export class DataService {
       .select('id')
       .eq('follower_id', userId)
       .eq('following_id', targetUserId)
-      .limit(1);
+      .maybeSingle();
 
-    return this.mapFollowersTableError({ isFollowing: !!(data && data.length > 0), error });
+    return { isFollowing: !!data, error };
   }
 
   static async followUser(userId: string, targetUserId: string) {
     const { error } = await supabase
       .from('followers')
-      .upsert(
-        { follower_id: userId, following_id: targetUserId },
-        { onConflict: 'follower_id,following_id', ignoreDuplicates: true }
-      );
+      .insert({ follower_id: userId, following_id: targetUserId });
 
-    return this.mapFollowersTableError({ error });
+    return { error };
   }
 
   static async unfollowUser(userId: string, targetUserId: string) {
@@ -188,7 +205,7 @@ export class DataService {
       .eq('follower_id', userId)
       .eq('following_id', targetUserId);
 
-    return this.mapFollowersTableError({ error });
+    return { error };
   }
 
   // FREELANCER PROFILES
@@ -324,28 +341,6 @@ export class DataService {
   static async uploadPortfolioImage(userId: string, file: File) {
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${userId}/portfolio-${Date.now()}.${fileExt}`;
-
-    const { error } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, {
-        contentType: file.type,
-        upsert: true,
-      });
-
-    if (error) {
-      return { publicUrl: null, error };
-    }
-
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    return { publicUrl: data.publicUrl, error: null };
-  }
-
-  static async uploadClientPostMedia(userId: string, file: File) {
-    const fileExt = file.name.split('.').pop() || 'jpg';
-    const filePath = `${userId}/client-post-${Date.now()}.${fileExt}`;
 
     const { error } = await supabase.storage
       .from('avatars')
@@ -765,7 +760,7 @@ export class DataService {
   static async getClientPosts(limit = 30) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -775,7 +770,7 @@ export class DataService {
   static async getClientPostsByClientId(clientId: string, limit = 20) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
       .eq('client_id', clientId)
       .eq('is_published', true)
       .order('created_at', { ascending: false })
@@ -823,97 +818,24 @@ export class DataService {
         likes: likesByPost[postId] || 0,
         comments: commentsByPost[postId] || 0,
         liked_by_me: !!likedByMe[postId],
+        shares: 0,
+        saves: 0,
+        saved_by_me: false,
       })),
       error: null,
     };
   }
 
   static async getClientPostEngagementStats(postIds: string[], userId?: string) {
-    if (postIds.length === 0) {
-      return { data: [], error: null };
-    }
+    return this.getClientPostLikeStats(postIds, userId);
+  }
 
-    const [likesResponse, commentsResponse, sharesResponse, savesResponse] = await Promise.all([
-      supabase
-        .from('client_post_likes')
-        .select('post_id, user_id')
-        .in('post_id', postIds),
-      supabase
-        .from('client_post_comments')
-        .select('post_id')
-        .in('post_id', postIds),
-      supabase
-        .from('client_post_shares' as any)
-        .select('post_id, user_id')
-        .in('post_id', postIds),
-      supabase
-        .from('client_post_saves' as any)
-        .select('post_id, user_id')
-        .in('post_id', postIds),
-    ]);
+  static async toggleClientPostSave(_userId: string, _postId: string, currentlySaved: boolean) {
+    return { saved: !currentlySaved, error: null };
+  }
 
-    const likesError = likesResponse.error;
-    const commentsError = commentsResponse.error;
-    if (likesError || commentsError) {
-      return { data: null, error: likesError || commentsError };
-    }
-
-    const sharesTableMissing = !!sharesResponse.error && this.isMissingOptionalClientPostTable(sharesResponse.error, 'client_post_shares');
-    const savesTableMissing = !!savesResponse.error && this.isMissingOptionalClientPostTable(savesResponse.error, 'client_post_saves');
-
-    if (sharesResponse.error && !sharesTableMissing) {
-      return { data: null, error: sharesResponse.error };
-    }
-
-    if (savesResponse.error && !savesTableMissing) {
-      return { data: null, error: savesResponse.error };
-    }
-
-    const likesByPost: Record<string, number> = {};
-    const commentsByPost: Record<string, number> = {};
-    const sharesByPost: Record<string, number> = {};
-    const savesByPost: Record<string, number> = {};
-    const likedByMe: Record<string, boolean> = {};
-    const savedByMe: Record<string, boolean> = {};
-
-    (likesResponse.data || []).forEach((item: any) => {
-      likesByPost[item.post_id] = (likesByPost[item.post_id] || 0) + 1;
-      if (userId && item.user_id === userId) {
-        likedByMe[item.post_id] = true;
-      }
-    });
-
-    (commentsResponse.data || []).forEach((item: any) => {
-      commentsByPost[item.post_id] = (commentsByPost[item.post_id] || 0) + 1;
-    });
-
-    ((sharesResponse.data || []) as any[]).forEach((item: any) => {
-      sharesByPost[item.post_id] = (sharesByPost[item.post_id] || 0) + 1;
-    });
-
-    ((savesResponse.data || []) as any[]).forEach((item: any) => {
-      savesByPost[item.post_id] = (savesByPost[item.post_id] || 0) + 1;
-      if (userId && item.user_id === userId) {
-        savedByMe[item.post_id] = true;
-      }
-    });
-
-    return {
-      data: postIds.map((postId) => ({
-        post_id: postId,
-        likes: likesByPost[postId] || 0,
-        comments: commentsByPost[postId] || 0,
-        shares: sharesByPost[postId] || 0,
-        saves: savesByPost[postId] || 0,
-        liked_by_me: !!likedByMe[postId],
-        saved_by_me: !!savedByMe[postId],
-      })),
-      error: null,
-      missingTables: {
-        client_post_shares: sharesTableMissing,
-        client_post_saves: savesTableMissing,
-      },
-    };
+  static async recordClientPostShare(_userId: string, _postId: string) {
+    return { data: null, error: null };
   }
 
   static async getClientPostComments(postId: string, limit = 40) {
@@ -1005,57 +927,6 @@ export class DataService {
     return { data, error };
   }
 
-  static async toggleClientPostSave(userId: string, postId: string, currentlySaved: boolean) {
-    if (currentlySaved) {
-      const { error } = await supabase
-        .from('client_post_saves' as any)
-        .delete()
-        .eq('user_id', userId)
-        .eq('post_id', postId);
-
-      if (error && this.isMissingOptionalClientPostTable(error, 'client_post_saves')) {
-        return { saved: currentlySaved, error: null, tableMissing: true };
-      }
-
-      return { saved: false, error, tableMissing: false };
-    }
-
-    const { error } = await supabase
-      .from('client_post_saves' as any)
-      .insert({ user_id: userId, post_id: postId });
-
-    if (error && this.isMissingOptionalClientPostTable(error, 'client_post_saves')) {
-      return { saved: currentlySaved, error: null, tableMissing: true };
-    }
-
-    if (error && error.code !== '23505') {
-      return { saved: currentlySaved, error, tableMissing: false };
-    }
-
-    return { saved: true, error: null, tableMissing: false };
-  }
-
-  static async recordClientPostShare(userId: string, postId: string) {
-    const { error } = await supabase
-      .from('client_post_shares' as any)
-      .insert({ user_id: userId, post_id: postId });
-
-    if (error && this.isMissingOptionalClientPostTable(error, 'client_post_shares')) {
-      return { shared: false, error: null, tableMissing: true };
-    }
-
-    if (error && error.code !== '23505') {
-      return { shared: false, error, tableMissing: false };
-    }
-
-    return { shared: true, error: null, tableMissing: false };
-  }
-
-  private static isMissingOptionalClientPostTable(error: unknown, tableName: string) {
-    const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
-    return message.includes(tableName.toLowerCase()) && (message.includes('schema cache') || message.includes('does not exist'));
-  }
-
   static async getActiveOrLatestBookingBetweenUsers(userAId: string, userBId: string) {
     const { data, error } = await supabase
       .from('bookings')
@@ -1117,19 +988,9 @@ export class DataService {
         ...post,
         is_published: post.is_published ?? true,
       })
-      .select('*, client:client_id(id, email, full_name, avatar_url, location, role)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
       .single();
     return { data, error };
-  }
-
-  static async deleteClientPost(postId: string, userId: string) {
-    const { error } = await supabase
-      .from('client_posts')
-      .delete()
-      .eq('id', postId)
-      .eq('client_id', userId);
-
-    return { error };
   }
 
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {

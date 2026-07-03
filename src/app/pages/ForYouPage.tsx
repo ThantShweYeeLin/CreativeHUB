@@ -21,7 +21,6 @@ import {
   Smile,
   Sparkles,
   Tag,
-  Trash2,
   Users,
   X,
 } from 'lucide-react';
@@ -42,7 +41,6 @@ interface ComposerAttachment {
   name: string;
   type: string;
   previewUrl: string | null;
-  file?: File;
 }
 
 interface ComposerState {
@@ -63,18 +61,14 @@ interface ComposerState {
 interface FeedPost {
   id: string;
   authorId: string;
-  authorRole?: 'client' | 'freelancer';
   authorName: string;
   username: string;
   avatar: string;
   specialty: string;
   image: string | null;
-  mediaType?: 'image' | 'video';
   caption: string;
   likes: number;
   commentsCount: number;
-  sharesCount: number;
-  savesCount: number;
   timeAgo: string;
   createdAtRaw?: string;
   isLiked: boolean;
@@ -90,17 +84,6 @@ interface FeedPost {
   poll?: {
     question: string;
     options: string[];
-  } | null;
-}
-
-interface PostComment {
-  id: string;
-  content: string;
-  created_at: string;
-  user?: {
-    id?: string;
-    full_name?: string;
-    avatar_url?: string;
   } | null;
 }
 
@@ -204,19 +187,15 @@ function buildCaption(state: ComposerState) {
   const details = [
     state.location ? `Location: ${state.location}` : '',
     state.category ? `Category: ${state.category}` : '',
-      state.visibility && state.visibility !== 'Public' ? `Visibility: ${state.visibility}` : '',
+    state.visibility ? `Visibility: ${state.visibility}` : '',
+    state.labels.length ? `Tags: ${state.labels.join(', ')}` : '',
+    state.taggedPeople ? `With: ${state.taggedPeople}` : '',
+    state.hashtags ? `Hashtags: ${splitList(state.hashtags, '#').join(' ')}` : '',
     state.mentions ? `Mentions: ${splitList(state.mentions, '@').join(' ')}` : '',
     state.pollQuestion ? `Poll: ${state.pollQuestion} (${splitList(state.pollOptions).join(' / ')})` : '',
   ].filter(Boolean);
 
   return [state.text.trim(), ...details].filter(Boolean).join('\n\n');
-}
-
-function sanitizeCaption(caption: string) {
-  return caption
-    .replace(/(^|\n)\s*Visibility:\s*Public\s*(?=\n|$)/gi, '')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
 }
 
 function isMissingClientPostsTable(error: unknown) {
@@ -743,19 +722,21 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
-  const [followActionPendingIds, setFollowActionPendingIds] = useState<Set<string>>(new Set());
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
-  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
-  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, PostComment[]>>({});
-  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
-  const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
+  const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+  const [sharingPost, setSharingPost] = useState<FeedPost | null>(null);
+  const [mutualUsers, setMutualUsers] = useState<Array<{ id: string; full_name: string | null; email: string; avatar_url: string | null }>>([]);
+  const [selectedShareRecipientIds, setSelectedShareRecipientIds] = useState<string[]>([]);
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
+  const [isSendingShare, setIsSendingShare] = useState(false);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
   const [composerPlaceholder] = useState(() => composerPlaceholders[Math.floor(Math.random() * composerPlaceholders.length)]);
 
@@ -790,38 +771,6 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       isMounted = false;
     };
   }, [user?.id]);
-
-  const handleToggleFollow = async (creatorId: string, currentlyFollowing: boolean) => {
-    if (!user?.id || user.id === creatorId) {
-      return;
-    }
-
-    setFollowActionPendingIds((current) => new Set(current).add(creatorId));
-
-    try {
-      if (currentlyFollowing) {
-        const response = await DataService.unfollowUser(user.id, creatorId);
-        if (response.error) throw response.error;
-        setFollowingIds((current) => {
-          const next = new Set(current);
-          next.delete(creatorId);
-          return next;
-        });
-      } else {
-        const response = await DataService.followUser(user.id, creatorId);
-        if (response.error) throw response.error;
-        setFollowingIds((current) => new Set(current).add(creatorId));
-      }
-    } catch (followError) {
-      setError((followError as any).message || 'Unable to update follow status.');
-    } finally {
-      setFollowActionPendingIds((current) => {
-        const next = new Set(current);
-        next.delete(creatorId);
-        return next;
-      });
-    }
-  };
 
   useEffect(() => {
     let isMounted = true;
@@ -885,7 +834,6 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         return projectItems.map((project, index) => ({
           id: `${authorId}-${project.id}`,
           authorId,
-          authorRole: 'freelancer' as const,
           authorName: freelancer.fullName,
           username,
           avatar: freelancer.profileImage || fallbackProfileImage,
@@ -894,8 +842,6 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           caption: project.description || `${project.title} by ${freelancer.fullName}.`,
           likes: project.likes ?? Math.max(5, Math.round(freelancer.rating * 30) + index * 3),
           commentsCount: project.comments ?? Math.max(1, Math.round(freelancer.totalReviews / 4) + index),
-          sharesCount: 0,
-          savesCount: 0,
           timeAgo: toTimeAgo(project.createdAt),
           createdAtRaw: project.createdAt,
           isLiked: false,
@@ -903,48 +849,89 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         }));
       }).slice(0, 30);
 
-      const rawClientPosts = clientPostsTableMissing ? [] : (clientPostsResponse.data || []);
-      const clientPostStatsResponse = rawClientPosts.length > 0
-        ? await DataService.getClientPostEngagementStats(rawClientPosts.map((post: any) => String(post.id)), user?.id)
-        : { data: [], error: null };
-
-      const clientPostStatsById = new Map(
-        (clientPostStatsResponse.data || []).map((item: any) => [String(item.post_id), item])
-      );
-
-      const clientPosts: FeedPost[] = rawClientPosts.map((post: any) => {
+      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map((post: any) => {
         const authorName = post.client?.full_name || 'Client';
         const username = (post.client?.email || 'client').split('@')[0];
-        const postStats = clientPostStatsById.get(String(post.id));
 
         return {
           id: `client-post-${post.id}`,
           authorId: post.client_id,
-          authorRole: (post.client?.role || 'client') as 'client' | 'freelancer',
           authorName,
           username,
           avatar: post.client?.avatar_url || fallbackProfileImage,
-          specialty: post.client?.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
+          specialty: 'Client Brief',
           image: post.image_url || null,
           caption: post.caption,
-          likes: Math.max(0, Number(postStats?.likes || 0)),
-          commentsCount: Math.max(0, Number(postStats?.comments || 0)),
-          sharesCount: Math.max(0, Number(postStats?.shares || 0)),
-          savesCount: Math.max(0, Number(postStats?.saves || 0)),
+          likes: 0,
+          commentsCount: 0,
           timeAgo: toTimeAgo(post.created_at),
           createdAtRaw: post.created_at,
-          isLiked: !!postStats?.liked_by_me,
-          isSaved: !!postStats?.saved_by_me,
+          isLiked: false,
+          isSaved: false,
           isClientPost: true,
         };
       });
+
+      const demoPosts: FeedPost[] = [
+        {
+          id: 'demo-client-post-1',
+          authorId: 'demo-client-1',
+          authorName: 'Demo Client',
+          username: 'demo_client',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Looking for a photographer for a street style campaign in Bangkok.',
+          likes: 6,
+          commentsCount: 2,
+          timeAgo: 'Just now',
+          createdAtRaw: new Date().toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+        {
+          id: 'demo-client-post-2',
+          authorId: 'demo-client-2',
+          authorName: 'Demo Brand Team',
+          username: 'demo_brand_team',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1558655146-d09347e92766?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Seeking a motion designer for a short-form launch teaser next week.',
+          likes: 4,
+          commentsCount: 1,
+          timeAgo: 'Just now',
+          createdAtRaw: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+        {
+          id: 'demo-client-post-3',
+          authorId: 'demo-client-3',
+          authorName: 'Demo Events Co.',
+          username: 'demo_events',
+          avatar: fallbackProfileImage,
+          specialty: 'Client Brief',
+          image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1200&q=80',
+          caption: 'Demo post: Need a makeup artist for an editorial shoot this Friday.',
+          likes: 9,
+          commentsCount: 3,
+          timeAgo: '1h ago',
+          createdAtRaw: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          isLiked: false,
+          isSaved: false,
+          isClientPost: true,
+        },
+      ];
 
       if (!isMounted) {
         return;
       }
 
-      const combinedPosts = clientPosts.length > 0 ? clientPosts : generatedPosts;
-      setPosts(combinedPosts);
+      const combinedPosts = [...clientPosts, ...generatedPosts];
+      setPosts(combinedPosts.length > 0 ? combinedPosts : demoPosts);
       setIsLoading(false);
     }
 
@@ -967,19 +954,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     });
   }, [posts, activeFeedTab, followingIds]);
 
-  const focusedPost = useMemo(
-    () => posts.find((post) => post.id === focusedPostId) || null,
-    [posts, focusedPostId]
-  );
-
-  const handleLike = async (postId: string) => {
-    const targetPost = posts.find((post) => post.id === postId);
-    if (!targetPost) {
-      return;
-    }
-
-    const currentlyLiked = targetPost.isLiked;
-
+  const handleLike = (postId: string) => {
     setPosts((current) =>
       current.map((post) =>
         post.id === postId
@@ -987,258 +962,84 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           : post
       )
     );
-
-    if (!targetPost.isClientPost || !user?.id) {
-      return;
-    }
-
-    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
-    const response = await DataService.toggleClientPostLike(user.id, persistedPostId, currentlyLiked);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to update like status.');
-      setPosts((current) =>
-        current.map((post) =>
-          post.id === postId
-            ? { ...post, isLiked: currentlyLiked, likes: currentlyLiked ? post.likes + 1 : Math.max(0, post.likes - 1) }
-            : post
-        )
-      );
-      return;
-    }
-
-    if (response.liked !== undefined) {
-      setPosts((current) =>
-        current.map((post) => {
-          if (post.id !== postId || post.isLiked === response.liked) {
-            return post;
-          }
-
-          return {
-            ...post,
-            isLiked: response.liked,
-            likes: response.liked ? post.likes + 1 : Math.max(0, post.likes - 1),
-          };
-        })
-      );
-    }
   };
 
-  const loadCommentsForPost = async (postId: string) => {
-    const targetPost = posts.find((item) => item.id === postId);
-    if (!targetPost?.isClientPost) {
-      setCommentsByPostId((current) => ({ ...current, [postId]: [] }));
-      return;
-    }
-
-    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
-    const response = await DataService.getClientPostComments(persistedPostId, 100);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to load comments.');
-      return;
-    }
-
-    setCommentsByPostId((current) => ({
-      ...current,
-      [postId]: (response.data || []).map((item: any) => ({
-        id: String(item.id),
-        content: String(item.content || ''),
-        created_at: String(item.created_at || new Date().toISOString()),
-        user: item.user || null,
-      })),
-    }));
-  };
-
-  const openPostFocus = async (postId: string) => {
-    setFocusedPostId(postId);
-    await loadCommentsForPost(postId);
-  };
-
-  const handleSave = async (postId: string) => {
-    const targetPost = posts.find((post) => post.id === postId);
-    if (!targetPost) {
-      return;
-    }
-
-    const currentlySaved = targetPost.isSaved;
-
+  const handleSave = (postId: string) => {
     setPosts((current) =>
       current.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              isSaved: !post.isSaved,
-              savesCount: post.isSaved ? Math.max(0, post.savesCount - 1) : post.savesCount + 1,
-            }
-          : post
+        post.id === postId ? { ...post, isSaved: !post.isSaved } : post
       )
     );
-
-    if (!targetPost.isClientPost || !user?.id) {
-      return;
-    }
-
-    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
-    const response = await DataService.toggleClientPostSave(user.id, persistedPostId, currentlySaved);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to update save status.');
-      setPosts((current) =>
-        current.map((post) =>
-          post.id === postId
-            ? {
-                ...post,
-                isSaved: currentlySaved,
-                savesCount: currentlySaved ? post.savesCount + 1 : Math.max(0, post.savesCount - 1),
-              }
-            : post
-        )
-      );
-    }
   };
 
   const handleShare = async (postId: string) => {
-    const targetPost = posts.find((post) => post.id === postId);
-    const targetAuthorId = targetPost?.authorId || postId.split('-')[0];
-    const shareUrl = `${window.location.origin}/profile/${targetAuthorId}`;
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-    } catch {
-      // Ignore clipboard issues and still record share intent.
-    }
-
-    setPosts((current) =>
-      current.map((post) =>
-        post.id === postId ? { ...post, sharesCount: post.sharesCount + 1 } : post
-      )
-    );
-
-    if (!targetPost?.isClientPost || !user?.id) {
+    if (!user?.id) {
       return;
     }
 
-    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
-    const response = await DataService.recordClientPostShare(user.id, persistedPostId);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to record share.');
-      setPosts((current) =>
-        current.map((post) =>
-          post.id === postId ? { ...post, sharesCount: Math.max(0, post.sharesCount - 1) } : post
-        )
-      );
+    const post = posts.find((item) => item.id === postId);
+    if (!post) {
+      return;
     }
+
+    setSharingPost(post);
+    setIsShareSheetOpen(true);
+    setIsLoadingMutualUsers(true);
+    setSelectedShareRecipientIds([]);
+
+    const response = await DataService.getMutualUsers(user.id);
+    if (response.error) {
+      setMutualUsers([]);
+      setError((response.error as any).message || 'Unable to load mutuals for sharing.');
+    } else {
+      setMutualUsers(response.data || []);
+    }
+
+    setIsLoadingMutualUsers(false);
   };
 
-  const handleSubmitComment = async (postId: string) => {
-    const targetPost = posts.find((post) => post.id === postId);
-    const draft = (commentDraftByPostId[postId] || '').trim();
-
-    if (!targetPost || !draft || !user?.id) {
+  const copyShareLink = async () => {
+    if (!sharingPost) {
       return;
     }
-
-    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
-
-    if (!targetPost.isClientPost) {
-      const localComment: PostComment = {
-        id: `local-comment-${Date.now()}`,
-        content: draft,
-        created_at: new Date().toISOString(),
-        user: {
-          id: user.id,
-          full_name: user.fullName || '',
-          avatar_url: user.avatar_url || '',
-        },
-      };
-
-      setCommentsByPostId((current) => ({
-        ...current,
-        [postId]: [...(current[postId] || []), localComment],
-      }));
-      setPosts((current) =>
-        current.map((post) =>
-          post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post
-        )
-      );
-      setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
-      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
-      return;
-    }
-
-    const persistedPostId = targetPost.id.replace(/^client-post-/, '');
-    const response = await DataService.addClientPostComment(user.id, persistedPostId, draft);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to add comment.');
-      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
-      return;
-    }
-
-    const addedComment = response.data as any;
-    const nextComment: PostComment = {
-      id: String(addedComment?.id || `comment-${Date.now()}`),
-      content: String(addedComment?.content || draft),
-      created_at: String(addedComment?.created_at || new Date().toISOString()),
-      user: addedComment?.user || {
-        id: user.id,
-        full_name: user.fullName,
-        avatar_url: user.avatar_url,
-      },
-    };
-
-    setCommentsByPostId((current) => ({
-      ...current,
-      [postId]: [...(current[postId] || []), nextComment],
-    }));
-    setPosts((current) =>
-      current.map((post) =>
-        post.id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post
-      )
-    );
-    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
-    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+    const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
+    await navigator.clipboard.writeText(`${shareUrl}\n\n${sharingPost.caption}`);
+    setError(null);
   };
 
-  const handleDeletePost = async (postId: string) => {
-    const targetPost = posts.find((post) => post.id === postId);
-    if (!targetPost || !user?.id || targetPost.authorId !== user.id) {
+  const sendShareToMutuals = async () => {
+    if (!user?.id || !sharingPost || selectedShareRecipientIds.length === 0) {
       return;
     }
 
-    const confirmed = window.confirm('Delete this post? This action cannot be undone.');
-    if (!confirmed) {
-      return;
-    }
+    setIsSendingShare(true);
+    setError(null);
 
-    if (targetPost.isClientPost) {
-      const persistedPostId = postId.replace(/^client-post-/, '');
-      if (persistedPostId !== postId) {
-        const response = await DataService.deleteClientPost(persistedPostId, user.id);
-        if (response.error) {
-          setError((response.error as any).message || 'Unable to delete post.');
-          return;
-        }
+    const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
+    const message = `Shared a post from ${sharingPost.authorName}:\n${shareUrl}\n\n${sharingPost.caption}`;
+
+    const recipients = mutualUsers.filter((mutual) => selectedShareRecipientIds.includes(mutual.id));
+
+    for (const mutual of recipients) {
+      const conversationResponse = await DataService.ensureConversation(user.id, mutual.id);
+      if (conversationResponse.error || !conversationResponse.data) {
+        continue;
       }
+
+      await DataService.sendMessage({
+        conversation_id: conversationResponse.data.id,
+        sender_id: user.id,
+        recipient_id: mutual.id,
+        content: message,
+        read: false,
+      } as any);
     }
 
-    setPosts((current) => current.filter((post) => post.id !== postId));
-    setCommentsByPostId((current) => {
-      const next = { ...current };
-      delete next[postId];
-      return next;
-    });
-    setCommentDraftByPostId((current) => {
-      const next = { ...current };
-      delete next[postId];
-      return next;
-    });
-    setIsSubmittingCommentByPostId((current) => {
-      const next = { ...current };
-      delete next[postId];
-      return next;
-    });
-    setFocusedPostId(null);
+    setIsSendingShare(false);
+    setIsShareSheetOpen(false);
+    setSharingPost(null);
+    setMutualUsers([]);
+    setSelectedShareRecipientIds([]);
   };
 
   const handleAddFiles = (files: FileList | null) => {
@@ -1248,7 +1049,6 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
       name: file.name,
       type: file.type || 'application/octet-stream',
       previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : null,
-      file,
     }));
 
     setComposer((current) => ({
@@ -1291,42 +1091,29 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     setIsPublishing(true);
     setError(null);
 
-    const firstFileAttachment = composer.attachments.find((attachment) => attachment.file);
-    const firstMediaPreview = firstFileAttachment?.previewUrl || composer.gifUrl.trim() || null;
+    const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || composer.gifUrl.trim() || null;
     let createdId = `local-post-${Date.now()}`;
     let createdAt = 'Just now';
     let createdAtRaw = new Date().toISOString();
 
-    let uploadedImageUrl: string | null = null;
-    let mediaType: 'image' | 'video' | undefined = undefined;
+    if (user.role === 'client') {
+      const response = await DataService.createClientPost({
+        client_id: user.id,
+        caption,
+        image_url: firstMedia,
+      });
 
-    if (firstFileAttachment?.file) {
-      const uploadResponse = await DataService.uploadClientPostMedia(user.id, firstFileAttachment.file);
-      if (uploadResponse.error || !uploadResponse.publicUrl) {
-        setError((uploadResponse.error as any)?.message || 'Unable to upload your post media.');
+      if (response.error && !isMissingClientPostsTable(response.error)) {
+        setError((response.error as any)?.message || 'Unable to publish post.');
         setIsPublishing(false);
         return;
       }
-      uploadedImageUrl = uploadResponse.publicUrl;
-      mediaType = firstFileAttachment.type.startsWith('video/') ? 'video' : 'image';
-    }
 
-    const response = await DataService.createClientPost({
-      client_id: user.id,
-      caption,
-      image_url: uploadedImageUrl ?? firstMediaPreview,
-    });
-
-    if (response.error && !isMissingClientPostsTable(response.error)) {
-      setError((response.error as any)?.message || 'Unable to publish post.');
-      setIsPublishing(false);
-      return;
-    }
-
-    if (response.data) {
-      createdId = `client-post-${(response.data as any).id}`;
-      createdAt = toTimeAgo((response.data as any).created_at);
-      createdAtRaw = String((response.data as any).created_at || createdAtRaw);
+      if (response.data) {
+        createdId = `client-post-${(response.data as any).id}`;
+        createdAt = toTimeAgo((response.data as any).created_at);
+        createdAtRaw = String((response.data as any).created_at || createdAtRaw);
+      }
     }
 
     const hashtags = splitList(composer.hashtags, '#');
@@ -1335,23 +1122,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
     const newFeedPost: FeedPost = {
       id: createdId,
       authorId: user.id,
-      authorRole: (user.role || 'client') as 'client' | 'freelancer',
       authorName: userName,
       username: ((user.email || userName).split('@')[0] || userName).toLowerCase().replace(/\s+/g, '_'),
       avatar: userAvatar,
-      specialty: user.role === 'freelancer' ? 'Creative Update' : 'Client Brief',
-      image: uploadedImageUrl ?? firstMediaPreview,
-      mediaType: mediaType ?? (firstFileAttachment?.type.startsWith('video/') ? 'video' : 'image'),
+      specialty: user.role === 'client' ? 'Client Brief' : 'Creative Update',
+      image: firstMedia,
       caption: composer.text.trim() || caption,
       likes: 0,
       commentsCount: 0,
-      sharesCount: 0,
-      savesCount: 0,
       timeAgo: createdAt,
       createdAtRaw,
       isLiked: false,
       isSaved: false,
-      isClientPost: true,
+      isClientPost: user.role === 'client',
       location: composer.location.trim() || undefined,
       hashtags,
       mentions,
@@ -1467,39 +1250,20 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
           {sortedPosts.map((post) => (
             <div key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg md:rounded-3xl">
               <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-                <div className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80">
-                  <button
-                    onClick={() => {
-                      onViewProfile?.(post.authorId);
-                    }}
-                    className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
-                  >
-                    <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white">
-                      <ImageWithFallback src={post.avatar} alt={post.authorName} className="h-full w-full object-cover" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
-                      <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
-                    </div>
-                  </button>
-                  {user?.id && user.id !== post.authorId && (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleToggleFollow(post.authorId, followingIds.has(post.authorId));
-                      }}
-                      disabled={followActionPendingIds.has(post.authorId)}
-                      className={`rounded-full px-4 py-2 text-xs font-semibold transition ${
-                        followingIds.has(post.authorId)
-                          ? 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                          : 'bg-gray-900 text-white hover:bg-black'
-                      } ${followActionPendingIds.has(post.authorId) ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      {followingIds.has(post.authorId) ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-                </div>
+                <button
+                  onClick={() => {
+                    onViewProfile?.(post.authorId);
+                  }}
+                  className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
+                >
+                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white">
+                    <ImageWithFallback src={post.avatar} alt={post.authorName} className="h-full w-full object-cover" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
+                    <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
+                  </div>
+                </button>
                 <span className="ml-3 flex-shrink-0 text-sm text-gray-500">{post.timeAgo}</span>
               </div>
 
@@ -1507,23 +1271,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                 <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-6">
                   {post.location && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.location}</span>}
                   {post.category && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.category}</span>}
-                  {post.visibility && post.visibility !== 'Public' && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
+                  {post.visibility && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
                   {post.labels?.map((label) => <span key={label} className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
                 </div>
               )}
 
               {post.image && (
-                <button
-                  type="button"
-                  onClick={() => void openPostFocus(post.id)}
-                  className="relative aspect-square w-full bg-gray-100 text-left"
-                >
-                  {post.mediaType === 'video' ? (
+                <div className="relative aspect-square bg-gray-100">
+                  {post.image.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/') ? (
                     <video src={post.image} className="h-full w-full object-cover" controls />
                   ) : (
                     <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
                   )}
-                </button>
+                </div>
               )}
 
               <div className="px-4 py-3 md:px-6 md:py-4">
@@ -1534,7 +1294,7 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                       <span className="font-semibold text-gray-900">{post.likes}</span>
                     </button>
                     <button
-                      onClick={() => void openPostFocus(post.id)}
+                      onClick={() => setExpandedCommentsForPost((current) => current === post.id ? null : post.id)}
                       className="group flex items-center gap-2 transition-all"
                     >
                       <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
@@ -1542,37 +1302,19 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     </button>
                     <button onClick={() => void handleShare(post.id)} className="group flex items-center gap-2 transition-all">
                       <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
-                      <span className="font-semibold text-gray-900">{post.sharesCount}</span>
                     </button>
                   </div>
-                  <button onClick={() => void handleSave(post.id)} className="transition-all flex items-center gap-2">
+                  <button onClick={() => handleSave(post.id)} className="transition-all">
                     <Bookmark className={`h-6 w-6 transition-all ${post.isSaved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
-                    <span className="font-semibold text-gray-900">{post.savesCount}</span>
                   </button>
                 </div>
 
-                <div
-                  className="mb-4 w-full space-y-3 text-left cursor-pointer"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => void openPostFocus(post.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      void openPostFocus(post.id);
-                    }
-                  }}
-                >
+                <div className="mb-4 space-y-3">
                   <p className="whitespace-pre-line text-gray-900">
-                    <button
-                      onClick={() => {
-                        onViewProfile?.(post.authorId);
-                      }}
-                      className="font-bold transition-colors hover:text-gray-900"
-                    >
+                    <button onClick={() => onViewProfile?.(post.authorId)} className="font-bold transition-colors hover:text-gray-900">
                       @{post.username}
                     </button>{' '}
-                    <span>{sanitizeCaption(post.caption)}</span>
+                    <span>{post.caption}</span>
                   </p>
                   {((post.hashtags?.length ?? 0) > 0 || (post.mentions?.length ?? 0) > 0) && (
                     <div className="flex flex-wrap gap-2 text-sm font-semibold">
@@ -1603,111 +1345,139 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
                     </div>
                   )}
                 </div>
+
+                {expandedCommentsForPost === post.id && (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    Comment threads are not yet enabled for this feed item.
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      {focusedPost && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setFocusedPostId(null)}
-              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            {focusedPost.image && (
-              <div className="max-h-[55vh] overflow-hidden bg-gray-100">
-                {focusedPost.mediaType === 'video' ? (
-                  <video src={focusedPost.image} controls className="h-full max-h-[55vh] w-full object-contain" />
-                ) : (
-                  <ImageWithFallback src={focusedPost.image} alt={focusedPost.caption} className="h-full max-h-[55vh] w-full object-contain" />
-                )}
+      {isShareSheetOpen && sharingPost && (
+        <div className="fixed inset-0 z-[70] animate-in fade-in-0 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl md:top-24 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share post</p>
+                <h3 className="mt-1 text-xl font-bold text-gray-950">Send this post</h3>
+                <p className="mt-1 text-sm text-gray-600">Choose specific mutuals, copy a link, or send to selected users in messages.</p>
               </div>
-            )}
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-            <div className="max-h-[40vh] overflow-y-auto p-5">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span className="font-semibold text-gray-900">@{focusedPost.username}</span>
-                  <span>•</span>
-                  <span>{focusedPost.timeAgo}</span>
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 overflow-hidden rounded-xl">
+                  <ImageWithFallback src={sharingPost.avatar} alt={sharingPost.authorName} className="h-full w-full object-cover" />
                 </div>
-                {user?.id === focusedPost.authorId && (
-                  <button
-                    type="button"
-                    onClick={() => void handleDeletePost(focusedPost.id)}
-                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
-                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900">{sharingPost.authorName}</p>
+                  <p className="line-clamp-2 text-xs text-gray-600">{sharingPost.caption}</p>
+                </div>
               </div>
+            </div>
 
-              <p className="mb-4 whitespace-pre-line text-sm text-gray-800">{sanitizeCaption(focusedPost.caption)}</p>
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void copyShareLink()}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
+              >
+                <p className="text-sm font-semibold text-gray-900">Copy link</p>
+                <p className="mt-1 text-xs text-gray-500">Copies the post link and caption so you can paste it anywhere.</p>
+              </button>
 
-              <div className="mb-4 flex items-center gap-4 border-y border-gray-200 py-3">
-                <button onClick={() => void handleLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                  {focusedPost.likes}
-                </button>
-                <button onClick={() => { void openPostFocus(focusedPost.id); }} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <MessageCircle className="h-5 w-5" />
-                  {focusedPost.commentsCount}
-                </button>
-                <button onClick={() => void handleShare(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Share2 className="h-5 w-5" />
-                  {focusedPost.sharesCount}
-                </button>
-                <button onClick={() => void handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Bookmark className={`h-5 w-5 ${focusedPost.isSaved ? 'fill-gray-900 text-gray-900' : ''}`} />
-                  {focusedPost.savesCount}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => void sendShareToMutuals()}
+                disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
+                className="rounded-2xl bg-gray-900 px-4 py-3 text-left text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <p className="text-sm font-semibold">Send in messages</p>
+                <p className="mt-1 text-xs text-white/75">
+                  {isLoadingMutualUsers
+                    ? 'Loading mutuals...'
+                    : selectedShareRecipientIds.length > 0
+                      ? `Send to ${selectedShareRecipientIds.length} selected user${selectedShareRecipientIds.length === 1 ? '' : 's'}.`
+                      : 'Pick recipients first.'}
+                </p>
+              </button>
+            </div>
 
-              <div className="space-y-3">
-                {(commentsByPostId[focusedPost.id] || []).length === 0 ? (
-                  <p className="text-sm text-gray-500">No comments yet.</p>
-                ) : (
-                  (commentsByPostId[focusedPost.id] || []).map((comment) => (
-                    <div key={comment.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <span className="font-semibold text-gray-800">{comment.user?.full_name || 'User'}</span>
-                        <span>•</span>
-                        <span>{toTimeAgo(comment.created_at)}</span>
-                      </div>
-                      <p className="mt-1 text-sm text-gray-800">{comment.content}</p>
-                    </div>
-                  ))
-                )}
-              </div>
+            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+              {isLoadingMutualUsers ? (
+                <p className="px-4 py-3 text-sm text-gray-500">Finding mutual connections...</p>
+              ) : mutualUsers.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-gray-500">You do not have any mutual connections yet.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedShareRecipientIds(mutualUsers.map((mutual) => mutual.id))}
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedShareRecipientIds([])}
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900"
+                    >
+                      Clear
+                    </button>
+                  </div>
 
-              <div className="mt-4 flex gap-2">
-                <input
-                  value={commentDraftByPostId[focusedPost.id] || ''}
-                  onChange={(event) =>
-                    setCommentDraftByPostId((current) => ({
-                      ...current,
-                      [focusedPost.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Write a comment..."
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => void handleSubmitComment(focusedPost.id)}
-                  disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
-                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
-                </button>
-              </div>
+                  {mutualUsers.map((mutual) => {
+                    const isSelected = selectedShareRecipientIds.includes(mutual.id);
+                    return (
+                      <button
+                        key={mutual.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedShareRecipientIds((current) =>
+                            current.includes(mutual.id)
+                              ? current.filter((id) => id !== mutual.id)
+                              : [...current, mutual.id]
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                      >
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-transparent'}`}>
+                          <Check className="h-3 w-3" />
+                        </div>
+                        <div className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-gray-200">
+                          <ImageWithFallback src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} className="h-full w-full object-cover" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-900">{mutual.full_name || mutual.email}</p>
+                          <p className="truncate text-xs text-gray-500">{mutual.email}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendShareToMutuals()}
+                disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingShare ? 'Sending...' : 'Send to selected users'}
+              </button>
             </div>
           </div>
         </div>
