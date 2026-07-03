@@ -6,6 +6,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ProfileCardProps {
   id: string;
@@ -112,6 +113,7 @@ function normalizeText(value: string | null | undefined) {
 }
 
 export function ExplorePage() {
+  const { user } = useAuth();
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -285,7 +287,17 @@ export function ExplorePage() {
         open={showAIMatcher}
         freelancers={freelancers}
         onClose={() => setShowAIMatcher(false)}
-        onResults={setAIMatcherResults}
+        onResults={(results) => {
+          setAIMatcherResults(results);
+
+          if (user?.id && user.role === 'client') {
+            void DataService.notifyAiMatchResults(user.id, results.length);
+            const matchedFreelancerIds = Array.from(new Set(results.map((item) => String(item.id)).filter(Boolean))).slice(0, 20);
+            matchedFreelancerIds.forEach((freelancerId) => {
+              void DataService.notifyPortfolioMatchedByAI(freelancerId, user.id);
+            });
+          }
+        }}
       />
 
       {error && (

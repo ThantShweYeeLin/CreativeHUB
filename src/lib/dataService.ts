@@ -444,12 +444,90 @@ export class DataService {
   }
 
   static async updateBooking(bookingId: string, updates: Partial<Booking>) {
+    const previous = await supabase
+      .from('bookings')
+      .select('id, client_id, freelancer_id, status, payment_status')
+      .eq('id', bookingId)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
       .eq('id', bookingId)
       .select()
       .single();
+
+    if (!error && data) {
+      const previousStatus = String(previous.data?.status || '');
+      const nextStatus = String((data as any).status || '');
+      const previousPaymentStatus = String(previous.data?.payment_status || '');
+      const nextPaymentStatus = String((data as any).payment_status || '');
+      const clientId = String((data as any).client_id || previous.data?.client_id || '');
+      const freelancerId = String((data as any).freelancer_id || previous.data?.freelancer_id || '');
+
+      if (nextStatus && nextStatus !== previousStatus) {
+        if (nextStatus === 'cancelled') {
+          if (clientId) {
+            await this.notifyEvent({
+              userId: clientId,
+              actorId: freelancerId || null,
+              type: 'booking_cancelled',
+              title: 'Booking cancelled',
+              message: 'A booking was cancelled.',
+              relatedId: bookingId,
+            });
+          }
+          if (freelancerId) {
+            await this.notifyEvent({
+              userId: freelancerId,
+              actorId: clientId || null,
+              type: 'booking_cancelled',
+              title: 'Booking cancelled',
+              message: 'A booking was cancelled.',
+              relatedId: bookingId,
+            });
+          }
+        }
+
+        if (nextStatus === 'completed' && clientId) {
+          await this.notifyEvent({
+            userId: clientId,
+            actorId: freelancerId || null,
+            type: 'booking_completed',
+            title: 'Booking completion',
+            message: 'Your booking has been marked completed.',
+            relatedId: bookingId,
+          });
+        }
+      }
+
+      if (nextPaymentStatus && nextPaymentStatus !== previousPaymentStatus) {
+        if (clientId) {
+          await this.notifyEvent({
+            userId: clientId,
+            actorId: freelancerId || null,
+            type: 'payment_update',
+            title: 'Payment/deposit update',
+            message: `Payment status is now ${nextPaymentStatus}.`,
+            relatedId: bookingId,
+            metadata: { payment_status: nextPaymentStatus },
+          });
+        }
+
+        if (freelancerId && (nextPaymentStatus === 'paid' || nextPaymentStatus === 'released')) {
+          await this.notifyEvent({
+            userId: freelancerId,
+            actorId: clientId || null,
+            type: 'payment_released',
+            title: 'Payment released',
+            message: 'Payment was released for your booking.',
+            relatedId: bookingId,
+            metadata: { payment_status: nextPaymentStatus },
+          });
+        }
+      }
+    }
+
     return { data, error };
   }
 
@@ -622,6 +700,16 @@ export class DataService {
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', data.conversation_id);
+
+      await this.notifyEvent({
+        userId: String(data.recipient_id),
+        actorId: String(data.sender_id),
+        type: 'message',
+        title: 'New message',
+        message: 'You received a new message.',
+        relatedId: String(data.conversation_id),
+        metadata: { conversation_id: data.conversation_id },
+      });
     }
 
     return { data, error };
@@ -812,6 +900,88 @@ export class DataService {
       .single();
 
     return { data, error: error || rpcResult.error };
+  }
+
+  private static async notifyEvent(args: {
+    userId: string;
+    actorId?: string | null;
+    type: string;
+    title: string;
+    message: string;
+    relatedId?: string | null;
+    metadata?: Record<string, any>;
+  }) {
+    if (!args.userId) {
+      return { error: null };
+    }
+
+    const response = await this.createNotification({
+      user_id: args.userId,
+      actor_id: args.actorId || null,
+      type: args.type,
+      title: args.title,
+      message: args.message,
+      related_id: args.relatedId || null,
+      post_id: null,
+      comment_id: null,
+      metadata: args.metadata || {},
+      read: false,
+    });
+
+    return { error: response.error };
+  }
+
+  static async notifyTeamInvitation(inviteeUserId: string, inviterUserId: string, teamName: string) {
+    return this.notifyEvent({
+      userId: inviteeUserId,
+      actorId: inviterUserId,
+      type: 'team_invitation',
+      title: 'Team invitation',
+      message: `You were invited to join ${teamName}.`,
+      metadata: { team_name: teamName },
+    });
+  }
+
+  static async notifyTeamMemberJoined(targetUserId: string, joinedUserId: string, teamName: string) {
+    return this.notifyEvent({
+      userId: targetUserId,
+      actorId: joinedUserId,
+      type: 'team_member_joined',
+      title: 'Team member joined',
+      message: `A new member joined ${teamName}.`,
+      metadata: { team_name: teamName },
+    });
+  }
+
+  static async notifyAccountSecurityAlert(userId: string, message: string, severity: 'info' | 'warning' | 'critical' = 'info') {
+    return this.notifyEvent({
+      userId,
+      type: 'account_security',
+      title: 'Account/security alert',
+      message,
+      metadata: { severity },
+    });
+  }
+
+  static async notifyAiMatchResults(userId: string, resultCount: number) {
+    return this.notifyEvent({
+      userId,
+      type: 'ai_match_results',
+      title: 'AI match results',
+      message: `Your AI matcher found ${resultCount} freelancer${resultCount === 1 ? '' : 's'}.`,
+      metadata: { results_count: resultCount },
+    });
+  }
+
+  static async notifyPortfolioMatchedByAI(freelancerUserId: string, actorUserId: string | null) {
+    return this.notifyEvent({
+      userId: freelancerUserId,
+      actorId: actorUserId,
+      type: 'portfolio_matched_ai',
+      title: 'Portfolio matched by AI',
+      message: 'Your portfolio appeared in AI match results.',
+      metadata: {},
+    });
   }
 
   // REQUESTS
@@ -1210,6 +1380,17 @@ export class DataService {
       .select()
       .single();
 
+    if (!error) {
+      await this.notifyEvent({
+        userId: review.reviewee_id,
+        actorId: review.reviewer_id,
+        type: 'review',
+        title: 'New review',
+        message: 'You received a new review.',
+        relatedId: review.booking_id,
+      });
+    }
+
     return { data, error };
   }
 
@@ -1241,12 +1422,74 @@ export class DataService {
   }
 
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {
+    const previous = await supabase
+      .from('requests')
+      .select('id, client_id, freelancer_id, project_name, status')
+      .eq('id', requestId)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from('requests')
       .update(updates)
       .eq('id', requestId)
       .select()
       .single();
+
+    if (!error && data) {
+      const previousStatus = String(previous.data?.status || '');
+      const nextStatus = String((data as any).status || '');
+      const clientId = String((data as any).client_id || previous.data?.client_id || '');
+      const freelancerId = String((data as any).freelancer_id || previous.data?.freelancer_id || '');
+      const projectName = String((data as any).project_name || previous.data?.project_name || 'your request');
+
+      if (nextStatus !== previousStatus) {
+        if (nextStatus === 'accepted' && clientId) {
+          await this.notifyEvent({
+            userId: clientId,
+            actorId: freelancerId || null,
+            type: 'request_accepted',
+            title: 'Booking accepted',
+            message: `${projectName} was accepted.`,
+            relatedId: requestId,
+          });
+        }
+
+        if (nextStatus === 'rejected' && clientId) {
+          await this.notifyEvent({
+            userId: clientId,
+            actorId: freelancerId || null,
+            type: 'request_rejected',
+            title: 'Booking rejected',
+            message: `${projectName} was rejected.`,
+            relatedId: requestId,
+          });
+        }
+
+        if (nextStatus === 'cancelled') {
+          if (clientId) {
+            await this.notifyEvent({
+              userId: clientId,
+              actorId: freelancerId || null,
+              type: 'booking_cancelled',
+              title: 'Booking cancelled',
+              message: `${projectName} was cancelled.`,
+              relatedId: requestId,
+            });
+          }
+          if (freelancerId) {
+            await this.notifyEvent({
+              userId: freelancerId,
+              actorId: clientId || null,
+              type: 'booking_cancelled',
+              title: 'Booking cancelled',
+              message: `${projectName} was cancelled.`,
+              relatedId: requestId,
+            });
+          }
+        }
+      }
+    }
+
     return { data, error };
   }
 }
