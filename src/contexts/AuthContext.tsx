@@ -7,6 +7,8 @@ interface AuthContextType {
   loading: boolean;
   signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
+  signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -88,6 +90,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
+  const requestPasswordReset = async (email: string, redirectTo: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { error } = await authService.requestPasswordReset(email, redirectTo);
+    if (error) {
+      throw error;
+    }
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'facebook', redirectTo: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { error } = await authService.signInWithOAuth(provider, redirectTo);
+    if (error) {
+      throw error;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -95,6 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signUp,
         signIn,
+        requestPasswordReset,
+        signInWithOAuth,
         signOut,
         isAuthenticated: !!user,
       }}

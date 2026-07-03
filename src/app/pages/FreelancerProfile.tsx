@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { ArrowLeft, Briefcase, Heart, Mail, MapPin, MessageCircle, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -20,6 +20,8 @@ interface FreelancerProfileProps {
   onOpenChat?: () => void;
 }
 
+type FollowRelationship = 'follow' | 'following' | 'follow_back' | 'friends';
+
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
@@ -29,7 +31,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
-  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; liked: boolean }>>({});
+  const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
+  const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
+  const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
+  const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
+  const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
+  const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [activeProjects, setActiveProjects] = useState(0);
   const [completedProjects, setCompletedProjects] = useState(0);
@@ -37,6 +44,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [error, setError] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
@@ -133,18 +141,27 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
 
       if (user?.id && user.id !== targetId) {
-        const favoriteResponse = await DataService.isFavorited(user.id, targetId);
+        const [favoriteResponse, followResponse, followedByTargetResponse] = await Promise.all([
+          DataService.isFavorited(user.id, targetId),
+          DataService.isFollowing(user.id, targetId),
+          DataService.isFollowing(targetId, user.id),
+        ]);
+
         if (isMounted && !favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
 
-        const followResponse = await DataService.isFollowing(user.id, targetId);
         if (isMounted && !followResponse.error) {
           setIsFollowing(followResponse.isFollowing);
+        }
+
+        if (isMounted && !followedByTargetResponse.error) {
+          setIsFollowedByTarget(followedByTargetResponse.isFollowing);
         }
       } else {
         setIsFavorited(false);
         setIsFollowing(false);
+        setIsFollowedByTarget(false);
       }
 
       const followCountsResponse = await DataService.getFollowCounts(targetId);
@@ -167,12 +184,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
       if (isMounted && !postsResponse.error) {
         setProfilePosts(postsResponse.data || []);
-        const seed: Record<string, { likes: number; comments: number; liked: boolean }> = {};
+        const seed: Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }> = {};
         (postsResponse.data || []).forEach((post: any) => {
           seed[post.id] = {
             likes: Math.max(0, Number(post.likes_count || 0)),
             comments: Math.max(0, Number(post.comments_count || 0)),
+            shares: Math.max(0, Number(post.shares_count || 0)),
+            saves: Math.max(0, Number(post.saves_count || 0)),
             liked: false,
+            saved: false,
           };
         });
         setPostEngagement(seed);
@@ -201,6 +221,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const styles = freelancerProfile?.styles || [];
 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
+  const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
+
+  const followRelationship: FollowRelationship = isFollowing
+    ? (isFollowedByTarget ? 'friends' : 'following')
+    : (isFollowedByTarget ? 'follow_back' : 'follow');
 
   const handleFavoriteToggle = async () => {
     if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
@@ -240,6 +265,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     setIsFollowing((current) => !current);
+    if (!isFollowing) {
+      setIsFollowedByTarget(true);
+    } else if (isFollowedByTarget) {
+      setIsFollowedByTarget(false);
+    }
     setIsFollowLoading(false);
   };
 
@@ -308,9 +338,31 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsSubmittingRequest(false);
   };
 
-  const togglePostLike = (postId: string) => {
+  const openPostFocus = async (postId: string) => {
+    setFocusedPostId(postId);
+
+    if (commentsByPostId[postId]) {
+      return;
+    }
+
+    setLoadingCommentsByPostId((current) => ({ ...current, [postId]: true }));
+    const response = await DataService.getClientPostComments(postId, 100);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load comments.');
+      setCommentsByPostId((current) => ({ ...current, [postId]: [] }));
+    } else {
+      setCommentsByPostId((current) => ({ ...current, [postId]: response.data || [] }));
+    }
+    setLoadingCommentsByPostId((current) => ({ ...current, [postId]: false }));
+  };
+
+  const closePostFocus = () => {
+    setFocusedPostId(null);
+  };
+
+  const togglePostLike = async (postId: string) => {
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
         ...current,
         [postId]: {
@@ -320,11 +372,107 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         },
       };
     });
+
+    if (!user?.id) {
+      return;
+    }
+
+    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+    const response = await DataService.toggleClientPostLike(user.id, postId, engagement.liked);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update like status.');
+      setPostEngagement((current) => {
+        const existing = current[postId] || engagement;
+        return {
+          ...current,
+          [postId]: {
+            ...existing,
+            liked: engagement.liked,
+            likes: engagement.liked ? existing.likes + 1 : Math.max(0, existing.likes - 1),
+          },
+        };
+      });
+    }
   };
 
-  const addPostComment = (postId: string) => {
+  const togglePostSave = async (postId: string) => {
     setPostEngagement((current) => {
-      const existing = current[postId] || { likes: 0, comments: 0, liked: false };
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          saved: !existing.saved,
+          saves: existing.saved ? Math.max(0, existing.saves - 1) : existing.saves + 1,
+        },
+      };
+    });
+
+    if (!user?.id) {
+      return;
+    }
+
+    const engagement = postEngagement[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+    const response = await DataService.toggleClientPostSave(user.id, postId, engagement.saved);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update save status.');
+      setPostEngagement((current) => {
+        const existing = current[postId] || engagement;
+        return {
+          ...current,
+          [postId]: {
+            ...existing,
+            saved: engagement.saved,
+            saves: engagement.saved ? existing.saves + 1 : Math.max(0, existing.saves - 1),
+          },
+        };
+      });
+    }
+  };
+
+  const sharePost = async (postId: string) => {
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      return {
+        ...current,
+        [postId]: {
+          ...existing,
+          shares: existing.shares + 1,
+        },
+      };
+    });
+
+    if (user?.id) {
+      await DataService.recordClientPostShare(user.id, postId);
+    }
+
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/profile/${id}`);
+    } catch {
+      // ignore clipboard failures
+    }
+  };
+
+  const submitComment = async (postId: string) => {
+    const draft = (commentDraftByPostId[postId] || '').trim();
+    if (!draft || !user?.id) {
+      return;
+    }
+
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: true }));
+    const response = await DataService.addClientPostComment(user.id, postId, draft);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add comment.');
+      setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+      return;
+    }
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [postId]: [...(current[postId] || []), response.data],
+    }));
+    setPostEngagement((current) => {
+      const existing = current[postId] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
         ...current,
         [postId]: {
@@ -333,6 +481,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         },
       };
     });
+    setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
+    setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
   };
 
   if (isLoading) {
@@ -455,10 +605,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={() => void handleFollowToggle()}
-                      disabled={isFollowLoading}
-                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${isFollowing ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : 'bg-gray-900 text-white hover:shadow-lg'} disabled:opacity-60`}
+                      disabled={isFollowLoading || followRelationship === 'friends'}
+                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${
+                        followRelationship === 'friends'
+                          ? 'bg-gray-200 text-gray-900 cursor-default'
+                          : followRelationship === 'follow_back'
+                            ? 'bg-amber-500 text-white hover:bg-amber-600'
+                            : isFollowing
+                              ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                              : 'bg-gray-900 text-white hover:shadow-lg'
+                      } disabled:opacity-60`}
                     >
-                      {isFollowLoading ? 'Updating...' : isFollowing ? 'Following' : 'Follow'}
+                      {isFollowLoading
+                        ? 'Updating...'
+                        : followRelationship === 'friends'
+                          ? 'Friends'
+                          : followRelationship === 'follow_back'
+                            ? 'Follow back'
+                            : isFollowing
+                              ? 'Following'
+                              : 'Follow'}
                     </button>
                   )}
                 </div>
@@ -589,22 +755,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             <p className="mt-1 text-sm text-gray-600">Posts from this profile also visible in For You feed.</p>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               {profilePosts.map((post) => {
-                const engagement = postEngagement[post.id] || { likes: 0, comments: 0, liked: false };
+                const engagement = postEngagement[post.id] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
                 return (
                   <article key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <div className="aspect-[4/3] bg-white">
+                    <button type="button" onClick={() => void openPostFocus(post.id)} className="aspect-[4/3] w-full bg-white text-left">
                       <ImageWithFallback
                         src={post.image_url || avatarUrl}
                         alt={post.caption || 'Post image'}
                         className="h-full w-full object-cover"
                       />
-                    </div>
+                    </button>
                     <div className="p-4">
                       <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
-                      <div className="mt-3 flex items-center gap-3 text-sm text-gray-700">
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-700">
                         <button
                           type="button"
-                          onClick={() => togglePostLike(post.id)}
+                          onClick={() => void togglePostLike(post.id)}
                           className="inline-flex items-center gap-1"
                         >
                           <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
@@ -612,11 +778,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         </button>
                         <button
                           type="button"
-                          onClick={() => addPostComment(post.id)}
+                          onClick={() => void openPostFocus(post.id)}
                           className="inline-flex items-center gap-1"
                         >
                           <MessageCircle className="h-4 w-4" />
                           {engagement.comments}
+                        </button>
+                        <button type="button" onClick={() => void sharePost(post.id)} className="inline-flex items-center gap-1">
+                          <Share2 className="h-4 w-4" />
+                          Share
+                        </button>
+                        <button type="button" onClick={() => void togglePostSave(post.id)} className="inline-flex items-center gap-1">
+                          <Bookmark className={`h-4 w-4 ${engagement.saved ? 'fill-gray-900 text-gray-900' : ''}`} />
+                          Save
                         </button>
                       </div>
                     </div>
@@ -627,6 +801,106 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </section>
         )}
       </main>
+
+      {focusedPost && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+            <button
+              type="button"
+              onClick={closePostFocus}
+              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="max-h-[60vh] overflow-hidden bg-gray-100">
+              <ImageWithFallback
+                src={focusedPost.image_url || avatarUrl}
+                alt={focusedPost.caption || 'Post image'}
+                className="max-h-[60vh] w-full object-contain"
+              />
+            </div>
+
+            <div className="max-h-[35vh] overflow-y-auto p-5">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3 text-left">
+                  <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
+                    <ImageWithFallback src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{displayName}</p>
+                    <p className="text-xs text-gray-500">{title}</p>
+                  </div>
+                </div>
+                <span className="text-xs text-gray-500">{focusedPost.created_at ? new Date(focusedPost.created_at).toLocaleString() : ''}</span>
+              </div>
+
+              <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption || 'No caption'}</p>
+
+              <div className="mt-4 flex flex-wrap items-center gap-4 border-y border-gray-200 py-3">
+                <button onClick={() => void togglePostLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Heart className={`h-5 w-5 ${postEngagement[focusedPost.id]?.liked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
+                  {postEngagement[focusedPost.id]?.likes || 0}
+                </button>
+                <button onClick={() => void openPostFocus(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <MessageCircle className="h-5 w-5 text-gray-700" />
+                  {postEngagement[focusedPost.id]?.comments || 0}
+                </button>
+                <button onClick={() => void sharePost(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Share2 className="h-5 w-5 text-gray-700" />
+                  Share
+                </button>
+                <button onClick={() => void togglePostSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  <Bookmark className={`h-5 w-5 ${postEngagement[focusedPost.id]?.saved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />
+                  Save
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <p className="text-sm font-semibold text-gray-900">Comments</p>
+                {loadingCommentsByPostId[focusedPost.id] ? (
+                  <p className="text-sm text-gray-500">Loading comments...</p>
+                ) : (commentsByPostId[focusedPost.id] || []).length === 0 ? (
+                  <p className="text-sm text-gray-500">No comments yet.</p>
+                ) : (
+                  (commentsByPostId[focusedPost.id] || []).map((comment: any) => (
+                    <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                      <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                        <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
+                        <span>•</span>
+                        <span>{new Date(comment.created_at).toLocaleString()}</span>
+                      </div>
+                      <p className="whitespace-pre-wrap">{comment.content}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="mt-4 flex gap-2">
+                <input
+                  value={commentDraftByPostId[focusedPost.id] || ''}
+                  onChange={(event) =>
+                    setCommentDraftByPostId((current) => ({
+                      ...current,
+                      [focusedPost.id]: event.target.value,
+                    }))
+                  }
+                  placeholder="Write a comment..."
+                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => void submitComment(focusedPost.id)}
+                  disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
+                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                >
+                  {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showBookingForm && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">

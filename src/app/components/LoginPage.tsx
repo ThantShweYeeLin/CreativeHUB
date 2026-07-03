@@ -6,18 +6,24 @@ import { authService } from '../../lib/authService';
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
   onGoToSignUp: () => void;
+  onForgotPassword: (email: string) => Promise<void>;
+  onOAuthLogin: (provider: 'google' | 'facebook') => Promise<void>;
 }
 
-export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
+export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogin }: LoginPageProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [oauthLoadingProvider, setOauthLoadingProvider] = useState<'google' | 'facebook' | null>(null);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
     if (!email || !password) {
       setError('Please fill in all fields.');
@@ -31,6 +37,38 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
       setError(err instanceof Error ? err.message : 'Unable to sign in.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!email || !/\S+@\S+\.\S+/.test(email)) {
+      setError('Enter a valid email first, then click Forgot password.');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      await onForgotPassword(email.trim());
+      setSuccess('Password reset email sent. Please check your inbox.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to send reset email.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
+    setError('');
+    setSuccess('');
+    setOauthLoadingProvider(provider);
+    try {
+      await onOAuthLogin(provider);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Unable to continue with ${provider}.`);
+      setOauthLoadingProvider(null);
     }
   };
 
@@ -88,6 +126,11 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
               {error}
             </div>
           )}
+          {success && (
+            <div className="mb-5 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm">
+              {success}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -107,8 +150,13 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-sm font-semibold text-gray-700">Password</label>
-                <button type="button" className="text-xs text-gray-500 hover:text-gray-900 transition-colors">
-                  Forgot password?
+                <button
+                  type="button"
+                  onClick={() => void handleForgotPassword()}
+                  disabled={forgotLoading}
+                  className="text-xs text-gray-500 hover:text-gray-900 transition-colors disabled:opacity-60"
+                >
+                  {forgotLoading ? 'Sending...' : 'Forgot password?'}
                 </button>
               </div>
               <div className="relative">
@@ -149,36 +197,25 @@ export function LoginPage({ onLogin, onGoToSignUp }: LoginPageProps) {
           </div>
 
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={async () => {
-                setError('');
-                try {
-                  const { error } = await authService.signInWithOAuth('google');
-                  if (error) setError(error instanceof Error ? error.message : 'Google login failed');
-                } catch (err) {
-                  setError('Google login failed');
-                }
-              }}
-              className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-            >
-              Google
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                setError('');
-                try {
-                  const { error } = await authService.signInWithOAuth('facebook');
-                  if (error) setError(error instanceof Error ? error.message : 'Facebook login failed');
-                } catch (err) {
-                  setError('Facebook login failed');
-                }
-              }}
-              className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-            >
-              Facebook
-            </button>
+            {[
+              { name: 'Google', icon: 'G' },
+              { name: 'Facebook', icon: 'f' },
+            ].map(({ name, icon }) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => void handleOAuthLogin(name.toLowerCase() as 'google' | 'facebook')}
+                disabled={oauthLoadingProvider !== null}
+                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-60"
+              >
+                {oauthLoadingProvider === name.toLowerCase() ? (
+                  <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <span className="font-bold">{icon}</span>
+                )}
+                {name}
+              </button>
+            ))}
           </div>
 
           <p className="mt-8 text-center text-sm text-gray-500">

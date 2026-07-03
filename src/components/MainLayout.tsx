@@ -179,7 +179,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-gray-200">
+      <header className="sticky top-0 z-[1200] bg-white/80 backdrop-blur-lg border-b border-gray-200">
         <div className="max-w-[1680px] mx-auto px-4 md:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}

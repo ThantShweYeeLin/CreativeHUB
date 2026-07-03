@@ -754,6 +754,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
   const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
   const [isSendingShare, setIsSendingShare] = useState(false);
+  const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
   const [composerPlaceholder] = useState(() => composerPlaceholders[Math.floor(Math.random() * composerPlaceholders.length)]);
 
@@ -1106,6 +1107,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
     await navigator.clipboard.writeText(`${shareUrl}\n\n${sharingPost.caption}`);
     setError(null);
+    setShareStatusMessage('Post link copied to clipboard.');
   };
 
   const sendShareToMutuals = async () => {
@@ -1117,7 +1119,14 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setError(null);
 
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
-    const message = `Shared a post from ${sharingPost.authorName}:\n${shareUrl}\n${sharingPost.image || ''}\n\n${sharingPost.caption}`;
+    const sharedPostPayload = {
+      authorName: sharingPost.authorName,
+      authorId: sharingPost.authorId,
+      shareUrl,
+      caption: sharingPost.caption,
+      imageUrl: sharingPost.image || null,
+    };
+    const message = `SHARED_POST::${JSON.stringify(sharedPostPayload)}`;
 
     const recipients = mutualUsers.filter((mutual) => selectedShareRecipientIds.includes(mutual.id));
 
@@ -1141,8 +1150,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setSharingPost(null);
     setMutualUsers([]);
     setSelectedShareRecipientIds([]);
-
-    onOpenMessages?.(recipients[0]?.id);
+    setShareStatusMessage(
+      recipients.length === 1
+        ? `Shared with ${recipients[0].full_name || recipients[0].email}.`
+        : `Shared with ${recipients.length} mutuals.`
+    );
   };
 
   const handleAddFiles = (files: FileList | null) => {
@@ -1257,6 +1269,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 py-4 md:py-8 -mx-4 md:mx-0">
       <div className="mx-auto max-w-2xl">
+        {shareStatusMessage && (
+          <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 shadow-sm">
+            {shareStatusMessage}
+          </div>
+        )}
+
         <div className="mb-6 px-4 md:mb-8">
           <h1 className="mb-2 text-3xl font-bold text-gray-900 md:text-4xl">For You</h1>
           <p className="text-sm text-gray-600 md:text-base">Live creative feed from the CreativeHUB community</p>

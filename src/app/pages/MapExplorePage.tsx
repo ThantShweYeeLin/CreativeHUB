@@ -554,7 +554,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
         )}
       </div>
 
-      <div className="relative h-[460px] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl md:h-[calc(100vh-240px)]">
+      <div className="relative z-0 h-[460px] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl md:h-[calc(100vh-240px)]">
         <MapContainer center={center} zoom={12} className="h-full w-full">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

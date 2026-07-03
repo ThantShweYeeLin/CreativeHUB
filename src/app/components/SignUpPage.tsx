@@ -7,11 +7,13 @@ import { authService } from '../../lib/authService';
 interface SignUpPageProps {
   onSignUp: (fullName: string, email: string, password: string, role: AccountType) => Promise<void>;
   onGoToLogin: () => void;
+  onValidateEmail?: (email: string) => Promise<string | null>;
+  onOAuthSignUp?: (provider: 'google' | 'facebook') => Promise<void>;
 }
 
 type AccountType = 'client' | 'freelancer';
 
-export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
+export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSignUp }: SignUpPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [accountType, setAccountType] = useState<AccountType>('client');
   const [fullName, setFullName] = useState('');
@@ -20,6 +22,8 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  const [oauthLoadingProvider, setOauthLoadingProvider] = useState<'google' | 'facebook' | null>(null);
   const [error, setError] = useState('');
   const [agreed, setAgreed] = useState(false);
 
@@ -27,33 +31,24 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
   const strengthColors = ['', 'bg-red-400', 'bg-yellow-400', 'bg-green-500'];
   const strengthLabels = ['', 'Weak', 'Fair', 'Strong'];
 
-  const handleStep1 = (e: React.FormEvent) => {
+  const handleStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (!fullName.trim()) { setError('Please enter your full name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
-    // Check if email is already registered before proceeding to password step
-    (async () => {
-      try {
-        const resp = await DataService.getUserByEmail(email);
-        if (resp.error) {
-          // If there's an error checking, allow proceeding but log it
-          console.error('Email check failed', resp.error);
-          setStep(2);
-          return;
-        }
 
-        if (resp.data) {
-          setError('This email is already registered. Please sign in or use a different email.');
-          return;
-        }
+    if (onValidateEmail) {
+      setIsCheckingEmail(true);
+      const validationError = await onValidateEmail(email.trim());
+      setIsCheckingEmail(false);
 
-        setStep(2);
-      } catch (err) {
-        console.error('Email uniqueness check failed', err);
-        setStep(2);
+      if (validationError) {
+        setError(validationError);
+        return;
       }
-    })();
+    }
+
+    setStep(2);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -84,6 +79,22 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
       setError(err instanceof Error ? err.message : 'Unable to create account.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOAuthSignUp = async (provider: 'google' | 'facebook') => {
+    if (!onOAuthSignUp) {
+      setError('Social sign up is not available right now.');
+      return;
+    }
+
+    setError('');
+    setOauthLoadingProvider(provider);
+    try {
+      await onOAuthSignUp(provider);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Unable to continue with ${provider}.`);
+      setOauthLoadingProvider(null);
     }
   };
 
@@ -222,9 +233,16 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
 
               <button
                 type="submit"
-                className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-black transition-all flex items-center justify-center gap-2 mt-2"
+                disabled={isCheckingEmail}
+                className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-black transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                Continue <ArrowRight className="w-4 h-4" />
+                {isCheckingEmail ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Continue <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
 
               <div className="relative mt-2">
@@ -233,36 +251,22 @@ export function SignUpPage({ onSignUp, onGoToLogin }: SignUpPageProps) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError('');
-                    try {
-                      const { error } = await authService.signInWithOAuth('google');
-                      if (error) setError(error instanceof Error ? error.message : 'Google sign-in failed');
-                    } catch (err) {
-                      setError('Google sign-in failed');
-                    }
-                  }}
-                  className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-                >
-                  Google
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError('');
-                    try {
-                      const { error } = await authService.signInWithOAuth('facebook');
-                      if (error) setError(error instanceof Error ? error.message : 'Facebook sign-in failed');
-                    } catch (err) {
-                      setError('Facebook sign-in failed');
-                    }
-                  }}
-                  className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700"
-                >
-                  Facebook
-                </button>
+                {[{ name: 'Google', icon: 'G' }, { name: 'Facebook', icon: 'f' }].map(({ name, icon }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => void handleOAuthSignUp(name.toLowerCase() as 'google' | 'facebook')}
+                    disabled={oauthLoadingProvider !== null}
+                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-60"
+                  >
+                    {oauthLoadingProvider === name.toLowerCase() ? (
+                      <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="font-bold">{icon}</span>
+                    )}
+                    {name}
+                  </button>
+                ))}
               </div>
             </form>
           ) : (
