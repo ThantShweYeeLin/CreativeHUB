@@ -670,12 +670,40 @@ export class DataService {
   }
 
   static async createNotification(notification: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>) {
+    const rpcPayload = {
+      target_user_id: notification.user_id,
+      actor_user_id: notification.actor_id || notification.user_id,
+      notification_kind: notification.type,
+      notification_title: notification.title,
+      notification_message: notification.message || null,
+      notification_post_id: notification.post_id || null,
+      notification_comment_id: notification.comment_id || null,
+      notification_metadata: notification.metadata || {},
+    };
+
+    const rpcResult = await supabase.rpc('create_social_notification', rpcPayload);
+    if (!rpcResult.error) {
+      return { data: null, error: null };
+    }
+
     const { data, error } = await supabase
       .from('notifications')
-      .insert(notification)
+      .insert({
+        user_id: notification.user_id,
+        actor_id: notification.actor_id || null,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message || null,
+        related_id: notification.related_id || notification.post_id || notification.comment_id || null,
+        post_id: notification.post_id || null,
+        comment_id: notification.comment_id || null,
+        metadata: notification.metadata || {},
+        read: notification.read ?? false,
+      })
       .select()
       .single();
-    return { data, error };
+
+    return { data, error: error || rpcResult.error };
   }
 
   // REQUESTS
@@ -695,6 +723,21 @@ export class DataService {
             'Request insert blocked by RLS policy. Ensure you are logged in as a client and run the requests RLS migration SQL in supabase/schema.sql.',
         } as any,
       };
+    }
+
+    if (!error && request.freelancer_id && request.client_id) {
+      await this.createNotification({
+        user_id: request.freelancer_id,
+        actor_id: request.client_id,
+        type: 'request',
+        title: 'New booking request',
+        message: `New booking request: ${request.project_name}`,
+        related_id: null,
+        post_id: null,
+        comment_id: null,
+        metadata: {},
+        read: false,
+      });
     }
 
     return { data, error };
@@ -893,12 +936,33 @@ export class DataService {
       return { liked: false, error };
     }
 
+    const { data: postData } = await supabase
+      .from('client_posts')
+      .select('client_id')
+      .eq('id', postId)
+      .single();
+
     const { error } = await supabase
       .from('client_post_likes')
       .insert({ user_id: userId, post_id: postId });
 
     if (error && error.code !== '23505') {
       return { liked: currentlyLiked, error };
+    }
+
+    if (postData?.client_id && postData.client_id !== userId) {
+      await this.createNotification({
+        user_id: postData.client_id,
+        actor_id: userId,
+        type: 'like',
+        title: 'New like',
+        message: 'Someone liked your post.',
+        related_id: postId,
+        post_id: postId,
+        comment_id: null,
+        metadata: {},
+        read: false,
+      });
     }
 
     return { liked: true, error: null };
@@ -914,6 +978,29 @@ export class DataService {
       })
       .select('*, user:user_id(id, full_name, avatar_url)')
       .single();
+
+    if (!error) {
+      const { data: postData } = await supabase
+        .from('client_posts')
+        .select('client_id')
+        .eq('id', postId)
+        .single();
+
+      if (postData?.client_id && postData.client_id !== userId) {
+        await this.createNotification({
+          user_id: postData.client_id,
+          actor_id: userId,
+          type: 'comment',
+          title: 'New comment',
+          message: 'Someone commented on your post.',
+          related_id: postId,
+          post_id: postId,
+          comment_id: data?.id || null,
+          metadata: {},
+          read: false,
+        });
+      }
+    }
 
     return { data, error };
   }

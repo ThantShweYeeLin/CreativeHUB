@@ -1147,8 +1147,8 @@ export function ForYouPage({ onViewProfile }: ForYouPageProps) {
         created_at: new Date().toISOString(),
         user: {
           id: user.id,
-          full_name: user.fullName,
-          avatar_url: user.avatar_url,
+          full_name: user.fullName || '',
+          avatar_url: user.avatar_url || '',
         },
       };
 

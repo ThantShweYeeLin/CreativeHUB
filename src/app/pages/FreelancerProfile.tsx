@@ -266,6 +266,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         const response = await DataService.followUser(user.id, targetFreelancerUserId);
         if (response.error) throw response.error;
         setIsFollowingTarget(true);
+        if (targetIsFollowingMe) {
+          setIsFollowedByTarget(true);
+        }
       }
 
       setFollowCounts((current) => ({
@@ -673,10 +676,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                           : 'bg-gray-900 text-white hover:bg-black'
                       } ${isFollowActionPending ? 'opacity-60 cursor-not-allowed' : ''}`}
                     >
-                      {isFollowingTarget ? 'Following' : 'Follow'}
+                      {isFollowingTarget ? 'Following' : isFollowedByTarget ? 'Follow back' : 'Follow'}
                     </button>
                   )}
-                  {user?.id && user.id !== targetFreelancerUserId && isFollowedByTarget && (
+                  {user?.id && user.id !== targetFreelancerUserId && isFollowedByTarget && !isFollowingTarget && (
                     <span className="rounded-full bg-green-100 px-3 py-2 text-xs font-semibold text-green-700">
                       Follows you
                     </span>

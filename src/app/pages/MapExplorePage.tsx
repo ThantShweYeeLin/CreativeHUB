@@ -357,7 +357,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       if (distanceLimitKm && clientLocation) {
         const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
-        if (!Number.isFinite(freelancerDistance)) {
+        if (freelancerDistance === undefined || !Number.isFinite(freelancerDistance)) {
           return false;
         }
         if (freelancerDistance > distanceLimitKm) {

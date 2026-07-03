@@ -1,4 +1,4 @@
-import { Bell, Check, MessageCircle, Heart, MessageSquare, X as XIcon } from 'lucide-react';
+import { Bell, Check, MessageCircle, Heart, MessageSquare, Users, X as XIcon } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
@@ -29,12 +29,16 @@ const getNotificationIcon = (type: string) => {
       return <Check className="w-4 h-4 text-green-600" />;
     case 'request_rejected':
       return <XIcon className="w-4 h-4 text-red-600" />;
+    case 'request':
+      return <Check className="w-4 h-4 text-blue-600" />;
     case 'message':
       return <MessageCircle className="w-4 h-4 text-gray-900" />;
     case 'like':
       return <Heart className="w-4 h-4 text-red-500" />;
     case 'comment':
       return <MessageSquare className="w-4 h-4 text-gray-900" />;
+    case 'follow':
+      return <Users className="w-4 h-4 text-green-600" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
   }
