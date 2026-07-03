@@ -426,16 +426,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <div className="flex flex-wrap gap-3">
                   {user?.id !== targetFreelancerUserId && (
                     <button
-                      onClick={() => void handleFollowToggle()}
-                      disabled={isFollowLoading}
-                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${isFollowing ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : 'bg-gray-900 text-white hover:shadow-lg'} disabled:opacity-60`}
-                    >
-                      {isFollowLoading ? 'Updating...' : isFollowing ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-
-                  {user?.id !== targetFreelancerUserId && (
-                    <button
                       onClick={handleFavoriteToggle}
                       className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                     >
@@ -460,6 +450,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         Request Booking
                       </button>
                     )
+                  )}
+
+                  {user?.id !== targetFreelancerUserId && (
+                    <button
+                      onClick={() => void handleFollowToggle()}
+                      disabled={isFollowLoading}
+                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${isFollowing ? 'bg-gray-200 text-gray-900 hover:bg-gray-300' : 'bg-gray-900 text-white hover:shadow-lg'} disabled:opacity-60`}
+                    >
+                      {isFollowLoading ? 'Updating...' : isFollowing ? 'Following' : 'Follow'}
+                    </button>
                   )}
                 </div>
               </div>
