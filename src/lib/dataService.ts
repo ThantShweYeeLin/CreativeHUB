@@ -75,6 +75,27 @@ export class DataService {
     return q.eq('is_available', true);
   }
 
+  private static async getFreelancersByUserIds(
+    userIds: string[],
+    includeLocationColumns: boolean
+  ) {
+    if (!userIds.length) {
+      return { data: [], error: null };
+    }
+
+    const userFields = includeLocationColumns
+      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select(`*, users:user_id(${userFields})`)
+      .in('user_id', userIds)
+      .eq('is_available', true);
+
+    return { data, error };
+  }
+
   // USERS
   static async getUser(userId: string) {
     const { data, error } = await supabase
@@ -422,13 +443,46 @@ export class DataService {
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {
-    const firstAttempt = await this.getSearchFreelancersQuery(query, skills, true);
+    const trimmedQuery = query.trim();
+    const firstAttempt = await this.getSearchFreelancersQuery(trimmedQuery, skills, true);
+    let profileMatches = firstAttempt;
+
     if (firstAttempt.error && this.hasMissingLocationColumnError(firstAttempt.error)) {
-      const fallbackAttempt = await this.getSearchFreelancersQuery(query, skills, false);
-      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
+      profileMatches = await this.getSearchFreelancersQuery(trimmedQuery, skills, false);
     }
 
-    return { data: firstAttempt.data, error: firstAttempt.error };
+    if (profileMatches.error) {
+      return { data: profileMatches.data, error: profileMatches.error };
+    }
+
+    if (!trimmedQuery) {
+      return { data: profileMatches.data, error: null };
+    }
+
+    const userMatches = await this.searchUsers(trimmedQuery, { limit: 24 });
+    if (userMatches.error || !userMatches.data?.length) {
+      return { data: profileMatches.data, error: null };
+    }
+
+    const existingIds = new Set((profileMatches.data || []).map((item: any) => String(item.user_id || item.users?.id || item.id)));
+    const additionalIds = userMatches.data
+      .map((item) => String(item.id))
+      .filter((id) => !existingIds.has(id));
+
+    if (!additionalIds.length) {
+      return { data: profileMatches.data, error: null };
+    }
+
+    let additionalProfiles = await this.getFreelancersByUserIds(additionalIds, true);
+    if (additionalProfiles.error && this.hasMissingLocationColumnError(additionalProfiles.error)) {
+      additionalProfiles = await this.getFreelancersByUserIds(additionalIds, false);
+    }
+
+    if (additionalProfiles.error) {
+      return { data: profileMatches.data, error: null };
+    }
+
+    return { data: [...(profileMatches.data || []), ...(additionalProfiles.data || [])], error: null };
   }
 
   static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
