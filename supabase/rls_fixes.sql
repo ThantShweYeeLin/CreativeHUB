@@ -438,18 +438,59 @@ alter table if exists public.group_conversations enable row level security;
 alter table if exists public.group_conversation_members enable row level security;
 alter table if exists public.group_messages enable row level security;
 
+create or replace function public.is_group_conversation_member(
+  target_conversation_id uuid,
+  target_user_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.group_conversation_members gcm
+    where gcm.conversation_id = target_conversation_id
+      and gcm.user_id = target_user_id
+  );
+$$;
+
+create or replace function public.is_group_conversation_owner(
+  target_conversation_id uuid,
+  target_user_id uuid
+)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.group_conversations gc
+    where gc.id = target_conversation_id
+      and gc.created_by = target_user_id
+  );
+$$;
+
+grant execute on function public.is_group_conversation_member(uuid, uuid) to anon, authenticated;
+grant execute on function public.is_group_conversation_owner(uuid, uuid) to anon, authenticated;
+
+drop policy if exists "Users can read group conversations they joined" on public.group_conversations;
+drop policy if exists "Users can create group conversations" on public.group_conversations;
+drop policy if exists "Users can read group members in joined conversations" on public.group_conversation_members;
+drop policy if exists "Conversation owners can add members" on public.group_conversation_members;
+drop policy if exists "Users can leave group conversation" on public.group_conversation_members;
+drop policy if exists "Users can read group messages in joined conversations" on public.group_messages;
+drop policy if exists "Users can send group messages in joined conversations" on public.group_messages;
+
 DO $$
 BEGIN
   CREATE POLICY "Users can read group conversations they joined"
     ON public.group_conversations
     FOR SELECT
     USING (
-      EXISTS (
-        SELECT 1
-        FROM public.group_conversation_members gcm
-        WHERE gcm.conversation_id = group_conversations.id
-          AND gcm.user_id = auth.uid()
-      )
+      auth.uid() = created_by
+      OR public.is_group_conversation_member(group_conversations.id, auth.uid())
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -469,12 +510,9 @@ BEGIN
     ON public.group_conversation_members
     FOR SELECT
     USING (
-      EXISTS (
-        SELECT 1
-        FROM public.group_conversation_members mine
-        WHERE mine.conversation_id = group_conversation_members.conversation_id
-          AND mine.user_id = auth.uid()
-      )
+      auth.uid() = user_id
+      OR public.is_group_conversation_owner(group_conversation_members.conversation_id, auth.uid())
+      OR public.is_group_conversation_member(group_conversation_members.conversation_id, auth.uid())
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -486,12 +524,7 @@ BEGIN
     FOR INSERT
     WITH CHECK (
       auth.uid() = user_id
-      OR EXISTS (
-        SELECT 1
-        FROM public.group_conversations gc
-        WHERE gc.id = group_conversation_members.conversation_id
-          AND gc.created_by = auth.uid()
-      )
+      OR public.is_group_conversation_owner(group_conversation_members.conversation_id, auth.uid())
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -501,7 +534,10 @@ BEGIN
   CREATE POLICY "Users can leave group conversation"
     ON public.group_conversation_members
     FOR DELETE
-    USING (auth.uid() = user_id);
+    USING (
+      auth.uid() = user_id
+      OR public.is_group_conversation_owner(group_conversation_members.conversation_id, auth.uid())
+    );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -511,12 +547,8 @@ BEGIN
     ON public.group_messages
     FOR SELECT
     USING (
-      EXISTS (
-        SELECT 1
-        FROM public.group_conversation_members gcm
-        WHERE gcm.conversation_id = group_messages.conversation_id
-          AND gcm.user_id = auth.uid()
-      )
+      public.is_group_conversation_owner(group_messages.conversation_id, auth.uid())
+      OR public.is_group_conversation_member(group_messages.conversation_id, auth.uid())
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -528,11 +560,9 @@ BEGIN
     FOR INSERT
     WITH CHECK (
       auth.uid() = sender_id
-      AND EXISTS (
-        SELECT 1
-        FROM public.group_conversation_members gcm
-        WHERE gcm.conversation_id = group_messages.conversation_id
-          AND gcm.user_id = auth.uid()
+      AND (
+        public.is_group_conversation_owner(group_messages.conversation_id, auth.uid())
+        OR public.is_group_conversation_member(group_messages.conversation_id, auth.uid())
       )
     );
 EXCEPTION WHEN duplicate_object THEN NULL;

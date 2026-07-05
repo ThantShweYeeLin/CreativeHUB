@@ -5,13 +5,14 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface MessagesPageProps {
   onBack: () => void;
   onViewProfile?: (id: string) => void;
 }
 
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200';
+const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 function parseSharedPostMessage(content: string) {
   const trimmedContent = content.trim();
@@ -1066,9 +1067,22 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     const sharedPostId = sharedPost?.postId || null;
                     const previewFromDb = sharedPostId ? sharedPostPreviewById[sharedPostId] : null;
                     const fallbackFromAuthorCaption = sharedPostFallbackByMessageId[String(message.id)] || null;
+                    const groupConversationMembers = activeConversation?.isGroup
+                      ? (groupMembersByConversationId[String(activeConversation.rawId)] || [])
+                      : [];
+                    const senderMember = groupConversationMembers.find(
+                      (member: any) => String(member.user_id) === String(message.sender_id)
+                    );
+                    const senderAvatar = activeConversation?.isGroup
+                      ? (senderMember?.users?.avatar_url || null)
+                      : (isMine ? user?.avatar_url || null : activeConversation?.avatar || null);
                     const resolvedPreview = sharedPost?.imageUrl || sharedPost?.previewUrl || previewFromDb?.image_url || fallbackFromAuthorCaption?.image_url || null;
                     const resolvedCaption = sharedPost?.caption || previewFromDb?.caption || fallbackFromAuthorCaption?.caption || 'A post was shared with you.';
-                    const resolvedAuthorAvatar = sharedPost?.authorId ? previewFromDb?.avatar_url || fallbackFromAuthorCaption?.avatar_url || fallbackProfileImage : fallbackProfileImage;
+                    const resolvedAuthorAvatar =
+                      previewFromDb?.avatar_url
+                      || fallbackFromAuthorCaption?.avatar_url
+                      || senderAvatar
+                      || fallbackProfileImage;
                     const resolvedAuthorName = sharedPost?.authorName || previewFromDb?.author_name || fallbackFromAuthorCaption?.author_name || 'Shared post';
                     const reactions = messageReactionsById[String(message.id)] || { counts: {}, mine: null };
                     return (
