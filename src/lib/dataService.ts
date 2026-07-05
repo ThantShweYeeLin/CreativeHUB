@@ -1323,8 +1323,17 @@ export class DataService {
       .select('user:user_id(id, full_name, email, avatar_url)')
       .eq('post_id', postId);
 
+    const uniqueUsersById = new Map<string, any>();
+    (data || []).forEach((row: any) => {
+      const user = row?.user;
+      if (!user?.id) {
+        return;
+      }
+      uniqueUsersById.set(String(user.id), user);
+    });
+
     return {
-      data: (data || []).map((row: any) => row.user).filter(Boolean),
+      data: Array.from(uniqueUsersById.values()),
       error,
     };
   }
@@ -1339,6 +1348,21 @@ export class DataService {
       return { liked: false, error };
     }
 
+    const { data: existingLike, error: existingLikeError } = await supabase
+      .from('client_post_likes')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('post_id', postId)
+      .maybeSingle();
+
+    if (existingLikeError) {
+      return { liked: currentlyLiked, error: existingLikeError };
+    }
+
+    if (existingLike) {
+      return { liked: true, error: null };
+    }
+
     const { data: postData } = await supabase
       .from('client_posts')
       .select('client_id')
@@ -1347,9 +1371,9 @@ export class DataService {
 
     const { error } = await supabase
       .from('client_post_likes')
-      .insert({ user_id: userId, post_id: postId });
+      .upsert({ user_id: userId, post_id: postId }, { onConflict: 'post_id,user_id', ignoreDuplicates: true });
 
-    if (error && error.code !== '23505') {
+    if (error) {
       return { liked: currentlyLiked, error };
     }
 
