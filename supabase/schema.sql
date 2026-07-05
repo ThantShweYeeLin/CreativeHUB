@@ -15,6 +15,7 @@ create table public.users (
   cover_url text,
   bio text,
   role user_role default 'client',
+  preferred_currency text default 'THB',
   location text,
   location_latitude numeric(10,7),
   location_longitude numeric(10,7),

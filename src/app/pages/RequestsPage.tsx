@@ -36,6 +36,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
   const [editForm, setEditForm] = useState({
     projectName: '',
+    currency: 'THB',
     budgetMin: '',
     budgetMax: '',
     description: '',
@@ -123,6 +124,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setEditingRequest(request);
     setEditForm({
       projectName: request.projectName,
+      currency: request.budgetMeta?.currency || 'THB',
       budgetMin: String(request.budgetMeta?.min || request.budget || ''),
       budgetMax: String(request.budgetMeta?.max || request.budget || ''),
       description: request.message || '',
@@ -143,7 +145,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     }
 
     const descriptionWithBudget = appendBudgetMeta(editForm.description, {
-      currency: editingRequest.budgetMeta?.currency || 'THB',
+      currency: (editForm.currency || editingRequest.budgetMeta?.currency || 'THB').trim().toUpperCase(),
       min,
       max,
     });
@@ -334,7 +336,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 placeholder="Project name"
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <input
+                  value={editForm.currency}
+                  onChange={(event) => setEditForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  placeholder="Currency"
+                />
                 <input
                   value={editForm.budgetMin}
                   onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}

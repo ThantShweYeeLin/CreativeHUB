@@ -3,8 +3,10 @@ import { useParams } from 'react-router';
 import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import {
   appendBudgetMeta,
@@ -28,6 +30,7 @@ const fallbackProfileImage = DEFAULT_AVATAR_URL;
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
@@ -61,7 +64,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     projectName: '',
     budgetMin: '',
     budgetMax: '',
-    currency: 'THB',
+    currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     description: '',
   });
 
@@ -107,8 +110,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       const response = await DataService.getUser(user.id);
       if (!isMounted) return;
 
+      const profileCurrency = normalizeCurrencyCode((response.data as any)?.preferred_currency, '');
       const inferredCurrency = inferCurrencyFromLocation(response.data?.location || null);
-      setFormData((current) => ({ ...current, currency: inferredCurrency }));
+      setFormData((current) => ({ ...current, currency: profileCurrency || inferredCurrency }));
     }
 
     loadClientCurrency();
@@ -117,6 +121,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       isMounted = false;
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    setFormData((current) => ({
+      ...current,
+      currency: normalizeCurrencyCode(current.currency || preferredCurrency, 'THB'),
+    }));
+  }, [preferredCurrency]);
+
+  const freelancerRateCurrency = normalizeCurrencyCode((profile as any)?.preferred_currency || (freelancerProfile as any)?.preferred_currency || 'THB', 'THB');
+  const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+  const convertedHourlyRate = freelancerProfile?.hourly_rate
+    ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, viewerCurrency)
+    : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -857,7 +874,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Sparkles className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{freelancerProfile?.hourly_rate ? `฿${freelancerProfile.hourly_rate}/hr` : 'Custom'}</span>
+                  <span className="font-semibold text-gray-900">{convertedHourlyRate !== null ? `${formatCurrencyAmount(convertedHourlyRate, viewerCurrency)}/hr` : 'Custom'}</span>
                 </div>
                 <p className="mt-1 text-sm text-gray-500">starting rate</p>
               </div>
@@ -943,7 +960,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <h2 className="text-xl font-bold text-gray-900">Working Details</h2>
               <div className="mt-4 space-y-3 text-sm text-gray-700">
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
-                <p><span className="font-semibold text-gray-900">Hourly rate:</span> {freelancerProfile?.hourly_rate ? `฿${freelancerProfile.hourly_rate}` : 'Discuss per project'}</p>
+                <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
                 <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
               </div>
             </div>
@@ -1236,17 +1253,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-900">Budget Range</label>
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <select
-                    value={formData.currency}
-                    onChange={(event) => setFormData((current) => ({ ...current, currency: event.target.value }))}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  >
-                    {SUPPORTED_CURRENCIES.map((item) => (
-                      <option key={item.code} value={item.code}>
-                        {item.code} - {item.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div>
+                    <input
+                      value={formData.currency}
+                      onChange={(event) => setFormData((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                      list="booking-currency-suggestions"
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      placeholder="Type any currency code"
+                    />
+                    <datalist id="booking-currency-suggestions">
+                      {SUPPORTED_CURRENCIES.map((item) => (
+                        <option key={item.code} value={item.code}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
                   <input
                     required
                     inputMode="decimal"

@@ -28,8 +28,10 @@ export interface Database {
           email: string;
           full_name: string | null;
           avatar_url: string | null;
+          cover_url: string | null;
           bio: string | null;
           role: 'freelancer' | 'client';
+          preferred_currency: string | null;
           location: string | null;
           location_latitude: number | null;
           location_longitude: number | null;

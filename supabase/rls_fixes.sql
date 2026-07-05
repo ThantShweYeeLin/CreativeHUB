@@ -6,6 +6,9 @@ alter table if exists public.requests enable row level security;
 alter table if exists public.freelancer_profiles enable row level security;
 alter table if exists public.conversations enable row level security;
 
+alter table if exists public.users
+  add column if not exists preferred_currency text default 'THB';
+
 -- Freelancer profiles policies
 DO $$
 BEGIN

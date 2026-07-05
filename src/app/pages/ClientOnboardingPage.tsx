@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { CheckCircle2, ChevronLeft } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 
 const clientInterests = [
@@ -13,8 +15,6 @@ const clientInterests = [
   'Fashion Design',
   'Event Decoration',
 ] as const;
-
-const budgetBands = ['Under $100', '$100-$500', '$500-$1000', '$1000+'] as const;
 
 const favoriteStyles = [
   'Minimalist',
@@ -34,6 +34,14 @@ function toggle(list: string[], value: string) {
 export function ClientOnboardingPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
+  const onboardingCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+  const budgetBands = [
+    `Under ${formatCurrencyAmount(100, onboardingCurrency)}`,
+    `${formatCurrencyAmount(100, onboardingCurrency)}-${formatCurrencyAmount(500, onboardingCurrency)}`,
+    `${formatCurrencyAmount(500, onboardingCurrency)}-${formatCurrencyAmount(1000, onboardingCurrency)}`,
+    `${formatCurrencyAmount(1000, onboardingCurrency)}+`,
+  ];
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [displayName, setDisplayName] = useState(user?.fullName || '');
   const [companyName, setCompanyName] = useState('');

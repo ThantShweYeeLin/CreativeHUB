@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { geocodeAddress } from '../../lib/osmGeocoding';
@@ -64,6 +66,7 @@ function parseTags(value: string) {
 export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
@@ -887,7 +890,14 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
                 { label: 'Portfolio Items', value: stats.portfolioCount, icon: Layers },
                 { label: 'Pending Requests', value: stats.pending, icon: Users },
                 { label: 'Accepted Requests', value: stats.accepted, icon: Check },
-                { label: 'Average Budget', value: `฿${stats.averageBudget.toLocaleString()}`, icon: TrendingUp },
+                {
+                  label: 'Average Budget',
+                  value: formatCurrencyAmount(
+                    convertAmount(stats.averageBudget, 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')),
+                    normalizeCurrencyCode(preferredCurrency, 'THB')
+                  ),
+                  icon: TrendingUp,
+                },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
                   <div className="mb-3 inline-flex rounded-xl bg-gray-100 p-3">

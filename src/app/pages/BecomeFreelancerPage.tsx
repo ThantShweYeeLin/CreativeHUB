@@ -2,9 +2,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { CheckCircle2, ChevronLeft, ImagePlus, UploadCloud, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
+import { normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
@@ -161,6 +163,7 @@ function ProfileImageDropzone({
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { currency: preferredCurrency, setCurrency } = useCurrency();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [displayName, setDisplayName] = useState(user?.fullName || '');
   const [profilePictureUpload, setProfilePictureUpload] = useState<ImageUpload | null>(null);
@@ -172,6 +175,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [experience, setExperience] = useState('');
   const [bio, setBio] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
+  const [startingPriceCurrency, setStartingPriceCurrency] = useState(normalizeCurrencyCode(preferredCurrency, 'THB'));
   const [projectBudgetRange, setProjectBudgetRange] = useState('');
   const [availability, setAvailability] = useState('Available');
   const [workingDays, setWorkingDays] = useState('Flexible');
@@ -198,6 +202,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const availableSpecialties = useMemo(() => {
     return Array.from(new Set(selectedServices.flatMap((service) => specialtyMap[service] || [])));
   }, [selectedServices]);
+
+  useEffect(() => {
+    setStartingPriceCurrency(normalizeCurrencyCode(preferredCurrency, 'THB'));
+  }, [preferredCurrency]);
 
   const addPortfolioFiles = (files: FileList | File[]) => {
     const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
@@ -379,6 +387,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     const parsedStartingPrice = Number(startingPrice || 0);
     const profileDescription = [
       bio.trim(),
+      parsedStartingPrice > 0 ? `Starting price: ${startingPriceCurrency.toUpperCase()} ${parsedStartingPrice}` : '',
       projectBudgetRange ? `Typical project budget: ${projectBudgetRange}` : '',
       `Working days: ${workingDays}`,
       instagram ? `Instagram: ${instagram}` : '',
@@ -426,6 +435,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       full_name: displayName.trim(),
       avatar_url: uploadedProfilePictureUrl || user.avatar_url || null,
       cover_url: uploadedCoverPhotoUrl,
+      preferred_currency: normalizeCurrencyCode(startingPriceCurrency, 'THB'),
       location: location.trim(),
       location_latitude: resolvedLat,
       location_longitude: resolvedLng,
@@ -503,6 +513,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         verification: { idDocumentUrl, businessLicenseUrl },
       })
     );
+
+    await setCurrency(normalizeCurrencyCode(startingPriceCurrency, 'THB'), true);
 
     setIsSaving(false);
     navigate('/freelancer-dashboard/portfolio');
@@ -659,9 +671,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
           {step === 3 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Starting Price (USD, optional)</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Starting Price (optional)</label>
                   <input
                     value={startingPrice}
                     onChange={(event) => setStartingPrice(event.target.value)}
@@ -671,12 +683,26 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                   />
                 </div>
                 <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Preferred Currency</label>
+                  <select
+                    value={startingPriceCurrency}
+                    onChange={(event) => setStartingPriceCurrency(normalizeCurrencyCode(event.target.value, 'THB'))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
+                  >
+                    {SUPPORTED_CURRENCIES.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.code} - {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Typical Project Budget (optional)</label>
                   <input
                     value={projectBudgetRange}
                     onChange={(event) => setProjectBudgetRange(event.target.value)}
                     className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3"
-                    placeholder="$300-$800"
+                    placeholder="USD 300-800"
                   />
                 </div>
               </div>

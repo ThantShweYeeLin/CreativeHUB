@@ -2,6 +2,8 @@ import { ChevronLeft, Clock, CheckCircle, FileText, Upload, AlertCircle, Refresh
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 
 interface BookingTrackingPageProps {
@@ -29,6 +31,7 @@ function getInitialStage(status: string | undefined): BookingStage {
 
 export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
   const { id } = useParams();
+  const { currency: preferredCurrency } = useCurrency();
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -107,6 +110,12 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
       bookingDate: booking.created_at ? new Date(booking.created_at).toLocaleDateString() : 'Pending',
     };
   }, [booking]);
+
+  const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+  const formatMoney = (amount: number) => {
+    const converted = convertAmount(Number(amount || 0), 'THB', viewerCurrency);
+    return formatCurrencyAmount(converted, viewerCurrency);
+  };
 
   const stages = [
     {
@@ -294,7 +303,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                 <div className="bg-white rounded-xl p-4 mb-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm text-gray-600">Deposit Amount</span>
-                    <span className="text-2xl font-bold text-gray-900">฿{bookingData.pricing.deposit.toLocaleString()}</span>
+                    <span className="text-2xl font-bold text-gray-900">{formatMoney(bookingData.pricing.deposit)}</span>
                   </div>
                   <p className="text-xs text-gray-500">This amount will be held until service completion</p>
                 </div>
@@ -311,7 +320,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                     <CheckCircle className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900">Deposit Secured: ฿{bookingData.pricing.deposit.toLocaleString()}</p>
+                    <p className="font-bold text-gray-900">Deposit Secured: {formatMoney(bookingData.pricing.deposit)}</p>
                     <p className="text-xs text-gray-600">
                       {currentStage === 'inProgress'
                         ? 'Held safely until service completion'
@@ -329,7 +338,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                     <CheckCircle className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-bold text-gray-900">฿{bookingData.pricing.deposit.toLocaleString()} Transferred</p>
+                    <p className="font-bold text-gray-900">{formatMoney(bookingData.pricing.deposit)} Transferred</p>
                     <p className="text-xs text-gray-600">Deposit successfully transferred to {bookingData.freelancer.name}</p>
                   </div>
                 </div>
@@ -404,7 +413,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                             <span className="text-sm font-bold text-gray-900">Deposit Transfer Required</span>
                           </div>
                           <p className="text-xs text-gray-600 mb-3">
-                            Transfer ฿{bookingData.pricing.deposit.toLocaleString()} to secure your booking
+                            Transfer {formatMoney(bookingData.pricing.deposit)} to secure your booking
                           </p>
                           <button className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-2 px-4 rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
                             Transfer Deposit
@@ -445,7 +454,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                           <div className="flex items-center gap-2">
                             <CheckCircle className="w-4 h-4 text-green-600" />
                             <p className="text-sm font-semibold text-green-900">
-                              ฿{bookingData.pricing.deposit.toLocaleString()} transferred to freelancer
+                              {formatMoney(bookingData.pricing.deposit)} transferred to freelancer
                             </p>
                           </div>
                         </div>
@@ -580,7 +589,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Service Price</span>
-              <span className="font-semibold text-gray-900">฿{bookingData.pricing.servicePrice.toLocaleString()}</span>
+              <span className="font-semibold text-gray-900">{formatMoney(bookingData.pricing.servicePrice)}</span>
             </div>
             <div className="flex justify-between text-sm items-start">
               <div className="flex-1">
@@ -589,11 +598,11 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                   <p className="text-xs text-gray-500 mt-0.5">To be transferred after completion</p>
                 )}
               </div>
-              <span className="font-semibold text-gray-900">฿{bookingData.pricing.deposit.toLocaleString()}</span>
+              <span className="font-semibold text-gray-900">{formatMoney(bookingData.pricing.deposit)}</span>
             </div>
             <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
               <span className="font-bold text-gray-900">Total Booking Cost</span>
-              <span className="font-bold text-gray-900 text-xl">฿{bookingData.pricing.total.toLocaleString()}</span>
+              <span className="font-bold text-gray-900 text-xl">{formatMoney(bookingData.pricing.total)}</span>
             </div>
           </div>
 
@@ -605,7 +614,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                 <div>
                   <p className="text-sm font-semibold text-gray-900 mb-1">How Deposit Works</p>
                   <p className="text-xs text-gray-600 leading-relaxed">
-                    Your ฿{bookingData.pricing.deposit.toLocaleString()} deposit is held securely by CreativeHUB AI.
+                    Your {formatMoney(bookingData.pricing.deposit)} deposit is held securely by CreativeHUB AI.
                     After the service is completed and you confirm satisfaction, the deposit will be automatically
                     transferred to {bookingData.freelancer.name}.
                   </p>
@@ -618,7 +627,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
             <div className="mt-4 bg-gradient-to-r from-green-50 to-green-100 rounded-xl p-4 flex items-center gap-3">
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
               <p className="text-sm text-gray-700">
-                <span className="font-bold">Deposit Transferred:</span> ฿{bookingData.pricing.deposit.toLocaleString()} has been successfully transferred to {bookingData.freelancer.name}
+                <span className="font-bold">Deposit Transferred:</span> {formatMoney(bookingData.pricing.deposit)} has been successfully transferred to {bookingData.freelancer.name}
               </p>
             </div>
           )}

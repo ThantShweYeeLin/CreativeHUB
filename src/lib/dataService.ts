@@ -575,6 +575,23 @@ export class DataService {
       return { data: fallbackAttempt.data, error: fallbackAttempt.error };
     }
 
+    if (
+      error &&
+      (error as any).message?.toLowerCase().includes("could not find the 'preferred_currency' column") &&
+      Object.prototype.hasOwnProperty.call(updates, 'preferred_currency')
+    ) {
+      const { preferred_currency: _currency, ...safeUpdates } = updates as any;
+
+      const fallbackAttempt = await supabase
+        .from('users')
+        .update(safeUpdates)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      return { data: fallbackAttempt.data, error: fallbackAttempt.error };
+    }
+
     return { data, error };
   }
 

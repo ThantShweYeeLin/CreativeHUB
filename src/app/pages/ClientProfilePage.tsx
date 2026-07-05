@@ -3,8 +3,10 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
@@ -16,6 +18,7 @@ interface ClientProfilePageProps {
 
 export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
   const [isEditMode, setIsEditMode] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -223,16 +226,15 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     return new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const formatCurrency = (amount: number | string | null) => {
+  const formatCurrency = (amount: number | string | null, sourceCurrency?: string) => {
     if (amount === null || amount === undefined) {
       return 'Budget not set';
     }
 
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(Number(amount));
+    const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+    const fromCurrency = normalizeCurrencyCode(sourceCurrency || profile?.preferred_currency || viewerCurrency, viewerCurrency);
+    const converted = convertAmount(Number(amount), fromCurrency, viewerCurrency);
+    return formatCurrencyAmount(converted, viewerCurrency);
   };
 
   const togglePostLike = async (postId: string) => {

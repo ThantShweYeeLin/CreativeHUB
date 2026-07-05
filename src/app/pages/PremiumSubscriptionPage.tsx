@@ -1,5 +1,7 @@
 import { ChevronLeft, Shield, Clock, Award, RefreshCw, FileText, Headphones, Tag, Star, Check, X, Sparkles, Crown } from 'lucide-react';
 import { useState } from 'react';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 
 interface PremiumSubscriptionPageProps {
   onBack: () => void;
@@ -52,6 +54,12 @@ const premiumFeatures = [
 
 export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps) {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+  const { currency: preferredCurrency } = useCurrency();
+  const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+  const annualPrice = formatCurrencyAmount(convertAmount(999, 'THB', viewerCurrency), viewerCurrency);
+  const monthlyPrice = formatCurrencyAmount(convertAmount(99, 'THB', viewerCurrency), viewerCurrency);
+  const monthlyFromAnnual = formatCurrencyAmount(convertAmount(83, 'THB', viewerCurrency), viewerCurrency);
+  const annualSavings = formatCurrencyAmount(convertAmount(189, 'THB', viewerCurrency), viewerCurrency);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
@@ -103,11 +111,11 @@ export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps
                   Annual Plan
                 </h3>
                 <p className={`text-sm ${selectedPlan === 'annual' ? 'text-gray-300' : 'text-gray-500'}`}>
-                  Save ฿189/year • Only ฿83/month
+                  Save {annualSavings}/year • Only {monthlyFromAnnual}/month
                 </p>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold">฿999</span>
+                <span className="text-4xl font-bold">{annualPrice}</span>
                 <span className={`text-lg ${selectedPlan === 'annual' ? 'text-gray-300' : 'text-gray-500'}`}>/year</span>
               </div>
               {selectedPlan === 'annual' && (
@@ -138,7 +146,7 @@ export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps
                 </p>
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-4xl font-bold">฿99</span>
+                <span className="text-4xl font-bold">{monthlyPrice}</span>
                 <span className={`text-lg ${selectedPlan === 'monthly' ? 'text-gray-300' : 'text-gray-500'}`}>/month</span>
               </div>
               {selectedPlan === 'monthly' && (
@@ -293,7 +301,7 @@ export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps
           <Crown className="w-6 h-6" />
           Upgrade to Premium
           <span className="text-sm font-normal">
-            {selectedPlan === 'annual' ? '฿999/year' : '฿99/month'}
+            {selectedPlan === 'annual' ? `${annualPrice}/year` : `${monthlyPrice}/month`}
           </span>
         </button>
 

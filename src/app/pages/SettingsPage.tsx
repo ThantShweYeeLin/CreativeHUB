@@ -12,7 +12,9 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
+import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 
 type Role = 'freelancer' | 'client';
@@ -117,7 +119,7 @@ const defaultFreelancerSettings: FreelancerSettingsState = {
 const defaultClientSettings: ClientSettingsState = {
   preferredStyles: 'Minimalist, Luxury, Vintage',
   preferredFreelancerTypes: 'Photographers, Designers, Videographers',
-  defaultBudgetRange: '$200-$500',
+  defaultBudgetRange: 'USD 200-500',
   preferredSearchArea: 'Bangkok',
   preferredSearchRadius: '50',
   useAIRecommendations: true,
@@ -135,6 +137,7 @@ interface SavedSettingsPayload {
 export function SettingsPage() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const { setCurrency } = useCurrency();
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -186,6 +189,10 @@ export function SettingsPage() {
       } else {
         setFullName(userResponse.data?.full_name || user.fullName || '');
         setEmail(userResponse.data?.email || user.email || '');
+        setPreferences((current) => ({
+          ...current,
+          currency: normalizeCurrencyCode((userResponse.data as any)?.preferred_currency || current.currency, 'THB'),
+        }));
       }
 
       if (freelancerResponse.data) {
@@ -287,7 +294,23 @@ export function SettingsPage() {
     setStatusMessage('Account settings saved.');
   };
 
-  const handleSavePreferences = () => {
+  const handleSavePreferences = async () => {
+    const normalizedCurrency = normalizeCurrencyCode(preferences.currency, 'THB');
+    setPreferences((current) => ({ ...current, currency: normalizedCurrency }));
+
+    if (user?.id) {
+      const response = await DataService.updateUser(user.id, {
+        preferred_currency: normalizedCurrency,
+        updated_at: new Date().toISOString(),
+      } as any);
+
+      if (response.error) {
+        setErrorMessage((response.error as any).message || 'Unable to save preferred currency.');
+        return;
+      }
+    }
+
+    await setCurrency(normalizedCurrency, false);
     persistLocalSettings();
     setStatusMessage('Preferences saved.');
     setErrorMessage(null);
@@ -313,6 +336,14 @@ export function SettingsPage() {
       setErrorMessage((response.error as any).message || 'Unable to save freelancer settings.');
       return;
     }
+
+    const preferredCurrency = normalizeCurrencyCode(freelancerSettings.pricingCurrency || preferences.currency, 'THB');
+    await DataService.updateUser(user.id, {
+      preferred_currency: preferredCurrency,
+      updated_at: new Date().toISOString(),
+    } as any);
+    await setCurrency(preferredCurrency, false);
+    setPreferences((current) => ({ ...current, currency: preferredCurrency }));
 
     persistLocalSettings();
     setStatusMessage('Freelancer settings saved.');
@@ -427,7 +458,7 @@ export function SettingsPage() {
               </select>
               <select value={preferences.theme} onChange={(e) => setPreferences((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="light">Light</option><option value="dark">Dark</option></select>
               <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="Time zone" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value }))} placeholder="Currency" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="Currency" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               <select value={preferences.distanceUnit} onChange={(e) => setPreferences((c) => ({ ...c, distanceUnit: e.target.value as 'km' | 'miles' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="km">Kilometers</option><option value="miles">Miles</option></select>
             </div>
           </section>
@@ -521,7 +552,7 @@ export function SettingsPage() {
           </section>
 
           <div className="flex items-center justify-between">
-            <button onClick={handleSavePreferences} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Save Global Preferences</button>
+            <button onClick={() => void handleSavePreferences()} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Save Global Preferences</button>
             <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"><LogOut className="h-4 w-4" /> Log out</button>
           </div>
         </div>

@@ -7,6 +7,8 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 
 interface ProfileCardProps {
   id: string;
@@ -114,6 +116,8 @@ function normalizeText(value: string | null | undefined) {
 
 export function ExplorePage() {
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
+  const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -121,6 +125,7 @@ export function ExplorePage() {
     services: [],
     priceRange: [0, 10000],
     locations: [],
+    currency: normalizedPreferredCurrency,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +161,24 @@ export function ExplorePage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    setFilters((current) => {
+      if (current.currency === normalizedPreferredCurrency) {
+        return current;
+      }
+
+      // Keep existing numeric budget intent when currency changes globally.
+      const nextMin = Math.round(convertAmount(current.priceRange[0], current.currency, normalizedPreferredCurrency));
+      const nextMax = Math.round(convertAmount(current.priceRange[1], current.currency, normalizedPreferredCurrency));
+
+      return {
+        ...current,
+        currency: normalizedPreferredCurrency,
+        priceRange: [Math.min(nextMin, nextMax), Math.max(nextMin, nextMax)],
+      };
+    });
+  }, [normalizedPreferredCurrency]);
 
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers.map((profile) => ({
@@ -218,10 +241,13 @@ export function ExplorePage() {
         });
 
       const hourlyRate = Number(source?.hourly_rate);
+      const sourceCurrency = normalizeCurrencyCode(source?.users?.preferred_currency || source?.preferred_currency || 'THB', 'THB');
       const [minPrice, maxPrice] = filters.priceRange;
-      const isDefaultPriceFilter = minPrice === 0 && maxPrice === 10000;
+      const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
+      const isDefaultPriceFilter = minPrice === 0 && maxPrice === defaultMaxForCurrency;
+      const hourlyRateInSelectedCurrency = convertAmount(hourlyRate, sourceCurrency, filters.currency);
       const priceMatch = Number.isFinite(hourlyRate)
-        ? hourlyRate >= minPrice && hourlyRate <= maxPrice
+        ? hourlyRateInSelectedCurrency >= minPrice && hourlyRateInSelectedCurrency <= maxPrice
         : isDefaultPriceFilter;
 
       return queryMatch && serviceMatch && locationMatch && priceMatch;
@@ -377,6 +403,7 @@ export function ExplorePage() {
 
       {showSearchFilter && (
         <SearchFilterPanel
+          initialFilters={filters}
           onClose={() => setShowSearchFilter(false)}
           onSearch={(nextFilters) => setFilters(nextFilters)}
         />

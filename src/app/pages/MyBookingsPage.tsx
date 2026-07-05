@@ -2,6 +2,8 @@ import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin } from 'lucide-react
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
@@ -29,6 +31,7 @@ function formatStatus(status: string) {
 
 export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps) {
   const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
   const [bookings, setBookings] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +97,12 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
       };
     });
   }, [bookings, user?.role]);
+
+  const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
+  const formatMoney = (amount: number) => {
+    const converted = convertAmount(Number(amount || 0), 'THB', viewerCurrency);
+    return formatCurrencyAmount(converted, viewerCurrency);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
@@ -177,14 +186,14 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
                 </div>
                 <div className="text-right">
                   <div className="text-xs text-gray-500">Total</div>
-                  <div className="font-bold text-gray-900">฿{booking.totalAmount.toLocaleString()}</div>
+                  <div className="font-bold text-gray-900">{formatMoney(booking.totalAmount)}</div>
                 </div>
               </div>
 
               {/* Deposit Info */}
               <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                 <span className="text-xs text-gray-600">Deposit</span>
-                <span className="text-xs font-semibold text-gray-900">฿{booking.deposit.toLocaleString()}</span>
+                <span className="text-xs font-semibold text-gray-900">{formatMoney(booking.deposit)}</span>
               </div>
             </button>
           ))}

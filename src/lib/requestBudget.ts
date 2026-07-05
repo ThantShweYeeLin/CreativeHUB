@@ -1,19 +1,17 @@
+import { formatCurrencyAmount, normalizeCurrencyCode, SUPPORTED_CURRENCIES as GLOBAL_SUPPORTED_CURRENCIES } from './currency';
+
 export interface BudgetMeta {
   currency: string;
   min: number;
   max: number;
 }
 
-const BUDGET_META_PATTERN = /\[\[BUDGET_META:([A-Z]{3}):(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)\]\]/;
+const BUDGET_META_PATTERN = /\[\[BUDGET_META:([^:\]]+):(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)\]\]/i;
 
-export const SUPPORTED_CURRENCIES = [
-  { code: 'THB', label: 'Thai Baht' },
-  { code: 'USD', label: 'US Dollar' },
-  { code: 'EUR', label: 'Euro' },
-  { code: 'GBP', label: 'British Pound' },
-  { code: 'JPY', label: 'Japanese Yen' },
-  { code: 'SGD', label: 'Singapore Dollar' },
-] as const;
+export const SUPPORTED_CURRENCIES = GLOBAL_SUPPORTED_CURRENCIES.map((item) => ({
+  code: item.code,
+  label: item.label,
+}));
 
 export function inferCurrencyFromLocation(location: string | null | undefined) {
   const normalized = (location || '').toLowerCase();
@@ -46,7 +44,8 @@ export function inferCurrencyFromLocation(location: string | null | undefined) {
 }
 
 export function buildBudgetMetaTag(meta: BudgetMeta) {
-  return `[[BUDGET_META:${meta.currency}:${meta.min}:${meta.max}]]`;
+  const safeCurrency = (meta.currency || 'THB').trim().toUpperCase().replace(/[:\]]/g, '') || 'THB';
+  return `[[BUDGET_META:${safeCurrency}:${meta.min}:${meta.max}]]`;
 }
 
 export function appendBudgetMeta(message: string, meta: BudgetMeta) {
@@ -76,11 +75,7 @@ export function stripBudgetMeta(text: string | null | undefined) {
 }
 
 export function formatMoney(amount: number, currency: string) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    maximumFractionDigits: 0,
-  }).format(amount);
+  return formatCurrencyAmount(amount, normalizeCurrencyCode(currency));
 }
 
 export function formatBudgetRange(meta: BudgetMeta) {
