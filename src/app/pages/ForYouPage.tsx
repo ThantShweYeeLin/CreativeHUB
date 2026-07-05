@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router';
 import {
   AtSign,
   Bookmark,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
+import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -731,8 +733,9 @@ function LocationPickerSheet({
 
 export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const { user } = useAuth();
+  const location = useLocation();
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('following');
+  const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
@@ -740,6 +743,8 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
+  const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
+  const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
@@ -762,20 +767,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const userAvatar = user?.avatar_url || fallbackProfileImage;
 
   useEffect(() => {
-    function handleOpenPostEvent(e: any) {
-      try {
-        const postId = e?.detail?.postId;
-        if (postId) {
-          setFocusedPostId(postId);
-          // ensure comments are loaded
-          loadCommentsForPost(postId).catch(() => {});
-        }
-      } catch (err) {
-        // ignore
-      }
-    }
-
-    window.addEventListener('open-post', handleOpenPostEvent as EventListener);
     let isMounted = true;
 
     async function loadFollowing() {
@@ -801,9 +792,26 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     return () => {
       isMounted = false;
-      window.removeEventListener('open-post', handleOpenPostEvent as EventListener);
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    const state = location.state as { openPostId?: string } | null;
+    const requestedPostId = state?.openPostId || null;
+    if (!requestedPostId) {
+      return;
+    }
+
+    setFocusedPostId(requestedPostId);
+  }, [location.state]);
+
+  useEffect(() => {
+    if (!focusedPostId || commentsByPostId[focusedPostId]) {
+      return;
+    }
+
+    loadCommentsForPost(focusedPostId).catch(() => {});
+  }, [focusedPostId, commentsByPostId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1022,7 +1030,10 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         )
       );
       setError((response.error as any).message || 'Unable to update like.');
+      return;
     }
+
+    dispatchClientPostUpdated(postId);
   };
 
   const handleSave = async (postId: string) => {
@@ -1110,6 +1121,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     );
     setCommentDraftByPostId((current) => ({ ...current, [postId]: '' }));
     setIsSubmittingCommentByPostId((current) => ({ ...current, [postId]: false }));
+    dispatchClientPostUpdated(postId);
   };
 
   const openPostFocus = (postId: string) => {
@@ -1147,6 +1159,47 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     }
 
     setLoadingCommentsByPostId((current) => ({ ...current, [postId]: false }));
+  };
+
+  useEffect(() => {
+    const state = location.state as { openPostId?: string } | null;
+    const requestedPostId = state?.openPostId || null;
+    if (!requestedPostId) {
+      return;
+    }
+
+    setFocusedPostId(requestedPostId);
+    loadCommentsForPost(requestedPostId).catch(() => {});
+  }, [location.state]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeClientPostUpdated((postId) => {
+      if (focusedPostId === postId) {
+        void loadPostLikes(postId);
+        void loadCommentsForPost(postId);
+      }
+    });
+
+    return unsubscribe;
+  }, [focusedPostId, commentsByPostId]);
+
+  const loadPostLikes = async (postId: string) => {
+    if (loadingLikesByPostId[postId]) {
+      return;
+    }
+
+    setLoadingLikesByPostId((current) => ({ ...current, [postId]: true }));
+    const clientPostId = postId.replace(/^client-post-/, '');
+    const response = await DataService.getClientPostLikeUsers(clientPostId);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load likes.');
+      setLikedUsersByPostId((current) => ({ ...current, [postId]: [] }));
+    } else {
+      setLikedUsersByPostId((current) => ({ ...current, [postId]: response.data || [] }));
+    }
+
+    setLoadingLikesByPostId((current) => ({ ...current, [postId]: false }));
   };
 
   const handleShare = async (postId: string) => {
@@ -1206,7 +1259,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
     const sharedPostPayload = {
-      postId: sharingPost.id.replace(/^client-post-/, ''),
+      postId: sharingPost.id,
       authorName: sharingPost.authorName,
       authorId: sharingPost.authorId,
       shareUrl,
@@ -1644,9 +1697,19 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption}</p>
 
               <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
-                <button onClick={() => void handleLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <button onClick={() => {
+                  void handleLike(focusedPost.id);
+                  void loadPostLikes(focusedPost.id);
+                }} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
                   {focusedPost.likes}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadPostLikes(focusedPost.id)}
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800"
+                >
+                  {loadingLikesByPostId[focusedPost.id] ? 'Loading...' : 'View likes'}
                 </button>
                 <button onClick={() => void handleCommentToggle(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <MessageCircle className="h-5 w-5 text-gray-700" />
@@ -1667,6 +1730,27 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   {focusedPost.location}
                 </div>
               )}
+
+              {likedUsersByPostId[focusedPost.id] && likedUsersByPostId[focusedPost.id].length > 0 ? (
+                <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                  <p className="mb-2 font-semibold text-gray-900">Liked by</p>
+                  <div className="flex flex-wrap gap-3">
+                    {likedUsersByPostId[focusedPost.id].map((user) => (
+                      <div key={user.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
+                        <ImageWithFallback
+                          src={user.avatar_url || fallbackProfileImage}
+                          alt={user.full_name || user.email || 'User'}
+                          className="h-8 w-8 rounded-full object-cover"
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{user.full_name || user.email || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500">@{String(user.email || '').split('@')[0]}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-5 space-y-3">
                 <p className="text-sm font-semibold text-gray-900">Comments</p>

@@ -581,7 +581,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('client_posts')
-      .select('id, caption, image_url, client_id')
+      .select('id, caption, image_url, client_id, client:client_id(id, full_name, avatar_url)')
       .in('id', postIds);
 
     return { data: data || [], error };
@@ -594,7 +594,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('client_posts')
-      .select('id, caption, image_url, client_id, created_at')
+      .select('id, caption, image_url, client_id, created_at, client:client_id(id, full_name, avatar_url)')
       .in('client_id', authorIds)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -1315,6 +1315,18 @@ export class DataService {
       .order('created_at', { ascending: true })
       .limit(limit);
     return { data, error };
+  }
+
+  static async getClientPostLikeUsers(postId: string) {
+    const { data, error } = await supabase
+      .from('client_post_likes')
+      .select('user:user_id(id, full_name, email, avatar_url)')
+      .eq('post_id', postId);
+
+    return {
+      data: (data || []).map((row: any) => row.user).filter(Boolean),
+      error,
+    };
   }
 
   static async toggleClientPostLike(userId: string, postId: string, currentlyLiked: boolean) {

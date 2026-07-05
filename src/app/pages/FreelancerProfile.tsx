@@ -4,6 +4,7 @@ import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Sha
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import {
   appendBudgetMeta,
@@ -34,8 +35,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
+  const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
+  const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [activeProjects, setActiveProjects] = useState(0);
@@ -356,6 +359,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setCommentsByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
     }
     setLoadingCommentsByPostId((current) => ({ ...current, [stateKey]: false }));
+
+    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
+    if (!likesResponse.error) {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
+    }
+  };
+
+  const loadFreelancerPostLikes = async (postId: string) => {
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: true }));
+    const response = await DataService.getClientPostLikeUsers(apiPostId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load likes.');
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: [] }));
+    } else {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
+    }
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: false }));
   };
 
   const closePostFocus = () => {
@@ -396,7 +418,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           },
         };
       });
+      return;
     }
+
+    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
+    if (!likesResponse.error) {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
+    }
+
+    dispatchClientPostUpdated(apiPostId);
   };
 
   const togglePostSave = async (postId: string) => {
@@ -493,6 +523,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     });
     setCommentDraftByPostId((current) => ({ ...current, [stateKey]: '' }));
     setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: false }));
+    dispatchClientPostUpdated(apiPostId);
   };
 
   if (isLoading) {
@@ -852,6 +883,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <Heart className={`h-5 w-5 ${postEngagement[focusedPost.id]?.liked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
                   {postEngagement[focusedPost.id]?.likes || 0}
                 </button>
+                <button onClick={() => void loadFreelancerPostLikes(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                  {loadingLikesByPostId[focusedPost.id] ? 'Loading...' : 'View likes'}
+                </button>
                 <button onClick={() => void openPostFocus(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <MessageCircle className="h-5 w-5 text-gray-700" />
                   {postEngagement[focusedPost.id]?.comments || 0}
@@ -867,6 +901,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div className="mt-5 space-y-3">
+                {likedUsersByPostId[focusedPost.id] && likedUsersByPostId[focusedPost.id].length > 0 ? (
+                  <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                    <p className="mb-2 font-semibold text-gray-900">Liked by</p>
+                    <div className="flex flex-wrap gap-3">
+                      {likedUsersByPostId[focusedPost.id].map((likedUser: any) => (
+                        <div key={likedUser.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
+                          <ImageWithFallback
+                            src={likedUser.avatar_url || fallbackProfileImage}
+                            alt={likedUser.full_name || likedUser.email || 'User'}
+                            className="h-8 w-8 rounded-full object-cover"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
+                            <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <p className="text-sm font-semibold text-gray-900">Comments</p>
                 {loadingCommentsByPostId[focusedPost.id] ? (
                   <p className="text-sm text-gray-500">Loading comments...</p>

@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
@@ -22,8 +23,10 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
+  const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
+  const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [formValues, setFormValues] = useState({
     full_name: '',
@@ -266,7 +269,15 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           },
         };
       });
+      return;
     }
+
+    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
+    if (!likesResponse.error) {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
+    }
+
+    dispatchClientPostUpdated(apiPostId);
   };
 
   const togglePostSave = async (postId: string) => {
@@ -357,6 +368,25 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       return;
     }
     setCommentsByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
+
+    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
+    if (!likesResponse.error) {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
+    }
+  };
+
+  const loadClientPostLikes = async (postId: string) => {
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: true }));
+    const response = await DataService.getClientPostLikeUsers(apiPostId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load likes.');
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: [] }));
+    } else {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
+    }
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: false }));
   };
 
   const submitComment = async (postId: string) => {
@@ -391,6 +421,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     });
     setCommentDraftByPostId((current) => ({ ...current, [stateKey]: '' }));
     setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: false }));
+    dispatchClientPostUpdated(apiPostId);
   };
 
   const deletePost = async (postId: string) => {
@@ -932,6 +963,9 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                         <Heart className={`h-5 w-5 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
                         {engagement.likes}
                       </button>
+                      <button onClick={() => void loadClientPostLikes(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                        {loadingLikesByPostId[postId] ? 'Loading...' : 'View likes'}
+                      </button>
                       <button onClick={() => void openPostFocus(postId)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                         <MessageCircle className="h-5 w-5" />
                         {engagement.comments}
@@ -945,6 +979,27 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                         {engagement.saves}
                       </button>
                     </div>
+
+                    {likedUsersByPostId[postId] && likedUsersByPostId[postId].length > 0 ? (
+                      <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                        <p className="mb-2 font-semibold text-gray-900">Liked by</p>
+                        <div className="flex flex-wrap gap-3">
+                          {likedUsersByPostId[postId].map((likedUser: any) => (
+                            <div key={likedUser.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
+                              <ImageWithFallback
+                                src={likedUser.avatar_url || DEFAULT_AVATAR_URL}
+                                alt={likedUser.full_name || likedUser.email || 'User'}
+                                className="h-8 w-8 rounded-full object-cover"
+                              />
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
+                                <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
                     <div className="space-y-3">
                       {(commentsByPostId[postId] || []).length === 0 ? (

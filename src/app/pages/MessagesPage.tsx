@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, ExternalLink, MessageCircle, Search, Send } from 'lucide-react';
+import { useLocation } from 'react-router';
+import { ChevronLeft, MessageCircle, Search, Send, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 
 interface MessagesPageProps {
   onBack: () => void;
@@ -81,7 +82,6 @@ function parseSharedPostMessage(content: string) {
 
 export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
@@ -100,9 +100,26 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messageReactionsById, setMessageReactionsById] = useState<Record<string, { counts: Record<string, number>; mine: string | null }>>({});
-  const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null }>>({});
-  const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null }>>({});
+  const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }>>({});
+  const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }>>({});
+  const [zoomedSharedPost, setZoomedSharedPost] = useState<{
+    authorName: string;
+    authorId: string | null;
+    authorAvatar: string;
+    postId: string | null;
+    imageUrl: string | null;
+    caption: string;
+  } | null>(null);
+  const [sharedPostLikeUsers, setSharedPostLikeUsers] = useState<any[]>([]);
+  const [sharedPostComments, setSharedPostComments] = useState<any[]>([]);
+  const [isSharedPostLikesLoading, setIsSharedPostLikesLoading] = useState(false);
+  const [isSharedPostCommentsLoading, setIsSharedPostCommentsLoading] = useState(false);
+  const [showSharedPostLikes, setShowSharedPostLikes] = useState(false);
+  const [sharedPostCommentDraft, setSharedPostCommentDraft] = useState('');
+  const [isSubmittingSharedPostComment, setIsSubmittingSharedPostComment] = useState(false);
   const openConversationWithUserId = (location.state as { openConversationWithUserId?: string } | null)?.openConversationWithUserId || null;
+
+  const getClientPostId = (postId: string | null) => postId ? postId.replace(/^client-post-/, '') : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -234,11 +251,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         if (uniquePostIds.length > 0) {
           const previewResponse = await DataService.getClientPostPreviews(uniquePostIds);
           if (!previewResponse.error) {
-            const previewMap: Record<string, { image_url: string | null; caption: string | null }> = {};
+            const previewMap: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }> = {};
             (previewResponse.data || []).forEach((row: any) => {
               previewMap[String(row.id)] = {
                 image_url: row.image_url || null,
                 caption: row.caption || null,
+                avatar_url: row.client?.avatar_url || null,
+                author_name: row.client?.full_name || null,
               };
             });
             setSharedPostPreviewById(previewMap);
@@ -256,7 +275,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         if (authorIds.length > 0) {
           const candidatesResponse = await DataService.getClientPostsByAuthors(authorIds);
           if (!candidatesResponse.error) {
-            const fallbackByMessageId: Record<string, { image_url: string | null; caption: string | null }> = {};
+            const fallbackByMessageId: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }> = {};
             const candidates = candidatesResponse.data || [];
 
             items.forEach((item: any) => {
@@ -279,6 +298,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               fallbackByMessageId[String(item.id)] = {
                 image_url: matched?.image_url || null,
                 caption: matched?.caption || null,
+                avatar_url: matched?.client?.avatar_url || null,
+                author_name: matched?.client?.full_name || null,
               };
             });
 
@@ -296,6 +317,134 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       isMounted = false;
     };
   }, [selectedConversationId, user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSharedPostDetails() {
+      if (!zoomedSharedPost?.postId) {
+        setSharedPostLikeUsers([]);
+        setSharedPostComments([]);
+        setShowSharedPostLikes(false);
+        return;
+      }
+
+      const clientPostId = getClientPostId(zoomedSharedPost.postId);
+      if (!clientPostId) {
+        return;
+      }
+
+      setIsSharedPostLikesLoading(true);
+      setIsSharedPostCommentsLoading(true);
+      setShowSharedPostLikes(false);
+
+      const [likesResponse, commentsResponse] = await Promise.all([
+        DataService.getClientPostLikeUsers(clientPostId),
+        DataService.getClientPostComments(clientPostId, 100),
+      ]);
+
+      if (!isMounted) {
+        return;
+      }
+
+      setSharedPostLikeUsers(likesResponse.error ? [] : likesResponse.data || []);
+      setSharedPostComments(commentsResponse.error ? [] : commentsResponse.data || []);
+      setIsSharedPostLikesLoading(false);
+      setIsSharedPostCommentsLoading(false);
+    }
+
+    void loadSharedPostDetails();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [zoomedSharedPost?.postId]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeClientPostUpdated((postId) => {
+      if (zoomedSharedPost?.postId && getClientPostId(zoomedSharedPost.postId) === postId) {
+        void (async () => {
+          const clientPostId = getClientPostId(zoomedSharedPost.postId);
+          if (!clientPostId) {
+            return;
+          }
+
+          const [likesResponse, commentsResponse] = await Promise.all([
+            DataService.getClientPostLikeUsers(clientPostId),
+            DataService.getClientPostComments(clientPostId, 100),
+          ]);
+
+          setSharedPostLikeUsers(likesResponse.error ? [] : likesResponse.data || []);
+          setSharedPostComments(commentsResponse.error ? [] : commentsResponse.data || []);
+        })();
+      }
+    });
+
+    return unsubscribe;
+  }, [zoomedSharedPost?.postId]);
+
+  const handleSharedPostLike = async () => {
+    if (!user?.id || !zoomedSharedPost?.postId) {
+      return;
+    }
+
+    const clientPostId = getClientPostId(zoomedSharedPost.postId);
+    if (!clientPostId) {
+      return;
+    }
+
+    const liked = sharedPostLikeUsers.some((likedUser) => String(likedUser.id) === String(user.id));
+    setIsSharedPostLikesLoading(true);
+    const response = await DataService.toggleClientPostLike(user.id, clientPostId, liked);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update like status.');
+      setIsSharedPostLikesLoading(false);
+      return;
+    }
+
+    const [likesResponse, commentsResponse] = await Promise.all([
+      DataService.getClientPostLikeUsers(clientPostId),
+      DataService.getClientPostComments(clientPostId, 100),
+    ]);
+
+    setSharedPostLikeUsers(likesResponse.error ? [] : likesResponse.data || []);
+    setSharedPostComments(commentsResponse.error ? [] : commentsResponse.data || []);
+    setIsSharedPostLikesLoading(false);
+    dispatchClientPostUpdated(clientPostId);
+  };
+
+  const handleSharedPostCommentSubmit = async () => {
+    if (!user?.id || !zoomedSharedPost?.postId) {
+      return;
+    }
+
+    const clientPostId = getClientPostId(zoomedSharedPost.postId);
+    const draft = sharedPostCommentDraft.trim();
+    if (!clientPostId || !draft) {
+      return;
+    }
+
+    setIsSubmittingSharedPostComment(true);
+    const response = await DataService.addClientPostComment(user.id, clientPostId, draft);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add comment.');
+      setIsSubmittingSharedPostComment(false);
+      return;
+    }
+
+    const [likesResponse, commentsResponse] = await Promise.all([
+      DataService.getClientPostLikeUsers(clientPostId),
+      DataService.getClientPostComments(clientPostId, 100),
+    ]);
+
+    setSharedPostLikeUsers(likesResponse.error ? [] : likesResponse.data || []);
+    setSharedPostComments(commentsResponse.error ? [] : commentsResponse.data || []);
+    setSharedPostCommentDraft('');
+    setIsSubmittingSharedPostComment(false);
+    dispatchClientPostUpdated(clientPostId);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -667,13 +816,17 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             ) : (
               <>
                 <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => onViewProfile?.(activeConversation.otherParticipantId)}
+                    className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm transition-opacity hover:opacity-80"
+                  >
                     <ImageWithFallback
                       src={activeConversation.avatar}
                       alt={activeConversation.name}
                       className="w-full h-full object-cover"
                     />
-                  </div>
+                  </button>
                   <div>
                     <h2 className="font-bold text-gray-900">{activeConversation.name}</h2>
                     <p className="text-sm text-gray-600">Direct conversation</p>
@@ -760,6 +913,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     const fallbackFromAuthorCaption = sharedPostFallbackByMessageId[String(message.id)] || null;
                     const resolvedPreview = sharedPost?.imageUrl || sharedPost?.previewUrl || previewFromDb?.image_url || fallbackFromAuthorCaption?.image_url || null;
                     const resolvedCaption = sharedPost?.caption || previewFromDb?.caption || fallbackFromAuthorCaption?.caption || 'A post was shared with you.';
+                    const resolvedAuthorAvatar = sharedPost?.authorId ? previewFromDb?.avatar_url || fallbackFromAuthorCaption?.avatar_url || fallbackProfileImage : fallbackProfileImage;
+                    const resolvedAuthorName = sharedPost?.authorName || previewFromDb?.author_name || fallbackFromAuthorCaption?.author_name || 'Shared post';
                     const reactions = messageReactionsById[String(message.id)] || { counts: {}, mine: null };
                     return (
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -774,23 +929,22 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                             <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-slate-700 bg-slate-950 text-white' : 'border-gray-200 bg-white text-gray-900'}`}>
                               <div className="flex items-start justify-between gap-3 px-4 py-3">
                                 <div className="flex items-center gap-3 min-w-0">
-                                  <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                                    {sharedPost.authorName ? sharedPost.authorName.split(' ').map((part) => part[0]).slice(0, 2).join('') : 'P'}
-                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => sharedPost.authorId && onViewProfile?.(sharedPost.authorId as string)}
+                                    className={`h-10 w-10 rounded-full overflow-hidden flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'} transition-opacity hover:opacity-80`}
+                                  >
+                                    <ImageWithFallback
+                                      src={resolvedAuthorAvatar}
+                                      alt={resolvedAuthorName}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </button>
                                   <div className="min-w-0">
-                                    <div className="truncate text-sm font-semibold">{sharedPost.authorName || 'Shared post'}</div>
+                                    <div className="truncate text-sm font-semibold">{resolvedAuthorName}</div>
                                     <div className={`truncate text-xs ${isMine ? 'text-slate-400' : 'text-gray-500'}`}>Shared post</div>
                                   </div>
                                 </div>
-                                {sharedPost.authorId && onViewProfile && (
-                                  <button
-                                    type="button"
-                                    onClick={() => onViewProfile(sharedPost.authorId as string)}
-                                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
-                                  >
-                                    View profile
-                                  </button>
-                                )}
                               </div>
 
                               <div className="px-4 pb-4">
@@ -820,12 +974,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const pid = sharedPost.postId || null;
-                                    if (pid) {
-                                      navigate('/for-you', { state: { openPostId: `client-post-${pid}` } });
-                                    } else if (sharedPost.shareUrl) {
-                                      window.location.href = sharedPost.shareUrl;
-                                    }
+                                    setZoomedSharedPost({
+                                      authorName: resolvedAuthorName,
+                                      authorId: sharedPost.authorId || null,
+                                      authorAvatar: resolvedAuthorAvatar,
+                                      postId: sharedPost.postId || null,
+                                      imageUrl: resolvedPreview,
+                                      caption: resolvedCaption,
+                                    });
                                   }}
                                   className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
                                 >
@@ -908,6 +1064,145 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       <Send className="w-5 h-5" />
                     </button>
                   </div>
+
+          {zoomedSharedPost && (
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+              <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+                <button
+                  type="button"
+                  onClick={() => setZoomedSharedPost(null)}
+                  className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <div className="max-h-[60vh] overflow-hidden bg-gray-100">
+                  {zoomedSharedPost.imageUrl ? (
+                    <ImageWithFallback
+                      src={zoomedSharedPost.imageUrl}
+                      alt={zoomedSharedPost.caption || zoomedSharedPost.authorName}
+                      className="max-h-[60vh] w-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex min-h-[320px] items-center justify-center bg-gray-100 px-6 text-center text-gray-500">
+                      No preview available for this post.
+                    </div>
+                  )}
+                </div>
+
+                <div className="max-h-[35vh] overflow-y-auto p-5">
+                  <div className="mb-4 flex items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (zoomedSharedPost.authorId) {
+                          onViewProfile?.(zoomedSharedPost.authorId);
+                        }
+                      }}
+                      className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
+                    >
+                      <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
+                        <ImageWithFallback src={zoomedSharedPost.authorAvatar} alt={zoomedSharedPost.authorName} className="h-full w-full object-cover" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900">{zoomedSharedPost.authorName}</p>
+                        <p className="text-xs text-gray-500">Shared post</p>
+                      </div>
+                    </button>
+                  </div>
+
+                  <p className="whitespace-pre-line text-sm text-gray-800">{zoomedSharedPost.caption}</p>
+
+                  <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowSharedPostLikes((current) => !current)}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800"
+                    >
+                      <span className="text-lg leading-none">♥</span>
+                      {isSharedPostLikesLoading ? 'Loading...' : `${sharedPostLikeUsers.length} likes`}
+                    </button>
+                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                      <MessageCircle className="h-5 w-5 text-gray-700" />
+                      {isSharedPostCommentsLoading ? 'Loading...' : `${sharedPostComments.length} comments`}
+                    </span>
+                  </div>
+
+                  {showSharedPostLikes ? (
+                    <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                      <p className="mb-2 font-semibold text-gray-900">Liked by</p>
+                      {sharedPostLikeUsers.length > 0 ? (
+                        <div className="flex flex-wrap gap-3">
+                          {sharedPostLikeUsers.map((likedUser) => (
+                            <button
+                              key={likedUser.id}
+                              type="button"
+                              onClick={() => onViewProfile?.(String(likedUser.id))}
+                              className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-50"
+                            >
+                              <ImageWithFallback
+                                src={likedUser.avatar_url || fallbackProfileImage}
+                                alt={likedUser.full_name || likedUser.email || 'User'}
+                                className="h-8 w-8 rounded-full object-cover"
+                              />
+                              <div>
+                                <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
+                                <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">No likes yet.</p>
+                      )}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-5 space-y-3">
+                    <p className="text-sm font-semibold text-gray-900">Comments</p>
+                    {isSharedPostCommentsLoading ? (
+                      <p className="text-sm text-gray-500">Loading comments...</p>
+                    ) : sharedPostComments.length === 0 ? (
+                      <p className="text-sm text-gray-500">No comments yet.</p>
+                    ) : (
+                      sharedPostComments.map((comment) => (
+                        <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                          <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
+                            <ImageWithFallback
+                              src={comment.user?.avatar_url || fallbackProfileImage}
+                              alt={comment.user?.full_name || 'User'}
+                              className="h-6 w-6 rounded-full object-cover"
+                            />
+                            <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
+                            <span>•</span>
+                            <span>{new Date(comment.created_at).toLocaleString()}</span>
+                          </div>
+                          <p className="whitespace-pre-wrap">{comment.content}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="mt-4 flex gap-2">
+                    <input
+                      value={sharedPostCommentDraft}
+                      onChange={(event) => setSharedPostCommentDraft(event.target.value)}
+                      placeholder="Write a comment..."
+                      className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSharedPostCommentSubmit()}
+                      disabled={isSubmittingSharedPostComment}
+                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {isSubmittingSharedPostComment ? 'Sending...' : 'Comment'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
                 </div>
               </>
             )}
