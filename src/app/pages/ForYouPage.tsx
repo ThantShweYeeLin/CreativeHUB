@@ -732,7 +732,7 @@ function LocationPickerSheet({
 export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const { user } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('for-you');
+  const [activeFeedTab, setActiveFeedTab] = useState<'for-you' | 'following'>('following');
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
@@ -762,6 +762,20 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const userAvatar = user?.avatar_url || fallbackProfileImage;
 
   useEffect(() => {
+    function handleOpenPostEvent(e: any) {
+      try {
+        const postId = e?.detail?.postId;
+        if (postId) {
+          setFocusedPostId(postId);
+          // ensure comments are loaded
+          loadCommentsForPost(postId).catch(() => {});
+        }
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    window.addEventListener('open-post', handleOpenPostEvent as EventListener);
     let isMounted = true;
 
     async function loadFollowing() {
@@ -787,6 +801,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     return () => {
       isMounted = false;
+      window.removeEventListener('open-post', handleOpenPostEvent as EventListener);
     };
   }, [user?.id]);
 
@@ -1086,7 +1101,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     setCommentsByPostId((current) => ({
       ...current,
-      [postId]: [...(current[postId] || []), nextComment],
+      [postId]: [...(current[postId] || []), ...(nextComment ? [nextComment as FeedComment] : [])],
     }));
     setPosts((current) =>
       current.map((item) =>

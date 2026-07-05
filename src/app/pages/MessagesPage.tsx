@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, ExternalLink, MessageCircle, Search, Send } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
@@ -81,6 +81,7 @@ function parseSharedPostMessage(content: string) {
 
 export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
@@ -816,14 +817,20 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               ) : null}
 
                               <div className="flex flex-wrap gap-2 px-4 py-4">
-                                <a
-                                  href={sharedPost.shareUrl || '#'}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const pid = sharedPost.postId || null;
+                                    if (pid) {
+                                      navigate('/for-you', { state: { openPostId: `client-post-${pid}` } });
+                                    } else if (sharedPost.shareUrl) {
+                                      window.location.href = sharedPost.shareUrl;
+                                    }
+                                  }}
                                   className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
                                 >
                                   Open post
-                                </a>
+                                </button>
                                 {sharedPost.authorId && onViewProfile && (
                                   <button
                                     type="button"
