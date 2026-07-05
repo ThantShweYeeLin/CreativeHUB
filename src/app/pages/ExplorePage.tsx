@@ -191,21 +191,11 @@ export function ExplorePage() {
       const query = normalizeText(searchQuery);
       const queryMatch =
         query.length === 0 ||
-        [
-          profile.name,
-          profile.specialty,
-          source?.title,
-          source?.description,
-          ...(source?.skills || []),
-          ...(source?.styles || []),
-          profile.location,
-        ]
-          .filter(Boolean)
-          .some((value) => {
-            const normalizedValue = normalizeText(value);
-            const words = normalizedValue.split(/\s+/).filter(Boolean);
-            return words.some((word) => word.startsWith(query)) || normalizedValue.startsWith(query);
-          });
+        (() => {
+          const normalizedName = normalizeText(profile.name);
+          const nameWords = normalizedName.split(/\s+/).filter(Boolean);
+          return nameWords.some((word) => word.startsWith(query)) || normalizedName.startsWith(query);
+        })();
 
       const serviceMatch =
         filters.services.length === 0 ||
@@ -251,6 +241,7 @@ export function ExplorePage() {
   const uncategorizedProfiles = filteredProfiles.filter((profile) =>
     ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
   );
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   return (
     <>
@@ -343,31 +334,41 @@ export function ExplorePage() {
 
       {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
-          <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers match these filters</h2>
-          <p className="text-gray-600">Adjust service, location, or price range in Advanced Filter.</p>
+          <h2 className="mb-2 text-xl font-bold text-gray-900">
+            {hasActiveSearch ? 'No name found' : 'No freelancers match these filters'}
+          </h2>
+          <p className="text-gray-600">
+            {hasActiveSearch
+              ? 'No freelancer name starts with that search. Try another name.'
+              : 'Adjust service, location, or price range in Advanced Filter.'}
+          </p>
         </div>
       )}
 
+      {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
+        <CarouselSection title="Matching Freelancers" profiles={filteredProfiles} />
+      )}
+
       {/* Carousel Sections */}
-      {!isLoading && makeupArtists.length > 0 && (
+      {!isLoading && !hasActiveSearch && makeupArtists.length > 0 && (
         <CarouselSection
           title="Popular Makeup Artists in Thailand"
           profiles={makeupArtists}
         />
       )}
-      {!isLoading && photographers.length > 0 && (
+      {!isLoading && !hasActiveSearch && photographers.length > 0 && (
         <CarouselSection
           title="Popular Photographers in Thailand"
           profiles={photographers}
         />
       )}
-      {!isLoading && models.length > 0 && (
+      {!isLoading && !hasActiveSearch && models.length > 0 && (
         <CarouselSection
           title="Popular Models in Thailand"
           profiles={models}
         />
       )}
-      {!isLoading && uncategorizedProfiles.length > 0 && (
+      {!isLoading && !hasActiveSearch && uncategorizedProfiles.length > 0 && (
         <CarouselSection
           title="Featured Creative Freelancers"
           profiles={uncategorizedProfiles}
