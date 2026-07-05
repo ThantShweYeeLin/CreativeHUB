@@ -51,14 +51,17 @@ const budgetPresetsBaseThb: Array<{ key: string; range: [number, number]; type: 
   { key: 'over', range: [8000, 10000], type: 'over' },
 ];
 
-const currencySuggestions = SUPPORTED_CURRENCIES.map((item) => item.code);
+function defaultRangeForCurrency(currencyCode: string): [number, number] {
+  const max = Math.round(convertAmount(10000, DEFAULT_CURRENCY, currencyCode));
+  return [PRICE_MIN, Math.max(PRICE_MIN, max)];
+}
 
 export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchFilterPanelProps) {
   const { currency: preferredCurrency, setCurrency } = useCurrency();
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, DEFAULT_CURRENCY);
   const [filters, setFilters] = useState<FilterState>({
     services: initialFilters?.services || [],
-    priceRange: initialFilters?.priceRange || [PRICE_MIN, PRICE_MAX],
+    priceRange: initialFilters?.priceRange || defaultRangeForCurrency(normalizedPreferredCurrency),
     locations: initialFilters?.locations || [],
     currency: normalizeCurrencyCode(initialFilters?.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
   });
@@ -206,18 +209,17 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
             <div className="space-y-6">
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-900">Currency</label>
-                <input
+                <select
                   value={filters.currency}
                   onChange={(event) => handleCurrencyChange(event.target.value)}
-                  list="advanced-filter-currencies"
-                  placeholder="Type any currency (e.g. USD, THB, MMK)"
                   className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
-                />
-                <datalist id="advanced-filter-currencies">
-                  {currencySuggestions.map((code) => (
-                    <option key={code} value={code} />
+                >
+                  {SUPPORTED_CURRENCIES.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.code} - {item.symbol} {item.label}
+                    </option>
                   ))}
-                </datalist>
+                </select>
               </div>
 
               <div className="flex flex-wrap gap-2">
@@ -308,7 +310,14 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
         {/* Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-6 rounded-b-3xl flex items-center justify-between">
           <button
-            onClick={() => setFilters({ services: [], priceRange: [PRICE_MIN, PRICE_MAX], locations: [], currency: normalizedPreferredCurrency })}
+            onClick={() =>
+              setFilters({
+                services: [],
+                priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
+                locations: [],
+                currency: normalizedPreferredCurrency,
+              })
+            }
             className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors"
           >
             Clear All
