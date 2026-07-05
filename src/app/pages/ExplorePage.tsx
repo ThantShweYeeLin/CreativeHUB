@@ -134,9 +134,7 @@ export function ExplorePage() {
       setIsLoading(true);
       setError(null);
 
-      const response = searchQuery.trim()
-        ? await DataService.searchFreelancers(searchQuery.trim())
-        : await DataService.getAllFreelancers(60);
+      const response = await DataService.getAllFreelancers(200);
 
       if (!isMounted) {
         return;
@@ -152,13 +150,12 @@ export function ExplorePage() {
       setIsLoading(false);
     }
 
-    const timeoutId = window.setTimeout(loadFreelancers, searchQuery.trim() ? 250 : 0);
+    void loadFreelancers();
 
     return () => {
       isMounted = false;
-      window.clearTimeout(timeoutId);
     };
-  }, [searchQuery]);
+  }, []);
 
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers.map((profile) => ({
@@ -191,9 +188,24 @@ export function ExplorePage() {
         ].join(' ')
       );
 
+      const query = normalizeText(searchQuery);
       const queryMatch =
-        searchQuery.trim().length === 0 ||
-        combinedText.includes(normalizeText(searchQuery));
+        query.length === 0 ||
+        [
+          profile.name,
+          profile.specialty,
+          source?.title,
+          source?.description,
+          ...(source?.skills || []),
+          ...(source?.styles || []),
+          profile.location,
+        ]
+          .filter(Boolean)
+          .some((value) => {
+            const normalizedValue = normalizeText(value);
+            const words = normalizedValue.split(/\s+/).filter(Boolean);
+            return words.some((word) => word.startsWith(query)) || normalizedValue.startsWith(query);
+          });
 
       const serviceMatch =
         filters.services.length === 0 ||
