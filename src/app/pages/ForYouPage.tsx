@@ -1710,24 +1710,21 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <div className="px-4 py-3 md:px-6 md:py-4">
                 <div className="mb-3 flex items-center justify-between md:mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
-                      <button
-                        type="button"
-                        onClick={() => void handleLike(post.id)}
-                        disabled={!!likingByPostId[post.id]}
-                      >
-                        <Heart className={`h-7 w-7 transition-all ${post.isLiked ? 'fill-red-500 text-red-500 scale-110' : 'text-gray-700 group-hover:scale-110'}`} />
-                      </button>
+                    <div
+                      className="group flex cursor-pointer items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
+                      onClick={() => void openLikesForPost(post.id)}
+                    >
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void openLikesForPost(post.id);
+                          void handleLike(post.id);
                         }}
-                        className="font-semibold text-gray-900"
+                        disabled={!!likingByPostId[post.id]}
                       >
-                        {post.likes}
+                        <Heart className={`h-7 w-7 transition-all ${post.isLiked ? 'fill-red-500 text-red-500 scale-110' : 'text-gray-700 group-hover:scale-110'}`} />
                       </button>
+                      <span className="font-semibold text-gray-900">{post.likes}</span>
                       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Like</span>
                     </div>
                     <button
@@ -2000,25 +1997,21 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption}</p>
 
               <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
-                <div className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <div
+                  className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-gray-800"
+                  onClick={() => void openLikesForPost(focusedPost.id)}
+                >
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(event) => {
+                      event.stopPropagation();
                       void handleLike(focusedPost.id);
                     }}
                     disabled={!!likingByPostId[focusedPost.id]}
                   >
                     <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
                   </button>
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void openLikesForPost(focusedPost.id);
-                    }}
-                  >
-                    {focusedPost.likes}
-                  </button>
+                  <span>{focusedPost.likes}</span>
                 </div>
                 <button
                   type="button"

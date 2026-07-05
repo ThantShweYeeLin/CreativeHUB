@@ -318,6 +318,16 @@ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+-- Backfill safety: keep only one like row per (post_id, user_id) before adding unique index.
+delete from public.client_post_likes a
+using public.client_post_likes b
+where a.post_id = b.post_id
+  and a.user_id = b.user_id
+  and a.ctid < b.ctid;
+
+create unique index if not exists idx_client_post_likes_post_user_unique
+  on public.client_post_likes(post_id, user_id);
+
 create index if not exists idx_client_post_likes_post_id on public.client_post_likes(post_id);
 create index if not exists idx_client_post_comments_post_id on public.client_post_comments(post_id);
 create index if not exists idx_client_post_saves_post_id on public.client_post_saves(post_id);
