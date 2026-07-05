@@ -906,7 +906,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
       const [freelancersResponse, clientPostsResponse] = await Promise.all([
         DataService.getAllFreelancers(40),
-        DataService.getClientPosts(30),
+        DataService.getClientPosts(30, user?.id),
       ]);
 
       const clientPostsTableMissing = isMissingClientPostsTable(clientPostsResponse.error);
@@ -963,8 +963,8 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           commentsCount: Math.max(0, Number(post.comments_count || 0)),
           timeAgo: toTimeAgo(post.created_at),
           createdAtRaw: post.created_at,
-          isLiked: false,
-          isSaved: false,
+          isLiked: !!post.liked_by_me,
+          isSaved: !!post.saved_by_me,
           isClientPost: true,
         };
       });

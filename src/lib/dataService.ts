@@ -1719,7 +1719,7 @@ export class DataService {
   }
 
   // CLIENT POSTS (FOR YOU)
-  static async getClientPosts(limit = 30) {
+  static async getClientPosts(limit = 30, userId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
       .select('*, client:client_id(id, email, full_name, avatar_url, location)')
@@ -1731,7 +1731,7 @@ export class DataService {
       return { data, error };
     }
 
-    const enriched = await this.enrichClientPostsWithEngagement(data);
+    const enriched = await this.enrichClientPostsWithEngagement(data, userId);
     return { data: enriched, error: null };
   }
 
@@ -1748,13 +1748,13 @@ export class DataService {
       return { data, error };
     }
 
-    const enriched = await this.enrichClientPostsWithEngagement(data);
+    const enriched = await this.enrichClientPostsWithEngagement(data, clientId);
     return { data: enriched, error: null };
   }
 
-  private static async enrichClientPostsWithEngagement(posts: any[]) {
+  private static async enrichClientPostsWithEngagement(posts: any[], userId?: string) {
     const postIds = posts.map((post) => String(post.id));
-    const statsResponse = await this.getClientPostEngagementStats(postIds);
+    const statsResponse = await this.getClientPostEngagementStats(postIds, userId);
 
     if (statsResponse.error || !statsResponse.data) {
       return posts;
@@ -1768,6 +1768,8 @@ export class DataService {
         ...post,
         likes_count: Math.max(Number(post.likes_count || 0), Number(stats?.likes || 0)),
         comments_count: Math.max(Number(post.comments_count || 0), Number(stats?.comments || 0)),
+        liked_by_me: !!stats?.liked_by_me,
+        saved_by_me: !!stats?.saved_by_me,
       };
     });
   }
