@@ -1060,7 +1060,7 @@ export class DataService {
         data: null,
         error: {
           message:
-            'Request insert blocked by RLS policy. Ensure you are logged in as a client and run the requests RLS migration SQL in supabase/schema.sql.',
+            'Request insert blocked by RLS policy. Ensure you are logged in and run the requests RLS migration SQL in supabase/schema.sql.',
         } as any,
       };
     }

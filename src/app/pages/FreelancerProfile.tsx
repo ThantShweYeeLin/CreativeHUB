@@ -281,8 +281,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    if (user.role !== 'client') {
-      setError('Only client accounts can submit booking requests.');
+    if (user.role !== 'client' && user.role !== 'freelancer') {
+      setError('Only client or freelancer accounts can submit booking requests.');
       return;
     }
 
