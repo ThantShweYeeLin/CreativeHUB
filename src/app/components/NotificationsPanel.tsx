@@ -23,9 +23,9 @@ interface NotificationsPanelProps {
   onMarkAllAsRead?: () => void;
   onOpenRequests?: () => void;
   onOpenMessages?: () => void;
-  onOpenProfile?: (userId: string | null) => void;
-  onAcceptFriendRequest?: (notificationId: string, requesterId: string | null) => void;
-  onDenyFriendRequest?: (notificationId: string, requesterId: string | null) => void;
+  onOpenProfile?: (notification: NotificationPanelItem) => void;
+  onAcceptFriendRequest?: (notification: NotificationPanelItem) => void;
+  onDenyFriendRequest?: (notification: NotificationPanelItem) => void;
 }
 
 const getNotificationIcon = (type: string) => {
@@ -153,7 +153,7 @@ export function NotificationsPanel({
                   }
 
                   if (notification.type === 'friend_request') {
-                    onOpenProfile?.(notification.requesterId || notification.actorId);
+                    onOpenProfile?.(notification);
                     onClose();
                     return;
                   }
@@ -198,13 +198,13 @@ export function NotificationsPanel({
                     {notification.type === 'friend_request' && (
                       <div className="mt-3 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
                         <button
-                          onClick={() => onAcceptFriendRequest?.(notification.id, notification.requesterId || notification.actorId)}
+                          onClick={() => onAcceptFriendRequest?.(notification)}
                           className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black"
                         >
                           Accept
                         </button>
                         <button
-                          onClick={() => onDenyFriendRequest?.(notification.id, notification.requesterId || notification.actorId)}
+                          onClick={() => onDenyFriendRequest?.(notification)}
                           className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
                         >
                           Deny

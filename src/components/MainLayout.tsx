@@ -29,7 +29,11 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
-    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || 'CreativeHUB';
+    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || (() => {
+      const messageText = typeof row.message === 'string' ? row.message : '';
+      const match = messageText.match(/^(.+?)\s+(?:sent|accepted|declined)\b/i);
+      return match?.[1]?.trim() || 'CreativeHUB';
+    })();
     const fallbackMessage = (() => {
       switch (String(row.type || 'system')) {
         case 'friend_request':
@@ -186,37 +190,66 @@ export function MainLayout({ children }: MainLayoutProps) {
     await DataService.markAllNotificationsAsRead(user.id);
   };
 
-  const handleOpenNotificationProfile = (userId: string | null) => {
-    if (!userId) {
+  const resolveNotificationUserId = async (notification: NotificationPanelItem) => {
+    if (notification.requesterId || notification.actorId) {
+      return notification.requesterId || notification.actorId;
+    }
+
+    const searchName = notification.actorName?.trim();
+    if (!searchName) {
+      return null;
+    }
+
+    const searchResponse = await DataService.searchUsers(searchName, { limit: 1 });
+    if (searchResponse.error || !searchResponse.data?.length) {
+      return null;
+    }
+
+    return searchResponse.data[0].id;
+  };
+
+  const handleOpenNotificationProfile = async (notification: NotificationPanelItem) => {
+    const targetUserId = await resolveNotificationUserId(notification);
+    if (!targetUserId) {
       return;
     }
 
     setShowNotifications(false);
-    navigate(`/profile/${userId}`);
+    navigate(`/profile/${targetUserId}`);
   };
 
-  const handleAcceptFriendRequest = async (notificationId: string, requesterId: string | null) => {
-    if (!user?.id || !requesterId) {
+  const handleAcceptFriendRequest = async (notification: NotificationPanelItem) => {
+    if (!user?.id) {
       return;
     }
 
-    setProcessingNotificationId(notificationId);
+    const requesterId = await resolveNotificationUserId(notification);
+    if (!requesterId) {
+      return;
+    }
+
+    setProcessingNotificationId(notification.id);
     const response = await DataService.acceptFriendRequest(requesterId, user.id);
     if (!response.error) {
-      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
     }
     setProcessingNotificationId(null);
   };
 
-  const handleDenyFriendRequest = async (notificationId: string, requesterId: string | null) => {
-    if (!user?.id || !requesterId) {
+  const handleDenyFriendRequest = async (notification: NotificationPanelItem) => {
+    if (!user?.id) {
       return;
     }
 
-    setProcessingNotificationId(notificationId);
+    const requesterId = await resolveNotificationUserId(notification);
+    if (!requesterId) {
+      return;
+    }
+
+    setProcessingNotificationId(notification.id);
     const response = await DataService.denyFriendRequest(requesterId, user.id);
     if (!response.error) {
-      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+      setNotifications((current) => current.filter((item) => item.id !== notification.id));
     }
     setProcessingNotificationId(null);
   };
