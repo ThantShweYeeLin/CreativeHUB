@@ -845,7 +845,30 @@ export class DataService {
     }
 
     const { data, error } = await query;
-    return { data, error };
+    if (!error) {
+      return { data, error: null };
+    }
+
+    const message = String((error as any)?.message || '').toLowerCase();
+    const missingActorColumn = message.includes('actor_id') && (message.includes('does not exist') || message.includes('schema cache'));
+
+    if (!missingActorColumn) {
+      return { data: null, error };
+    }
+
+    let fallbackQuery = supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (unreadOnly) {
+      fallbackQuery = fallbackQuery.eq('read', false);
+    }
+
+    const fallback = await fallbackQuery;
+    return { data: fallback.data || [], error: fallback.error };
   }
 
   static async markNotificationAsRead(notificationId: string) {
@@ -882,6 +905,18 @@ export class DataService {
       return { data: null, error: null };
     }
 
+    const legacyRpc = await supabase.rpc('create_app_notification', {
+      target_user_id: notification.user_id,
+      notification_kind: notification.type,
+      notification_title: notification.title,
+      notification_message: notification.message || null,
+      notification_related_id: notification.related_id || notification.post_id || notification.comment_id || null,
+    });
+
+    if (!legacyRpc.error) {
+      return { data: null, error: null };
+    }
+
     const { data, error } = await supabase
       .from('notifications')
       .insert({
@@ -899,7 +934,34 @@ export class DataService {
       .select()
       .single();
 
-    return { data, error: error || rpcResult.error };
+    if (!error) {
+      return { data, error: null };
+    }
+
+    const errorMessage = String((error as any)?.message || '').toLowerCase();
+    const missingExtendedColumn = (
+      ['actor_id', 'post_id', 'comment_id', 'metadata']
+        .some((column) => errorMessage.includes(column))
+    ) && (errorMessage.includes('does not exist') || errorMessage.includes('schema cache'));
+
+    if (!missingExtendedColumn) {
+      return { data: null, error };
+    }
+
+    const minimalInsert = await supabase
+      .from('notifications')
+      .insert({
+        user_id: notification.user_id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message || null,
+        related_id: notification.related_id || notification.post_id || notification.comment_id || null,
+        read: notification.read ?? false,
+      } as any)
+      .select()
+      .single();
+
+    return { data: minimalInsert.data, error: minimalInsert.error || null };
   }
 
   private static async notifyEvent(args: {

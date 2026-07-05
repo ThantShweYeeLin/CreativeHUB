@@ -324,3 +324,71 @@ create index if not exists idx_client_post_saves_post_id on public.client_post_s
 create index if not exists idx_client_post_shares_post_id on public.client_post_shares(post_id);
 create index if not exists idx_message_reactions_message_id on public.message_reactions(message_id);
 create index if not exists idx_message_reactions_user_id on public.message_reactions(user_id);
+
+-- Notifications policies and fallback RPC for legacy schemas
+alter table if exists public.notifications enable row level security;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users see own notifications"
+    ON public.notifications
+    FOR SELECT
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can update own notifications"
+    ON public.notifications
+    FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can insert own notifications"
+    ON public.notifications
+    FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+create or replace function public.create_app_notification(
+  target_user_id uuid,
+  notification_kind text,
+  notification_title text,
+  notification_message text default null,
+  notification_related_id uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if target_user_id is null then
+    return;
+  end if;
+
+  insert into public.notifications (
+    user_id,
+    type,
+    title,
+    message,
+    related_id,
+    read
+  ) values (
+    target_user_id,
+    coalesce(notification_kind, 'system'),
+    coalesce(notification_title, 'Notification'),
+    notification_message,
+    notification_related_id,
+    false
+  );
+end;
+$$;
+
+grant execute on function public.create_app_notification(uuid, text, text, text, uuid) to anon, authenticated;
