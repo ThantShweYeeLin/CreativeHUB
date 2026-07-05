@@ -4,7 +4,7 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
+import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -32,6 +32,15 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingRequest, setEditingRequest] = useState<any | null>(null);
+  const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
+  const [editForm, setEditForm] = useState({
+    projectName: '',
+    budgetMin: '',
+    budgetMax: '',
+    description: '',
+    recipientIds: [] as string[],
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -45,7 +54,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       setIsLoading(true);
       setError(null);
 
-      const response = await DataService.getClientRequests(user.id);
+      const response = await DataService.getClientRequestsWithProgress(user.id);
       if (!isMounted) return;
 
       if (response.error) {
@@ -58,7 +67,22 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       setIsLoading(false);
     }
 
+    async function loadFreelancerOptions() {
+      const response = await DataService.getAllFreelancers(80);
+      if (!isMounted || response.error) {
+        return;
+      }
+
+      const items = (response.data || []).map((item: any) => ({
+        id: String(item.user_id || item.users?.id || item.id),
+        full_name: item.users?.full_name || item.title || 'Freelancer',
+        title: item.title || item.skills?.[0] || 'Creative Freelancer',
+      }));
+      setAvailableFreelancers(items);
+    }
+
     loadRequests();
+    loadFreelancerOptions();
 
     return () => {
       isMounted = false;
@@ -74,6 +98,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           max: Number(request.budget || 0),
         },
         id: request.id,
+        groupMeta: request.group_meta || null,
+        acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
+        isGroupRequest: Boolean(request.is_group_request),
         freelancer: {
           name: request.freelancer?.full_name || 'Freelancer',
           specialty: request.freelancer?.title || 'Creative Freelancer',
@@ -83,10 +110,66 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         budget: Number(request.budget || 0),
         status: request.status as 'pending' | 'accepted' | 'rejected',
         date: request.created_at,
-        message: stripBudgetMeta(request.message || request.description || ''),
+        message: stripBudgetMeta(request.plain_message || request.message || request.description || ''),
       })),
     [requests]
   );
+
+  const openEditRequest = (request: any) => {
+    if (request.status !== 'pending') {
+      return;
+    }
+
+    setEditingRequest(request);
+    setEditForm({
+      projectName: request.projectName,
+      budgetMin: String(request.budgetMeta?.min || request.budget || ''),
+      budgetMax: String(request.budgetMeta?.max || request.budget || ''),
+      description: request.message || '',
+      recipientIds: request.groupMeta?.recipients || [],
+    });
+  };
+
+  const saveRequestEdits = async () => {
+    if (!user?.id || !editingRequest) {
+      return;
+    }
+
+    const min = Number(editForm.budgetMin);
+    const max = Number(editForm.budgetMax);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= 0 || max < min) {
+      setError('Please enter a valid budget range.');
+      return;
+    }
+
+    const descriptionWithBudget = appendBudgetMeta(editForm.description, {
+      currency: editingRequest.budgetMeta?.currency || 'THB',
+      min,
+      max,
+    });
+
+    const response = await DataService.updatePendingBookingRequest({
+      requestId: editingRequest.id,
+      clientId: user.id,
+      projectName: editForm.projectName,
+      description: descriptionWithBudget,
+      budget: max,
+      recipientIds: editingRequest.groupMeta ? editForm.recipientIds : undefined,
+    });
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update request.');
+      return;
+    }
+
+    setEditingRequest(null);
+    setError(null);
+
+    const reload = await DataService.getClientRequestsWithProgress(user.id);
+    if (!reload.error) {
+      setRequests(reload.data || []);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
@@ -166,6 +249,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       <div>
                         <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
+                      {request.isGroupRequest && (
+                        <div>
+                          <span className="font-semibold text-gray-900">Status:</span> {request.acceptanceProgress}
+                        </div>
+                      )}
                     </div>
 
                     {/* Response Message */}
@@ -184,7 +272,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
                       {request.status === 'pending' && (
-                        <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all">
+                        <button
+                          onClick={() => openEditRequest(request)}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                        >
                           <Edit className="w-4 h-4" />
                           Edit Request
                         </button>
@@ -230,6 +321,79 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           </div>
         )}
       </div>
+
+      {editingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">Edit Pending Request</h3>
+            <div className="mt-4 space-y-4">
+              <input
+                value={editForm.projectName}
+                onChange={(event) => setEditForm((current) => ({ ...current, projectName: event.target.value }))}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                placeholder="Project name"
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  value={editForm.budgetMin}
+                  onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}
+                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  placeholder="Min budget"
+                />
+                <input
+                  value={editForm.budgetMax}
+                  onChange={(event) => setEditForm((current) => ({ ...current, budgetMax: event.target.value }))}
+                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  placeholder="Max budget"
+                />
+              </div>
+
+              <textarea
+                rows={4}
+                value={editForm.description}
+                onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                placeholder="Description"
+              />
+
+              {editingRequest.groupMeta && (
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-gray-900">Recipients</p>
+                  <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+                    {availableFreelancers.map((freelancer) => {
+                      const checked = editForm.recipientIds.includes(freelancer.id);
+                      return (
+                        <label key={freelancer.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                          <span>{freelancer.full_name}</span>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) => {
+                              const isChecked = event.target.checked;
+                              setEditForm((current) => ({
+                                ...current,
+                                recipientIds: isChecked
+                                  ? Array.from(new Set([...current.recipientIds, freelancer.id]))
+                                  : current.recipientIds.filter((id) => id !== freelancer.id),
+                              }));
+                            }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setEditingRequest(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2 font-semibold text-gray-700">Cancel</button>
+              <button onClick={() => void saveRequestEdits()} className="flex-1 rounded-xl bg-gray-900 px-4 py-2 font-semibold text-white">Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

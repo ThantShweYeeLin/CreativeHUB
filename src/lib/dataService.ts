@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
 import type { Database } from './supabase';
+import {
+  appendGroupRequestMeta,
+  buildGroupRequestMeta,
+  parseGroupRequestMeta,
+  stripGroupRequestMeta,
+} from './groupRequest';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -7,6 +13,15 @@ type Portfolio = Database['public']['Tables']['portfolios']['Row'];
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
 type Favorite = Database['public']['Tables']['favorites']['Row'];
+
+interface GroupConversationRow {
+  id: string;
+  title: string;
+  created_by: string | null;
+  related_group_request_id: string | null;
+  last_message_at: string;
+  created_at: string;
+}
 
 export interface UserSearchResult {
   id: string;
@@ -802,6 +817,177 @@ export class DataService {
     return this.createConversation(participant1Id, participant2Id);
   }
 
+  static async getUserGroupConversations(userId: string) {
+    const { data, error } = await supabase
+      .from('group_conversation_members')
+      .select('conversation_id, group_conversations:conversation_id(*)')
+      .eq('user_id', userId);
+
+    if (error || !data) {
+      return { data: [], error };
+    }
+
+    const conversations = (data || [])
+      .map((row: any) => row.group_conversations)
+      .filter(Boolean)
+      .sort((a: any, b: any) => {
+        const aTime = new Date(a.last_message_at || a.created_at || 0).getTime();
+        const bTime = new Date(b.last_message_at || b.created_at || 0).getTime();
+        return bTime - aTime;
+      });
+
+    return { data: conversations, error: null };
+  }
+
+  static async getGroupConversationMembers(conversationId: string) {
+    const { data, error } = await supabase
+      .from('group_conversation_members')
+      .select('conversation_id, user_id, role, users:user_id(id, full_name, email, avatar_url)')
+      .eq('conversation_id', conversationId)
+      .order('joined_at', { ascending: true });
+
+    return { data: data || [], error };
+  }
+
+  static async createGroupConversation(input: {
+    title: string;
+    createdBy: string;
+    memberIds: string[];
+    relatedGroupRequestId?: string;
+  }) {
+    const memberIds = Array.from(new Set(input.memberIds.filter(Boolean)));
+    if (!memberIds.includes(input.createdBy)) {
+      memberIds.push(input.createdBy);
+    }
+
+    const { data, error } = await supabase
+      .from('group_conversations')
+      .insert({
+        title: input.title,
+        created_by: input.createdBy,
+        related_group_request_id: input.relatedGroupRequestId || null,
+        last_message_at: new Date().toISOString(),
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      return { data: null, error };
+    }
+
+    const { error: membersError } = await supabase
+      .from('group_conversation_members')
+      .insert(
+        memberIds.map((userId) => ({
+          conversation_id: data.id,
+          user_id: userId,
+          role: userId === input.createdBy ? 'owner' : 'member',
+        }))
+      );
+
+    if (membersError) {
+      return { data: null, error: membersError };
+    }
+
+    return { data: data as GroupConversationRow, error: null };
+  }
+
+  static async ensureGroupConversationForRequest(input: {
+    groupRequestId: string;
+    title: string;
+    createdBy: string;
+    memberIds: string[];
+  }) {
+    const existing = await supabase
+      .from('group_conversations')
+      .select('*')
+      .eq('related_group_request_id', input.groupRequestId)
+      .maybeSingle();
+
+    if (existing.data) {
+      return { data: existing.data as GroupConversationRow, error: null };
+    }
+
+    const created = await this.createGroupConversation({
+      title: input.title,
+      createdBy: input.createdBy,
+      memberIds: input.memberIds,
+      relatedGroupRequestId: input.groupRequestId,
+    });
+
+    if (!created.error || created.data) {
+      return created;
+    }
+
+    const duplicate = String((created.error as any)?.message || '').toLowerCase().includes('duplicate');
+    if (!duplicate) {
+      return created;
+    }
+
+    const fallback = await supabase
+      .from('group_conversations')
+      .select('*')
+      .eq('related_group_request_id', input.groupRequestId)
+      .maybeSingle();
+
+    return { data: (fallback.data as GroupConversationRow) || null, error: fallback.error };
+  }
+
+  static async getGroupMessages(conversationId: string, limit = 80) {
+    const { data, error } = await supabase
+      .from('group_messages')
+      .select('id, conversation_id, sender_id, content, created_at')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    return { data: data || [], error };
+  }
+
+  static async sendGroupMessage(input: {
+    conversationId: string;
+    senderId: string;
+    content: string;
+  }) {
+    const { data, error } = await supabase
+      .from('group_messages')
+      .insert({
+        conversation_id: input.conversationId,
+        sender_id: input.senderId,
+        content: input.content,
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await supabase
+      .from('group_conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', input.conversationId);
+
+    const members = await this.getGroupConversationMembers(input.conversationId);
+    const recipients = (members.data || [])
+      .map((row: any) => String(row.user_id))
+      .filter((id: string) => id && id !== input.senderId);
+
+    for (const recipientId of recipients) {
+      await this.notifyEvent({
+        userId: recipientId,
+        actorId: input.senderId,
+        type: 'group_message',
+        title: 'New group message',
+        message: 'You received a new message in a group chat.',
+        relatedId: input.conversationId,
+        metadata: { conversation_id: input.conversationId, is_group: true },
+      });
+    }
+
+    return { data, error: null };
+  }
+
   static async getMessages(conversationId: string, limit = 50) {
     const { data, error } = await supabase
       .from('messages')
@@ -1319,6 +1505,199 @@ export class DataService {
     }
 
     return { data, error };
+  }
+
+  static async createBookingRequests(input: {
+    clientId: string;
+    recipientIds: string[];
+    projectName: string;
+    description: string;
+    budget: number;
+  }) {
+    const recipients = Array.from(new Set(input.recipientIds.filter(Boolean)));
+    if (!recipients.length) {
+      return { data: [], error: new Error('Please select at least one recipient.') };
+    }
+
+    const isGroup = recipients.length > 1;
+    const groupMeta = isGroup ? buildGroupRequestMeta(input.clientId, recipients) : null;
+    const payloadMessage = groupMeta
+      ? appendGroupRequestMeta(input.description, groupMeta)
+      : stripGroupRequestMeta(input.description);
+
+    const created: any[] = [];
+    for (const recipientId of recipients) {
+      const response = await this.createRequest({
+        client_id: input.clientId,
+        freelancer_id: recipientId,
+        project_name: input.projectName,
+        description: payloadMessage,
+        message: payloadMessage,
+        budget: input.budget,
+        status: 'pending',
+      } as any);
+
+      if (response.error) {
+        return { data: created, error: response.error };
+      }
+
+      created.push(response.data);
+    }
+
+    return { data: created, error: null };
+  }
+
+  static getRequestGroupMeta(request: any) {
+    return parseGroupRequestMeta(request?.message, request?.description);
+  }
+
+  static getRequestPlainMessage(request: any) {
+    return stripGroupRequestMeta(request?.message || request?.description || '');
+  }
+
+  static async getClientRequestsWithProgress(clientId: string) {
+    const response = await this.getClientRequests(clientId);
+    if (response.error || !response.data) {
+      return response;
+    }
+
+    const requests = response.data || [];
+    const groups = new Map<string, { total: number; accepted: number }>();
+
+    requests.forEach((request: any) => {
+      const meta = this.getRequestGroupMeta(request);
+      if (!meta?.group_id) {
+        return;
+      }
+
+      if (!groups.has(meta.group_id)) {
+        groups.set(meta.group_id, { total: 0, accepted: 0 });
+      }
+      const current = groups.get(meta.group_id)!;
+      current.total += 1;
+      if (request.status === 'accepted') {
+        current.accepted += 1;
+      }
+    });
+
+    const enriched = requests.map((request: any) => {
+      const meta = this.getRequestGroupMeta(request);
+      if (!meta?.group_id) {
+        return {
+          ...request,
+          plain_message: this.getRequestPlainMessage(request),
+          acceptance_progress: '0 out of 1 accepted',
+          is_group_request: false,
+        };
+      }
+
+      const stats = groups.get(meta.group_id) || { total: 1, accepted: 0 };
+      return {
+        ...request,
+        plain_message: this.getRequestPlainMessage(request),
+        group_meta: meta,
+        acceptance_progress: `${stats.accepted} out of ${stats.total} accepted`,
+        is_group_request: true,
+      };
+    });
+
+    return { data: enriched, error: null };
+  }
+
+  static async updatePendingBookingRequest(input: {
+    requestId: string;
+    clientId: string;
+    projectName: string;
+    description: string;
+    budget: number;
+    recipientIds?: string[];
+  }) {
+    const currentResponse = await supabase
+      .from('requests')
+      .select('*')
+      .eq('id', input.requestId)
+      .eq('client_id', input.clientId)
+      .single();
+
+    if (currentResponse.error || !currentResponse.data) {
+      return { data: null, error: currentResponse.error || new Error('Request not found.') };
+    }
+
+    const currentRequest = currentResponse.data;
+    if (currentRequest.status !== 'pending') {
+      return { data: null, error: new Error('Only pending requests can be edited.') };
+    }
+
+    const meta = this.getRequestGroupMeta(currentRequest);
+    const requestedRecipients = Array.from(new Set((input.recipientIds || []).filter(Boolean)));
+
+    if (!meta?.group_id) {
+      const nextMessage = stripGroupRequestMeta(input.description);
+      return this.updateRequest(input.requestId, {
+        project_name: input.projectName,
+        description: nextMessage,
+        message: nextMessage,
+        budget: input.budget,
+      } as any);
+    }
+
+    const groupRequestsResponse = await supabase
+      .from('requests')
+      .select('*')
+      .eq('client_id', input.clientId)
+      .eq('status', 'pending');
+
+    if (groupRequestsResponse.error) {
+      return { data: null, error: groupRequestsResponse.error };
+    }
+
+    const groupRequests = (groupRequestsResponse.data || []).filter((request: any) => {
+      const rowMeta = this.getRequestGroupMeta(request);
+      return rowMeta?.group_id === meta.group_id;
+    });
+
+    const currentRecipients = new Set(groupRequests.map((request: any) => String(request.freelancer_id)));
+    const desiredRecipients = new Set(requestedRecipients.length ? requestedRecipients : Array.from(currentRecipients));
+    const mergedMeta = {
+      ...meta,
+      recipients: Array.from(desiredRecipients),
+    };
+    const nextMessage = appendGroupRequestMeta(input.description, mergedMeta as any);
+
+    for (const request of groupRequests) {
+      await this.updateRequest(request.id, {
+        project_name: input.projectName,
+        description: nextMessage,
+        message: nextMessage,
+        budget: input.budget,
+      } as any);
+    }
+
+    for (const freelancerId of desiredRecipients) {
+      if (currentRecipients.has(freelancerId)) {
+        continue;
+      }
+
+      await this.createRequest({
+        client_id: input.clientId,
+        freelancer_id: freelancerId,
+        project_name: input.projectName,
+        description: nextMessage,
+        message: nextMessage,
+        budget: input.budget,
+        status: 'pending',
+      } as any);
+    }
+
+    for (const request of groupRequests) {
+      if (desiredRecipients.has(String(request.freelancer_id))) {
+        continue;
+      }
+
+      await supabase.from('requests').delete().eq('id', request.id).eq('status', 'pending');
+    }
+
+    return { data: { updated: true }, error: null };
   }
 
   static async getFreelancerRequests(freelancerId: string) {

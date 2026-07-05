@@ -402,3 +402,143 @@ end;
 $$;
 
 grant execute on function public.create_app_notification(uuid, text, text, text, uuid) to anon, authenticated;
+
+-- Group chat tables and policies
+create table if not exists public.group_conversations (
+  id uuid default uuid_generate_v4() primary key,
+  title text not null,
+  created_by uuid references public.users on delete set null,
+  related_group_request_id text,
+  last_message_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create unique index if not exists idx_group_conversations_related_request
+  on public.group_conversations(related_group_request_id)
+  where related_group_request_id is not null;
+
+create table if not exists public.group_conversation_members (
+  id uuid default uuid_generate_v4() primary key,
+  conversation_id uuid references public.group_conversations on delete cascade not null,
+  user_id uuid references public.users on delete cascade not null,
+  role text default 'member' not null,
+  joined_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(conversation_id, user_id)
+);
+
+create table if not exists public.group_messages (
+  id uuid default uuid_generate_v4() primary key,
+  conversation_id uuid references public.group_conversations on delete cascade not null,
+  sender_id uuid references public.users on delete cascade not null,
+  content text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table if exists public.group_conversations enable row level security;
+alter table if exists public.group_conversation_members enable row level security;
+alter table if exists public.group_messages enable row level security;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can read group conversations they joined"
+    ON public.group_conversations
+    FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM public.group_conversation_members gcm
+        WHERE gcm.conversation_id = group_conversations.id
+          AND gcm.user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can create group conversations"
+    ON public.group_conversations
+    FOR INSERT
+    WITH CHECK (auth.uid() = created_by);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can read group members in joined conversations"
+    ON public.group_conversation_members
+    FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM public.group_conversation_members mine
+        WHERE mine.conversation_id = group_conversation_members.conversation_id
+          AND mine.user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Conversation owners can add members"
+    ON public.group_conversation_members
+    FOR INSERT
+    WITH CHECK (
+      auth.uid() = user_id
+      OR EXISTS (
+        SELECT 1
+        FROM public.group_conversations gc
+        WHERE gc.id = group_conversation_members.conversation_id
+          AND gc.created_by = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can leave group conversation"
+    ON public.group_conversation_members
+    FOR DELETE
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can read group messages in joined conversations"
+    ON public.group_messages
+    FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1
+        FROM public.group_conversation_members gcm
+        WHERE gcm.conversation_id = group_messages.conversation_id
+          AND gcm.user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  CREATE POLICY "Users can send group messages in joined conversations"
+    ON public.group_messages
+    FOR INSERT
+    WITH CHECK (
+      auth.uid() = sender_id
+      AND EXISTS (
+        SELECT 1
+        FROM public.group_conversation_members gcm
+        WHERE gcm.conversation_id = group_messages.conversation_id
+          AND gcm.user_id = auth.uid()
+      )
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+create index if not exists idx_group_members_conversation_id on public.group_conversation_members(conversation_id);
+create index if not exists idx_group_members_user_id on public.group_conversation_members(user_id);
+create index if not exists idx_group_messages_conversation_id on public.group_messages(conversation_id);
+create index if not exists idx_group_messages_sender_id on public.group_messages(sender_id);

@@ -84,6 +84,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const { user } = useAuth();
   const location = useLocation();
   const [conversations, setConversations] = useState<any[]>([]);
+  const [groupConversations, setGroupConversations] = useState<any[]>([]);
+  const [groupMembersByConversationId, setGroupMembersByConversationId] = useState<Record<string, any[]>>({});
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -118,6 +120,9 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [sharedPostCommentDraft, setSharedPostCommentDraft] = useState('');
   const [isSubmittingSharedPostComment, setIsSubmittingSharedPostComment] = useState(false);
   const openConversationWithUserId = (location.state as { openConversationWithUserId?: string } | null)?.openConversationWithUserId || null;
+  const isGroupConversationKey = (value: string | null) => !!value && value.startsWith('group:');
+  const toGroupConversationKey = (conversationId: string) => `group:${conversationId}`;
+  const fromGroupConversationKey = (value: string) => value.replace(/^group:/, '');
 
   const getClientPostId = (postId: string | null) => postId ? postId.replace(/^client-post-/, '') : null;
 
@@ -148,6 +153,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       if (!user?.id) {
         if (isMounted) {
           setConversations([]);
+          setGroupConversations([]);
           setIsLoadingConversations(false);
         }
         return;
@@ -156,20 +162,26 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       setIsLoadingConversations(true);
       setError(null);
 
-      const response = await DataService.getUserConversations(user.id);
+      const [directResponse, groupResponse] = await Promise.all([
+        DataService.getUserConversations(user.id),
+        DataService.getUserGroupConversations(user.id),
+      ]);
       if (!isMounted) {
         return;
       }
 
-      if (response.error) {
-        setError((response.error as any).message || 'Unable to load conversations.');
+      if (directResponse.error || groupResponse.error) {
+        setError((directResponse.error as any)?.message || (groupResponse.error as any)?.message || 'Unable to load conversations.');
         setConversations([]);
+        setGroupConversations([]);
       } else {
-        const items = response.data || [];
-        setConversations(items);
+        const directItems = directResponse.data || [];
+        const groupItems = groupResponse.data || [];
+        setConversations(directItems);
+        setGroupConversations(groupItems);
 
         const preferredConversation = openConversationWithUserId
-          ? items.find((conversation: any) => {
+          ? directItems.find((conversation: any) => {
               const participant1Id = conversation.participant_1?.id;
               const participant2Id = conversation.participant_2?.id;
               return participant1Id === openConversationWithUserId || participant2Id === openConversationWithUserId;
@@ -177,11 +189,16 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           : null;
 
         setSelectedConversationId((current) => {
-          if (current && items.some((item: any) => item.id === current)) {
+          const hasDirect = current && directItems.some((item: any) => item.id === current);
+          const hasGroup = current && isGroupConversationKey(current) && groupItems.some((item: any) => item.id === fromGroupConversationKey(current));
+
+          if (hasDirect || hasGroup) {
             return current;
           }
 
-          return preferredConversation?.id ?? items[0]?.id ?? null;
+          return preferredConversation?.id
+            ?? directItems[0]?.id
+            ?? (groupItems[0]?.id ? toGroupConversationKey(String(groupItems[0].id)) : null);
         });
       }
 
@@ -199,6 +216,42 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   useEffect(() => {
     let isMounted = true;
 
+    async function loadGroupMembers() {
+      if (!groupConversations.length) {
+        if (isMounted) {
+          setGroupMembersByConversationId({});
+        }
+        return;
+      }
+
+      const entries = await Promise.all(
+        groupConversations.map(async (conversation) => {
+          const response = await DataService.getGroupConversationMembers(String(conversation.id));
+          return [String(conversation.id), response.data || []] as const;
+        })
+      );
+
+      if (!isMounted) {
+        return;
+      }
+
+      const next: Record<string, any[]> = {};
+      entries.forEach(([conversationId, members]) => {
+        next[conversationId] = members;
+      });
+      setGroupMembersByConversationId(next);
+    }
+
+    void loadGroupMembers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [groupConversations]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadMessages() {
       if (!selectedConversationId || !user?.id) {
         if (isMounted) {
@@ -208,7 +261,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       }
 
       setIsLoadingMessages(true);
-      const response = await DataService.getMessages(selectedConversationId, 100);
+      const isGroupConversation = isGroupConversationKey(selectedConversationId);
+      const rawConversationId = isGroupConversation
+        ? fromGroupConversationKey(selectedConversationId)
+        : selectedConversationId;
+
+      const response = isGroupConversation
+        ? await DataService.getGroupMessages(rawConversationId, 100)
+        : await DataService.getMessages(rawConversationId, 100);
 
       if (!isMounted) {
         return;
@@ -220,27 +280,31 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       } else {
         const items = [...(response.data || [])].reverse();
         setMessages(items);
-        await DataService.markMessagesAsRead(selectedConversationId, user.id);
+        if (!isGroupConversation) {
+          await DataService.markMessagesAsRead(rawConversationId, user.id);
 
-        const messageIds = items.map((item: any) => String(item.id));
-        const reactionsResponse = await DataService.getMessageReactions(messageIds);
-        if (!reactionsResponse.error) {
-          const next: Record<string, { counts: Record<string, number>; mine: string | null }> = {};
-          (reactionsResponse.data || []).forEach((row: any) => {
-            const messageId = String(row.message_id);
-            const emoji = String(row.reaction || '');
-            if (!emoji) return;
+          const messageIds = items.map((item: any) => String(item.id));
+          const reactionsResponse = await DataService.getMessageReactions(messageIds);
+          if (!reactionsResponse.error) {
+            const next: Record<string, { counts: Record<string, number>; mine: string | null }> = {};
+            (reactionsResponse.data || []).forEach((row: any) => {
+              const messageId = String(row.message_id);
+              const emoji = String(row.reaction || '');
+              if (!emoji) return;
 
-            if (!next[messageId]) {
-              next[messageId] = { counts: {}, mine: null };
-            }
+              if (!next[messageId]) {
+                next[messageId] = { counts: {}, mine: null };
+              }
 
-            next[messageId].counts[emoji] = (next[messageId].counts[emoji] || 0) + 1;
-            if (String(row.user_id) === String(user.id)) {
-              next[messageId].mine = emoji;
-            }
-          });
-          setMessageReactionsById(next);
+              next[messageId].counts[emoji] = (next[messageId].counts[emoji] || 0) + 1;
+              if (String(row.user_id) === String(user.id)) {
+                next[messageId].mine = emoji;
+              }
+            });
+            setMessageReactionsById(next);
+          }
+        } else {
+          setMessageReactionsById({});
         }
 
         const postIds = items
@@ -450,6 +514,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     let isMounted = true;
 
     async function loadBookingSession() {
+      if (!selectedConversationId || isGroupConversationKey(selectedConversationId)) {
+        if (isMounted) {
+          setBookingSession(null);
+          setHasSubmittedReview(false);
+        }
+        return;
+      }
+
       const selectedRawConversation = conversations.find((item: any) => item.id === selectedConversationId);
       const participant1 = selectedRawConversation?.participant_1;
       const participant2 = selectedRawConversation?.participant_2;
@@ -497,6 +569,28 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
   const activeConversation = selectedConversationId
     ? (() => {
+        if (isGroupConversationKey(selectedConversationId)) {
+          const groupId = fromGroupConversationKey(selectedConversationId);
+          const conversation = groupConversations.find((item: any) => String(item.id) === groupId);
+          if (!conversation) {
+            return null;
+          }
+
+          const members = (groupMembersByConversationId[groupId] || []).filter((member: any) => String(member.user_id) !== String(user?.id));
+          const coverMember = members[0]?.users;
+
+          return {
+            id: selectedConversationId,
+            rawId: groupId,
+            otherParticipantId: null,
+            isGroup: true,
+            name: conversation.title || 'Group chat',
+            avatar: coverMember?.avatar_url || fallbackProfileImage,
+            memberCount: (groupMembersByConversationId[groupId] || []).length,
+            lastMessageAt: conversation.last_message_at,
+          };
+        }
+
         const conversation = conversations.find((item: any) => item.id === selectedConversationId);
         if (!conversation) {
           return null;
@@ -508,16 +602,19 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
         return {
           id: conversation.id,
+          rawId: conversation.id,
           otherParticipantId: otherParticipant?.id,
+          isGroup: false,
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
+          memberCount: 2,
           lastMessageAt: conversation.last_message_at,
         };
       })()
     : null;
 
   const normalizedConversations = useMemo(() => {
-    return conversations
+    const directConversations = conversations
       .map((conversation) => {
         const participant1 = conversation.participant_1;
         const participant2 = conversation.participant_2;
@@ -525,16 +622,42 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
         return {
           id: conversation.id,
+          rawId: conversation.id,
+          isGroup: false,
           otherParticipantId: otherParticipant?.id,
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
+          memberCount: 2,
           lastMessageAt: conversation.last_message_at,
         };
       })
       .filter((item) => !!item.otherParticipantId);
-  }, [conversations, user?.id]);
 
-  const showBookingSessionControls = !!bookingSession && bookingSession.status !== 'completed';
+    const grouped = groupConversations.map((conversation: any) => {
+      const conversationId = String(conversation.id);
+      const members = groupMembersByConversationId[conversationId] || [];
+      const coverMember = members.find((member: any) => String(member.user_id) !== String(user?.id))?.users;
+
+      return {
+        id: toGroupConversationKey(conversationId),
+        rawId: conversationId,
+        isGroup: true,
+        otherParticipantId: null,
+        name: conversation.title || 'Group chat',
+        avatar: coverMember?.avatar_url || fallbackProfileImage,
+        memberCount: members.length,
+        lastMessageAt: conversation.last_message_at,
+      };
+    });
+
+    return [...directConversations, ...grouped].sort((a, b) => {
+      const aTime = new Date(a.lastMessageAt || 0).getTime();
+      const bTime = new Date(b.lastMessageAt || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [conversations, groupConversations, groupMembersByConversationId, user?.id]);
+
+  const showBookingSessionControls = !activeConversation?.isGroup && !!bookingSession && bookingSession.status !== 'completed';
 
   const handleEndSession = async () => {
     if (!bookingSession?.id || !user?.id || !activeConversation?.otherParticipantId || !selectedConversationId) {
@@ -595,25 +718,32 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   );
 
   const handleSendMessage = async () => {
-    if (
-      !user?.id ||
-      !selectedConversationId ||
-      !activeConversation?.otherParticipantId ||
-      !messageInput.trim()
-    ) {
+    if (!user?.id || !selectedConversationId || !messageInput.trim()) {
       return;
     }
 
     setIsSending(true);
     setError(null);
 
-    const response = await DataService.sendMessage({
-      conversation_id: selectedConversationId,
-      sender_id: user.id,
-      recipient_id: activeConversation.otherParticipantId,
-      content: messageInput.trim(),
-      read: false,
-    } as any);
+    const trimmedMessage = messageInput.trim();
+    const isGroupConversation = isGroupConversationKey(selectedConversationId);
+    const rawConversationId = isGroupConversation
+      ? fromGroupConversationKey(selectedConversationId)
+      : selectedConversationId;
+
+    const response = isGroupConversation
+      ? await DataService.sendGroupMessage({
+          conversationId: rawConversationId,
+          senderId: user.id,
+          content: trimmedMessage,
+        })
+      : await DataService.sendMessage({
+          conversation_id: rawConversationId,
+          sender_id: user.id,
+          recipient_id: activeConversation?.otherParticipantId,
+          content: trimmedMessage,
+          read: false,
+        } as any);
 
     if (response.error || !response.data) {
       setError((response.error as any)?.message || 'Unable to send message.');
@@ -622,13 +752,25 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     }
 
     setMessages((current) => [...current, response.data]);
-    setConversations((current) =>
-      current.map((conversation) =>
-        conversation.id === selectedConversationId
-          ? { ...conversation, last_message_at: new Date().toISOString() }
-          : conversation
-      )
-    );
+
+    if (isGroupConversation) {
+      setGroupConversations((current) =>
+        current.map((conversation) =>
+          String(conversation.id) === rawConversationId
+            ? { ...conversation, last_message_at: new Date().toISOString() }
+            : conversation
+        )
+      );
+    } else {
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === rawConversationId
+            ? { ...conversation, last_message_at: new Date().toISOString() }
+            : conversation
+        )
+      );
+    }
+
     setMessageInput('');
     setIsSending(false);
   };
@@ -708,7 +850,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           </button>
           <div className="flex items-center justify-between">
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Messages</h1>
-            <div className="text-sm text-gray-500">Group chat coming soon</div>
+            <div className="text-sm text-gray-500">Direct and group chats</div>
           </div>
         </div>
       </div>
@@ -818,8 +960,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center gap-4">
                   <button
                     type="button"
-                    onClick={() => onViewProfile?.(activeConversation.otherParticipantId)}
-                    className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm transition-opacity hover:opacity-80"
+                    onClick={() => {
+                      if (activeConversation.otherParticipantId) {
+                        onViewProfile?.(activeConversation.otherParticipantId);
+                      }
+                    }}
+                    disabled={!activeConversation.otherParticipantId}
+                    className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-70"
                   >
                     <ImageWithFallback
                       src={activeConversation.avatar}
@@ -829,7 +976,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   </button>
                   <div>
                     <h2 className="font-bold text-gray-900">{activeConversation.name}</h2>
-                    <p className="text-sm text-gray-600">Direct conversation</p>
+                    <p className="text-sm text-gray-600">
+                      {activeConversation.isGroup
+                        ? `${Math.max(0, Number(activeConversation.memberCount || 0))} members`
+                        : 'Direct conversation'}
+                    </p>
                   </div>
                   {showBookingSessionControls && (
                     <button
@@ -843,19 +994,23 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   )}
                 </div>
 
-                {bookingSession?.status === 'accepted' || bookingSession?.status === 'confirmed' || bookingSession?.status === 'in_progress' ? (
+                {!activeConversation?.isGroup && (bookingSession?.status === 'accepted' || bookingSession?.status === 'confirmed' || bookingSession?.status === 'in_progress') ? (
                   <div className="border-b border-green-200 bg-green-50 px-6 py-3 text-sm text-green-700">
                     You may now chat with this person.
                   </div>
                 ) : null}
 
-                {!bookingSession && (
+                {activeConversation?.isGroup ? (
+                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
+                    Group members can chat and coordinate here.
+                  </div>
+                ) : !bookingSession ? (
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
                     Mutuals can chat directly here.
                   </div>
-                )}
+                ) : null}
 
-                {bookingSession?.status === 'completed' && (
+                {!activeConversation?.isGroup && bookingSession?.status === 'completed' && (
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
                     <p className="text-sm font-semibold text-gray-900">Session completed</p>
                     {!hasSubmittedReview ? (
@@ -1011,29 +1166,31 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               : ''}
                           </p>
 
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            {Object.entries(reactions.counts).map(([emoji, count]) => (
-                              <button
-                                key={`${message.id}-${emoji}`}
-                                type="button"
-                                onClick={() => void handleReactToMessage(String(message.id), emoji)}
-                                className={`rounded-full border px-2 py-1 text-xs ${reactions.mine === emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700'}`}
-                              >
-                                {emoji} {count}
-                              </button>
-                            ))}
+                          {!activeConversation?.isGroup && (
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              {Object.entries(reactions.counts).map(([emoji, count]) => (
+                                <button
+                                  key={`${message.id}-${emoji}`}
+                                  type="button"
+                                  onClick={() => void handleReactToMessage(String(message.id), emoji)}
+                                  className={`rounded-full border px-2 py-1 text-xs ${reactions.mine === emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700'}`}
+                                >
+                                  {emoji} {count}
+                                </button>
+                              ))}
 
-                            {reactionChoices.map((emoji) => (
-                              <button
-                                key={`${message.id}-add-${emoji}`}
-                                type="button"
-                                onClick={() => void handleReactToMessage(String(message.id), emoji)}
-                                className="rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
-                              >
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
+                              {reactionChoices.map((emoji) => (
+                                <button
+                                  key={`${message.id}-add-${emoji}`}
+                                  type="button"
+                                  onClick={() => void handleReactToMessage(String(message.id), emoji)}
+                                  className="rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
