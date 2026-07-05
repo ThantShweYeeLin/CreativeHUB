@@ -39,6 +39,12 @@ const getNotificationIcon = (type: string) => {
       return <MessageSquare className="w-4 h-4 text-gray-900" />;
     case 'follow':
       return <Users className="w-4 h-4 text-green-600" />;
+    case 'friend_request':
+      return <Users className="w-4 h-4 text-blue-600" />;
+    case 'friend_request_accepted':
+      return <Check className="w-4 h-4 text-green-600" />;
+    case 'friend_request_declined':
+      return <XIcon className="w-4 h-4 text-red-600" />;
     case 'booking_cancelled':
       return <XIcon className="w-4 h-4 text-red-600" />;
     case 'booking_completed':

@@ -190,6 +190,190 @@ export class DataService {
     return { isFollowing: !!data, error };
   }
 
+  static async getFriendshipState(userId: string, targetUserId: string) {
+    if (!userId || !targetUserId || userId === targetUserId) {
+      return { state: 'none' as const, pendingNotificationId: null, error: null };
+    }
+
+    const [followingResponse, followedByTargetResponse] = await Promise.all([
+      this.isFollowing(userId, targetUserId),
+      this.isFollowing(targetUserId, userId),
+    ]);
+
+    if (followingResponse.error || followedByTargetResponse.error) {
+      return { state: 'none' as const, pendingNotificationId: null, error: followingResponse.error || followedByTargetResponse.error };
+    }
+
+    if (followingResponse.isFollowing && followedByTargetResponse.isFollowing) {
+      return { state: 'friends' as const, pendingNotificationId: null, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id, metadata')
+      .eq('user_id', targetUserId)
+      .eq('type', 'friend_request')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return { state: 'none' as const, pendingNotificationId: null, error };
+    }
+
+    const outgoingPending = (data || []).find((row: any) => String((row.metadata as any)?.requester_id || '') === userId);
+    if (outgoingPending) {
+      return { state: 'outgoing' as const, pendingNotificationId: outgoingPending.id, error: null };
+    }
+
+    const incomingResponse = await supabase
+      .from('notifications')
+      .select('id, metadata')
+      .eq('user_id', userId)
+      .eq('type', 'friend_request')
+      .order('created_at', { ascending: false });
+
+    if (incomingResponse.error) {
+      return { state: 'none' as const, pendingNotificationId: null, error: incomingResponse.error };
+    }
+
+    const incomingPending = (incomingResponse.data || []).find((row: any) => String((row.metadata as any)?.requester_id || '') === targetUserId);
+    if (incomingPending) {
+      return { state: 'incoming' as const, pendingNotificationId: incomingPending.id, error: null };
+    }
+
+    return { state: 'none' as const, pendingNotificationId: null, error: null };
+  }
+
+  static async sendFriendRequest(userId: string, targetUserId: string) {
+    if (!userId || !targetUserId || userId === targetUserId) {
+      return { error: null, alreadyPending: false };
+    }
+
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id, metadata')
+      .eq('user_id', targetUserId)
+      .eq('type', 'friend_request')
+      .order('created_at', { ascending: false });
+
+    if (!error) {
+      const alreadyPending = (data || []).some((row: any) => String((row.metadata as any)?.requester_id || '') === userId);
+      if (alreadyPending) {
+        return { error: null, alreadyPending: true };
+      }
+    }
+
+    const response = await this.createNotification({
+      user_id: targetUserId,
+      actor_id: userId,
+      type: 'friend_request',
+      title: 'New friend request',
+      message: 'Sent you a friend request.',
+      post_id: null,
+      comment_id: null,
+      related_id: null,
+      metadata: { requester_id: userId, status: 'pending' },
+      read: false,
+    } as any);
+
+    return { error: response.error, alreadyPending: false };
+  }
+
+  static async acceptFriendRequest(requesterUserId: string, targetUserId: string) {
+    if (!requesterUserId || !targetUserId || requesterUserId === targetUserId) {
+      return { error: null };
+    }
+
+    const pendingResponse = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', targetUserId)
+      .eq('type', 'friend_request')
+      .order('created_at', { ascending: false });
+
+    if (!pendingResponse.error) {
+      const pendingRequest = (pendingResponse.data || []).find((row: any) => String((row.metadata as any)?.requester_id || '') === requesterUserId);
+      if (pendingRequest?.id) {
+        await supabase.from('notifications').delete().eq('id', pendingRequest.id);
+      }
+    }
+
+    const [followResponse, reverseFollowResponse] = await Promise.all([
+      this.isFollowing(requesterUserId, targetUserId),
+      this.isFollowing(targetUserId, requesterUserId),
+    ]);
+
+    if (!followResponse.isFollowing) {
+      await this.followUser(requesterUserId, targetUserId);
+    }
+
+    if (!reverseFollowResponse.isFollowing) {
+      await this.followUser(targetUserId, requesterUserId);
+    }
+
+    await this.createNotification({
+      user_id: requesterUserId,
+      actor_id: targetUserId,
+      type: 'friend_request_accepted',
+      title: 'Friend request accepted',
+      message: 'Accepted your friend request.',
+      post_id: null,
+      comment_id: null,
+      related_id: null,
+      metadata: { requester_id: requesterUserId, status: 'accepted' },
+      read: false,
+    } as any);
+
+    return { error: null };
+  }
+
+  static async denyFriendRequest(requesterUserId: string, targetUserId: string) {
+    if (!requesterUserId || !targetUserId || requesterUserId === targetUserId) {
+      return { error: null };
+    }
+
+    const pendingResponse = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', targetUserId)
+      .eq('type', 'friend_request')
+      .order('created_at', { ascending: false });
+
+    if (!pendingResponse.error) {
+      const pendingRequest = (pendingResponse.data || []).find((row: any) => String((row.metadata as any)?.requester_id || '') === requesterUserId);
+      if (pendingRequest?.id) {
+        await supabase.from('notifications').delete().eq('id', pendingRequest.id);
+      }
+    }
+
+    await this.createNotification({
+      user_id: requesterUserId,
+      actor_id: targetUserId,
+      type: 'friend_request_declined',
+      title: 'Friend request declined',
+      message: 'Declined your friend request.',
+      post_id: null,
+      comment_id: null,
+      related_id: null,
+      metadata: { requester_id: requesterUserId, status: 'declined' },
+      read: false,
+    } as any);
+
+    return { error: null };
+  }
+
+  static async removeFriendship(userId: string, targetUserId: string) {
+    if (!userId || !targetUserId || userId === targetUserId) {
+      return { error: null };
+    }
+
+    await Promise.all([
+      this.unfollowUser(userId, targetUserId),
+      this.unfollowUser(targetUserId, userId),
+    ]);
+
+    return { error: null };
+  }
+
   static async followUser(userId: string, targetUserId: string) {
     const { error } = await supabase
       .from('followers')
