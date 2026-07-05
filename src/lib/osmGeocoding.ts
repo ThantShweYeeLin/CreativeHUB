@@ -5,7 +5,7 @@ export interface GeocodeResult {
   placeId: string | null;
 }
 
-export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
+export async function geocodeAddress(address: string, language: 'en' | 'th' = 'en'): Promise<GeocodeResult | null> {
   const value = address.trim();
   if (!value) {
     return null;
@@ -21,6 +21,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
     const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
       headers: {
         Accept: 'application/json',
+        'Accept-Language': language === 'th' ? 'th' : 'en',
       },
     });
 
@@ -49,15 +50,18 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
   if (primary) return primary;
 
   // Normalization / fallbacks
-  const normalized = value.replace(/\s*,\s*/g, ', ').replace(/chiang\s?mai/ig, 'Chiang Mai');
+  const normalized = value
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/chiang\s?mai/ig, 'Chiang Mai')
+    .replace(/\bbkk\b/ig, 'Bangkok')
+    .replace(/\bbangkok\b/ig, 'Bangkok');
 
   if (normalized !== value) {
     const tryNorm = await tryQuery(normalized);
     if (tryNorm) return tryNorm;
   }
 
-  // If country not present, try appending Thailand for common Chiang Mai entry or general fallback
-  if (!/thailand/i.test(value)) {
+  if (!/thailand|thai/i.test(value)) {
     const tryWithCountry = await tryQuery(`${value}, Thailand`);
     if (tryWithCountry) return tryWithCountry;
   }

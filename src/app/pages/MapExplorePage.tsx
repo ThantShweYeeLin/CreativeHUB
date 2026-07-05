@@ -31,6 +31,29 @@ const availabilityFilters: { key: Availability; label: string; dot: string }[] =
   { key: 'unavailable', label: 'Unavailable', dot: '🔴' },
 ];
 
+function getMapLanguagePreference(): 'en' | 'th' {
+  if (typeof window === 'undefined') {
+    return 'en';
+  }
+
+  try {
+    const raw = window.localStorage.getItem('creativehub.settings.v1');
+    if (!raw) {
+      return 'en';
+    }
+
+    const parsed = JSON.parse(raw) as { preferences?: { language?: string } };
+    const language = parsed?.preferences?.language;
+    return language === 'Thai' || language === 'ไทย' || language === 'th' ? 'th' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
+function translateMapText(language: 'en' | 'th', english: string, thai: string) {
+  return language === 'th' ? thai : english;
+}
+
 const distanceFilters = [5, 10, 25, 50] as const;
 
 function professionLabel(value: string): (typeof professionFilters)[number] | null {
@@ -126,16 +149,20 @@ function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number) {
   return earthRadiusKm * c;
 }
 
-function formatDistanceAway(distance: number) {
+function formatDistanceAway(distance: number, language: 'en' | 'th') {
   if (!Number.isFinite(distance)) {
     return null;
   }
 
   if (distance < 1) {
-    return `${Math.max(100, Math.round(distance * 1000))} m away`;
+    return language === 'th'
+      ? `${Math.max(100, Math.round(distance * 1000))} m เหนือ` 
+      : `${Math.max(100, Math.round(distance * 1000))} m away`;
   }
 
-  return `${distance.toFixed(1)} km away`;
+  return language === 'th'
+    ? `${distance.toFixed(1)} กม. away`
+    : `${distance.toFixed(1)} km away`;
 }
 
 function inBudgetBand(hourlyRate: number | undefined, band: BudgetBand) {
@@ -167,6 +194,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [mapLanguage, setMapLanguage] = useState<'en' | 'th'>(() => getMapLanguagePreference());
 
   const handleViewProfile = (freelancerId: string) => {
     const targetId = freelancers.find((item) => item.id === freelancerId)?.userId || freelancerId;
@@ -178,6 +206,21 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
     navigate(`/profile/${targetId}`);
   };
+
+  useEffect(() => {
+    const syncMapLanguage = () => {
+      setMapLanguage(getMapLanguagePreference());
+    };
+
+    syncMapLanguage();
+    window.addEventListener('storage', syncMapLanguage);
+    window.addEventListener('creativehub-settings-changed', syncMapLanguage);
+
+    return () => {
+      window.removeEventListener('storage', syncMapLanguage);
+      window.removeEventListener('creativehub-settings-changed', syncMapLanguage);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -212,7 +255,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         const resolved = await Promise.all(
           missingCoordinates.slice(0, 30).map(async (freelancer) => {
-            const geocoded = await geocodeAddress(freelancer.location || '');
+            const geocoded = await geocodeAddress(freelancer.location || '', mapLanguage);
             if (!geocoded) {
               return freelancer;
             }
@@ -245,7 +288,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
       } else {
         const userLocationText = userResponse.data?.location || '';
         if (userLocationText) {
-          const geocodedUserLocation = await geocodeAddress(userLocationText);
+          const geocodedUserLocation = await geocodeAddress(userLocationText, mapLanguage);
           if (geocodedUserLocation) {
             setClientLocation({
               lat: geocodedUserLocation.latitude,
@@ -271,10 +314,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
     return () => {
       isMounted = false;
     };
-  }, [user?.id]);
+  }, [mapLanguage, user?.id]);
 
   useEffect(() => {
-    if (!navigator.geolocation) {
+    if (!navigator.geolocation || clientLocation) {
       return;
     }
 
@@ -370,6 +413,32 @@ export function MapView({ onViewProfile }: MapViewProps) {
   }, [freelancers, selectedProfessions, selectedAvailability, budgetBand, distanceLimitKm, clientLocation, distanceByFreelancerId]);
 
   const selectedFreelancer = filteredFreelancers.find((freelancer) => freelancer.id === selectedId) || null;
+  const mapText = {
+    filters: translateMapText(mapLanguage, 'Map Filters', 'ตัวกรองแผนที่'),
+    hideFilters: translateMapText(mapLanguage, 'Hide Filters', 'ซ่อนตัวกรอง'),
+    showFilters: translateMapText(mapLanguage, 'Show Filters', 'แสดงตัวกรอง'),
+    matchCount: (count: number) => translateMapText(mapLanguage, `${count} match this filter set. Expand filters to refine profession, availability, budget, and distance.`, `${count} รายการตรงกับตัวกรองนี้ คลิกเพื่อปรับแต่งอาชีพ ความพร้อม ค่าบริการ และระยะทาง`),
+    profession: translateMapText(mapLanguage, 'Filter by Profession', 'กรองตามอาชีพ'),
+    availability: translateMapText(mapLanguage, 'Availability Filter', 'กรองความพร้อม'),
+    budget: translateMapText(mapLanguage, 'Budget Filter', 'กรองงบประมาณ'),
+    distance: translateMapText(mapLanguage, 'Distance Filter', 'กรองระยะทาง'),
+    anyDistance: translateMapText(mapLanguage, 'Any distance', 'ทุกระยะทาง'),
+    withinDistance: (distance: number) => translateMapText(mapLanguage, `Within ${distance} km`, `ภายใน ${distance} กม.`),
+    reset: translateMapText(mapLanguage, 'Reset Map Filters', 'ล้างตัวกรองแผนที่'),
+    openStreetMap: translateMapText(mapLanguage, 'OpenStreetMap Live View', 'มุมมองแผนที่แบบสด OpenStreetMap'),
+    matchingFreelancers: (count: number) => translateMapText(mapLanguage, `${count} freelancers match filters`, `${count} ฟรีแลนซ์ตรงกับตัวกรอง`),
+    locationSourceProfile: translateMapText(mapLanguage, 'Profile location', 'ตำแหน่งตามโปรไฟล์'),
+    locationSourceDevice: translateMapText(mapLanguage, 'Current device GPS', 'พิกัด GPS ของอุปกรณ์ปัจจุบัน'),
+    loading: translateMapText(mapLanguage, 'Loading freelancers...', 'กำลังโหลดฟรีแลนซ์...'),
+    unableToLoad: translateMapText(mapLanguage, 'Unable to load freelancers', 'ไม่สามารถโหลดฟรีแลนซ์ได้'),
+    noMatches: translateMapText(mapLanguage, 'No freelancers match these filters', 'ไม่มีฟรีแลนซ์ที่ตรงกับตัวกรอง'),
+    noMatchesHint: translateMapText(mapLanguage, 'Try relaxing profession, availability, budget, or distance filters.', 'ลองผ่อนตัวกรองอาชีพ ความพร้อม งบประมาณ หรือระยะทางให้กว้างขึ้น'),
+    nearYou: translateMapText(mapLanguage, 'Freelancers Near You', 'ฟรีแลนซ์ใกล้คุณ'),
+    previewSubtitle: translateMapText(mapLanguage, 'Profile previews from the current map filters.', 'ตัวอย่างโปรไฟล์จากตัวกรองแผนที่ปัจจุบัน'),
+    shown: translateMapText(mapLanguage, 'shown', 'แสดง'),
+    viewProfile: translateMapText(mapLanguage, 'View Profile', 'ดูโปรไฟล์'),
+    yourLocation: translateMapText(mapLanguage, 'Your Location', 'ตำแหน่งของคุณ'),
+  };
 
   const center: LatLngExpression = useMemo(() => {
     if (clientLocation) {
@@ -410,27 +479,27 @@ export function MapView({ onViewProfile }: MapViewProps) {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-gray-900" />
-            <h2 className="text-lg font-bold text-gray-900">Map Filters</h2>
+            <h2 className="text-lg font-bold text-gray-900">{mapText.filters}</h2>
           </div>
           <button
             type="button"
             onClick={() => setFiltersExpanded((current) => !current)}
             className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
           >
-            {filtersExpanded ? 'Hide Filters' : 'Show Filters'}
+            {filtersExpanded ? mapText.hideFilters : mapText.showFilters}
           </button>
         </div>
 
         {!filtersExpanded && (
           <p className="mb-2 text-sm text-gray-600">
-            {filteredFreelancers.length} match this filter set. Expand filters to refine profession, availability, budget, and distance.
+            {mapText.matchCount(filteredFreelancers.length)}
           </p>
         )}
 
         {filtersExpanded && (
         <div className="space-y-6">
           <div>
-            <h3 className="mb-3 text-sm font-bold text-gray-900">Filter by Profession</h3>
+            <h3 className="mb-3 text-sm font-bold text-gray-900">{mapText.profession}</h3>
             <div className="flex flex-wrap gap-2">
               {professionFilters.map((profession) => {
                 const isSelected = selectedProfessions.includes(profession);
@@ -453,7 +522,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-bold text-gray-900">Availability Filter</h3>
+            <h3 className="mb-3 text-sm font-bold text-gray-900">{mapText.availability}</h3>
             <div className="flex flex-wrap gap-2">
               {availabilityFilters.map((availability) => {
                 const isSelected = selectedAvailability.includes(availability.key);
@@ -476,7 +545,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-bold text-gray-900">Budget Filter</h3>
+            <h3 className="mb-3 text-sm font-bold text-gray-900">{mapText.budget}</h3>
             <div className="flex flex-wrap gap-2">
               {[
                 { key: 'all' as const, label: 'All' },
@@ -502,7 +571,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-bold text-gray-900">Distance Filter</h3>
+            <h3 className="mb-3 text-sm font-bold text-gray-900">{mapText.distance}</h3>
             <div className="flex flex-wrap gap-2 text-sm">
               <button
                 type="button"
@@ -513,7 +582,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                Any distance
+                {mapText.anyDistance}
               </button>
               {distanceFilters.map((distance) => (
                 <button
@@ -527,7 +596,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  Within {distance} km
+                  {mapText.withinDistance(distance)}
                 </button>
               ))}
               {!clientLocation && (
@@ -547,7 +616,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               }}
               className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
             >
-              Reset Map Filters
+              {mapText.reset}
             </button>
           </div>
         </div>
@@ -573,7 +642,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               <Marker position={[clientLocation.lat, clientLocation.lng]} icon={clientMarkerIcon}>
                 <Popup>
                   <div className="text-sm">
-                    <p className="font-bold text-gray-900">Your Location {locationSource === 'device' ? '(Live)' : ''}</p>
+                    <p className="font-bold text-gray-900">{mapText.yourLocation} {locationSource === 'device' ? '(Live)' : ''}</p>
                     <p className="text-gray-600">{clientLocation.label}</p>
                   </div>
                 </Popup>
@@ -604,7 +673,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   <p className="mt-1 text-xs text-gray-500">{freelancer.location}</p>
                   {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
                     <p className="mt-1 text-xs font-semibold text-blue-700">
-                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number)}
+                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number, mapLanguage)}
                     </p>
                   ) : null}
                   <div className="mt-2 flex items-center gap-3 text-xs text-gray-700">
@@ -617,7 +686,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                     className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
-                    View Profile
+                    {mapText.viewProfile}
                   </button>
                 </div>
               </Popup>
@@ -628,12 +697,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
         <div className="pointer-events-none absolute top-4 left-4 z-[500] rounded-xl border border-gray-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
             <Navigation className="h-4 w-4" />
-            OpenStreetMap Live View
+            {mapText.openStreetMap}
           </div>
-          <p className="mt-1 text-xs text-gray-600">{filteredFreelancers.length} freelancers match filters</p>
+          <p className="mt-1 text-xs text-gray-600">{mapText.matchingFreelancers(filteredFreelancers.length)}</p>
           {clientLocation ? (
             <p className="mt-0.5 text-xs text-gray-500">
-              Location source: {locationSource === 'device' ? 'Current device GPS' : 'Profile location'}
+              {translateMapText(mapLanguage, 'Location source: ', 'แหล่งที่มาของตำแหน่ง: ')}{locationSource === 'device' ? mapText.locationSourceDevice : mapText.locationSourceProfile}
             </p>
           ) : null}
         </div>
@@ -644,17 +713,17 @@ export function MapView({ onViewProfile }: MapViewProps) {
               {isLoading ? (
                 <>
                   <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-black" />
-                  <p className="font-semibold text-gray-900">Loading freelancers...</p>
+                  <p className="font-semibold text-gray-900">{mapText.loading}</p>
                 </>
               ) : errorMessage ? (
                 <>
-                  <p className="font-semibold text-gray-900">Unable to load freelancers</p>
+                  <p className="font-semibold text-gray-900">{mapText.unableToLoad}</p>
                   <p className="mt-1 text-sm text-gray-600">{errorMessage}</p>
                 </>
               ) : (
                 <>
-                  <p className="font-semibold text-gray-900">No freelancers match these filters</p>
-                  <p className="mt-1 text-sm text-gray-600">Try relaxing profession, availability, budget, or distance filters.</p>
+                  <p className="font-semibold text-gray-900">{mapText.noMatches}</p>
+                  <p className="mt-1 text-sm text-gray-600">{mapText.noMatchesHint}</p>
                 </>
               )}
             </div>
@@ -665,11 +734,11 @@ export function MapView({ onViewProfile }: MapViewProps) {
       <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-xl md:p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Freelancers Near You</h2>
-            <p className="text-sm text-gray-600">Profile previews from the current map filters.</p>
+            <h2 className="text-xl font-bold text-gray-900">{mapText.nearYou}</h2>
+            <p className="text-sm text-gray-600">{mapText.previewSubtitle}</p>
           </div>
           <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900">
-            {filteredFreelancers.length} shown
+            {filteredFreelancers.length} {mapText.shown}
           </div>
         </div>
 
@@ -697,7 +766,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   <p className="mt-1 truncate text-xs text-gray-500">{freelancer.location}</p>
                   {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
                     <p className="mt-1 text-xs font-semibold text-blue-700">
-                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number)}
+                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number, mapLanguage)}
                     </p>
                   ) : null}
                 </div>
@@ -713,8 +782,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         {!isLoading && !errorMessage && filteredFreelancers.length === 0 && (
           <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-700">
-            <p className="font-semibold text-gray-900">No freelancers match filters</p>
-            <p className="mt-1">Try enabling more professions, widening distance, or selecting a broader budget band.</p>
+            <p className="font-semibold text-gray-900">{mapText.noMatches}</p>
+            <p className="mt-1">{mapText.noMatchesHint}</p>
           </div>
         )}
       </div>

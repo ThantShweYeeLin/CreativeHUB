@@ -232,6 +232,10 @@ export function SettingsPage() {
     };
 
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('creativehub-settings-changed'));
+    }
   };
 
   const handleSaveAccountSettings = async () => {
@@ -417,7 +421,10 @@ export function SettingsPage() {
               <h2 className="text-lg font-bold">Preferences</h2>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <input value={preferences.language} onChange={(e) => setPreferences((c) => ({ ...c, language: e.target.value }))} placeholder="Language" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <select value={preferences.language} onChange={(e) => setPreferences((c) => ({ ...c, language: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                <option value="English">English</option>
+                <option value="Thai">ไทย</option>
+              </select>
               <select value={preferences.theme} onChange={(e) => setPreferences((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="light">Light</option><option value="dark">Dark</option></select>
               <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="Time zone" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
               <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value }))} placeholder="Currency" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
