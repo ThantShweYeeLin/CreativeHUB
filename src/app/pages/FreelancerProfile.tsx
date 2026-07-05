@@ -760,7 +760,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                             disabled={isFriendLoading}
                             className="rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
                           >
-                            {isFriendLoading ? 'Updating...' : 'Confirm Request'}
+                            {isFriendLoading ? 'Updating...' : 'Accept'}
                           </button>
                           <button
                             onClick={() => void handleDenyFriendRequest()}

@@ -9,6 +9,8 @@ export interface NotificationPanelItem {
   message: string | null;
   actorName: string;
   actorAvatar: string | null;
+  actorId: string | null;
+  requesterId: string | null;
   createdAt: string;
   read: boolean;
 }
@@ -21,6 +23,9 @@ interface NotificationsPanelProps {
   onMarkAllAsRead?: () => void;
   onOpenRequests?: () => void;
   onOpenMessages?: () => void;
+  onOpenProfile?: (userId: string | null) => void;
+  onAcceptFriendRequest?: (notificationId: string, requesterId: string | null) => void;
+  onDenyFriendRequest?: (notificationId: string, requesterId: string | null) => void;
 }
 
 const getNotificationIcon = (type: string) => {
@@ -94,6 +99,9 @@ export function NotificationsPanel({
   onMarkAllAsRead,
   onOpenRequests,
   onOpenMessages,
+  onOpenProfile,
+  onAcceptFriendRequest,
+  onDenyFriendRequest,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -144,6 +152,12 @@ export function NotificationsPanel({
                     onMarkAsRead?.(notification.id);
                   }
 
+                  if (notification.type === 'friend_request') {
+                    onOpenProfile?.(notification.requesterId || notification.actorId);
+                    onClose();
+                    return;
+                  }
+
                   if (notification.type.includes('request')) {
                     onOpenRequests?.();
                     onClose();
@@ -181,6 +195,22 @@ export function NotificationsPanel({
                       <span className="font-bold">{notification.actorName}</span>{' '}
                       <span className="text-gray-700">{notification.message || notification.title}</span>
                     </p>
+                    {notification.type === 'friend_request' && (
+                      <div className="mt-3 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+                        <button
+                          onClick={() => onAcceptFriendRequest?.(notification.id, notification.requesterId || notification.actorId)}
+                          className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          onClick={() => onDenyFriendRequest?.(notification.id, notification.requesterId || notification.actorId)}
+                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    )}
                     <p className="text-xs text-gray-500 mt-1">{formatRelativeTime(notification.createdAt)}</p>
                   </div>
 

@@ -298,16 +298,19 @@ export class DataService {
       }
     }
 
+    const requesterUserResponse = await this.getUser(userId);
+    const requesterName = requesterUserResponse.data?.full_name || 'Someone';
+
     const response = await this.createNotification({
       user_id: targetUserId,
       actor_id: userId,
       type: 'friend_request',
       title: 'New friend request',
-      message: 'Sent you a friend request.',
+      message: `${requesterName} sent you a friend request.`,
       post_id: null,
       comment_id: null,
       related_id: null,
-      metadata: { requester_id: userId, status: 'pending' },
+      metadata: { requester_id: userId, requester_name: requesterName, status: 'pending' },
       read: false,
     } as any);
 
@@ -346,16 +349,19 @@ export class DataService {
       await this.followUser(targetUserId, requesterUserId);
     }
 
+    const targetUserResponse = await this.getUser(targetUserId);
+    const targetName = targetUserResponse.data?.full_name || 'Someone';
+
     await this.createNotification({
       user_id: requesterUserId,
       actor_id: targetUserId,
       type: 'friend_request_accepted',
       title: 'Friend request accepted',
-      message: 'Accepted your friend request.',
+      message: `${targetName} accepted your friend request.`,
       post_id: null,
       comment_id: null,
       related_id: null,
-      metadata: { requester_id: requesterUserId, status: 'accepted' },
+      metadata: { requester_id: requesterUserId, requester_name: targetName, status: 'accepted' },
       read: false,
     } as any);
 
@@ -381,16 +387,19 @@ export class DataService {
       }
     }
 
+    const targetUserResponse = await this.getUser(targetUserId);
+    const targetName = targetUserResponse.data?.full_name || 'Someone';
+
     await this.createNotification({
       user_id: requesterUserId,
       actor_id: targetUserId,
       type: 'friend_request_declined',
       title: 'Friend request declined',
-      message: 'Declined your friend request.',
+      message: `${targetName} declined your friend request.`,
       post_id: null,
       comment_id: null,
       related_id: null,
-      metadata: { requester_id: requesterUserId, status: 'declined' },
+      metadata: { requester_id: requesterUserId, requester_name: targetName, status: 'declined' },
       read: false,
     } as any);
 

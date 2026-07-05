@@ -21,6 +21,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationPanelItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
 
@@ -28,13 +29,31 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
+    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || 'CreativeHUB';
+    const fallbackMessage = (() => {
+      switch (String(row.type || 'system')) {
+        case 'friend_request':
+          return `${actorName} sent you a friend request.`;
+        case 'friend_request_accepted':
+          return `${actorName} accepted your friend request.`;
+        case 'friend_request_declined':
+          return `${actorName} declined your friend request.`;
+        case 'follow':
+          return `${actorName} followed you.`;
+        default:
+          return String(row.title || 'Notification');
+      }
+    })();
+
     return {
       id: String(row.id),
       type: String(row.type || 'system'),
       title: String(row.title || 'Notification'),
-      message: typeof row.message === 'string' ? row.message : null,
-      actorName: actor?.full_name || 'CreativeHUB',
+      message: typeof row.message === 'string' && row.message.trim().length > 0 ? row.message : fallbackMessage,
+      actorName,
       actorAvatar: actor?.avatar_url || null,
+      actorId: actor?.id || row.actor_id || null,
+      requesterId: row.metadata?.requester_id || row.actor_id || null,
       createdAt: String(row.created_at || new Date().toISOString()),
       read: Boolean(row.read),
     };
@@ -108,7 +127,32 @@ export function MainLayout({ children }: MainLayoutProps) {
       if (response.error) {
         setNotifications([]);
       } else {
-        setNotifications((response.data || []).map(mapNotificationRecord));
+        const rows = response.data || [];
+        const mapped = await Promise.all(
+          rows.map(async (row: any) => {
+            const notification = mapNotificationRecord(row);
+            if (notification.actorName !== 'CreativeHUB' || notification.actorId) {
+              return notification;
+            }
+
+            if (!row.actor_id) {
+              return notification;
+            }
+
+            const actorResponse = await DataService.getUser(String(row.actor_id));
+            if (!actorResponse.error && actorResponse.data?.full_name) {
+              return {
+                ...notification,
+                actorName: actorResponse.data.full_name,
+                actorAvatar: actorResponse.data.avatar_url || notification.actorAvatar,
+              };
+            }
+
+            return notification;
+          })
+        );
+
+        setNotifications(mapped);
       }
       setIsNotificationsLoading(false);
     };
@@ -140,6 +184,41 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     setNotifications((current) => current.map((item) => ({ ...item, read: true })));
     await DataService.markAllNotificationsAsRead(user.id);
+  };
+
+  const handleOpenNotificationProfile = (userId: string | null) => {
+    if (!userId) {
+      return;
+    }
+
+    setShowNotifications(false);
+    navigate(`/profile/${userId}`);
+  };
+
+  const handleAcceptFriendRequest = async (notificationId: string, requesterId: string | null) => {
+    if (!user?.id || !requesterId) {
+      return;
+    }
+
+    setProcessingNotificationId(notificationId);
+    const response = await DataService.acceptFriendRequest(requesterId, user.id);
+    if (!response.error) {
+      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+    }
+    setProcessingNotificationId(null);
+  };
+
+  const handleDenyFriendRequest = async (notificationId: string, requesterId: string | null) => {
+    if (!user?.id || !requesterId) {
+      return;
+    }
+
+    setProcessingNotificationId(notificationId);
+    const response = await DataService.denyFriendRequest(requesterId, user.id);
+    if (!response.error) {
+      setNotifications((current) => current.filter((item) => item.id !== notificationId));
+    }
+    setProcessingNotificationId(null);
   };
 
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
@@ -246,6 +325,9 @@ export function MainLayout({ children }: MainLayoutProps) {
                       setShowNotifications(false);
                       navigate('/messages');
                     }}
+                    onOpenProfile={handleOpenNotificationProfile}
+                    onAcceptFriendRequest={handleAcceptFriendRequest}
+                    onDenyFriendRequest={handleDenyFriendRequest}
                   />
                 )}
               </div>
