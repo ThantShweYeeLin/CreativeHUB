@@ -213,6 +213,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
   const displayName = profile?.full_name || 'Creative Freelancer';
   const avatarUrl = profile?.avatar_url || fallbackProfileImage;
+  const coverUrl = profile?.cover_url || freelancerProfile?.cover_image_url || freelancerProfile?.image_urls?.[0] || '';
   const location = profile?.location || 'Location not provided';
   const bio = profile?.bio || freelancerProfile?.description || 'This freelancer has not added a bio yet.';
   const title = freelancerProfile?.title || 'Freelancer';
@@ -284,8 +285,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    if (user.role !== 'client') {
-      setError('Only client accounts can submit booking requests.');
+    if (user.role !== 'client' && user.role !== 'freelancer') {
+      setError('Only client or freelancer accounts can submit booking requests.');
       return;
     }
 
@@ -576,41 +577,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
         )}
 
-        <section className="mb-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
-          <div className="flex flex-col gap-6 md:flex-row md:items-start">
-            <div className="w-32 h-32 md:w-40 md:h-40 overflow-hidden rounded-full ring-4 ring-gray-100 shrink-0">
-              <ImageWithFallback src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-            </div>
-
-            <div className="flex-1">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-gray-900">{displayName}</h1>
-                  <p className="mt-2 text-lg text-gray-600">{title}</p>
-                  <div className="mt-4 flex flex-col gap-2 text-sm md:text-base text-gray-700">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                      <span>{location}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                      <span>{availability}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                      <span>{profile?.email || 'Email unavailable'}</span>
-                    </div>
+        <section className="mb-8 overflow-hidden rounded-3xl bg-white shadow-xl">
+          <div className="relative h-44 md:h-64 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900">
+            {coverUrl ? (
+              <ImageWithFallback src={coverUrl} alt={`${displayName} background`} className="h-full w-full object-cover" />
+            ) : null}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end">
+                  <div className="h-24 w-24 overflow-hidden rounded-full ring-4 ring-white bg-gray-200 shadow-xl md:h-32 md:w-32">
+                    <ImageWithFallback src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
                   </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{followCounts.followers}</span>
-                      <span>Followers</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{followCounts.following}</span>
-                      <span>Following</span>
-                    </div>
+                  <div className="text-white">
+                    <h1 className="text-2xl font-bold md:text-3xl">{displayName}</h1>
+                    <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
                   </div>
                 </div>
 
@@ -618,25 +599,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   {user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={handleFavoriteToggle}
-                      className={`p-3 rounded-full transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
                     >
-                      <Heart className={`w-6 h-6 ${isFavorited ? 'fill-current' : ''}`} />
+                      <Heart className={`h-6 w-6 ${isFavorited ? 'fill-current' : ''}`} />
                     </button>
                   )}
 
                   {requestStatus === 'accepted' ? (
                     <button
                       onClick={onOpenChat}
-                      className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
+                      className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
                     >
-                      <MessageCircle className="w-5 h-5" />
+                      <MessageCircle className="h-5 w-5" />
                       Open Chat
                     </button>
                   ) : (
                     user?.id !== targetFreelancerUserId && (
                       <button
                         onClick={() => setShowBookingForm(true)}
-                        className="px-6 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl text-base font-semibold hover:shadow-lg transition-all"
+                        className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
                       >
                         Request Booking
                       </button>
@@ -647,13 +628,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <button
                       onClick={() => void handleFollowToggle()}
                       disabled={isFollowLoading || followRelationship === 'friends'}
-                      className={`px-6 py-3 rounded-xl text-base font-semibold transition-all ${
+                      className={`rounded-xl px-6 py-3 text-base font-semibold transition-all ${
                         followRelationship === 'friends'
-                          ? 'bg-gray-200 text-gray-900 cursor-default'
+                          ? 'cursor-default bg-gray-200 text-gray-900'
                           : followRelationship === 'follow_back'
                             ? 'bg-amber-500 text-white hover:bg-amber-600'
                             : isFollowing
-                              ? 'bg-gray-200 text-gray-900 hover:bg-gray-300'
+                              ? 'bg-white/90 text-gray-900 hover:bg-white'
                               : 'bg-gray-900 text-white hover:shadow-lg'
                       } disabled:opacity-60`}
                     >
@@ -670,54 +651,86 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   )}
                 </div>
               </div>
+            </div>
+          </div>
 
-              <div className="mt-6 grid grid-cols-2 md:grid-cols-6 gap-4 border-y border-gray-200 py-5">
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Star className="w-4 h-4 md:w-5 md:h-5 fill-yellow-400 text-yellow-400" />
-                    <span className="font-semibold text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="mt-4 flex flex-col gap-2 text-sm text-gray-700 md:text-base">
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                    <span>{location}</span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">{totalReviews} reviews</p>
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                    <span>{availability}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                    <span>{profile?.email || 'Email unavailable'}</span>
+                  </div>
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                    <span className="font-semibold text-gray-900">{portfolioCount}</span>
+
+                <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{followCounts.followers}</span>
+                    <span>Followers</span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">portfolio items</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Briefcase className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                    <span className="font-semibold text-gray-900">{freelancerProfile?.experience_years || 0} yrs</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900">{followCounts.following}</span>
+                    <span>Following</span>
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">experience</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                    <span className="font-semibold text-gray-900">{freelancerProfile?.hourly_rate ? `฿${freelancerProfile.hourly_rate}/hr` : 'Custom'}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500">starting rate</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                    <span className="font-semibold text-gray-900">{activeProjects}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500">active projects</p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 text-gray-700">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 text-gray-900" />
-                    <span className="font-semibold text-gray-900">{completedProjects}</span>
-                  </div>
-                  <p className="mt-1 text-sm text-gray-500">completed projects</p>
                 </div>
               </div>
-
-              <p className="mt-6 text-gray-700 leading-7">{bio}</p>
             </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-4 border-y border-gray-200 py-5 md:grid-cols-6">
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">{totalReviews} reviews</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{portfolioCount}</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">portfolio items</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{freelancerProfile?.experience_years || 0} yrs</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">experience</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Sparkles className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{freelancerProfile?.hourly_rate ? `฿${freelancerProfile.hourly_rate}/hr` : 'Custom'}</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">starting rate</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{activeProjects}</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">active projects</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 text-gray-700">
+                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                  <span className="font-semibold text-gray-900">{completedProjects}</span>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">completed projects</p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-gray-700 leading-7">{bio}</p>
           </div>
         </section>
 
