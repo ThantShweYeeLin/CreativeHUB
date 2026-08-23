@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { authService } from '../../lib/authService';
+import { supabase } from '../../lib/supabase';
 
 export function ResetPasswordPage() {
   const navigate = useNavigate();
@@ -8,6 +9,43 @@ export function ResetPasswordPage() {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recoverySessionReady, setRecoverySessionReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Attempt to extract and establish the recovery session from the URL
+        const { data, error } = await supabase.auth.getSessionFromUrl();
+        if (!mounted) return;
+
+        if (error) {
+          // No recovery token found in URL — check if a normal session exists
+          const sessionResp = await supabase.auth.getSession();
+          if (sessionResp?.data?.session) {
+            setRecoverySessionReady(true);
+          } else {
+            setRecoverySessionReady(false);
+            setError('No password recovery session found. Please open the link from the password reset email in this browser.');
+          }
+          return;
+        }
+
+        if (data?.session) {
+          setRecoverySessionReady(true);
+        } else {
+          setRecoverySessionReady(false);
+          setError('Unable to establish recovery session from the URL.');
+        }
+      } catch (err) {
+        setRecoverySessionReady(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,6 +56,11 @@ export function ResetPasswordPage() {
     }
     if (password !== confirm) {
       setError('Passwords do not match.');
+      return;
+    }
+
+    if (!recoverySessionReady) {
+      setError('Password recovery session not established. Please open the reset link from your email in this browser.');
       return;
     }
 
