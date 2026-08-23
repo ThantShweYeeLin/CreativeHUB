@@ -2343,7 +2343,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_accepted',
             title: 'Booking accepted',
-            message: `accepted your ${projectName}.`,
+            message: `accepted ${projectName}.`,
             relatedId: requestId,
           });
         }
@@ -2354,7 +2354,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_rejected',
             title: 'Booking rejected',
-            message: `rejected your ${projectName}.`,
+            message: `rejected ${projectName}.`,
             relatedId: requestId,
           });
         }
