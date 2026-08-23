@@ -1535,6 +1535,17 @@ export class DataService {
   }
 
   static async createNotification(notification: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>) {
+    let metadata = { ...(notification.metadata || {}) };
+    if (notification.actor_id && !metadata.actor_name && !metadata.requester_name) {
+      const actorResponse = await this.getUser(String(notification.actor_id));
+      const actorName = actorResponse.data?.full_name || 'User';
+      metadata = {
+        ...metadata,
+        actor_name: actorName,
+        requester_name: actorName,
+      };
+    }
+
     const rpcPayload = {
       target_user_id: notification.user_id,
       actor_user_id: notification.actor_id || notification.user_id,
@@ -1543,7 +1554,7 @@ export class DataService {
       notification_message: notification.message || null,
       notification_post_id: notification.post_id || null,
       notification_comment_id: notification.comment_id || null,
-      notification_metadata: notification.metadata || {},
+      notification_metadata: metadata,
     };
 
     const rpcResult = await supabase.rpc('create_social_notification', rpcPayload);
@@ -1740,6 +1751,9 @@ export class DataService {
     }
 
     if (!error && request.freelancer_id && request.client_id) {
+      const clientUser = await this.getUser(String(request.client_id));
+      const clientName = clientUser.data?.full_name || 'User';
+
       await this.createNotification({
         user_id: request.freelancer_id,
         actor_id: request.client_id,
@@ -1749,7 +1763,11 @@ export class DataService {
         related_id: null,
         post_id: null,
         comment_id: null,
-        metadata: {},
+        metadata: {
+          actor_name: clientName,
+          requester_name: clientName,
+          project_name: request.project_name,
+        },
         read: false,
       });
     }

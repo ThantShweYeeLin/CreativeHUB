@@ -203,7 +203,16 @@ export function MainLayout({ children }: MainLayoutProps) {
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
             const shouldResolveActorName = (
-              (!!notification.actorId || !!row.actor_id || !!row.metadata?.requester_id || !!row.metadata?.actor_id || !!row.related_id) &&
+              (
+                !!notification.actorId ||
+                !!row.actor_id ||
+                !!row.metadata?.requester_id ||
+                !!row.metadata?.actor_id ||
+                !!row.related_id ||
+                String(row.type || '') === 'request' ||
+                String(row.type || '') === 'request_accepted' ||
+                String(row.type || '') === 'request_rejected'
+              ) &&
               (
                 !notification.actorName ||
                 /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(notification.actorName || '')) ||
@@ -261,7 +270,57 @@ export function MainLayout({ children }: MainLayoutProps) {
               }
             }
 
+            if (!resolvedActorId && ['request', 'request_accepted', 'request_rejected'].includes(String(row.type || ''))) {
+              const projectName = String(
+                row.metadata?.project_name ||
+                row.metadata?.projectName ||
+                (typeof row.message === 'string' ? row.message.replace(/^.*?:\s*/i, '').trim() : '') ||
+                ''
+              ).replace(/[.]+$/, '');
+
+              if (user?.id && projectName) {
+                const requestResponse = await supabase
+                  .from('requests')
+                  .select('id, client_id, freelancer_id, project_name, client:client_id(id, full_name, avatar_url)')
+                  .eq('freelancer_id', user.id)
+                  .eq('project_name', projectName)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+
+                if (!requestResponse.error && requestResponse.data?.[0]?.client_id) {
+                  resolvedActorId = String(requestResponse.data[0].client_id);
+                }
+              }
+            }
+
             if (!resolvedActorId) {
+              const requestProjectName = String(
+                row.metadata?.project_name ||
+                row.metadata?.projectName ||
+                (typeof row.message === 'string' ? row.message.replace(/^.*?:\s*/i, '').trim() : '') ||
+                ''
+              ).replace(/[.]+$/, '');
+
+              if (user?.id && ['request', 'request_accepted', 'request_rejected'].includes(String(row.type || '')) && requestProjectName) {
+                const legacyRequestResponse = await supabase
+                  .from('requests')
+                  .select('id, client_id, freelancer_id, project_name')
+                  .eq('freelancer_id', user.id)
+                  .eq('project_name', requestProjectName)
+                  .order('created_at', { ascending: false })
+                  .limit(1);
+
+                if (!legacyRequestResponse.error && legacyRequestResponse.data?.[0]?.client_id) {
+                  const legacyActorResponse = await DataService.getUser(String(legacyRequestResponse.data[0].client_id));
+                  if (!legacyActorResponse.error && legacyActorResponse.data?.full_name) {
+                    return {
+                      ...notification,
+                      actorName: legacyActorResponse.data.full_name,
+                    };
+                  }
+                }
+              }
+
               const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
               if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
                 return {

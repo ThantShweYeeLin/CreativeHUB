@@ -102,7 +102,7 @@ const normalizeNotificationText = (notification: NotificationPanelItem) => {
     .replace(/^(?:creative\s*hub|creativehub)\s+(?:ai\s+)?/i, '')
     .replace(/^(?:creative\s*hub|creativehub)$/i, '')
     .replace(/^(?:creative\s*hub|creativehub)\s+/i, '')
-    .replace(/^(?:freelancer|user|someone)\s+(?=(?:accepted|rejected|sent|declined|cancelled|followed)\b)/i, '')
+    .replace(/^(?:freelancer|user|someone)\s+(?=(?:new\s+booking\s+request|accepted|rejected|sent|declined|cancelled|followed)\b)/i, '')
     .trim();
 
   if (!cleanedMessage) {
