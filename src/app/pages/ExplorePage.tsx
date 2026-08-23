@@ -183,19 +183,19 @@ export function ExplorePage() {
             type="text"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search for makeup artists, photographers, models..."
+            placeholder="Search people, email, or works — e.g. Uri, uri@example.com, wedding"
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
           />
         </div>
         <div className="flex gap-3">
           <button
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search people, email, or works — e.g. Uri, uri@example.com, wedding"
-                className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
-              />
+            onClick={() => setShowSearchFilter(true)}
+            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
+          >
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
+            </div>
+            <div className="text-left">
               <div className="font-semibold text-sm md:text-base text-gray-900">Advanced Filter</div>
               <div className="text-xs text-gray-500 hidden md:block">Refine Your Search</div>
             </div>
@@ -206,25 +206,14 @@ export function ExplorePage() {
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
-            // If there's a search query, also include direct user matches (fallback)
-            if (searchQuery.trim()) {
-              const fallback = await DataService.searchUsersFallback(searchQuery.trim());
-              // eslint-disable-next-line no-console
-              console.debug('[ExplorePage] fallback=', fallback);
-              const fallbackData = (fallback.data || []) as any[];
-
-              const combined = [...data];
-              for (const f of fallbackData) {
-                const exists = combined.find((c) => (c.user_id && f.user_id && c.user_id === f.user_id) || c.id === f.id);
-                if (!exists) combined.push(f);
-              }
-
-              // eslint-disable-next-line no-console
-              console.debug('[ExplorePage] mergedResultsCount=', combined.length);
-              setFreelancers(combined);
-            } else {
-              setFreelancers(data);
-            }
+            </div>
+            <div className="text-left">
+              <div className="font-semibold text-sm md:text-base text-gray-900">AI Matcher</div>
+              <div className="text-xs text-gray-500 hidden md:block">Upload & Find Similar</div>
+            </div>
+          </button>
+        </div>
+      </div>
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
