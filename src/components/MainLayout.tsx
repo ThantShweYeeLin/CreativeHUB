@@ -31,7 +31,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
     const rawMessageText = typeof row.message === 'string' ? row.message : '';
-    const isGenericActorName = (value?: string | null) => /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(value || ''));
+    const isGenericActorName = (value?: string | null) => /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(value || ''));
     const inferredActorName = (() => {
       const match = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i);
       const candidate = match?.[1]?.trim();
@@ -44,17 +44,18 @@ export function MainLayout({ children }: MainLayoutProps) {
       actor?.full_name,
       row.metadata?.requester_name,
       row.metadata?.actor_name,
+      row.metadata?.name,
       inferredActorName,
-    ].find((value) => !!value && !isGenericActorName(String(value))) || 'Freelancer';
-    const finalActorName = isGenericActorName(String(actorName || '')) ? 'Freelancer' : (actorName || 'Freelancer');
+    ].find((value) => !!value && !isGenericActorName(String(value))) || 'User';
+    const finalActorName = actorName || 'User';
 
     const projectNameFromText = (() => {
       const text = rawMessageText.replace(/^(?:creative\s*hub\s+)?/i, '').trim();
       const match = text.match(/(?:accepted|rejected|cancelled)\s+(.+?)(?:\.|$)/i);
       if (match?.[1]) {
-        return match[1].trim();
+        return match[1].trim().replace(/[.]+$/, '');
       }
-      return String(row.metadata?.project_name || row.metadata?.projectName || '').trim();
+      return String(row.metadata?.project_name || row.metadata?.projectName || '').trim().replace(/[.]+$/, '');
     })();
 
     const buildTypeMessage = () => {
@@ -202,12 +203,14 @@ export function MainLayout({ children }: MainLayoutProps) {
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
             const shouldResolveActorName = (
-              (!!notification.actorId || !!row.actor_id) &&
+              (!!notification.actorId || !!row.actor_id || !!row.metadata?.requester_id || !!row.metadata?.actor_id || !!row.related_id) &&
               (
                 !notification.actorName ||
-                /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(notification.actorName || '')) ||
-                /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(row.message || '')) ||
-                notification.actorName === 'Freelancer'
+                /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(notification.actorName || '')) ||
+                /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.message || '')) ||
+                notification.actorName === 'Freelancer' ||
+                notification.actorName === 'Someone' ||
+                notification.actorName === 'User'
               )
             );
 
@@ -215,7 +218,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               return notification;
             }
 
-            const actorId = String(notification.actorId || row.actor_id || '');
+            const actorId = String(notification.actorId || row.actor_id || row.metadata?.actor_id || row.metadata?.requester_id || '');
             let resolvedActorId = actorId;
             let fallbackActorName: string | null = null;
             let fallbackAvatar: string | null = null;
@@ -228,14 +231,56 @@ export function MainLayout({ children }: MainLayoutProps) {
                 .maybeSingle();
 
               if (!relatedRequestResponse.error && relatedRequestResponse.data) {
-                const relatedActorId = String((relatedRequestResponse.data as any)?.freelancer_id || (relatedRequestResponse.data as any)?.client_id || '');
+                const relatedActorId = String(
+                  (relatedRequestResponse.data as any)?.freelancer_id ||
+                  (relatedRequestResponse.data as any)?.client_id ||
+                  ''
+                );
                 if (relatedActorId) {
                   resolvedActorId = relatedActorId;
                 }
               }
             }
 
+            if (!resolvedActorId && row.type === 'message' && row.related_id) {
+              const conversationResponse = await supabase
+                .from('conversations')
+                .select('id, participant_1_id, participant_2_id')
+                .eq('id', row.related_id)
+                .maybeSingle();
+
+              if (!conversationResponse.error && conversationResponse.data) {
+                const participantIds = [conversationResponse.data.participant_1_id, conversationResponse.data.participant_2_id]
+                  .filter(Boolean)
+                  .map(String);
+                const currentUserId = user?.id ? String(user.id) : '';
+                const otherParticipantId = participantIds.find((id) => id && id !== currentUserId);
+                if (otherParticipantId) {
+                  resolvedActorId = otherParticipantId;
+                }
+              }
+            }
+
             if (!resolvedActorId) {
+              const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
+              if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
+                return {
+                  ...notification,
+                  actorName: messageName,
+                };
+              }
+              if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
+                return {
+                  ...notification,
+                  actorName: String(row.metadata.requester_name),
+                };
+              }
+              if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
+                return {
+                  ...notification,
+                  actorName: String(row.metadata.actor_name),
+                };
+              }
               return notification;
             }
 
@@ -245,7 +290,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               fallbackAvatar = actorResponse.data.avatar_url || notification.actorAvatar;
             }
 
-            if (fallbackActorName && !/^(?:creative\s*hub|creativehub|freelancer)\b/i.test(fallbackActorName)) {
+            if (fallbackActorName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(fallbackActorName)) {
               return {
                 ...notification,
                 actorName: fallbackActorName,
@@ -253,10 +298,25 @@ export function MainLayout({ children }: MainLayoutProps) {
               };
             }
 
-            if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(row.metadata.requester_name))) {
+            if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
               return {
                 ...notification,
                 actorName: String(row.metadata.requester_name),
+              };
+            }
+
+            if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
+              return {
+                ...notification,
+                actorName: String(row.metadata.actor_name),
+              };
+            }
+
+            const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
+            if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
+              return {
+                ...notification,
+                actorName: messageName,
               };
             }
 

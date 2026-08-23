@@ -102,6 +102,7 @@ const normalizeNotificationText = (notification: NotificationPanelItem) => {
     .replace(/^(?:creative\s*hub|creativehub)\s+(?:ai\s+)?/i, '')
     .replace(/^(?:creative\s*hub|creativehub)$/i, '')
     .replace(/^(?:creative\s*hub|creativehub)\s+/i, '')
+    .replace(/^(?:freelancer|user|someone)\s+(?=(?:accepted|rejected|sent|declined|cancelled|followed)\b)/i, '')
     .trim();
 
   if (!cleanedMessage) {
@@ -110,7 +111,7 @@ const normalizeNotificationText = (notification: NotificationPanelItem) => {
 
   const actorName = notification.actorName?.trim();
   if (actorName) {
-    const actorPattern = new RegExp(`^${actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\-–]?\\s*`, 'i');
+    const actorPattern = new RegExp(`^${actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s+`, 'i');
     const stripped = cleanedMessage.replace(actorPattern, '');
     if (stripped !== cleanedMessage) {
       return stripped || cleanedMessage;
@@ -226,9 +227,7 @@ export function NotificationsPanel({
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
-                      <span className="font-bold">{
-                        /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(notification.actorName || '')) ? 'Freelancer' : notification.actorName
-                      }</span>{' '}
+                      <span className="font-bold">{notification.actorName || 'User'}</span>{' '}
                       <span className="text-gray-700">{normalizeNotificationText(notification)}</span>
                     </p>
                     {notification.type === 'friend_request' && (
