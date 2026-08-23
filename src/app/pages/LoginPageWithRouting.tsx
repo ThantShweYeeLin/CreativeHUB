@@ -18,7 +18,8 @@ export function LoginPageWithRouting() {
 
   const handleForgotPassword = async (email: string) => {
     try {
-      await requestPasswordReset(email);
+      const redirectTo = `${window.location.origin}/reset-password`;
+      await requestPasswordReset(email, redirectTo);
     } catch (err) {
       console.error('Forgot password failed:', err);
       throw err;

@@ -5,6 +5,7 @@ import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 // Authenticated page imports
 import { FreelancerProfile } from './pages/FreelancerProfile';
@@ -82,6 +83,7 @@ export default function App() {
       {!isAuthenticated && (
         <>
           <Route path="/login" element={<LoginPageWithRouting />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/signup" element={<SignUpPageWithRouting />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </>
