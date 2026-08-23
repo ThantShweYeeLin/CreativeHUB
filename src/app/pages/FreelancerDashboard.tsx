@@ -4,6 +4,7 @@ import {
   Calendar,
   Check,
   ChevronLeft,
+  ChevronRight,
   DollarSign,
   Image as ImageIcon,
   Layers,
@@ -46,7 +47,7 @@ interface NewPortfolioFormState {
   description: string;
   tools: string;
   projectUrl: string;
-  imageFile: File | null;
+  images: Array<{ id: string; file: File; previewUrl: string }>;
 }
 
 interface EditPortfolioFormState {
@@ -55,6 +56,8 @@ interface EditPortfolioFormState {
   description: string;
   tools: string;
   projectUrl: string;
+  imageUrls: string[];
+  newImages: Array<{ id: string; file: File; previewUrl: string }>;
 }
 
 function parseTags(value: string) {
@@ -86,7 +89,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     description: '',
     tools: '',
     projectUrl: '',
-    imageFile: null,
+    images: [],
   });
   const [isGeneratingStyles, setIsGeneratingStyles] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState<EditPortfolioFormState | null>(null);
@@ -320,15 +323,18 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
     let imageUrls: string[] = [];
 
-    if (newPortfolioForm.imageFile) {
-      const uploadResponse = await DataService.uploadPortfolioImage(user.id, newPortfolioForm.imageFile);
-      if (uploadResponse.error || !uploadResponse.publicUrl) {
-        setError((uploadResponse.error as any)?.message || 'Unable to upload portfolio image.');
+    if (newPortfolioForm.images.length > 0) {
+      const uploadResults = await Promise.all(
+        newPortfolioForm.images.map(({ file }) => DataService.uploadPortfolioImage(user.id, file))
+      );
+      const failedUpload = uploadResults.find((result) => result.error || !result.publicUrl);
+      if (failedUpload) {
+        setError((failedUpload.error as any)?.message || 'Unable to upload one or more portfolio images.');
         setIsSavingPortfolio(false);
         return;
       }
 
-      imageUrls = [uploadResponse.publicUrl];
+      imageUrls = uploadResults.map((result) => result.publicUrl as string);
     }
 
     const createResponse = await DataService.createPortfolioItem(freelancerProfile.id, {
@@ -347,10 +353,44 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     }
 
     setPortfolioItems((current) => [createResponse.data, ...current]);
-    setNewPortfolioForm({ title: '', description: '', tools: '', projectUrl: '', imageFile: null });
+    newPortfolioForm.images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+    setNewPortfolioForm({ title: '', description: '', tools: '', projectUrl: '', images: [] });
     setIsAddingPortfolio(false);
     setIsSavingPortfolio(false);
     setSuccess('Portfolio item uploaded successfully.');
+  };
+
+  const addPortfolioImages = (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      setError('Choose image files for this portfolio post.');
+      return;
+    }
+
+    setNewPortfolioForm((current) => {
+      const availableSlots = Math.max(10 - current.images.length, 0);
+      const additions = imageFiles.slice(0, availableSlots).map((file) => ({
+        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+
+      if (imageFiles.length > availableSlots) {
+        setError('A portfolio post can contain up to 10 images.');
+      } else {
+        setError(null);
+      }
+
+      return { ...current, images: [...current.images, ...additions] };
+    });
+  };
+
+  const removeNewPortfolioImage = (imageId: string) => {
+    setNewPortfolioForm((current) => {
+      const removedImage = current.images.find((image) => image.id === imageId);
+      if (removedImage) URL.revokeObjectURL(removedImage.previewUrl);
+      return { ...current, images: current.images.filter((image) => image.id !== imageId) };
+    });
   };
 
   const startEditingPortfolio = (item: any) => {
@@ -360,6 +400,49 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       description: item.description || '',
       tools: (item.tools_used || []).join(', '),
       projectUrl: item.project_url || '',
+      imageUrls: Array.isArray(item.image_urls) ? item.image_urls : [],
+      newImages: [],
+    });
+  };
+
+  const addEditPortfolioImages = (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      setError('Choose image files for this portfolio post.');
+      return;
+    }
+
+    setEditingPortfolio((current) => {
+      if (!current) return current;
+      const availableSlots = Math.max(10 - current.imageUrls.length - current.newImages.length, 0);
+      const additions = imageFiles.slice(0, availableSlots).map((file) => ({
+        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+
+      if (imageFiles.length > availableSlots) {
+        setError('A portfolio post can contain up to 10 images.');
+      } else {
+        setError(null);
+      }
+
+      return { ...current, newImages: [...current.newImages, ...additions] };
+    });
+  };
+
+  const removeExistingEditImage = (imageUrl: string) => {
+    setEditingPortfolio((current) =>
+      current ? { ...current, imageUrls: current.imageUrls.filter((url) => url !== imageUrl) } : current
+    );
+  };
+
+  const removeNewEditImage = (imageId: string) => {
+    setEditingPortfolio((current) => {
+      if (!current) return current;
+      const removedImage = current.newImages.find((image) => image.id === imageId);
+      if (removedImage) URL.revokeObjectURL(removedImage.previewUrl);
+      return { ...current, newImages: current.newImages.filter((image) => image.id !== imageId) };
     });
   };
 
@@ -375,11 +458,32 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setError(null);
     setSuccess(null);
 
+    let uploadedImageUrls: string[] = [];
+    if (editingPortfolio.newImages.length > 0) {
+      if (!user?.id) {
+        setError('You need to be signed in to upload portfolio images.');
+        setIsUpdatingPortfolio(false);
+        return;
+      }
+
+      const uploadResults = await Promise.all(
+        editingPortfolio.newImages.map(({ file }) => DataService.uploadPortfolioImage(user.id, file))
+      );
+      const failedUpload = uploadResults.find((result) => result.error || !result.publicUrl);
+      if (failedUpload) {
+        setError((failedUpload.error as any)?.message || 'Unable to upload one or more portfolio images.');
+        setIsUpdatingPortfolio(false);
+        return;
+      }
+      uploadedImageUrls = uploadResults.map((result) => result.publicUrl as string);
+    }
+
     const updateResponse = await DataService.updatePortfolioItem(editingPortfolio.id, {
       title: editingPortfolio.title.trim(),
       description: editingPortfolio.description.trim() || null,
       tools_used: parseTags(editingPortfolio.tools),
       project_url: editingPortfolio.projectUrl.trim() || null,
+      image_urls: [...editingPortfolio.imageUrls, ...uploadedImageUrls],
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -392,6 +496,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setPortfolioItems((current) =>
       current.map((item) => (item.id === editingPortfolio.id ? updateResponse.data : item))
     );
+    editingPortfolio.newImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
     setEditingPortfolio(null);
     setIsUpdatingPortfolio(false);
     setSuccess('Portfolio item updated.');
@@ -656,18 +761,39 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     placeholder="Tools used (comma separated)"
                     className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
                   />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(event) =>
-                      setNewPortfolioForm((current) => ({
-                        ...current,
-                        imageFile: event.target.files?.[0] || null,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm"
-                  />
+                  <label className="flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 hover:border-gray-900 hover:bg-white">
+                    <span>{newPortfolioForm.images.length ? `${newPortfolioForm.images.length} image${newPortfolioForm.images.length === 1 ? '' : 's'} selected` : 'Add project images (up to 10)'}</span>
+                    <span className="font-semibold">Choose</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="sr-only"
+                      onChange={(event) => {
+                        if (event.target.files) addPortfolioImages(event.target.files);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
                 </div>
+                {newPortfolioForm.images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                    {newPortfolioForm.images.map((image, index) => (
+                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        <img src={image.previewUrl} alt={`Project image ${index + 1}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeNewPortfolioImage(image.id)}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
+                          aria-label={`Remove project image ${index + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">{index + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <button
                   onClick={() => void handleCreatePortfolio()}
                   disabled={isSavingPortfolio}
@@ -686,12 +812,38 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               <div className="grid grid-cols-1 gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {portfolioItems.map((item) => (
                   <div key={item.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                    <div className="aspect-[4/3] bg-gray-100">
-                      <ImageWithFallback
-                        src={item.image_urls?.[0] || DEFAULT_AVATAR_URL}
-                        alt={item.title}
-                        className="h-full w-full object-cover"
-                      />
+                    <div id={`dashboard-portfolio-${item.id}`} className="relative flex aspect-[4/3] snap-x snap-mandatory overflow-x-auto bg-gray-100">
+                      {(item.image_urls?.length ? item.image_urls : [DEFAULT_AVATAR_URL]).map((imageUrl: string, index: number) => (
+                        <ImageWithFallback
+                          key={`${item.id}-${imageUrl}-${index}`}
+                          src={imageUrl}
+                          alt={`${item.title} image ${index + 1}`}
+                          className="h-full min-w-full snap-center object-cover"
+                        />
+                      ))}
+                      {item.image_urls?.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`dashboard-portfolio-${item.id}`)?.scrollBy({ left: -320, behavior: 'smooth' })}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
+                            aria-label={`Previous image in ${item.title}`}
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`dashboard-portfolio-${item.id}`)?.scrollBy({ left: 320, behavior: 'smooth' })}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
+                            aria-label={`Next image in ${item.title}`}
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">
+                            {item.image_urls.length} photos
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="p-4">
                       <h3 className="font-bold text-gray-900">{item.title}</h3>
@@ -761,9 +913,58 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   placeholder="Tools used (comma separated)"
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
                 />
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-sm font-semibold text-gray-700">Project photos</p>
+                    <span className="text-xs text-gray-500">{editingPortfolio.imageUrls.length + editingPortfolio.newImages.length}/10</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
+                    {editingPortfolio.imageUrls.map((imageUrl, index) => (
+                      <div key={imageUrl} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        <img src={imageUrl} alt={`Project image ${index + 1}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeExistingEditImage(imageUrl)}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
+                          aria-label={`Remove project image ${index + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                    {editingPortfolio.newImages.map((image, index) => (
+                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
+                        <img src={image.previewUrl} alt={`New project image ${index + 1}`} className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeNewEditImage(image.id)}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
+                          aria-label={`Remove new project image ${index + 1}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <label className="mt-3 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 hover:border-gray-900 hover:bg-white">
+                    <span>Add more images</span>
+                    <span className="font-semibold">Choose</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="sr-only"
+                      onChange={(event) => {
+                        if (event.target.files) addEditPortfolioImages(event.target.files);
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
+                      editingPortfolio.newImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
                       setEditingPortfolio(null);
                       setError(null);
                     }}

@@ -770,7 +770,10 @@ export class DataService {
 
   static async uploadPortfolioImage(userId: string, file: File) {
     const fileExt = file.name.split('.').pop() || 'jpg';
-    const filePath = `${userId}/portfolio-${Date.now()}.${fileExt}`;
+    const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
+    const filePath = `${userId}/portfolio-${Date.now()}-${uniqueId}.${fileExt}`;
 
     const { error } = await supabase.storage
       .from('avatars')

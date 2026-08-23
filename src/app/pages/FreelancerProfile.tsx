@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -973,12 +973,38 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                 {featuredPortfolio.map((item) => (
                   <div key={item.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <div className="aspect-[4/3] bg-white">
-                      <ImageWithFallback
-                        src={item.image_urls?.[0] || avatarUrl}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                      />
+                    <div id={`public-portfolio-${item.id}`} className="relative flex aspect-[4/3] snap-x snap-mandatory overflow-x-auto bg-white">
+                      {(item.image_urls?.length ? item.image_urls : [avatarUrl]).map((imageUrl: string, index: number) => (
+                        <ImageWithFallback
+                          key={`${item.id}-${imageUrl}-${index}`}
+                          src={imageUrl}
+                          alt={`${item.title} image ${index + 1}`}
+                          className="h-full min-w-full snap-center object-cover"
+                        />
+                      ))}
+                      {item.image_urls?.length > 1 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`public-portfolio-${item.id}`)?.scrollBy({ left: -360, behavior: 'smooth' })}
+                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
+                            aria-label={`Previous image in ${item.title}`}
+                          >
+                            <ChevronLeft className="h-5 w-5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById(`public-portfolio-${item.id}`)?.scrollBy({ left: 360, behavior: 'smooth' })}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
+                            aria-label={`Next image in ${item.title}`}
+                          >
+                            <ChevronRight className="h-5 w-5" />
+                          </button>
+                          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">
+                            {item.image_urls.length} photos
+                          </span>
+                        </>
+                      )}
                     </div>
                     <div className="p-4">
                       <h3 className="font-bold text-gray-900">{item.title}</h3>

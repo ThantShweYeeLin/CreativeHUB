@@ -31,6 +31,15 @@ export function SignUpPageWithRouting() {
     }
   };
 
+  const handleOAuthSignUp = async (provider: 'google' | 'facebook') => {
+    try {
+      await signInWithOAuth(provider, `${window.location.origin}/explore`);
+    } catch (error) {
+      console.error('OAuth sign up failed:', error);
+      throw error;
+    }
+  };
+
   return (
     <SignUpPageComponent
       onSignUp={handleSignUp}

@@ -85,7 +85,7 @@ export default function App() {
           <Route path="/login" element={<LoginPageWithRouting />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/signup" element={<SignUpPageWithRouting />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/signup" replace />} />
         </>
       )}
 
