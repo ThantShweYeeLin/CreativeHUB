@@ -2345,6 +2345,7 @@ export class DataService {
             title: 'Booking accepted',
             message: `accepted ${projectName}.`,
             relatedId: requestId,
+            metadata: { project_name: projectName },
           });
         }
 
@@ -2356,6 +2357,7 @@ export class DataService {
             title: 'Booking rejected',
             message: `rejected ${projectName}.`,
             relatedId: requestId,
+            metadata: { project_name: projectName },
           });
         }
 
