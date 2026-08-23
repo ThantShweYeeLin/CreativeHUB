@@ -1302,6 +1302,9 @@ export class DataService {
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', data.conversation_id);
 
+      const senderUser = await this.getUser(String(data.sender_id));
+      const senderName = senderUser.data?.full_name || 'Someone';
+
       await this.notifyEvent({
         userId: String(data.recipient_id),
         actorId: String(data.sender_id),
@@ -1309,7 +1312,7 @@ export class DataService {
         title: 'New message',
         message: 'sent you a message.',
         relatedId: String(data.conversation_id),
-        metadata: { conversation_id: data.conversation_id },
+        metadata: { conversation_id: data.conversation_id, actor_name: senderName, requester_name: senderName },
       });
     }
 
@@ -1578,6 +1581,17 @@ export class DataService {
       return { error: null };
     }
 
+    let metadata = { ...(args.metadata || {}) };
+    if (args.actorId && !metadata.actor_name && !metadata.requester_name) {
+      const actorResponse = await this.getUser(String(args.actorId));
+      const actorName = actorResponse.data?.full_name || 'Someone';
+      metadata = {
+        ...metadata,
+        actor_name: actorName,
+        requester_name: actorName,
+      };
+    }
+
     const response = await this.createNotification({
       user_id: args.userId,
       actor_id: args.actorId || null,
@@ -1587,7 +1601,7 @@ export class DataService {
       related_id: args.relatedId || null,
       post_id: null,
       comment_id: null,
-      metadata: args.metadata || {},
+      metadata,
       read: false,
     });
 
@@ -2338,6 +2352,9 @@ export class DataService {
 
       if (nextStatus !== previousStatus) {
         if (nextStatus === 'accepted' && clientId) {
+          const freelancerUser = freelancerId ? await this.getUser(freelancerId) : null;
+          const actorName = freelancerUser?.data?.full_name || 'Someone';
+
           await this.notifyEvent({
             userId: clientId,
             actorId: freelancerId || null,
@@ -2345,11 +2362,14 @@ export class DataService {
             title: 'Booking accepted',
             message: `accepted ${projectName}.`,
             relatedId: requestId,
-            metadata: { project_name: projectName },
+            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
         }
 
         if (nextStatus === 'rejected' && clientId) {
+          const freelancerUser = freelancerId ? await this.getUser(freelancerId) : null;
+          const actorName = freelancerUser?.data?.full_name || 'Someone';
+
           await this.notifyEvent({
             userId: clientId,
             actorId: freelancerId || null,
@@ -2357,7 +2377,7 @@ export class DataService {
             title: 'Booking rejected',
             message: `rejected ${projectName}.`,
             relatedId: requestId,
-            metadata: { project_name: projectName },
+            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
         }
 
