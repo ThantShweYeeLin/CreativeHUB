@@ -33,30 +33,74 @@ export function MainLayout({ children }: MainLayoutProps) {
     const inferredActorName = (() => {
       const match = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i);
       const candidate = match?.[1]?.trim();
-      return candidate && !/^creativehub\b/i.test(candidate) ? candidate : null;
-    })();
-    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || inferredActorName || 'CreativeHUB';
-    const fallbackMessage = (() => {
-      switch (String(row.type || 'system')) {
-        case 'friend_request':
-          return `${actorName} sent you a friend request.`;
-        case 'friend_request_accepted':
-          return `${actorName} accepted your friend request.`;
-        case 'friend_request_declined':
-          return `${actorName} declined your friend request.`;
-        case 'follow':
-          return `${actorName} followed you.`;
-        default:
-          return String(row.title || 'Notification');
+      if (candidate && !/^creativehub\b/i.test(candidate)) {
+        return candidate;
       }
+      return /^creativehub\b/i.test(rawMessageText) ? 'Freelancer' : null;
     })();
+    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || inferredActorName || 'Freelancer';
+    const finalActorName = /^creativehub\b/i.test(actorName) ? 'Freelancer' : actorName;
+
+    const projectNameFromText = (() => {
+      const text = rawMessageText.replace(/^creativehub\s+/i, '').trim();
+      const match = text.match(/(?:accepted|rejected)\s+(.+?)(?:\.|$)/i);
+      if (match?.[1]) {
+        return match[1].trim();
+      }
+      return String(row.metadata?.project_name || row.metadata?.projectName || '').trim();
+    })();
+
+    const buildTypeMessage = () => {
+      const type = String(row.type || 'system');
+      const projectName = projectNameFromText || 'project';
+
+      if (type === 'request_accepted') {
+        return `${finalActorName} accepted ${projectName}.`;
+      }
+
+      if (type === 'request_rejected') {
+        return `${finalActorName} rejected ${projectName}.`;
+      }
+
+      if (type === 'message' || type === 'group_message') {
+        return `${finalActorName} sent you a message.`;
+      }
+
+      if (type === 'friend_request') {
+        return `${finalActorName} sent you a friend request.`;
+      }
+
+      if (type === 'friend_request_accepted') {
+        return `${finalActorName} accepted your friend request.`;
+      }
+
+      if (type === 'friend_request_declined') {
+        return `${finalActorName} declined your friend request.`;
+      }
+
+      if (type === 'follow') {
+        return `${finalActorName} followed you.`;
+      }
+
+      return String(row.title || 'Notification');
+    };
+
+    const fallbackMessage = buildTypeMessage();
+    const normalizedMessage = typeof row.message === 'string' && row.message.trim().length > 0 ? row.message.trim() : fallbackMessage;
+    const displayMessage = (
+      /^creativehub\b/i.test(normalizedMessage) ||
+      /^freelancer\b/i.test(normalizedMessage) ||
+      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
+    )
+      ? buildTypeMessage()
+      : normalizedMessage;
 
     return {
       id: String(row.id),
       type: String(row.type || 'system'),
       title: String(row.title || 'Notification'),
-      message: typeof row.message === 'string' && row.message.trim().length > 0 ? row.message : fallbackMessage,
-      actorName,
+      message: displayMessage,
+      actorName: finalActorName,
       actorAvatar: actor?.avatar_url || null,
       actorId: actor?.id || row.actor_id || null,
       requesterId: row.metadata?.requester_id || row.actor_id || null,
@@ -143,7 +187,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               (
                 !notification.actorName ||
                 /^creativehub\b/i.test(notification.actorName) ||
-                /^creativehub\b/i.test(String(row.message || ''))
+                /^creativehub\b/i.test(String(row.message || '')) ||
+                notification.actorName === 'Freelancer'
               )
             );
 
