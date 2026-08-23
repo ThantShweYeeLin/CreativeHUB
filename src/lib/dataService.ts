@@ -1291,13 +1291,37 @@ export class DataService {
     return { data, error: null };
   }
 
-  static async sendMessage(message: Omit<Message, 'id' | 'created_at'>) {
+  static async sendMessage(
+    message: Omit<Message, 'id' | 'created_at'>,
+    options?: { shouldNotify?: boolean }
+  ) {
+    const { shouldNotify = true } = options ?? {};
+
+    const normalizedContent = String(message.content || '').trim();
+    const isAutoAcceptMessage = normalizedContent === 'Your request has been accepted. You may now chat with this person.';
+
+    if (isAutoAcceptMessage) {
+      const recentMessageCheck = await supabase
+        .from('messages')
+        .select('id')
+        .eq('conversation_id', message.conversation_id)
+        .eq('sender_id', message.sender_id)
+        .eq('recipient_id', message.recipient_id)
+        .eq('content', normalizedContent)
+        .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+        .limit(1);
+
+      if (!recentMessageCheck.error && (recentMessageCheck.data?.length ?? 0) > 0) {
+        return { data: recentMessageCheck.data[0], error: null };
+      }
+    }
+
     const { data, error } = await supabase
       .from('messages')
       .insert(message)
       .select()
       .single();
-    
+
     // Update conversation last message time
     if (!error && data) {
       await supabase
@@ -1305,18 +1329,33 @@ export class DataService {
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', data.conversation_id);
 
-      const senderUser = await this.getUser(String(data.sender_id));
-      const senderName = senderUser.data?.full_name || 'Someone';
+      if (shouldNotify) {
+        const senderUser = await this.getUser(String(data.sender_id));
+        const senderName = senderUser.data?.full_name || 'Someone';
 
-      await this.notifyEvent({
-        userId: String(data.recipient_id),
-        actorId: String(data.sender_id),
-        type: 'message',
-        title: 'New message',
-        message: 'sent you a message.',
-        relatedId: String(data.conversation_id),
-        metadata: { conversation_id: data.conversation_id, actor_name: senderName, requester_name: senderName },
-      });
+        const recentNotificationCheck = await supabase
+          .from('notifications')
+          .select('id')
+          .eq('user_id', String(data.recipient_id))
+          .eq('actor_id', String(data.sender_id))
+          .eq('type', 'message')
+          .eq('related_id', String(data.conversation_id))
+          .eq('message', 'sent you a message.')
+          .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+          .limit(1);
+
+        if (!recentNotificationCheck.error && (recentNotificationCheck.data?.length ?? 0) === 0) {
+          await this.notifyEvent({
+            userId: String(data.recipient_id),
+            actorId: String(data.sender_id),
+            type: 'message',
+            title: 'New message',
+            message: 'sent you a message.',
+            relatedId: String(data.conversation_id),
+            metadata: { conversation_id: data.conversation_id, actor_name: senderName, requester_name: senderName },
+          });
+        }
+      }
     }
 
     return { data, error };
@@ -1593,6 +1632,23 @@ export class DataService {
         actor_name: actorName,
         requester_name: actorName,
       };
+    }
+
+    if (args.type === 'message' && args.relatedId && args.actorId && args.userId) {
+      const duplicateCheck = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', args.userId)
+        .eq('actor_id', args.actorId)
+        .eq('type', 'message')
+        .eq('related_id', args.relatedId)
+        .eq('message', args.message)
+        .gte('created_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
+        .limit(1);
+
+      if (!duplicateCheck.error && (duplicateCheck.data?.length ?? 0) > 0) {
+        return { error: null };
+      }
     }
 
     const response = await this.createNotification({

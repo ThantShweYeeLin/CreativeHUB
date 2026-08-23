@@ -231,20 +231,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           setError((bookingResponse.error as any).message || 'Request accepted, but booking conversion failed.');
         }
 
-        const conversationResponse = await DataService.ensureConversation(
+        await DataService.ensureConversation(
           request.client_id,
           request.freelancer_id
         );
-
-        if (conversationResponse.data?.id) {
-          await DataService.sendMessage({
-            conversation_id: conversationResponse.data.id,
-            sender_id: request.freelancer_id,
-            recipient_id: request.client_id,
-            content: 'Your request has been accepted. You may now chat with this person.',
-            read: false,
-          } as any);
-        }
 
         const groupMeta = DataService.getRequestGroupMeta(request);
         if (groupMeta?.group_id) {
