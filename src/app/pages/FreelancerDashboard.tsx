@@ -27,6 +27,7 @@ type DashboardSection = 'portfolio' | 'requests' | 'analytics' | 'settings';
 interface FreelancerDashboardProps {
   onBack: () => void;
   section: DashboardSection;
+  initialOpenRequestId?: string | undefined;
 }
 
 interface SettingsFormState {
@@ -63,7 +64,7 @@ function parseTags(value: string) {
     .filter(Boolean);
 }
 
-export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProps) {
+export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: FreelancerDashboardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
@@ -74,6 +75,7 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [highlightRequestId, setHighlightRequestId] = useState<string | null>(null);
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [requestSearch, setRequestSearch] = useState('');
   const [requestMinBudget, setRequestMinBudget] = useState('');
@@ -161,6 +163,23 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
       isMounted = false;
     };
   }, [user?.id]);
+
+  // If navigation provided an initialOpenRequestId, scroll to and highlight that request after load
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!initialOpenRequestId) return;
+    if (requests.length === 0) return;
+
+    const openId = initialOpenRequestId;
+    setTimeout(() => {
+      const el = document.getElementById(`request-${openId}`);
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightRequestId(openId);
+        setTimeout(() => setHighlightRequestId(null), 4000);
+      }
+    }, 300);
+  }, [requests, user?.id]);
 
   const stats = useMemo(() => {
     const pending = requests.filter((request) => request.status === 'pending').length;
@@ -829,7 +848,11 @@ export function FreelancerDashboard({ onBack, section }: FreelancerDashboardProp
                     const cleanMessage = stripBudgetMeta(request.message || request.description || 'No message provided');
 
                     return (
-                  <div key={request.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
+                  <div
+                    id={`request-${request.id}`}
+                    key={request.id}
+                    className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-lg ${highlightRequestId === request.id ? 'ring-4 ring-yellow-200' : ''}`}
+                  >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center">
                       <div className="h-14 w-14 overflow-hidden rounded-full ring-2 ring-white shadow-md">
                         <ImageWithFallback
