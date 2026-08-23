@@ -142,8 +142,9 @@ export function ExplorePage() {
       const response = await DataService.getAllFreelancers(200);
 
       // Debugging: log raw response to inspect why some names are not returned
+      // Use console.log so it's visible in all browser consoles
       // eslint-disable-next-line no-console
-      console.debug('[ExplorePage] searchQuery=', searchQuery, 'response=', response);
+      console.log('[ExplorePage] searchQuery=', searchQuery, 'response=', response);
 
       if (!isMounted) {
         return;
@@ -153,13 +154,27 @@ export function ExplorePage() {
         setError((response.error as any).message || 'Unable to load freelancers.');
         setFreelancers([]);
       } else {
+        // Merge direct freelancer search and user fallback concurrently for more complete results
         const data = response.data || [];
-        if (data.length === 0 && searchQuery.trim()) {
-          // Try fallback: search users directly and synthesize profiles
-          const fallback = await DataService.searchUsersFallback(searchQuery.trim());
-          // eslint-disable-next-line no-console
-          console.debug('[ExplorePage] fallback=', fallback);
-          setFreelancers(fallback.data || []);
+        if (searchQuery.trim()) {
+          try {
+            const [fallback] = await Promise.all([DataService.searchUsersFallback(searchQuery.trim())]);
+            // eslint-disable-next-line no-console
+            console.log('[ExplorePage] fallback=', fallback);
+            const fallbackData = (fallback.data || []) as any[];
+
+            const combined = [...data];
+            for (const f of fallbackData) {
+              const exists = combined.find((c) => (c.user_id && f.user_id && c.user_id === f.user_id) || c.id === f.id);
+              if (!exists) combined.push(f);
+            }
+
+            // eslint-disable-next-line no-console
+            console.log('[ExplorePage] mergedResultsCount=', combined.length);
+            setFreelancers(combined);
+          } catch (err) {
+            setFreelancers(data);
+          }
         } else {
           setFreelancers(data);
         }
