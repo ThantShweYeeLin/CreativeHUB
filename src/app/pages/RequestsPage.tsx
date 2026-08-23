@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,6 +29,7 @@ const getStatusText = (status: 'pending' | 'accepted' | 'rejected') => {
 };
 
 export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: RequestsPageProps) {
+  const location = useLocation();
   const { user } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -84,6 +86,20 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
     loadRequests();
     loadFreelancerOptions();
+
+    // If navigation passed an openRequestId in state, attempt to open that request after load
+    const openRequestId = (location.state as any)?.openRequestId as string | undefined;
+    if (openRequestId) {
+      (async () => {
+        // Wait briefly for requests to load then open the matching one
+        await new Promise((r) => setTimeout(r, 250));
+        const resp = await DataService.getClientRequestsWithProgress(user?.id || '');
+        if (!resp.error) {
+          const found = (resp.data || []).find((r: any) => r.id === openRequestId);
+          if (found) openEditRequest(found);
+        }
+      })();
+    }
 
     return () => {
       isMounted = false;

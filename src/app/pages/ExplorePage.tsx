@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -117,6 +117,7 @@ function normalizeText(value: string | null | undefined) {
 export function ExplorePage() {
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
+  const navigate = useNavigate();
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
@@ -131,6 +132,10 @@ export function ExplorePage() {
   const [error, setError] = useState<string | null>(null);
   const [showAIMatcher, setShowAIMatcher] = useState(false);
   const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherFreelancer[] | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const suggestionsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -207,6 +212,71 @@ export function ExplorePage() {
       };
     });
   }, [normalizedPreferredCurrency]);
+
+  // Autocomplete: fetch suggestions (debounced) from both searchUsers and fallback
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    let mounted = true;
+    const timer = setTimeout(async () => {
+      const q = searchQuery.trim();
+      try {
+        const [usersRes, fallbackRes] = await Promise.allSettled([
+          DataService.searchUsers(q, { limit: 6 }),
+          DataService.searchUsersFallback(q),
+        ]);
+
+        const combined: any[] = [];
+        if (usersRes.status === 'fulfilled' && usersRes.value?.data) combined.push(...usersRes.value.data);
+        if (fallbackRes.status === 'fulfilled' && fallbackRes.value?.data) combined.push(...fallbackRes.value.data);
+
+        const dedupe = new Map<string, any>();
+        for (const r of combined) {
+          const key = r.user_id || r.users?.id || r.id;
+          if (!key) continue;
+          if (!dedupe.has(key)) dedupe.set(key, r);
+        }
+
+        const list = Array.from(dedupe.values()).slice(0, 6);
+        if (mounted) {
+          setSuggestions(list);
+          setShowSuggestions(list.length > 0);
+        }
+      } catch (e) {
+        if (mounted) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      }
+    }, 180);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  // Click outside to close suggestions
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as Node;
+      if (
+        suggestionsRef.current &&
+        inputRef.current &&
+        !suggestionsRef.current.contains(target) &&
+        !inputRef.current.contains(target)
+      ) {
+        setShowSuggestions(false);
+      }
+    }
+
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, []);
 
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers.map((profile) => ({
@@ -305,11 +375,42 @@ export function ExplorePage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
+            ref={inputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
+            onFocus={() => setShowSuggestions(suggestions.length > 0)}
             placeholder="Search people, email, or works — e.g. Uri, uri@example.com, wedding"
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
           />
+          {showSuggestions && suggestions.length > 0 && (
+            <div
+              ref={suggestionsRef}
+              className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden"
+            >
+              {suggestions.map((s, idx) => {
+                const id = s.user_id || s.users?.id || s.id;
+                const name = s.users?.full_name || s.title || s.users?.email || 'Unknown';
+                const subtitle = s.users?.email || s.users?.username || s.title || '';
+                const avatar = s.users?.avatar_url || DEFAULT_AVATAR_URL;
+                return (
+                  <button
+                    key={id || idx}
+                    onClick={() => {
+                      setShowSuggestions(false);
+                      navigate(`/profile/${id}`);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
+                  >
+                    <img src={avatar} alt={name} className="w-8 h-8 rounded-full object-cover" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">{name}</span>
+                      {subtitle && <span className="text-xs text-gray-500">{subtitle}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
         <div className="flex gap-3">
           <button

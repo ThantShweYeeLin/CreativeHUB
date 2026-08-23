@@ -16,6 +16,24 @@ export function LoginPageWithRouting() {
     }
   };
 
+  const handleForgotPassword = async (email: string) => {
+    try {
+      await requestPasswordReset(email);
+    } catch (err) {
+      console.error('Forgot password failed:', err);
+      throw err;
+    }
+  };
+
+  const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
+    try {
+      await signInWithOAuth(provider);
+    } catch (err) {
+      console.error('OAuth login failed:', err);
+      throw err;
+    }
+  };
+
   return (
     <LoginPageComponent
       onLogin={handleLogin}

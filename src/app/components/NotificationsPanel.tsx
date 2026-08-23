@@ -11,6 +11,7 @@ export interface NotificationPanelItem {
   actorAvatar: string | null;
   actorId: string | null;
   requesterId: string | null;
+  relatedId?: string | null;
   createdAt: string;
   read: boolean;
 }
@@ -21,7 +22,7 @@ interface NotificationsPanelProps {
   isLoading?: boolean;
   onMarkAsRead?: (notificationId: string) => void;
   onMarkAllAsRead?: () => void;
-  onOpenRequests?: () => void;
+  onOpenRequests?: (notification?: NotificationPanelItem) => void;
   onOpenMessages?: () => void;
   onOpenProfile?: (notification: NotificationPanelItem) => void;
   onAcceptFriendRequest?: (notification: NotificationPanelItem) => void;
@@ -159,7 +160,7 @@ export function NotificationsPanel({
                   }
 
                   if (notification.type.includes('request')) {
-                    onOpenRequests?.();
+                    onOpenRequests?.(notification);
                     onClose();
                     return;
                   }

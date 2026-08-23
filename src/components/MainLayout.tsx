@@ -58,6 +58,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       actorAvatar: actor?.avatar_url || null,
       actorId: actor?.id || row.actor_id || null,
       requesterId: row.metadata?.requester_id || row.actor_id || null,
+      relatedId: row.related_id || null,
       createdAt: String(row.created_at || new Date().toISOString()),
       read: Boolean(row.read),
     };
@@ -350,9 +351,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                     isLoading={isNotificationsLoading}
                     onMarkAsRead={handleMarkNotificationAsRead}
                     onMarkAllAsRead={handleMarkAllNotificationsAsRead}
-                    onOpenRequests={() => {
+                    onOpenRequests={(notification) => {
                       setShowNotifications(false);
-                      navigate('/requests');
+                      const requestId = notification?.relatedId || notification?.id;
+                      if (requestId) {
+                        navigate('/requests', { state: { openRequestId: requestId } });
+                      } else {
+                        navigate('/requests');
+                      }
                     }}
                     onOpenMessages={() => {
                       setShowNotifications(false);
