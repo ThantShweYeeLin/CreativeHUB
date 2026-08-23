@@ -136,15 +136,17 @@ export function MainLayout({ children }: MainLayoutProps) {
         const mapped = await Promise.all(
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
-            if (notification.actorName !== 'CreativeHUB' || notification.actorId) {
+            const shouldResolveActorName = (
+              !notification.actorName ||
+              notification.actorName === 'CreativeHUB' ||
+              notification.actorName === 'CreativeHUB AI'
+            ) && !!notification.actorId;
+
+            if (!shouldResolveActorName) {
               return notification;
             }
 
-            if (!row.actor_id) {
-              return notification;
-            }
-
-            const actorResponse = await DataService.getUser(String(row.actor_id));
+            const actorResponse = await DataService.getUser(String(notification.actorId));
             if (!actorResponse.error && actorResponse.data?.full_name) {
               return {
                 ...notification,
