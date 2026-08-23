@@ -114,7 +114,7 @@ export function ExplorePage() {
 
       // Debugging: log raw response to inspect why some names are not returned
       // eslint-disable-next-line no-console
-      console.debug('[ExplorePage] searchQuery=', searchQuery, 'responseCount=', (response.data || []).length);
+      console.debug('[ExplorePage] searchQuery=', searchQuery, 'response=', response);
 
       if (!isMounted) {
         return;
@@ -128,6 +128,8 @@ export function ExplorePage() {
         if (data.length === 0 && searchQuery.trim()) {
           // Try fallback: search users directly and synthesize profiles
           const fallback = await DataService.searchUsersFallback(searchQuery.trim());
+          // eslint-disable-next-line no-console
+          console.debug('[ExplorePage] fallback=', fallback);
           setFreelancers(fallback.data || []);
         } else {
           setFreelancers(data);
