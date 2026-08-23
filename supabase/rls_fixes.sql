@@ -416,6 +416,64 @@ $$;
 
 grant execute on function public.create_app_notification(uuid, text, text, text, uuid) to anon, authenticated;
 
+-- Atomic accept friend request helper
+create or replace function public.accept_friend_request(
+  requester_user_id uuid,
+  target_user_id uuid
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  pending_id uuid;
+  requester_name text;
+begin
+  if requester_user_id is null or target_user_id is null then
+    return;
+  end if;
+
+  -- Remove the pending friend_request notification targeted at the accepter
+  select id into pending_id
+  from public.notifications n
+  where n.user_id = target_user_id
+    and n.type = 'friend_request'
+    and (n.metadata->> 'requester_id')::text = requester_user_id::text
+  order by n.created_at desc
+  limit 1;
+
+  if pending_id is not null then
+    delete from public.notifications where id = pending_id;
+  end if;
+
+  -- Ensure mutual follower rows exist
+  insert into public.followers (follower_id, following_id, created_at)
+    values (requester_user_id, target_user_id, timezone('utc', now()))
+  on conflict do nothing;
+
+  insert into public.followers (follower_id, following_id, created_at)
+    values (target_user_id, requester_user_id, timezone('utc', now()))
+  on conflict do nothing;
+
+  -- Notify the requester that their request was accepted
+  select full_name into requester_name from public.profiles where id = target_user_id limit 1;
+  insert into public.notifications (user_id, actor_id, type, title, message, metadata, read, created_at)
+    values (
+      requester_user_id,
+      target_user_id,
+      'friend_request_accepted',
+      'Friend request accepted',
+      coalesce(requester_name, 'Someone') || ' accepted your friend request.',
+      jsonb_build_object('requester_id', requester_user_id, 'requester_name', coalesce(requester_name, '')),
+      false,
+      timezone('utc', now())
+    );
+end;
+$$;
+
+grant execute on function public.accept_friend_request(uuid, uuid) to anon, authenticated;
+
 -- Group chat tables and policies
 create table if not exists public.group_conversations (
   id uuid default uuid_generate_v4() primary key,

@@ -207,7 +207,7 @@ export class FeedService {
   static subscribeToNotifications(userId: string, onChange: () => void): RealtimeChannel {
     return supabase
       .channel(`notifications-${userId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, onChange)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, onChange)
       .subscribe();
   }
 }

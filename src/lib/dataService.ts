@@ -199,6 +199,36 @@ export class DataService {
     };
   }
 
+  static async getFollowers(userId: string) {
+    const { data, error } = await supabase
+      .from('followers')
+      .select('follower_id')
+      .eq('following_id', userId);
+
+    if (error) return { data: [], error };
+
+    const ids = (data || []).map((r: any) => String(r.follower_id));
+    if (ids.length === 0) return { data: [], error: null };
+
+    const usersResp = await supabase.from('users').select('id, full_name, avatar_url').in('id', ids).order('full_name', { ascending: true });
+    return { data: (usersResp.data || []), error: usersResp.error };
+  }
+
+  static async getFollowing(userId: string) {
+    const { data, error } = await supabase
+      .from('followers')
+      .select('following_id')
+      .eq('follower_id', userId);
+
+    if (error) return { data: [], error };
+
+    const ids = (data || []).map((r: any) => String(r.following_id));
+    if (ids.length === 0) return { data: [], error: null };
+
+    const usersResp = await supabase.from('users').select('id, full_name, avatar_url').in('id', ids).order('full_name', { ascending: true });
+    return { data: (usersResp.data || []), error: usersResp.error };
+  }
+
   static async getFollowCounts(userId: string) {
     const [followersResponse, followingResponse] = await Promise.all([
       supabase
@@ -349,6 +379,13 @@ export class DataService {
       read: false,
     } as any);
 
+    // Also create a follow row so the requester is following the target (helps establish mutual friendship on accept)
+    try {
+      await this.followUser(userId, targetUserId);
+    } catch (err) {
+      // ignore errors (unique constraint or RLS) — it's a best-effort insert
+    }
+
     return { error: response.error, alreadyPending: false };
   }
 
@@ -357,6 +394,30 @@ export class DataService {
       return { error: null };
     }
 
+    let rpcAttempted = false;
+    let rpcErrorMessage: string | null = null;
+    try {
+      rpcAttempted = true;
+      const rpc = await supabase.rpc('accept_friend_request', {
+        requester_user_id: requesterUserId,
+        target_user_id: targetUserId,
+      });
+
+      // rpc returns void; check for rpc.error
+      if (rpc.error) {
+        rpcErrorMessage = rpc.error.message || String(rpc.error);
+        console.warn('accept_friend_request RPC failed, falling back to legacy accept flow', rpc.error);
+        // fall through to legacy flow
+      } else {
+        return { error: null, rpcAttempted, rpcErrorMessage };
+      }
+    } catch (err: any) {
+      rpcErrorMessage = err?.message || String(err);
+      console.warn('accept_friend_request RPC threw, falling back to legacy accept flow', err);
+      // fall through to legacy flow
+    }
+
+    // Legacy fallback: delete pending notification and create reverse follow + accepted notification
     const pendingResponse = await supabase
       .from('notifications')
       .select('id')
@@ -371,17 +432,14 @@ export class DataService {
       }
     }
 
-    const [followResponse, reverseFollowResponse] = await Promise.all([
-      this.isFollowing(requesterUserId, targetUserId),
+    const [followResp] = await Promise.all([
       this.isFollowing(targetUserId, requesterUserId),
-    ]);
+    ].map((p) => p).slice(0));
 
-    if (!followResponse.isFollowing) {
-      await this.followUser(requesterUserId, targetUserId);
-    }
-
-    if (!reverseFollowResponse.isFollowing) {
+    try {
       await this.followUser(targetUserId, requesterUserId);
+    } catch (err) {
+      // ignore
     }
 
     const targetUserResponse = await this.getUser(targetUserId);
@@ -400,7 +458,7 @@ export class DataService {
       read: false,
     } as any);
 
-    return { error: null };
+    return { error: null, rpcAttempted, rpcErrorMessage };
   }
 
   static async denyFriendRequest(requesterUserId: string, targetUserId: string) {

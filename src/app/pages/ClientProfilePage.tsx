@@ -8,6 +8,7 @@ import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import FollowersModal from '../components/FollowersModal';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
@@ -31,6 +32,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
   const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+  const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [formValues, setFormValues] = useState({
     full_name: '',
     location: '',
@@ -730,14 +732,14 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-4 md:gap-8 text-xs md:text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
+                  <button onClick={() => setShowFollowersModal({ type: 'followers' })} className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{followCounts.followers}</span>
                     <span>Followers</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  </button>
+                  <button onClick={() => setShowFollowersModal({ type: 'following' })} className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{followCounts.following}</span>
                     <span>Following</span>
-                  </div>
+                  </button>
                   {isFreelancer ? (
                     <>
                       <div>
@@ -1064,6 +1066,9 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           onCancel={() => setIsLocationPickerOpen(false)}
           onConfirm={handleLocationPicked}
         />
+      )}
+      {showFollowersModal && user?.id && (
+        <FollowersModal userId={user.id} type={showFollowersModal.type} onClose={() => setShowFollowersModal(null)} />
       )}
     </div>
   );

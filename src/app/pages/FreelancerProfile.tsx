@@ -8,6 +8,7 @@ import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import FollowersModal from '../components/FollowersModal';
 import {
   appendBudgetMeta,
   formatBudgetRange,
@@ -53,6 +54,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
   const [friendshipState, setFriendshipState] = useState<'none' | 'outgoing' | 'incoming' | 'friends'>('none');
   const [isFriendLoading, setIsFriendLoading] = useState(false);
+  const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [bookingMode, setBookingMode] = useState<'individual' | 'group'>('individual');
   const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
@@ -226,6 +228,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setFriendshipState('none');
       }
 
+      // Re-check friendship state shortly after load to avoid timing/race conditions
+      if (user?.id && user.id !== targetId) {
+        setTimeout(async () => {
+          if (!isMounted) return;
+          const refreshed = await DataService.getFriendshipState(user.id, targetId);
+          if (!refreshed.error && isMounted) {
+            setFriendshipState(refreshed.state);
+          }
+        }, 600);
+      }
+
       const followCountsResponse = await DataService.getFollowCounts(targetId);
       if (isMounted && !followCountsResponse.error) {
         setFollowCounts({
@@ -290,6 +303,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     ? (isFollowedByTarget ? 'friends' : 'following')
     : (isFollowedByTarget ? 'follow_back' : 'follow');
 
+  const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (friendshipState === 'friends' || (isFollowing && isFollowedByTarget)));
+
   const handleFavoriteToggle = async () => {
     if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
       return;
@@ -349,6 +364,39 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsFriendLoading(false);
   };
 
+  const handleFollowToggle = async () => {
+    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) return;
+
+    setError(null);
+    setIsFriendLoading(true);
+
+    if (isFollowing) {
+      const resp = await DataService.unfollowUser(user.id, targetFreelancerUserId);
+      if (resp.error) {
+        setError((resp.error as any).message || 'Unable to unfollow.');
+        setIsFriendLoading(false);
+        return;
+      }
+      setIsFollowing(false);
+      setFollowCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }));
+      setIsFriendLoading(false);
+      return;
+    }
+
+    const resp = await DataService.followUser(user.id, targetFreelancerUserId);
+    if (resp.error) {
+      setError((resp.error as any).message || 'Unable to follow.');
+      setIsFriendLoading(false);
+      return;
+    }
+
+    // refresh friendship state from backend to pick up mutual follow
+    setIsFollowing(true);
+    setFollowCounts((c) => ({ ...c, followers: c.followers + 1 }));
+    await refreshFriendshipState();
+    setIsFriendLoading(false);
+  };
+
   const handleAcceptFriendRequest = async () => {
     if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
       return;
@@ -361,6 +409,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     if (response.error) {
       setError((response.error as any).message || 'Unable to accept friend request.');
+      setIsFriendLoading(false);
+      return;
+    }
+
+    // Surface RPC debug message if present
+    if ((response as any).rpcAttempted && (response as any).rpcErrorMessage) {
+      setError((response as any).rpcErrorMessage || 'RPC accept_friend_request failed');
       setIsFriendLoading(false);
       return;
     }
@@ -749,23 +804,23 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     </button>
                   )}
 
-                  {requestStatus === 'accepted' ? (
+                  {showMessageButton && (
                     <button
                       onClick={onOpenChat}
                       className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
                     >
                       <MessageCircle className="h-5 w-5" />
-                      Open Chat
+                      Message
                     </button>
-                  ) : (
-                    user?.id !== targetFreelancerUserId && (
-                      <button
-                        onClick={() => setShowBookingForm(true)}
-                        className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
-                      >
-                        Request Booking
-                      </button>
-                    )
+                  )}
+
+                  {user?.id !== targetFreelancerUserId && (
+                    <button
+                      onClick={() => setShowBookingForm(true)}
+                      className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
+                    >
+                      Request Booking
+                    </button>
                   )}
 
                   {user?.id !== targetFreelancerUserId && (
@@ -789,26 +844,37 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         </>
                       ) : friendshipState === 'friends' ? (
                         <button
-                          onClick={() => void handleUnfriend()}
+                          onClick={async () => {
+                            if (confirm('Remove friendship with this user?')) {
+                              await handleUnfriend();
+                            }
+                          }}
                           disabled={isFriendLoading}
                           className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60"
                         >
-                          {isFriendLoading ? 'Updating...' : 'Unfriend'}
+                          {isFriendLoading ? 'Updating...' : 'Friends'}
                         </button>
                       ) : friendshipState === 'outgoing' ? (
                         <button
                           disabled
                           className="cursor-default rounded-xl bg-gray-200 px-6 py-3 text-base font-semibold text-gray-900"
                         >
-                          Request Sent
+                          Requested
                         </button>
                       ) : (
                         <button
-                          onClick={() => void handleSendFriendRequest()}
+                          onClick={() => void handleFollowToggle()}
                           disabled={isFriendLoading}
                           className="rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
                         >
-                          {isFriendLoading ? 'Updating...' : 'Send Friend Request'}
+                          {isFriendLoading
+                            ? 'Updating...'
+                            : isFollowing
+                            ? 'Following'
+                            : isFollowedByTarget
+                            ? 'Follow back'
+                            : 'Follow'
+                          }
                         </button>
                       )}
                     </div>
@@ -837,14 +903,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
+                  <button onClick={() => setShowFollowersModal({ type: 'followers' })} className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{followCounts.followers}</span>
                     <span>Followers</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                  </button>
+                  <button onClick={() => setShowFollowersModal({ type: 'following' })} className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900">{followCounts.following}</span>
                     <span>Following</span>
-                  </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1019,6 +1085,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </section>
         )}
       </main>
+
+      {showFollowersModal && targetFreelancerUserId && (
+        <FollowersModal
+          userId={String(targetFreelancerUserId)}
+          type={showFollowersModal.type}
+          onClose={() => setShowFollowersModal(null)}
+        />
+      )}
 
       {focusedPost && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
