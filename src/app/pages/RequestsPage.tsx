@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 
 interface RequestsPageProps {
@@ -30,8 +31,10 @@ const getStatusText = (status: 'pending' | 'accepted' | 'rejected') => {
 
 export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: RequestsPageProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
+  const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingRequest, setEditingRequest] = useState<any | null>(null);
@@ -106,6 +109,48 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    const groupRecipientIds = requests.flatMap((request) => request.group_meta?.recipients || []);
+    const uniqueRecipientIds = Array.from(new Set(groupRecipientIds.map(String).filter(Boolean)));
+    if (!uniqueRecipientIds.length) {
+      setGroupMemberNamesByRequest({});
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      const response = await DataService.getUsersByIds(uniqueRecipientIds);
+      if (!isActive || response.error) {
+        return;
+      }
+
+      const profilesById = new Map((response.data || []).map((user) => [String(user.id), user]));
+      const nextMap: Record<string, string[]> = {};
+
+      for (const request of requests) {
+        const meta = request.group_meta || DataService.getRequestGroupMeta(request);
+        if (!meta?.recipients?.length) {
+          continue;
+        }
+
+        const names = meta.recipients
+          .map((recipientId: string) => profilesById.get(String(recipientId))?.full_name)
+          .filter((name): name is string => Boolean(name && name.trim()));
+
+        if (names.length) {
+          nextMap[String(request.id)] = names;
+        }
+      }
+
+      setGroupMemberNamesByRequest(nextMap);
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [requests]);
+
   const normalizedRequests = useMemo(
     () =>
       requests.map((request) => ({
@@ -119,6 +164,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
         isGroupRequest: Boolean(request.is_group_request),
         freelancer: {
+          id: request.freelancer?.id || request.freelancer_id || '',
           name: request.freelancer?.full_name || 'Freelancer',
           specialty: request.freelancer?.title || 'Creative Freelancer',
           avatar: request.freelancer?.avatar_url || DEFAULT_AVATAR_URL,
@@ -127,9 +173,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         budget: Number(request.budget || 0),
         status: request.status as 'pending' | 'accepted' | 'rejected',
         date: request.created_at,
-        message: stripBudgetMeta(request.plain_message || request.message || request.description || ''),
+        message: stripRequestDisplayMeta(request.plain_message || request.message || request.description || '') || 'Group request',
       })),
-    [requests]
+    [requests, groupMemberNamesByRequest]
   );
 
   const openEditRequest = (request: any) => {
@@ -248,7 +294,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           {request.projectName}
                         </h3>
                         <p className="text-sm md:text-base text-gray-600">
-                          <span className="font-semibold">{request.freelancer.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => request.freelancer.id && navigate(`/profile/${request.freelancer.id}`)}
+                            className="font-semibold text-gray-900 hover:text-black"
+                          >
+                            {request.freelancer.name}
+                          </button>
                           {' · '}
                           {request.freelancer.specialty}
                         </p>
@@ -283,7 +335,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           ? 'bg-red-50 border-2 border-red-100'
                           : 'bg-gray-50 border-2 border-gray-100'
                       }`}>
-                        <p className="text-xs md:text-sm text-gray-700 italic">"{request.message}"</p>
+                        <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">Description</p>
+                        <p className="text-xs md:text-sm text-gray-700 italic">{request.message}</p>
                       </div>
                     )}
 

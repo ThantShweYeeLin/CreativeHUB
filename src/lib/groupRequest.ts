@@ -1,3 +1,5 @@
+import { stripBudgetMeta } from './requestBudget';
+
 export interface GroupRequestMeta {
   group_id: string;
   owner_id: string;
@@ -57,4 +59,24 @@ export function stripGroupRequestMeta(value: string | null | undefined) {
   }
 
   return text.slice(0, start).trim();
+}
+
+export function stripRequestDisplayMeta(value: string | null | undefined) {
+  const direct = stripBudgetMeta(stripGroupRequestMeta(value || ''));
+  return direct
+    .replace(/\s*(?:,\s*|\s+and\s+)?as\s+freelancer\s*$/i, '')
+    .replace(/\s*(?:,\s*|\s+and\s+)?as\s+client\s*$/i, '')
+    .trim();
+}
+
+export function summarizeGroupRequestMembers(
+  recipients: Array<string | null | undefined> = [],
+  memberNames: Array<string | null | undefined> = []
+) {
+  const count = recipients.filter(Boolean).length;
+  if (!count) {
+    return 'Group request';
+  }
+
+  return memberNames.length ? 'Group request' : `Group request: ${count} member${count === 1 ? '' : 's'}`;
 }

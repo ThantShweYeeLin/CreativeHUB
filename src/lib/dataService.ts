@@ -5,6 +5,8 @@ import {
   buildGroupRequestMeta,
   parseGroupRequestMeta,
   stripGroupRequestMeta,
+  summarizeGroupRequestMembers,
+  stripRequestDisplayMeta,
 } from './groupRequest';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -163,6 +165,20 @@ export class DataService {
       .eq('email', email)
       .single();
     return { data, error };
+  }
+
+  static async getUsersByIds(userIds: string[]) {
+    const uniqueIds = Array.from(new Set((userIds || []).map(String).filter(Boolean)));
+    if (!uniqueIds.length) {
+      return { data: [] as Array<{ id: string; full_name: string | null; avatar_url: string | null; email: string }>, error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, full_name, avatar_url')
+      .in('id', uniqueIds);
+
+    return { data: (data || []) as Array<{ id: string; full_name: string | null; avatar_url: string | null; email: string }>, error };
   }
 
   static async searchUsers(query: string, options?: { excludeUserId?: string; limit?: number }) {
@@ -1820,7 +1836,8 @@ export class DataService {
   }
 
   static getRequestPlainMessage(request: any) {
-    return stripGroupRequestMeta(request?.message || request?.description || '');
+    const plainText = stripRequestDisplayMeta(stripGroupRequestMeta(request?.message || request?.description || ''));
+    return plainText || 'Group request';
   }
 
   static async getClientRequestsWithProgress(clientId: string) {

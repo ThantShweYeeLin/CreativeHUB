@@ -20,6 +20,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 
@@ -79,6 +80,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [highlightRequestId, setHighlightRequestId] = useState<string | null>(null);
+  const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [requestSearch, setRequestSearch] = useState('');
   const [requestMinBudget, setRequestMinBudget] = useState('');
@@ -183,6 +185,48 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       }
     }, 300);
   }, [requests, user?.id]);
+
+  useEffect(() => {
+    const groupRecipientIds = requests.flatMap((request) => DataService.getRequestGroupMeta(request)?.recipients || []);
+    const uniqueRecipientIds = Array.from(new Set(groupRecipientIds.map(String).filter(Boolean)));
+    if (!uniqueRecipientIds.length) {
+      setGroupMemberNamesByRequest({});
+      return;
+    }
+
+    let isActive = true;
+
+    (async () => {
+      const response = await DataService.getUsersByIds(uniqueRecipientIds);
+      if (!isActive || response.error) {
+        return;
+      }
+
+      const profilesById = new Map((response.data || []).map((user) => [String(user.id), user]));
+      const nextMap: Record<string, string[]> = {};
+
+      for (const request of requests) {
+        const meta = DataService.getRequestGroupMeta(request);
+        if (!meta?.recipients?.length) {
+          continue;
+        }
+
+        const names = meta.recipients
+          .map((recipientId) => profilesById.get(String(recipientId))?.full_name)
+          .filter((name): name is string => Boolean(name && name.trim()));
+
+        if (names.length) {
+          nextMap[String(request.id)] = names;
+        }
+      }
+
+      setGroupMemberNamesByRequest(nextMap);
+    })();
+
+    return () => {
+      isActive = false;
+    };
+  }, [requests]);
 
   const stats = useMemo(() => {
     const pending = requests.filter((request) => request.status === 'pending').length;
@@ -1036,7 +1080,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       max: Number(request.budget || 0),
                     };
 
-                    const cleanMessage = stripBudgetMeta(request.message || request.description || 'No message provided');
+                    const groupMeta = DataService.getRequestGroupMeta(request);
+                    const memberNames = groupMeta?.recipients?.length ? (groupMemberNamesByRequest[String(request.id)] || []) : [];
+                    const cleanMessage = stripRequestDisplayMeta(request.message || request.description || 'No message provided') || 'Group request';
+                    const groupSummary = groupMeta?.recipients?.length
+                      ? summarizeGroupRequestMembers(groupMeta.recipients, memberNames)
+                      : null;
 
                     return (
                   <div
@@ -1045,18 +1094,57 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-lg ${highlightRequestId === request.id ? 'ring-4 ring-yellow-200' : ''}`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center">
-                      <div className="h-14 w-14 overflow-hidden rounded-full ring-2 ring-white shadow-md">
+                      <button
+                        type="button"
+                        onClick={() => request.client_id && navigate(`/profile/${request.client_id}`)}
+                        className="h-14 w-14 overflow-hidden rounded-full ring-2 ring-white shadow-md transition-transform hover:scale-105"
+                        aria-label={`Open ${request.client?.full_name || 'Client'} profile`}
+                      >
                         <ImageWithFallback
                           src={request.client?.avatar_url || DEFAULT_AVATAR_URL}
                           alt={request.client?.full_name || 'Client'}
                           className="h-full w-full object-cover"
                         />
-                      </div>
+                      </button>
                       <div className="flex-1">
                         <h3 className="text-lg font-bold text-gray-900">{request.project_name}</h3>
                         <p className="text-sm text-gray-600">
-                          {request.client?.full_name || 'Client'} • {cleanMessage}
+                          <button
+                            type="button"
+                            onClick={() => request.client_id && navigate(`/profile/${request.client_id}`)}
+                            className="font-semibold text-gray-900 hover:text-black"
+                          >
+                            {request.client?.full_name || 'Client'}
+                          </button>
                         </p>
+                        {groupSummary && (
+                          <p className="mt-2 text-sm text-gray-700">
+                            <span className="font-semibold text-gray-900">Group request</span>
+                          </p>
+                        )}
+                        {cleanMessage && (
+                          <p className="mt-2 text-sm text-gray-700">
+                            <span className="font-semibold text-gray-900">Description:</span> {cleanMessage}
+                          </p>
+                        )}
+                        {groupMeta?.recipients?.length && memberNames.length > 0 && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-700">
+                            <span className="font-semibold text-gray-900">Group members:</span>
+                            {memberNames.map((memberName, index) => (
+                              <button
+                                key={`${request.id}-${memberName}-${index}`}
+                                type="button"
+                                onClick={() => {
+                                  const recipientId = groupMeta.recipients[index];
+                                  if (recipientId) navigate(`/profile/${recipientId}`);
+                                }}
+                                className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 hover:border-gray-300 hover:bg-gray-100"
+                              >
+                                {memberName}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-600">
                           <span className="inline-flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatBudgetRange(budgetMeta)}</span>
                           <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{new Date(request.created_at).toLocaleDateString()}</span>
