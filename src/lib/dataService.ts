@@ -75,60 +75,66 @@ export class DataService {
 
   static async searchFreelancers(query: string, skills?: string[]) {
     const cleaned = typeof query === 'string' ? query.trim() : '';
+    const normQuery = cleaned.replace(/\s+/g, '').toLowerCase();
 
-    // Start base query for freelancer profiles and include related user info
-    let q = supabase
-      .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)');
-
-    // If there's a query, also search users for matching full_name or email (used as username fallback)
+    // 1) Find users matching the query (case-insensitive, ignore spaces by normalizing client-side)
+    let matchedUsers: Array<{ id: string; full_name?: string; email?: string }> = [];
     if (cleaned) {
-      // Broad user search: first fetch users whose name or email loosely matches
-      const userSearch = await supabase
+      const usersResp = await supabase
         .from('users')
         .select('id, full_name, email')
         .or(`full_name.ilike.%${cleaned}%,email.ilike.%${cleaned}%`)
-        .limit(500);
+        .limit(1000);
 
-      let users = (userSearch.data || []) as Array<{ id: string; full_name?: string; email?: string }>;
+      const users = (usersResp.data || []) as Array<{ id: string; full_name?: string; email?: string }>;
 
-      // If query contains multiple words, filter client-side to ensure all words appear in full_name
-      const words = cleaned.split(/\s+/).filter(Boolean);
-      if (words.length > 1) {
-        const lowerWords = words.map((w) => w.toLowerCase());
-        users = users.filter((u) => {
-          const name = (u.full_name || '').toLowerCase();
-          return lowerWords.every((w) => name.includes(w));
+      matchedUsers = users.filter((u) => {
+        const name = (u.full_name || '').replace(/\s+/g, '').toLowerCase();
+        const emailLocal = (u.email || '').split('@')[0].replace(/\s+/g, '').toLowerCase();
+        return name.includes(normQuery) || emailLocal.includes(normQuery) || (u.email || '').toLowerCase().includes(cleaned.toLowerCase());
+      });
+    }
+
+    // 2) Fetch freelancer profiles that either belong to matched users or match title/description
+    const userIds = matchedUsers.map((u) => u.id).filter(Boolean);
+
+    const profilesByUser = userIds.length > 0
+      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)').in('user_id', userIds)
+      : { data: [] };
+
+    const profilesByText = cleaned
+      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)').or(`title.ilike.%${cleaned}%,description.ilike.%${cleaned}%`).eq('is_available', true).limit(1000)
+      : { data: [] };
+
+    const combined = ([...(profilesByUser.data || []), ...(profilesByText.data || [])] as any[])
+      .filter(Boolean)
+      .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
+
+    // 3) For matched users who don't have a freelancer profile, synthesize a minimal profile so they can be found
+    const profilesUserIds = new Set((combined as any[]).map((p) => p.user_id));
+    for (const u of matchedUsers) {
+      if (!profilesUserIds.has(u.id)) {
+        combined.push({
+          id: `user-${u.id}`,
+          user_id: u.id,
+          title: '',
+          description: '',
+          is_available: false,
+          users: { id: u.id, email: u.email, full_name: u.full_name },
         });
       }
-
-      // Also allow matching by email local-part (username)
-      const extraSearch = await supabase
-        .from('users')
-        .select('id, full_name, email')
-        .or(`email.ilike.%${cleaned}%`)
-        .limit(500);
-
-      users = users.concat((extraSearch.data || []) as any[]);
-
-      const userIds: string[] = Array.from(new Set(users.map((u) => u.id).filter(Boolean)));
-
-      // Build OR conditions: title, description, or matching user_id(s)
-      const orConditions: string[] = [`title.ilike.%${cleaned}%`, `description.ilike.%${cleaned}%`];
-
-      for (const id of userIds) {
-        orConditions.push(`user_id.eq.${id}`);
-      }
-
-      q = q.or(orConditions.join(','));
     }
 
+    // 4) Optionally filter by skills if provided
+    let finalResults = combined;
     if (skills && skills.length > 0) {
-      q = q.overlaps('skills', skills);
+      finalResults = finalResults.filter((p: any) => {
+        const s = p.skills || [];
+        return Array.isArray(s) && skills.every((sk) => s.includes(sk));
+      });
     }
 
-    const { data, error } = await q.eq('is_available', true);
-    return { data, error };
+    return { data: finalResults, error: null };
   }
 
   static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
