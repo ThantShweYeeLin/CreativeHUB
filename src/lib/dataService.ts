@@ -1156,7 +1156,7 @@ export class DataService {
         actorId: input.senderId,
         type: 'group_message',
         title: 'New group message',
-        message: 'You received a new message in a group chat.',
+        message: 'sent a message in the group chat.',
         relatedId: input.conversationId,
         metadata: { conversation_id: input.conversationId, is_group: true },
       });
@@ -1307,7 +1307,7 @@ export class DataService {
         actorId: String(data.sender_id),
         type: 'message',
         title: 'New message',
-        message: 'You received a new message.',
+        message: 'sent you a message.',
         relatedId: String(data.conversation_id),
         metadata: { conversation_id: data.conversation_id },
       });
