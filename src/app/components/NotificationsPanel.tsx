@@ -99,27 +99,30 @@ const normalizeNotificationText = (notification: NotificationPanelItem) => {
   }
 
   const cleanedMessage = rawMessage
-    .replace(/^creativehub\s+(?:ai\s+)?/i, '')
-    .replace(/^creativehub$/i, '')
+    .replace(/^(?:creative\s*hub|creativehub)\s+(?:ai\s+)?/i, '')
+    .replace(/^(?:creative\s*hub|creativehub)$/i, '')
+    .replace(/^(?:creative\s*hub|creativehub)\s+/i, '')
     .trim();
 
-  if (cleanedMessage) {
-    const actorName = notification.actorName?.trim();
-    if (actorName) {
-      const actorPattern = new RegExp(`^${actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\-–]?\\s*`, 'i');
-      const stripped = cleanedMessage.replace(actorPattern, '');
-      if (stripped !== cleanedMessage) {
-        if (notification.type === 'request_accepted' || notification.type === 'request_rejected') {
-          const projectName = notification.relatedId ? '' : '';
-          return stripped || cleanedMessage;
-        }
-        return stripped || cleanedMessage;
-      }
+  if (!cleanedMessage) {
+    return rawMessage;
+  }
+
+  const actorName = notification.actorName?.trim();
+  if (actorName) {
+    const actorPattern = new RegExp(`^${actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\-–]?\\s*`, 'i');
+    const stripped = cleanedMessage.replace(actorPattern, '');
+    if (stripped !== cleanedMessage) {
+      return stripped || cleanedMessage;
     }
+  }
+
+  const legacyVerbPattern = /^(?:accepted|rejected|sent)\s+/i;
+  if (legacyVerbPattern.test(cleanedMessage)) {
     return cleanedMessage;
   }
 
-  return rawMessage;
+  return cleanedMessage;
 };
 
 export function NotificationsPanel({
@@ -224,7 +227,7 @@ export function NotificationsPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
                       <span className="font-bold">{
-                        /^creativehub\b/i.test(notification.actorName) ? 'Freelancer' : notification.actorName
+                        /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(notification.actorName || '')) ? 'Freelancer' : notification.actorName
                       }</span>{' '}
                       <span className="text-gray-700">{normalizeNotificationText(notification)}</span>
                     </p>

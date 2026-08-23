@@ -7,6 +7,7 @@ import { UserMenu } from '../app/components/UserMenu';
 import { NotificationPanelItem, NotificationsPanel } from '../app/components/NotificationsPanel';
 import { DataService } from '../lib/dataService';
 import { FeedService } from '../lib/feedService';
+import { supabase } from '../lib/supabase';
 import { ImageWithFallback } from './common/ImageWithFallback';
 import { DEFAULT_AVATAR_URL } from '../lib/defaults';
 
@@ -30,20 +31,26 @@ export function MainLayout({ children }: MainLayoutProps) {
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
     const rawMessageText = typeof row.message === 'string' ? row.message : '';
+    const isGenericActorName = (value?: string | null) => /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(value || ''));
     const inferredActorName = (() => {
       const match = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i);
       const candidate = match?.[1]?.trim();
-      if (candidate && !/^creativehub\b/i.test(candidate)) {
+      if (candidate && !isGenericActorName(candidate)) {
         return candidate;
       }
-      return /^creativehub\b/i.test(rawMessageText) ? 'Freelancer' : null;
+      return isGenericActorName(rawMessageText) ? 'Freelancer' : null;
     })();
-    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || inferredActorName || 'Freelancer';
-    const finalActorName = /^creativehub\b/i.test(actorName) ? 'Freelancer' : actorName;
+    const actorName = [
+      actor?.full_name,
+      row.metadata?.requester_name,
+      row.metadata?.actor_name,
+      inferredActorName,
+    ].find((value) => !!value && !isGenericActorName(String(value))) || 'Freelancer';
+    const finalActorName = isGenericActorName(String(actorName || '')) ? 'Freelancer' : (actorName || 'Freelancer');
 
     const projectNameFromText = (() => {
-      const text = rawMessageText.replace(/^creativehub\s+/i, '').trim();
-      const match = text.match(/(?:accepted|rejected)\s+(.+?)(?:\.|$)/i);
+      const text = rawMessageText.replace(/^(?:creative\s*hub\s+)?/i, '').trim();
+      const match = text.match(/(?:accepted|rejected|cancelled)\s+(.+?)(?:\.|$)/i);
       if (match?.[1]) {
         return match[1].trim();
       }
@@ -87,10 +94,22 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     const fallbackMessage = buildTypeMessage();
     const normalizedMessage = typeof row.message === 'string' && row.message.trim().length > 0 ? row.message.trim() : fallbackMessage;
+    const typeNeedsActorFirstMessage = [
+      'request_accepted',
+      'request_rejected',
+      'message',
+      'group_message',
+      'friend_request',
+      'friend_request_accepted',
+      'friend_request_declined',
+      'follow',
+      'booking_cancelled',
+    ].includes(String(row.type || 'system'));
     const displayMessage = (
-      /^creativehub\b/i.test(normalizedMessage) ||
-      /^freelancer\b/i.test(normalizedMessage) ||
-      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
+      typeNeedsActorFirstMessage ||
+      /^(?:creative\s*hub|freelancer)\b/i.test(normalizedMessage) ||
+      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage) ||
+      /\b(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
     )
       ? buildTypeMessage()
       : normalizedMessage;
@@ -186,8 +205,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               (!!notification.actorId || !!row.actor_id) &&
               (
                 !notification.actorName ||
-                /^creativehub\b/i.test(notification.actorName) ||
-                /^creativehub\b/i.test(String(row.message || '')) ||
+                /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(notification.actorName || '')) ||
+                /^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(row.message || '')) ||
                 notification.actorName === 'Freelancer'
               )
             );
@@ -197,16 +216,47 @@ export function MainLayout({ children }: MainLayoutProps) {
             }
 
             const actorId = String(notification.actorId || row.actor_id || '');
-            if (!actorId) {
+            let resolvedActorId = actorId;
+            let fallbackActorName: string | null = null;
+            let fallbackAvatar: string | null = null;
+
+            if (!resolvedActorId && row.related_id) {
+              const relatedRequestResponse = await supabase
+                .from('requests')
+                .select('id, freelancer_id, client_id, project_name')
+                .eq('id', row.related_id)
+                .maybeSingle();
+
+              if (!relatedRequestResponse.error && relatedRequestResponse.data) {
+                const relatedActorId = String((relatedRequestResponse.data as any)?.freelancer_id || (relatedRequestResponse.data as any)?.client_id || '');
+                if (relatedActorId) {
+                  resolvedActorId = relatedActorId;
+                }
+              }
+            }
+
+            if (!resolvedActorId) {
               return notification;
             }
 
-            const actorResponse = await DataService.getUser(actorId);
+            const actorResponse = await DataService.getUser(resolvedActorId);
             if (!actorResponse.error && actorResponse.data?.full_name) {
+              fallbackActorName = actorResponse.data.full_name;
+              fallbackAvatar = actorResponse.data.avatar_url || notification.actorAvatar;
+            }
+
+            if (fallbackActorName && !/^(?:creative\s*hub|creativehub|freelancer)\b/i.test(fallbackActorName)) {
               return {
                 ...notification,
-                actorName: actorResponse.data.full_name,
-                actorAvatar: actorResponse.data.avatar_url || notification.actorAvatar,
+                actorName: fallbackActorName,
+                actorAvatar: fallbackAvatar || notification.actorAvatar,
+              };
+            }
+
+            if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer)\b/i.test(String(row.metadata.requester_name))) {
+              return {
+                ...notification,
+                actorName: String(row.metadata.requester_name),
               };
             }
 
