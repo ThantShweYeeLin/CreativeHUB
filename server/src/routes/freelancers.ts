@@ -1,12 +1,17 @@
 import { Router } from 'express';
-import User from '../models/User.js';
+import { createSupabaseForRequest } from '../lib/supabase.js';
 
 const router = Router();
 
 router.get('/', async (_req, res) => {
   try {
-    const freelancers = await User.find({ role: 'freelancer' }).select('-passwordHash');
-    return res.json({ freelancers });
+    const supabase = createSupabaseForRequest();
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select('*, users:user_id(id, email, full_name, avatar_url, bio, location, rating, total_reviews)')
+      .eq('is_available', true);
+    if (error) return res.status(400).json({ message: error.message });
+    return res.json({ freelancers: data ?? [] });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to load freelancers.' });
@@ -15,11 +20,17 @@ router.get('/', async (_req, res) => {
 
 router.get('/:id', async (req, res) => {
   try {
-    const freelancer = await User.findById(req.params.id).select('-passwordHash');
-    if (!freelancer || freelancer.role !== 'freelancer') {
+    const supabase = createSupabaseForRequest();
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select('*, users:user_id(id, email, full_name, avatar_url, bio, location, rating, total_reviews)')
+      .eq('user_id', req.params.id)
+      .maybeSingle();
+    if (error) return res.status(400).json({ message: error.message });
+    if (!data) {
       return res.status(404).json({ message: 'Freelancer not found.' });
     }
-    return res.json({ freelancer });
+    return res.json({ freelancer: data });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to load freelancer.' });

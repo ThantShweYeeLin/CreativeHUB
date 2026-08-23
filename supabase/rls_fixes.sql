@@ -9,6 +9,16 @@ alter table if exists public.conversations enable row level security;
 alter table if exists public.users
   add column if not exists preferred_currency text default 'THB';
 
+-- A newly authenticated user must be able to create their own public profile.
+DO $$
+BEGIN
+  CREATE POLICY "Users can create own record"
+    ON public.users
+    FOR INSERT
+    WITH CHECK (auth.uid() = id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Freelancer profiles policies
 DO $$
 BEGIN
