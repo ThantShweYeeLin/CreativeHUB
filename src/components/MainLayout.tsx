@@ -29,11 +29,13 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
-    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || (() => {
-      const messageText = typeof row.message === 'string' ? row.message : '';
-      const match = messageText.match(/^(.+?)\s+(?:sent|accepted|declined)\b/i);
-      return match?.[1]?.trim() || 'CreativeHUB';
+    const rawMessageText = typeof row.message === 'string' ? row.message : '';
+    const inferredActorName = (() => {
+      const match = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i);
+      const candidate = match?.[1]?.trim();
+      return candidate && !/^creativehub\b/i.test(candidate) ? candidate : null;
     })();
+    const actorName = actor?.full_name || row.metadata?.requester_name || row.metadata?.actor_name || inferredActorName || 'CreativeHUB';
     const fallbackMessage = (() => {
       switch (String(row.type || 'system')) {
         case 'friend_request':
@@ -137,16 +139,24 @@ export function MainLayout({ children }: MainLayoutProps) {
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
             const shouldResolveActorName = (
-              !notification.actorName ||
-              notification.actorName === 'CreativeHUB' ||
-              notification.actorName === 'CreativeHUB AI'
-            ) && !!notification.actorId;
+              (!!notification.actorId || !!row.actor_id) &&
+              (
+                !notification.actorName ||
+                /^creativehub\b/i.test(notification.actorName) ||
+                /^creativehub\b/i.test(String(row.message || ''))
+              )
+            );
 
             if (!shouldResolveActorName) {
               return notification;
             }
 
-            const actorResponse = await DataService.getUser(String(notification.actorId));
+            const actorId = String(notification.actorId || row.actor_id || '');
+            if (!actorId) {
+              return notification;
+            }
+
+            const actorResponse = await DataService.getUser(actorId);
             if (!actorResponse.error && actorResponse.data?.full_name) {
               return {
                 ...notification,
