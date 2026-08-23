@@ -16,8 +16,25 @@ export function ResetPasswordPage() {
     (async () => {
       try {
         // Attempt to extract and establish the recovery session from the URL
-        const { data, error } = await supabase.auth.getSessionFromUrl();
+        const tryConsume = async () => await supabase.auth.getSessionFromUrl();
+        let { data, error } = await tryConsume();
         if (!mounted) return;
+
+        // If there's an error but the URL looks like a recovery link and we already have a session,
+        // sign out and try consuming the recovery token again.
+        const href = typeof window !== 'undefined' ? window.location.href : '';
+        const looksLikeRecovery = /type=recovery|access_token=|#access_token/.test(href);
+
+        if (error && looksLikeRecovery) {
+          const sessionResp = await supabase.auth.getSession();
+          if (sessionResp?.data?.session) {
+            // Sign out current session to avoid conflicts, then retry
+            await supabase.auth.signOut();
+            const retry = await tryConsume();
+            data = retry.data;
+            error = retry.error;
+          }
+        }
 
         if (error) {
           // No recovery token found in URL — check if a normal session exists
