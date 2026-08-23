@@ -83,19 +83,38 @@ export class DataService {
 
     // If there's a query, also search users for matching full_name or email (used as username fallback)
     if (cleaned) {
+      // Broad user search: first fetch users whose name or email loosely matches
       const userSearch = await supabase
         .from('users')
-        .select('id')
+        .select('id, full_name, email')
         .or(`full_name.ilike.%${cleaned}%,email.ilike.%${cleaned}%`)
-        .limit(200);
+        .limit(500);
 
-      const userIds: string[] = (userSearch.data || []).map((u: any) => u.id).filter(Boolean);
+      let users = (userSearch.data || []) as Array<{ id: string; full_name?: string; email?: string }>;
+
+      // If query contains multiple words, filter client-side to ensure all words appear in full_name
+      const words = cleaned.split(/\s+/).filter(Boolean);
+      if (words.length > 1) {
+        const lowerWords = words.map((w) => w.toLowerCase());
+        users = users.filter((u) => {
+          const name = (u.full_name || '').toLowerCase();
+          return lowerWords.every((w) => name.includes(w));
+        });
+      }
+
+      // Also allow matching by email local-part (username)
+      const extraSearch = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .or(`email.ilike.%${cleaned}%`)
+        .limit(500);
+
+      users = users.concat((extraSearch.data || []) as any[]);
+
+      const userIds: string[] = Array.from(new Set(users.map((u) => u.id).filter(Boolean)));
 
       // Build OR conditions: title, description, or matching user_id(s)
-      const orConditions: string[] = [
-        `title.ilike.%${cleaned}%`,
-        `description.ilike.%${cleaned}%`,
-      ];
+      const orConditions: string[] = [`title.ilike.%${cleaned}%`, `description.ilike.%${cleaned}%`];
 
       for (const id of userIds) {
         orConditions.push(`user_id.eq.${id}`);
