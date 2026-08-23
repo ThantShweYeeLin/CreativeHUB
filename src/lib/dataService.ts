@@ -75,7 +75,8 @@ export class DataService {
 
   static async searchFreelancers(query: string, skills?: string[]) {
     const cleaned = typeof query === 'string' ? query.trim() : '';
-    const normQuery = cleaned.replace(/\s+/g, '').toLowerCase();
+    const stripDiacritics = (s: string) => s.normalize ? s.normalize('NFD').replace(/\p{Diacritic}/gu, '') : s;
+    const normQuery = stripDiacritics(cleaned).replace(/\s+/g, '').toLowerCase();
 
     // 1) Find users matching the query (case-insensitive, ignore spaces by normalizing client-side)
     let matchedUsers: Array<{ id: string; full_name?: string; email?: string }> = [];
@@ -89,9 +90,23 @@ export class DataService {
       const users = (usersResp.data || []) as Array<{ id: string; full_name?: string; email?: string }>;
 
       matchedUsers = users.filter((u) => {
-        const name = (u.full_name || '').replace(/\s+/g, '').toLowerCase();
-        const emailLocal = (u.email || '').split('@')[0].replace(/\s+/g, '').toLowerCase();
-        return name.includes(normQuery) || emailLocal.includes(normQuery) || (u.email || '').toLowerCase().includes(cleaned.toLowerCase());
+        const rawName = u.full_name || '';
+        const name = stripDiacritics(rawName).replace(/\s+/g, '').toLowerCase();
+        const emailLocal = stripDiacritics((u.email || '').split('@')[0]).replace(/\s+/g, '').toLowerCase();
+
+        // initials, e.g., John Doe -> jd
+        const initials = (rawName || '')
+          .split(/\s+/)
+          .map((p) => p[0] || '')
+          .join('')
+          .toLowerCase();
+
+        return (
+          (name && name.includes(normQuery)) ||
+          (emailLocal && emailLocal.includes(normQuery)) ||
+          ((u.email || '').toLowerCase().includes(cleaned.toLowerCase())) ||
+          (initials && initials.includes(normQuery))
+        );
       });
     }
 
