@@ -160,6 +160,19 @@ export class DataService {
       .filter(Boolean)
       .filter((v, i, a) => a.findIndex((x) => x.id === v.id) === i);
 
+    // Ensure users matched from users table are always included (merge fallback results)
+    try {
+      const usersFallback = await DataService.searchUsersFallback(cleaned);
+      const fallbackData = (usersFallback.data || []) as any[];
+      for (const f of fallbackData) {
+        if (!combined.find((c) => c.user_id === f.user_id || c.id === f.id)) {
+          combined.push(f);
+        }
+      }
+    } catch (err) {
+      // ignore fallback errors
+    }
+
     // 3) For matched users who don't have a freelancer profile, synthesize a minimal profile so they can be found
     const profilesUserIds = new Set((combined as any[]).map((p) => p.user_id));
     for (const u of matchedUsers) {
