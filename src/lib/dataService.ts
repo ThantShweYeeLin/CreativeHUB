@@ -19,6 +19,41 @@ export class DataService {
     return { data, error };
   }
 
+  // Fallback: search users table directly and synthesize minimal profile-like objects
+  static async searchUsersFallback(query: string) {
+    const cleaned = typeof query === 'string' ? query.trim() : '';
+    if (!cleaned) return { data: [], error: null };
+
+    const stripDiacritics = (s: string) => s.normalize ? s.normalize('NFD').replace(/\p{Diacritic}/gu, '') : s;
+    const normQuery = stripDiacritics(cleaned).replace(/\s+/g, '').toLowerCase();
+
+    const usersResp = await supabase
+      .from('users')
+      .select('*')
+      .ilike('full_name', `%${cleaned}%`)
+      .limit(200);
+
+    const users = (usersResp.data || []) as Array<any>;
+
+    const matched = users.filter((u) => {
+      const name = stripDiacritics((u.full_name || '')).replace(/\s+/g, '').toLowerCase();
+      const emailLocal = stripDiacritics(((u.email || '').split('@')[0] || '')).replace(/\s+/g, '').toLowerCase();
+      const initials = (u.full_name || '').split(/\s+/).map((p: string) => (p[0] || '')).join('').toLowerCase();
+      return name.includes(normQuery) || emailLocal.includes(normQuery) || initials.includes(normQuery) || (u.email || '').toLowerCase().includes(cleaned.toLowerCase());
+    });
+
+    const results = matched.map((u) => ({
+      id: `user-${u.id}`,
+      user_id: u.id,
+      title: '',
+      description: '',
+      is_available: false,
+      users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
+    }));
+
+    return { data: results, error: null };
+  }
+
   static async getUserByEmail(email: string) {
     const { data, error } = await supabase
       .from('users')

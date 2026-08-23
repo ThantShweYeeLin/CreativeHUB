@@ -124,7 +124,14 @@ export function ExplorePage() {
         setError((response.error as any).message || 'Unable to load freelancers.');
         setFreelancers([]);
       } else {
-        setFreelancers(response.data || []);
+        const data = response.data || [];
+        if (data.length === 0 && searchQuery.trim()) {
+          // Try fallback: search users directly and synthesize profiles
+          const fallback = await DataService.searchUsersFallback(searchQuery.trim());
+          setFreelancers(fallback.data || []);
+        } else {
+          setFreelancers(data);
+        }
       }
 
       setIsLoading(false);
