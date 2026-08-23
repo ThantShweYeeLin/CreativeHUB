@@ -112,6 +112,10 @@ export function ExplorePage() {
         ? await DataService.searchFreelancers(searchQuery.trim())
         : await DataService.getAllFreelancers(60);
 
+      // Debugging: log raw response to inspect why some names are not returned
+      // eslint-disable-next-line no-console
+      console.debug('[ExplorePage] searchQuery=', searchQuery, 'responseCount=', (response.data || []).length);
+
       if (!isMounted) {
         return;
       }
