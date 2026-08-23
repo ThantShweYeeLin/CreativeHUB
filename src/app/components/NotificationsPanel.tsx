@@ -92,6 +92,24 @@ function formatRelativeTime(value: string) {
   return `${days}d ago`;
 }
 
+const normalizeNotificationText = (notification: NotificationPanelItem) => {
+  const rawMessage = (notification.message || notification.title || '').trim();
+  if (!rawMessage) {
+    return '';
+  }
+
+  const actorName = notification.actorName?.trim();
+  if (actorName) {
+    const actorPattern = new RegExp(`^${actorName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*[:\-–]?\\s*`, 'i');
+    const stripped = rawMessage.replace(actorPattern, '');
+    if (stripped !== rawMessage) {
+      return stripped;
+    }
+  }
+
+  return rawMessage;
+};
+
 export function NotificationsPanel({
   onClose,
   notifications,
@@ -194,7 +212,7 @@ export function NotificationsPanel({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
                       <span className="font-bold">{notification.actorName}</span>{' '}
-                      <span className="text-gray-700">{notification.message || notification.title}</span>
+                      <span className="text-gray-700">{normalizeNotificationText(notification)}</span>
                     </p>
                     {notification.type === 'friend_request' && (
                       <div className="mt-3 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
