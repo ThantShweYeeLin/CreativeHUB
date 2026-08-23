@@ -6,7 +6,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 export const hasSupabaseConfig = Boolean(supabaseUrl && supabaseAnonKey);
 
-export type Database = any;
+// Backwards-compatible export used across the codebase
+export const isSupabaseConfigured = hasSupabaseConfig;
 
 export const supabase = createClient<Database>(
   supabaseUrl || 'http://127.0.0.1:54321',

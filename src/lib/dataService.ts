@@ -498,24 +498,7 @@ export class DataService {
       .single();
     return { data, error };
   }
-
-  static async getAllFreelancers(limit?: number, offset = 0) {
-    if (!hasSupabaseConfig) {
-      return { data: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
-    }
-
-    let query = supabase
-      .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
-      .order('created_at', { ascending: false });
-
-    if (typeof limit === 'number') {
-      query = query.range(offset, offset + limit - 1);
-    }
-
-    const { data, error } = await query;
-    return { data, error };
-  }
+  
 
   static async getAllFreelancers(limit = 20, offset = 0) {
     const firstAttempt = await this.getAllFreelancersQuery(limit, offset, true);
