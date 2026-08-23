@@ -79,6 +79,8 @@ export default function App() {
 
   return (
     <Routes>
+      {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       {/* Public Routes */}
       {!isAuthenticated && (
         <>

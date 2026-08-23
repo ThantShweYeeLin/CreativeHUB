@@ -190,11 +190,13 @@ export function MainLayout({ children }: MainLayoutProps) {
 
     const loadNotifications = async () => {
       setIsNotificationsLoading(true);
-      const response = await DataService.getUserNotifications(user.id, { limit: 30 });
-      if (!isMounted) {
-        return;
-      }
+      try {
+        const response = await DataService.getUserNotifications(user.id, { limit: 30 });
+        if (!isMounted) {
+          return;
+        }
 
+<<<<<<< Updated upstream
       if (response.error) {
         setNotifications([]);
       } else {
@@ -222,54 +224,76 @@ export function MainLayout({ children }: MainLayoutProps) {
                 notification.actorName === 'User'
               )
             );
+=======
+        if (response.error) {
+          console.error('Failed to load notifications:', response.error);
+          setNotifications([]);
+        } else {
+          const rows = response.data || [];
+          const mapped = await Promise.all(
+            rows.map(async (row: any) => {
+              const notification = mapNotificationRecord(row);
+              const shouldResolveActorName = (
+                (!!notification.actorId || !!row.actor_id || !!row.metadata?.requester_id || !!row.metadata?.actor_id || !!row.related_id) &&
+                (
+                  !notification.actorName ||
+                  /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(notification.actorName || '')) ||
+                  /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.message || '')) ||
+                  notification.actorName === 'Freelancer' ||
+                  notification.actorName === 'Someone' ||
+                  notification.actorName === 'User'
+                )
+              );
+>>>>>>> Stashed changes
 
-            if (!shouldResolveActorName) {
-              return notification;
-            }
+              if (!shouldResolveActorName) {
+                return notification;
+              }
 
-            const actorId = String(notification.actorId || row.actor_id || row.metadata?.actor_id || row.metadata?.requester_id || '');
-            let resolvedActorId = actorId;
-            let fallbackActorName: string | null = null;
-            let fallbackAvatar: string | null = null;
+              const actorId = String(notification.actorId || row.actor_id || row.metadata?.actor_id || row.metadata?.requester_id || '');
+              let resolvedActorId = actorId;
+              let fallbackActorName: string | null = null;
+              let fallbackAvatar: string | null = null;
 
-            if (!resolvedActorId && row.related_id) {
-              const relatedRequestResponse = await supabase
-                .from('requests')
-                .select('id, freelancer_id, client_id, project_name')
-                .eq('id', row.related_id)
-                .maybeSingle();
+              if (!resolvedActorId && row.related_id) {
+                const relatedRequestResponse = await supabase
+                  .from('requests')
+                  .select('id, freelancer_id, client_id, project_name')
+                  .eq('id', row.related_id)
+                  .maybeSingle();
 
-              if (!relatedRequestResponse.error && relatedRequestResponse.data) {
-                const relatedActorId = String(
-                  (relatedRequestResponse.data as any)?.freelancer_id ||
-                  (relatedRequestResponse.data as any)?.client_id ||
-                  ''
-                );
-                if (relatedActorId) {
-                  resolvedActorId = relatedActorId;
+                if (!relatedRequestResponse.error && relatedRequestResponse.data) {
+                  const relatedActorId = String(
+                    (relatedRequestResponse.data as any)?.freelancer_id ||
+                    (relatedRequestResponse.data as any)?.client_id ||
+                    ''
+                  );
+                  if (relatedActorId) {
+                    resolvedActorId = relatedActorId;
+                  }
                 }
               }
-            }
 
-            if (!resolvedActorId && row.type === 'message' && row.related_id) {
-              const conversationResponse = await supabase
-                .from('conversations')
-                .select('id, participant_1_id, participant_2_id')
-                .eq('id', row.related_id)
-                .maybeSingle();
+              if (!resolvedActorId && row.type === 'message' && row.related_id) {
+                const conversationResponse = await supabase
+                  .from('conversations')
+                  .select('id, participant_1_id, participant_2_id')
+                  .eq('id', row.related_id)
+                  .maybeSingle();
 
-              if (!conversationResponse.error && conversationResponse.data) {
-                const participantIds = [conversationResponse.data.participant_1_id, conversationResponse.data.participant_2_id]
-                  .filter(Boolean)
-                  .map(String);
-                const currentUserId = user?.id ? String(user.id) : '';
-                const otherParticipantId = participantIds.find((id) => id && id !== currentUserId);
-                if (otherParticipantId) {
-                  resolvedActorId = otherParticipantId;
+                if (!conversationResponse.error && conversationResponse.data) {
+                  const participantIds = [conversationResponse.data.participant_1_id, conversationResponse.data.participant_2_id]
+                    .filter(Boolean)
+                    .map(String);
+                  const currentUserId = user?.id ? String(user.id) : '';
+                  const otherParticipantId = participantIds.find((id) => id && id !== currentUserId);
+                  if (otherParticipantId) {
+                    resolvedActorId = otherParticipantId;
+                  }
                 }
               }
-            }
 
+<<<<<<< Updated upstream
             if (!resolvedActorId && ['request', 'request_accepted', 'request_rejected'].includes(String(row.type || ''))) {
               const projectName = String(
                 row.metadata?.project_name ||
@@ -319,6 +343,57 @@ export function MainLayout({ children }: MainLayoutProps) {
                     };
                   }
                 }
+=======
+              if (!resolvedActorId) {
+                const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
+                if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
+                  return {
+                    ...notification,
+                    actorName: messageName,
+                  };
+                }
+                if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
+                  return {
+                    ...notification,
+                    actorName: String(row.metadata.requester_name),
+                  };
+                }
+                if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
+                  return {
+                    ...notification,
+                    actorName: String(row.metadata.actor_name),
+                  };
+                }
+                return notification;
+              }
+
+              const actorResponse = await DataService.getUser(resolvedActorId);
+              if (!actorResponse.error && actorResponse.data?.full_name) {
+                fallbackActorName = actorResponse.data.full_name;
+                fallbackAvatar = actorResponse.data.avatar_url || notification.actorAvatar;
+              }
+
+              if (fallbackActorName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(fallbackActorName)) {
+                return {
+                  ...notification,
+                  actorName: fallbackActorName,
+                  actorAvatar: fallbackAvatar || notification.actorAvatar,
+                };
+              }
+
+              if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
+                return {
+                  ...notification,
+                  actorName: String(row.metadata.requester_name),
+                };
+              }
+
+              if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
+                return {
+                  ...notification,
+                  actorName: String(row.metadata.actor_name),
+                };
+>>>>>>> Stashed changes
               }
 
               const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
@@ -328,64 +403,19 @@ export function MainLayout({ children }: MainLayoutProps) {
                   actorName: messageName,
                 };
               }
-              if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
-                return {
-                  ...notification,
-                  actorName: String(row.metadata.requester_name),
-                };
-              }
-              if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
-                return {
-                  ...notification,
-                  actorName: String(row.metadata.actor_name),
-                };
-              }
+
               return notification;
-            }
+            })
+          );
 
-            const actorResponse = await DataService.getUser(resolvedActorId);
-            if (!actorResponse.error && actorResponse.data?.full_name) {
-              fallbackActorName = actorResponse.data.full_name;
-              fallbackAvatar = actorResponse.data.avatar_url || notification.actorAvatar;
-            }
-
-            if (fallbackActorName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(fallbackActorName)) {
-              return {
-                ...notification,
-                actorName: fallbackActorName,
-                actorAvatar: fallbackAvatar || notification.actorAvatar,
-              };
-            }
-
-            if (row.metadata?.requester_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.requester_name))) {
-              return {
-                ...notification,
-                actorName: String(row.metadata.requester_name),
-              };
-            }
-
-            if (row.metadata?.actor_name && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.metadata.actor_name))) {
-              return {
-                ...notification,
-                actorName: String(row.metadata.actor_name),
-              };
-            }
-
-            const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
-            if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
-              return {
-                ...notification,
-                actorName: messageName,
-              };
-            }
-
-            return notification;
-          })
-        );
-
-        setNotifications(mapped);
+          setNotifications(mapped);
+        }
+      } catch (err) {
+        console.error('Error while loading notifications:', err);
+        setNotifications([]);
+      } finally {
+        setIsNotificationsLoading(false);
       }
-      setIsNotificationsLoading(false);
     };
 
     loadNotifications();

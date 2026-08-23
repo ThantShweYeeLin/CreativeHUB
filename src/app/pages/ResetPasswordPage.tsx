@@ -10,6 +10,9 @@ export function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [recoverySessionReady, setRecoverySessionReady] = useState(false);
+  const [resendEmail, setResendEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -127,6 +130,48 @@ export function ResetPasswordPage() {
             </button>
           </div>
         </form>
+        {!recoverySessionReady && (
+          <div className="mt-6 border-t pt-4">
+            <p className="text-sm text-gray-600 mb-2">Can't open the recovery link? Request a new one:</p>
+            {resendMessage && <div className="mb-2 text-sm text-green-700">{resendMessage}</div>}
+            <div className="flex gap-2">
+              <input
+                type="email"
+                placeholder="Your email"
+                value={resendEmail}
+                onChange={(e) => setResendEmail(e.target.value)}
+                className="flex-1 rounded-xl border border-gray-200 px-3 py-2"
+              />
+              <button
+                onClick={async () => {
+                  setResendMessage(null);
+                  setResendLoading(true);
+                  try {
+                    if (!resendEmail) {
+                      setResendMessage('Please enter your email.');
+                      setResendLoading(false);
+                      return;
+                    }
+                    const redirectTo = `${window.location.origin}/reset-password`;
+                    const { error } = await authService.requestPasswordReset(resendEmail, redirectTo);
+                    if (error) {
+                      setResendMessage(error.message || 'Unable to send reset email.');
+                    } else {
+                      setResendMessage('Password reset email sent. Check your inbox.');
+                    }
+                  } catch (err) {
+                    setResendMessage(err instanceof Error ? err.message : 'Unknown error');
+                  }
+                  setResendLoading(false);
+                }}
+                className="rounded-xl bg-blue-600 px-4 py-2 text-white font-semibold"
+              >
+                {resendLoading ? 'Sending...' : 'Resend'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">If you opened the link in a different browser or device, open it here or copy the link into this browser.</p>
+          </div>
+        )}
       </div>
     </div>
   );

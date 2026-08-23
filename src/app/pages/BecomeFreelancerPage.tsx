@@ -517,7 +517,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     await setCurrency(normalizeCurrencyCode(startingPriceCurrency, 'THB'), true);
 
     setIsSaving(false);
-    navigate('/freelancer-dashboard/portfolio');
+    // Navigate back to Explore and force a full reload so AuthContext re-reads
+    // the updated user profile (role change) and the dashboard button appears.
+    window.location.href = '/explore';
   };
 
   return (
