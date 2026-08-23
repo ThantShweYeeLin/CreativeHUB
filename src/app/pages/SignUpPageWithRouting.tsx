@@ -12,7 +12,7 @@ export function SignUpPageWithRouting() {
       navigate('/explore');
     } catch (error) {
       console.error('Sign up failed:', error);
-      // Error will be displayed by the SignUpPage component
+      throw error;
     }
   };
 

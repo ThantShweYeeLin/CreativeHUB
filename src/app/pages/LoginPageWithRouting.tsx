@@ -12,7 +12,7 @@ export function LoginPageWithRouting() {
       navigate('/explore');
     } catch (error) {
       console.error('Login failed:', error);
-      // Error will be displayed by the LoginPage component
+      throw error;
     }
   };
 

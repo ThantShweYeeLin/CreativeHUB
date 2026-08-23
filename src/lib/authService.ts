@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { hasSupabaseConfig, supabase } from './supabase';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
 
 export interface SignUpData {
@@ -24,6 +24,10 @@ export interface AuthUser {
 class AuthService {
   async signUp(data: SignUpData): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
+      if (!hasSupabaseConfig) {
+        return { user: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+      }
+
       // Create auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
@@ -81,6 +85,10 @@ class AuthService {
 
   async signIn(data: SignInData): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
+      if (!hasSupabaseConfig) {
+        return { user: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+      }
+
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -131,6 +139,10 @@ class AuthService {
 
   async getCurrentUser(): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
+      if (!hasSupabaseConfig) {
+        return { user: null, error: null };
+      }
+
       const { data, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
@@ -183,6 +195,10 @@ class AuthService {
   }
 
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
+    if (!hasSupabaseConfig) {
+      return null;
+    }
+
     return supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
         const { data: userProfile } = await supabase

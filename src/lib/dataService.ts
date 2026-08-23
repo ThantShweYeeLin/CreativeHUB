@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { hasSupabaseConfig, supabase } from './supabase';
 import type { Database } from './supabase';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -30,6 +30,10 @@ export class DataService {
 
   // FREELANCER PROFILES
   static async getFreelancerProfile(userId: string) {
+    if (!hasSupabaseConfig) {
+      return { data: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+    }
+
     const { data, error } = await supabase
       .from('freelancer_profiles')
       .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
@@ -39,6 +43,10 @@ export class DataService {
   }
 
   static async getFreelancerById(id: string) {
+    if (!hasSupabaseConfig) {
+      return { data: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+    }
+
     const { data, error } = await supabase
       .from('freelancer_profiles')
       .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
@@ -48,6 +56,10 @@ export class DataService {
   }
 
   static async getAllFreelancers(limit?: number, offset = 0) {
+    if (!hasSupabaseConfig) {
+      return { data: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+    }
+
     let query = supabase
       .from('freelancer_profiles')
       .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
@@ -62,12 +74,34 @@ export class DataService {
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {
+    const cleaned = typeof query === 'string' ? query.trim() : '';
+
+    // Start base query for freelancer profiles and include related user info
     let q = supabase
       .from('freelancer_profiles')
       .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)');
 
-    if (query) {
-      q = q.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
+    // If there's a query, also search users for matching full_name or email (used as username fallback)
+    if (cleaned) {
+      const userSearch = await supabase
+        .from('users')
+        .select('id')
+        .or(`full_name.ilike.%${cleaned}%,email.ilike.%${cleaned}%`)
+        .limit(200);
+
+      const userIds: string[] = (userSearch.data || []).map((u: any) => u.id).filter(Boolean);
+
+      // Build OR conditions: title, description, or matching user_id(s)
+      const orConditions: string[] = [
+        `title.ilike.%${cleaned}%`,
+        `description.ilike.%${cleaned}%`,
+      ];
+
+      for (const id of userIds) {
+        orConditions.push(`user_id.eq.${id}`);
+      }
+
+      q = q.or(orConditions.join(','));
     }
 
     if (skills && skills.length > 0) {
