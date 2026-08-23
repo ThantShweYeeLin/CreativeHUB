@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
-import { ImageWithFallback } from '../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
-
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
+import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
+import { useAuth } from '../../contexts/AuthContext';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 
 interface ProfileCardProps {
   id: string;
@@ -94,12 +98,39 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
   );
 }
 
+const knownLocations = ['bangkok', 'chiang mai', 'pattaya', 'phuket', 'nakhon ratchasima', 'khon kaen', 'udon thani'];
+
+const serviceKeywords: Record<string, string[]> = {
+  'Photography': ['photography', 'photographer', 'photo', 'portrait', 'studio'],
+  'Fashion & Styling': ['fashion', 'styling', 'stylist', 'wardrobe', 'editorial'],
+  'Videography': ['videography', 'videographer', 'video', 'cinematic', 'editing'],
+  'Graphic Design': ['graphic design', 'designer', 'branding', 'logo', 'visual identity', 'illustration'],
+  'Makeup & Beauty': ['makeup', 'beauty', 'hairstyle', 'hair', 'bridal', 'cosmetic'],
+  'Wedding Planning': ['wedding', 'wedding planning', 'planner', 'event planning'],
+  'Others': ['creative', 'freelancer'],
+};
+
+function normalizeText(value: string | null | undefined) {
+  return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
+}
+
 export function ExplorePage() {
+  const { user } = useAuth();
+  const { currency: preferredCurrency } = useCurrency();
+  const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<FilterState>({
+    services: [],
+    priceRange: [0, 10000],
+    locations: [],
+    currency: normalizedPreferredCurrency,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAIMatcher, setShowAIMatcher] = useState(false);
+  const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherFreelancer[] | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -108,9 +139,7 @@ export function ExplorePage() {
       setIsLoading(true);
       setError(null);
 
-      const response = searchQuery.trim()
-        ? await DataService.searchFreelancers(searchQuery.trim())
-        : await DataService.getAllFreelancers(60);
+      const response = await DataService.getAllFreelancers(200);
 
       // Debugging: log raw response to inspect why some names are not returned
       // eslint-disable-next-line no-console
@@ -139,13 +168,30 @@ export function ExplorePage() {
       setIsLoading(false);
     }
 
-    const timeoutId = window.setTimeout(loadFreelancers, searchQuery.trim() ? 250 : 0);
+    void loadFreelancers();
 
     return () => {
       isMounted = false;
-      window.clearTimeout(timeoutId);
     };
-  }, [searchQuery]);
+  }, []);
+
+  useEffect(() => {
+    setFilters((current) => {
+      if (current.currency === normalizedPreferredCurrency) {
+        return current;
+      }
+
+      // Keep existing numeric budget intent when currency changes globally.
+      const nextMin = Math.round(convertAmount(current.priceRange[0], current.currency, normalizedPreferredCurrency));
+      const nextMax = Math.round(convertAmount(current.priceRange[1], current.currency, normalizedPreferredCurrency));
+
+      return {
+        ...current,
+        currency: normalizedPreferredCurrency,
+        priceRange: [Math.min(nextMin, nextMax), Math.max(nextMin, nextMax)],
+      };
+    });
+  }, [normalizedPreferredCurrency]);
 
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers.map((profile) => ({
@@ -154,13 +200,75 @@ export function ExplorePage() {
       specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
       rating: Number(profile.users?.rating || 0),
       reviews: Number(profile.users?.total_reviews || 0),
-      image: profile.users?.avatar_url || fallbackProfileImage,
+      image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
       location: profile.users?.location || undefined,
     }));
   }, [freelancers]);
 
-  const sectionFor = (keywords: string[]) => {
+  const filteredProfiles = useMemo(() => {
+    const mapById = new Map(
+      freelancers.map((item) => [item.user_id || item.users?.id || item.id, item])
+    );
+
     return profiles.filter((profile) => {
+      const source = mapById.get(profile.id);
+      const combinedText = normalizeText(
+        [
+          profile.name,
+          profile.specialty,
+          source?.title,
+          source?.description,
+          ...(source?.skills || []),
+          ...(source?.styles || []),
+          profile.location,
+        ].join(' ')
+      );
+
+      const query = normalizeText(searchQuery);
+      const queryMatch =
+        query.length === 0 ||
+        (() => {
+          const normalizedName = normalizeText(profile.name);
+          const nameWords = normalizedName.split(/\s+/).filter(Boolean);
+          return nameWords.some((word) => word.startsWith(query)) || normalizedName.startsWith(query);
+        })();
+
+      const serviceMatch =
+        filters.services.length === 0 ||
+        filters.services.some((service) => {
+          const keywords = serviceKeywords[service] || [service];
+          return keywords.some((keyword) => combinedText.includes(normalizeText(keyword)));
+        });
+
+      const normalizedLocation = normalizeText(profile.location);
+      const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
+
+      const locationMatch =
+        filters.locations.length === 0 ||
+        filters.locations.some((location) => {
+          const normalizedSelectedLocation = normalizeText(location);
+          if (normalizedSelectedLocation === 'others') {
+            return !!normalizedLocation && !isKnownLocation;
+          }
+          return normalizedLocation.includes(normalizedSelectedLocation);
+        });
+
+      const hourlyRate = Number(source?.hourly_rate);
+      const sourceCurrency = normalizeCurrencyCode(source?.users?.preferred_currency || source?.preferred_currency || 'THB', 'THB');
+      const [minPrice, maxPrice] = filters.priceRange;
+      const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
+      const isDefaultPriceFilter = minPrice === 0 && maxPrice === defaultMaxForCurrency;
+      const hourlyRateInSelectedCurrency = convertAmount(hourlyRate, sourceCurrency, filters.currency);
+      const priceMatch = Number.isFinite(hourlyRate)
+        ? hourlyRateInSelectedCurrency >= minPrice && hourlyRateInSelectedCurrency <= maxPrice
+        : isDefaultPriceFilter;
+
+      return queryMatch && serviceMatch && locationMatch && priceMatch;
+    });
+  }, [profiles, freelancers, filters, searchQuery]);
+
+  const sectionFor = (keywords: string[]) => {
+    return filteredProfiles.filter((profile) => {
       const searchable = `${profile.specialty} ${freelancers.find((item) => (item.user_id || item.users?.id || item.id) === profile.id)?.skills?.join(' ') || ''}`.toLowerCase();
       return keywords.some((keyword) => searchable.includes(keyword));
     });
@@ -169,9 +277,10 @@ export function ExplorePage() {
   const makeupArtists = sectionFor(['makeup', 'beauty', 'hair', 'stylist']);
   const photographers = sectionFor(['photo', 'camera', 'studio', 'portrait', 'editorial']);
   const models = sectionFor(['model', 'fashion', 'runway']);
-  const uncategorizedProfiles = profiles.filter((profile) =>
+  const uncategorizedProfiles = filteredProfiles.filter((profile) =>
     ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
   );
+  const hasActiveSearch = searchQuery.trim().length > 0;
 
   return (
     <>
@@ -201,7 +310,8 @@ export function ExplorePage() {
             </div>
           </button>
           <button
-            onClick={() => {}}
+            type="button"
+            onClick={() => setShowAIMatcher(true)}
             className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -233,29 +343,64 @@ export function ExplorePage() {
         </div>
       )}
 
+      {!isLoading && aiMatcherResults && (
+        <AIImageMatcherResults
+          results={aiMatcherResults}
+          onReset={() => {
+            setAIMatcherResults(null);
+            setShowAIMatcher(true);
+          }}
+        />
+      )}
+
+      {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <h2 className="mb-2 text-xl font-bold text-gray-900">
+            {hasActiveSearch ? 'No name found' : 'No freelancers match these filters'}
+          </h2>
+          <p className="text-gray-600">
+            {hasActiveSearch
+              ? 'No freelancer name starts with that search. Try another name.'
+              : 'Adjust service, location, or price range in Advanced Filter.'}
+          </p>
+        </div>
+      )}
+
+      {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
+        <CarouselSection title="Matching Freelancers" profiles={filteredProfiles} />
+      )}
+
       {/* Carousel Sections */}
-      {!isLoading && makeupArtists.length > 0 && (
+      {!isLoading && !hasActiveSearch && makeupArtists.length > 0 && (
         <CarouselSection
           title="Popular Makeup Artists in Thailand"
           profiles={makeupArtists}
         />
       )}
-      {!isLoading && photographers.length > 0 && (
+      {!isLoading && !hasActiveSearch && photographers.length > 0 && (
         <CarouselSection
           title="Popular Photographers in Thailand"
           profiles={photographers}
         />
       )}
-      {!isLoading && models.length > 0 && (
+      {!isLoading && !hasActiveSearch && models.length > 0 && (
         <CarouselSection
           title="Popular Models in Thailand"
           profiles={models}
         />
       )}
-      {!isLoading && uncategorizedProfiles.length > 0 && (
+      {!isLoading && !hasActiveSearch && uncategorizedProfiles.length > 0 && (
         <CarouselSection
           title="Featured Creative Freelancers"
           profiles={uncategorizedProfiles}
+        />
+      )}
+
+      {showSearchFilter && (
+        <SearchFilterPanel
+          initialFilters={filters}
+          onClose={() => setShowSearchFilter(false)}
+          onSearch={(nextFilters) => setFilters(nextFilters)}
         />
       )}
     </>

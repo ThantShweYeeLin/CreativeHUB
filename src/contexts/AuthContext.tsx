@@ -1,11 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authService, type AuthUser } from '../lib/authService';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
+  signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
 }
@@ -17,6 +20,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      setLoading(false);
+      return;
+    }
+
     // Check current user on mount
     authService.getCurrentUser().then(({ user: currentUser }) => {
       setUser(currentUser);
@@ -34,6 +42,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
     const { user: newUser, error } = await authService.signUp({
       email,
       password,
@@ -49,6 +61,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
     const { user: signedInUser, error } = await authService.signIn({
       email,
       password,
@@ -62,11 +78,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!isSupabaseConfigured) {
+      setUser(null);
+      return;
+    }
+
     const { error } = await authService.signOut();
     if (error) {
       throw error;
     }
     setUser(null);
+  };
+
+  const requestPasswordReset = async (email: string, redirectTo: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { error } = await authService.requestPasswordReset(email, redirectTo);
+    if (error) {
+      throw error;
+    }
+  };
+
+  const signInWithOAuth = async (provider: 'google' | 'facebook', redirectTo: string) => {
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase is not configured.');
+    }
+
+    const { error } = await authService.signInWithOAuth(provider, redirectTo);
+    if (error) {
+      throw error;
+    }
   };
 
   return (
@@ -76,6 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loading,
         signUp,
         signIn,
+        requestPasswordReset,
+        signInWithOAuth,
         signOut,
         isAuthenticated: !!user,
       }}

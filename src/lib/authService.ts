@@ -22,6 +22,70 @@ export interface AuthUser {
 }
 
 class AuthService {
+  private toFriendlyAuthError(error: any, fallback: string) {
+    const raw = String(error?.message || fallback);
+    const lower = raw.toLowerCase();
+
+    if (lower.includes('invalid login credentials')) {
+      return new Error('Incorrect email or password. Please try again.');
+    }
+
+    if (lower.includes('invalid email')) {
+      return new Error('Invalid email format. Please enter a valid email address.');
+    }
+
+    if (lower.includes('password should be at least')) {
+      return new Error('Password is too short. Use at least 6 characters.');
+    }
+
+    if (lower.includes('user already registered') || lower.includes('already been registered')) {
+      return new Error('This email is already registered. Please sign in instead.');
+    }
+
+    if (lower.includes('provider is not enabled') || lower.includes('unsupported provider')) {
+      return new Error('This sign-in provider is not enabled yet. Please use email and password.');
+    }
+
+    return new Error(raw);
+  }
+
+  private async ensureUserProfile(authUser: User) {
+    const { data: existingProfile, error: profileLookupError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (profileLookupError) {
+      return { data: null, error: this.toFriendlyAuthError(profileLookupError, 'Failed to load profile') };
+    }
+
+    if (existingProfile) {
+      return { data: existingProfile, error: null };
+    }
+
+    const metadata = (authUser.user_metadata || {}) as { full_name?: string; name?: string; avatar_url?: string };
+    const fullName = metadata.full_name || metadata.name || authUser.email?.split('@')[0] || 'CreativeHUB User';
+
+    const { data: createdProfile, error: createError } = await supabase
+      .from('users')
+      .insert({
+        id: authUser.id,
+        email: authUser.email || '',
+        full_name: fullName,
+        avatar_url: metadata.avatar_url || null,
+        role: 'client',
+      })
+      .select('*')
+      .single();
+
+    if (createError) {
+      return { data: null, error: this.toFriendlyAuthError(createError, 'Failed to complete your profile setup.') };
+    }
+
+    return { data: createdProfile, error: null };
+  }
+
   async signUp(data: SignUpData): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
       if (!hasSupabaseConfig) {
@@ -35,7 +99,7 @@ class AuthService {
       });
 
       if (authError) {
-        return { user: null, error: authError as any };
+        return { user: null, error: this.toFriendlyAuthError(authError, 'Unable to sign up.') };
       }
 
       if (!authData.user) {
@@ -65,7 +129,7 @@ class AuthService {
       });
 
       if (profileError) {
-        return { user: null, error: new Error((profileError as any).message || 'Failed to create user profile') };
+        return { user: null, error: this.toFriendlyAuthError(profileError, 'Failed to create user profile') };
       }
 
       return {
@@ -95,26 +159,17 @@ class AuthService {
       });
 
       if (authError) {
-        return { user: null, error: authError as any };
+        return { user: null, error: this.toFriendlyAuthError(authError, 'Unable to sign in.') };
       }
 
       if (!authData.user) {
         return { user: null, error: new Error('Sign in failed') };
       }
 
-      // Get user profile
-      const { data: userProfile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', authData.user.id)
-        .maybeSingle();
+      const { data: userProfile, error: profileError } = await this.ensureUserProfile(authData.user);
 
-      if (profileError) {
-        return { user: null, error: new Error((profileError as any).message || 'Failed to load profile') };
-      }
-
-      if (!userProfile) {
-        return { user: null, error: new Error('Your account exists but your profile is not complete. Please contact support.') };
+      if (profileError || !userProfile) {
+        return { user: null, error: profileError || new Error('Unable to load your profile.') };
       }
 
       return {
@@ -129,6 +184,58 @@ class AuthService {
       };
     } catch (error) {
       return { user: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  }
+
+  async checkEmailExists(email: string): Promise<{ exists: boolean; error: Error | null }> {
+    try {
+      const normalized = email.trim();
+      if (!normalized) {
+        return { exists: false, error: new Error('Email is required.') };
+      }
+
+      const { data, error } = await supabase
+        .from('users')
+        .select('id')
+        .ilike('email', normalized)
+        .limit(1);
+
+      if (error) {
+        return { exists: false, error: this.toFriendlyAuthError(error, 'Unable to validate email.') };
+      }
+
+      return { exists: (data || []).length > 0, error: null };
+    } catch (error) {
+      return { exists: false, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  }
+
+  async requestPasswordReset(email: string, redirectTo: string): Promise<{ error: Error | null }> {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) {
+        return { error: this.toFriendlyAuthError(error, 'Unable to send password reset email.') };
+      }
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  }
+
+  async signInWithOAuth(provider: 'google' | 'facebook', redirectTo: string): Promise<{ error: Error | null }> {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+
+      if (error) {
+        return { error: this.toFriendlyAuthError(error, `Unable to continue with ${provider}.`) };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unknown error') };
     }
   }
 
@@ -153,19 +260,10 @@ class AuthService {
         return { user: null, error: null };
       }
 
-      // Get user profile
-      const { data: userProfile, error: profileError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', data.session.user.id)
-        .maybeSingle();
+      const { data: userProfile, error: profileError } = await this.ensureUserProfile(data.session.user);
 
-      if (profileError) {
-        return { user: null, error: new Error((profileError as any).message || 'Failed to load profile') };
-      }
-
-      if (!userProfile) {
-        return { user: null, error: new Error('User signed in but profile record is missing. Please complete registration.') };
+      if (profileError || !userProfile) {
+        return { user: null, error: profileError || new Error('Failed to load profile') };
       }
 
       return {
@@ -194,6 +292,16 @@ class AuthService {
     return { data, error };
   }
 
+  async updateEmail(email: string) {
+    const { data, error } = await supabase.auth.updateUser({ email });
+    return { data, error };
+  }
+
+  async updatePassword(password: string) {
+    const { data, error } = await supabase.auth.updateUser({ password });
+    return { data, error };
+  }
+
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
     if (!hasSupabaseConfig) {
       return null;
@@ -201,11 +309,7 @@ class AuthService {
 
     return supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       if (session?.user) {
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
+        const { data: userProfile } = await this.ensureUserProfile(session.user);
 
         if (userProfile) {
           callback({

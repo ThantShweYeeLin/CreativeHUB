@@ -1,3 +1,6 @@
 packages:
   - '.'
   - 'server'
+allowBuilds:
+  '@tailwindcss/oxide': false
+  esbuild: false

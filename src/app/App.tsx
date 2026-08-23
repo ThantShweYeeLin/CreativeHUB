@@ -1,29 +1,30 @@
-import { Routes, Route, Navigate } from 'react-router';
+import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 
 // Authenticated page imports
-import { FreelancerProfile } from './components/FreelancerProfile';
-import { MapView } from './components/MapView';
-import { PortfoliosView } from './components/PortfoliosView';
-import { SearchResults } from './components/SearchResults';
-import { AIImageMatcher } from './components/AIImageMatcher';
-import { UserMenu } from './components/UserMenu';
-import { NotificationsPanel } from './components/NotificationsPanel';
-import { RequestsPage } from './components/RequestsPage';
-import { ClientProfilePage } from './components/ClientProfilePage';
-import { BecomeFreelancerPage } from './components/BecomeFreelancerPage';
-import { FreelancerDashboard } from './components/FreelancerDashboard';
-import { PremiumSubscriptionPage } from './components/PremiumSubscriptionPage';
-import { BookingTrackingPage } from './components/BookingTrackingPage';
-import { MyBookingsPage } from './components/MyBookingsPage';
-import { FavoritesPage } from './components/FavoritesPage';
-import { MessagesPage } from './components/MessagesPage';
-import { ForYouPage } from './components/ForYouPage';
+import { FreelancerProfile } from './pages/FreelancerProfile';
+import { MapView } from './pages/MapExplorePage';
+import { RequestsPage } from './pages/RequestsPage';
+import { ClientProfilePage } from './pages/ClientProfilePage';
+import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
+import { FreelancerDashboardPortfolioPage } from './pages/FreelancerDashboardPortfolioPage';
+import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
+import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
+import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
+import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { MyBookingsPage } from './pages/MyBookingsPage';
+import { FavoritesPage } from './pages/FavoritesPage';
+import { MessagesPage } from './pages/MessagesPage';
+import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
+import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
 
 // Loading component
 function LoadingScreen() {
@@ -37,11 +38,42 @@ function LoadingScreen() {
   );
 }
 
+function SupabaseSetupScreen() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-bold text-white">
+          CH
+        </div>
+        <h1 className="mb-2 text-2xl font-bold text-gray-900">Supabase setup needed</h1>
+        <p className="mb-6 text-sm leading-6 text-gray-600">
+          CreativeHUB needs your Supabase project URL and anon key before it can show the app.
+        </p>
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-3 text-sm font-semibold text-gray-900">Create a file named .env in the project root:</p>
+          <pre className="overflow-x-auto rounded-xl bg-black p-4 text-xs text-white">
+{`VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
+          </pre>
+        </div>
+        <p className="mt-5 text-sm text-gray-600">
+          After saving the file, restart the dev server and reload the page.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
 
   if (loading) {
     return <LoadingScreen />;
+  }
+
+  if (!isSupabaseConfigured) {
+    return <SupabaseSetupScreen />;
   }
 
   return (
@@ -74,7 +106,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <MapView onViewProfile={() => {}} />
+                  <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -83,9 +115,7 @@ export default function App() {
             path="/freelancers"
             element={
               <ProtectedRoute>
-                <MainLayout>
-                  <PortfoliosView onViewProfile={() => {}} />
-                </MainLayout>
+                <Navigate to="/explore" replace />
               </ProtectedRoute>
             }
           />
@@ -94,7 +124,10 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <MainLayout>
-                  <ForYouPage onViewProfile={() => {}} />
+                  <ForYouPage
+                    onViewProfile={(id) => navigate(`/profile/${id}`)}
+                    onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
+                  />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -105,7 +138,7 @@ export default function App() {
             path="/profile/:id"
             element={
               <ProtectedRoute>
-                <FreelancerProfile onBack={() => {}} requestStatus={null} onOpenChat={() => {}} />
+                <FreelancerProfile onBack={() => navigate(-1)} requestStatus={null} onOpenChat={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -113,7 +146,7 @@ export default function App() {
             path="/client-profile"
             element={
               <ProtectedRoute>
-                <ClientProfilePage onBack={() => {}} />
+                <ClientProfilePage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -123,7 +156,7 @@ export default function App() {
             path="/requests"
             element={
               <ProtectedRoute>
-                <RequestsPage onBack={() => {}} onViewProfile={() => {}} onOpenMessages={() => {}} />
+                <RequestsPage onBack={() => navigate(-1)} onViewProfile={() => navigate('/explore')} onOpenMessages={() => navigate('/messages')} />
               </ProtectedRoute>
             }
           />
@@ -131,7 +164,7 @@ export default function App() {
             path="/my-bookings"
             element={
               <ProtectedRoute>
-                <MyBookingsPage onBack={() => {}} onSelectBooking={() => {}} />
+                <MyBookingsPage onBack={() => navigate('/explore')} onSelectBooking={(id) => navigate(`/booking/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -139,7 +172,7 @@ export default function App() {
             path="/booking/:id"
             element={
               <ProtectedRoute>
-                <BookingTrackingPage onBack={() => {}} />
+                <BookingTrackingPage onBack={() => navigate('/my-bookings')} />
               </ProtectedRoute>
             }
           />
@@ -149,7 +182,7 @@ export default function App() {
             path="/messages"
             element={
               <ProtectedRoute>
-                <MessagesPage onBack={() => {}} />
+                <MessagesPage onBack={() => navigate(-1)} onViewProfile={(id) => navigate(`/profile/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -157,7 +190,7 @@ export default function App() {
             path="/favorites"
             element={
               <ProtectedRoute>
-                <FavoritesPage onBack={() => {}} onViewProfile={() => {}} />
+                <FavoritesPage onBack={() => navigate('/explore')} onViewProfile={(id) => navigate(`/profile/${id}`)} />
               </ProtectedRoute>
             }
           />
@@ -165,7 +198,59 @@ export default function App() {
             path="/freelancer-dashboard"
             element={
               <ProtectedRoute>
-                <FreelancerDashboard onBack={() => {}} />
+                {user?.role === 'freelancer' ? (
+                  <Navigate to="/freelancer-dashboard/portfolio" replace />
+                ) : (
+                  <Navigate to="/become-freelancer" replace />
+                )}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/portfolio"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardPortfolioPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/requests"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardRequestsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/analytics"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardAnalyticsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/settings"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardSettingsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/client"
+            element={
+              <ProtectedRoute>
+                <ClientOnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/freelancer"
+            element={
+              <ProtectedRoute>
+                <BecomeFreelancerPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />
@@ -173,7 +258,17 @@ export default function App() {
             path="/become-freelancer"
             element={
               <ProtectedRoute>
-                <BecomeFreelancerPage onBack={() => {}} />
+                <BecomeFreelancerPage onBack={() => navigate(-1)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <SettingsPage />
+                </MainLayout>
               </ProtectedRoute>
             }
           />
@@ -181,7 +276,7 @@ export default function App() {
             path="/premium"
             element={
               <ProtectedRoute>
-                <PremiumSubscriptionPage onBack={() => {}} />
+                <PremiumSubscriptionPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />

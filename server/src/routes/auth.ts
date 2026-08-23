@@ -1,7 +1,5 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import { createSupabaseForRequest } from '../lib/supabase.js';
 
 const router = Router();
 
@@ -12,20 +10,38 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ message: 'Email, password, and name are required.' });
     }
 
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(409).json({ message: 'Email already in use.' });
+    if (role !== 'client' && role !== 'freelancer') {
+      return res.status(400).json({ message: 'Role must be client or freelancer.' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = new User({ email, passwordHash, name, role });
-    await user.save();
-
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET ?? 'secret', {
-      expiresIn: '7d'
+    const supabase = createSupabaseForRequest();
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name, role } },
     });
 
-    return res.status(201).json({ user: { id: user._id, email: user.email, name: user.name, role: user.role }, token });
+    if (error) return res.status(400).json({ message: error.message });
+    if (!data.user) return res.status(500).json({ message: 'Supabase did not create the user.' });
+
+    // When email confirmation is disabled Supabase returns a session immediately,
+    // allowing the profile row to be created under the user's RLS permissions.
+    if (data.session?.access_token) {
+      const authenticatedSupabase = createSupabaseForRequest(data.session.access_token);
+      const { error: profileError } = await authenticatedSupabase.from('users').upsert({
+        id: data.user.id,
+        email,
+        full_name: name,
+        role,
+      });
+      if (profileError) return res.status(400).json({ message: profileError.message });
+    }
+
+    return res.status(201).json({
+      user: { id: data.user.id, email: data.user.email, fullName: name, role },
+      session: data.session,
+      needsEmailConfirmation: !data.session,
+    });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Failed to create account.' });
@@ -39,21 +55,19 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
+    const supabase = createSupabaseForRequest();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error || !data.user) return res.status(401).json({ message: error?.message ?? 'Invalid credentials.' });
 
-    const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) {
-      return res.status(401).json({ message: 'Invalid credentials.' });
-    }
+    const authenticatedSupabase = createSupabaseForRequest(data.session.access_token);
+    const { data: profile, error: profileError } = await authenticatedSupabase
+      .from('users')
+      .select('id, email, full_name, role')
+      .eq('id', data.user.id)
+      .maybeSingle();
 
-    const token = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET ?? 'secret', {
-      expiresIn: '7d'
-    });
-
-    return res.json({ user: { id: user._id, email: user.email, name: user.name, role: user.role }, token });
+    if (profileError) return res.status(400).json({ message: profileError.message });
+    return res.json({ user: profile ?? { id: data.user.id, email: data.user.email }, session: data.session });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: 'Login failed.' });

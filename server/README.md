@@ -1,6 +1,7 @@
 # CreativeHUB Server
 
-This backend provides MongoDB support for the CreativeHUB frontend.
+This optional API provides Supabase-backed endpoints for CreativeHUB. The Vite
+frontend accesses Supabase directly and does not require this server to run.
 
 ## Setup
 
@@ -11,7 +12,8 @@ This backend provides MongoDB support for the CreativeHUB frontend.
 pnpm install
 ```
 
-3. Start MongoDB locally or use MongoDB Atlas, then set `MONGO_URI` in `.env`.
+3. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (the equivalent
+   `VITE_SUPABASE_*` variables are also accepted).
 4. Run the server:
 
 ```bash
@@ -29,10 +31,5 @@ pnpm dev
 - `GET /api/bookings` - list bookings
 - `POST /api/bookings` - create a booking
 
-## MongoDB Models
-
-- `User` - clients and freelancers
-- `Booking` - booking requests and status
-- `Request` - collaboration requests
-- `Message` - chat messages
-- `Notification` - app notifications
+All persisted data is stored in the Supabase tables defined in
+`../supabase/schema.sql`.

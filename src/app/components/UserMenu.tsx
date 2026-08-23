@@ -26,12 +26,12 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40"
+        className="fixed inset-0 z-[1205]"
         onClick={onClose}
       />
 
       {/* Menu Dropdown */}
-      <div className="absolute top-16 right-6 z-50 w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeIn">
+      <div className="absolute top-16 right-6 z-[1210] w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeIn">
         <div className="py-2">
           {/* Premium Option - Featured */}
           <button

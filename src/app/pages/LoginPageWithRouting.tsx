@@ -4,7 +4,7 @@ import { LoginPage as LoginPageComponent } from '../components/LoginPage';
 
 export function LoginPageWithRouting() {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, requestPasswordReset, signInWithOAuth } = useAuth();
 
   const handleLogin = async (email: string, password: string) => {
     try {
@@ -20,6 +20,8 @@ export function LoginPageWithRouting() {
     <LoginPageComponent
       onLogin={handleLogin}
       onGoToSignUp={() => navigate('/signup')}
+      onForgotPassword={handleForgotPassword}
+      onOAuthLogin={handleOAuthLogin}
     />
   );
 }

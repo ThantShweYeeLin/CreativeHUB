@@ -1,15 +1,19 @@
-import { X, Sparkles, DollarSign } from 'lucide-react';
-import { useState } from 'react';
+import { X, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useCurrency } from '../../contexts/CurrencyContext';
+import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
 
 interface SearchFilterPanelProps {
   onClose: () => void;
   onSearch: (filters: FilterState) => void;
+  initialFilters?: FilterState;
 }
 
-interface FilterState {
+export interface FilterState {
   services: string[];
   priceRange: [number, number];
   locations: string[];
+  currency: string;
 }
 
 const serviceOptions = [
@@ -33,12 +37,109 @@ const locationOptions = [
   'Others'
 ];
 
-export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps) {
+const PRICE_MIN = 0;
+const PRICE_MAX = 100000;
+const PRICE_STEP = 100;
+
+const DEFAULT_CURRENCY = 'THB';
+
+const budgetPresetsBaseThb: Array<{ key: string; range: [number, number]; type: 'any' | 'under' | 'range' | 'over' }> = [
+  { key: 'any', range: [0, 10000], type: 'any' },
+  { key: 'under', range: [0, 2000], type: 'under' },
+  { key: 'mid', range: [2000, 5000], type: 'range' },
+  { key: 'high', range: [5000, 8000], type: 'range' },
+  { key: 'over', range: [8000, 10000], type: 'over' },
+];
+
+function defaultRangeForCurrency(currencyCode: string): [number, number] {
+  const max = Math.round(convertAmount(10000, DEFAULT_CURRENCY, currencyCode));
+  return [PRICE_MIN, Math.max(PRICE_MIN, max)];
+}
+
+export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchFilterPanelProps) {
+  const { currency: preferredCurrency, setCurrency } = useCurrency();
+  const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, DEFAULT_CURRENCY);
   const [filters, setFilters] = useState<FilterState>({
-    services: [],
-    priceRange: [1000, 5000],
-    locations: []
+    services: initialFilters?.services || [],
+    priceRange: initialFilters?.priceRange || defaultRangeForCurrency(normalizedPreferredCurrency),
+    locations: initialFilters?.locations || [],
+    currency: normalizeCurrencyCode(initialFilters?.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
   });
+
+  useEffect(() => {
+    if (initialFilters) {
+      setFilters({
+        services: initialFilters.services,
+        priceRange: initialFilters.priceRange,
+        locations: initialFilters.locations,
+        currency: normalizeCurrencyCode(initialFilters.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+      });
+      return;
+    }
+
+    setFilters((prev) => ({
+      ...prev,
+      currency: normalizeCurrencyCode(prev.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+    }));
+  }, [initialFilters, normalizedPreferredCurrency]);
+
+  const budgetPresets = useMemo(() => {
+    const selectedCurrency = normalizeCurrencyCode(filters.currency, DEFAULT_CURRENCY);
+
+    return budgetPresetsBaseThb.map((preset) => {
+      const convertedRange: [number, number] = [
+        Math.round(convertAmount(preset.range[0], DEFAULT_CURRENCY, selectedCurrency)),
+        Math.round(convertAmount(preset.range[1], DEFAULT_CURRENCY, selectedCurrency)),
+      ];
+
+      const label = (() => {
+        if (preset.type === 'any') return 'Any Budget';
+        if (preset.type === 'under') return `Under ${formatCurrencyAmount(convertedRange[1], selectedCurrency)}`;
+        if (preset.type === 'over') return `${formatCurrencyAmount(convertedRange[0], selectedCurrency)}+`;
+        return `${formatCurrencyAmount(convertedRange[0], selectedCurrency)} - ${formatCurrencyAmount(convertedRange[1], selectedCurrency)}`;
+      })();
+
+      return {
+        key: preset.key,
+        label,
+        range: convertedRange,
+      };
+    });
+  }, [filters.currency]);
+
+  const currencySymbol = getCurrencySymbol(filters.currency);
+
+  const setMinPrice = (value: number) => {
+    const safeMin = Math.max(PRICE_MIN, Math.min(value, filters.priceRange[1]));
+    setFilters((prev) => ({
+      ...prev,
+      priceRange: [safeMin, prev.priceRange[1]],
+    }));
+  };
+
+  const handleCurrencyChange = (value: string) => {
+    const nextCurrency = normalizeCurrencyCode(value, DEFAULT_CURRENCY);
+
+    setFilters((prev) => {
+      const currentCurrency = normalizeCurrencyCode(prev.currency, DEFAULT_CURRENCY);
+      const nextMin = Math.max(PRICE_MIN, Math.round(convertAmount(prev.priceRange[0], currentCurrency, nextCurrency)));
+      const nextMax = Math.min(PRICE_MAX, Math.round(convertAmount(prev.priceRange[1], currentCurrency, nextCurrency)));
+
+      return {
+        ...prev,
+        currency: nextCurrency,
+        priceRange: [Math.min(nextMin, nextMax), Math.max(nextMin, nextMax)],
+      };
+    });
+  };
+
+  const setMaxPrice = (value: number) => {
+    const safeMax = Math.min(PRICE_MAX, Math.max(value, filters.priceRange[0]));
+    setFilters((prev) => ({
+      ...prev,
+      priceRange: [prev.priceRange[0], safeMax],
+    }));
+  };
 
   const toggleService = (service: string) => {
     setFilters(prev => ({
@@ -59,6 +160,7 @@ export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps)
   };
 
   const handleSearch = () => {
+    void setCurrency(filters.currency, true);
     onSearch(filters);
     onClose();
   };
@@ -103,56 +205,81 @@ export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps)
 
           {/* Price Range */}
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Price Range (THB)</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Price Range ({(filters.currency || 'THB').toUpperCase()})</h3>
             <div className="space-y-6">
-              <div className="relative pt-6">
-                {/* Range slider */}
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.priceRange[0]}
-                  onChange={(e) => setFilters(prev => ({
-                    ...prev,
-                    priceRange: [parseInt(e.target.value), prev.priceRange[1]]
-                  }))}
-                  className="absolute w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-gray-900"
-                  style={{ zIndex: filters.priceRange[0] > filters.priceRange[1] ? 2 : 1 }}
-                />
-                <input
-                  type="range"
-                  min="0"
-                  max="10000"
-                  step="100"
-                  value={filters.priceRange[1]}
-                  onChange={(e) => setFilters(prev => ({
-                    ...prev,
-                    priceRange: [prev.priceRange[0], parseInt(e.target.value)]
-                  }))}
-                  className="absolute w-full h-2 bg-transparent rounded-lg appearance-none cursor-pointer accent-gray-900"
-                  style={{ zIndex: filters.priceRange[1] < filters.priceRange[0] ? 2 : 1 }}
-                />
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Currency</label>
+                <select
+                  value={filters.currency}
+                  onChange={(event) => handleCurrencyChange(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
+                >
+                  {SUPPORTED_CURRENCIES.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {item.code} - {item.symbol} {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {budgetPresets.map((preset) => {
+                  const isActive =
+                    filters.priceRange[0] === preset.range[0] &&
+                    filters.priceRange[1] === preset.range[1];
+                  return (
+                    <button
+                      key={preset.key}
+                      onClick={() => setFilters((prev) => ({ ...prev, priceRange: preset.range }))}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                        isActive
+                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Price display */}
-              <div className="flex items-center justify-between gap-4 mt-12">
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 rounded-xl border-2 border-gray-200">
-                  <DollarSign className="w-5 h-5 text-gray-900" />
-                  <div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
+                  <span className="w-7 text-lg font-bold text-gray-900">{currencySymbol}</span>
+                  <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Min</div>
-                    <div className="text-xl font-bold text-gray-900">{filters.priceRange[0].toLocaleString()}</div>
+                    <input
+                      type="number"
+                      min={PRICE_MIN}
+                      max={PRICE_MAX}
+                      step={PRICE_STEP}
+                      value={filters.priceRange[0]}
+                      onChange={(e) => setMinPrice(Number(e.target.value || PRICE_MIN))}
+                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                    />
                   </div>
                 </div>
-                <div className="w-12 h-0.5 bg-gray-300" />
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-3 rounded-xl border-2 border-gray-200">
-                  <DollarSign className="w-5 h-5 text-gray-900" />
-                  <div>
+                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
+                  <span className="w-7 text-lg font-bold text-gray-900">{currencySymbol}</span>
+                  <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Max</div>
-                    <div className="text-xl font-bold text-gray-900">{filters.priceRange[1].toLocaleString()}</div>
+                    <input
+                      type="number"
+                      min={PRICE_MIN}
+                      max={PRICE_MAX}
+                      step={PRICE_STEP}
+                      value={filters.priceRange[1]}
+                      onChange={(e) => setMaxPrice(Number(e.target.value || PRICE_MAX))}
+                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                    />
                   </div>
                 </div>
               </div>
+
+              <p className="text-sm text-gray-500">
+                Tip: Choose a preset for quick filtering, or type your exact minimum and maximum budget.
+              </p>
             </div>
           </div>
 
@@ -183,7 +310,14 @@ export function SearchFilterPanel({ onClose, onSearch }: SearchFilterPanelProps)
         {/* Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-6 rounded-b-3xl flex items-center justify-between">
           <button
-            onClick={() => setFilters({ services: [], priceRange: [1000, 5000], locations: [] })}
+            onClick={() =>
+              setFilters({
+                services: [],
+                priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
+                locations: [],
+                currency: normalizedPreferredCurrency,
+              })
+            }
             className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors"
           >
             Clear All
