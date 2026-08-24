@@ -28,7 +28,7 @@ export function LoginPageWithRouting() {
 
   const handleOAuthLogin = async (provider: 'google' | 'facebook') => {
     try {
-      await signInWithOAuth(provider);
+      await signInWithOAuth(provider, `${window.location.origin}/explore`);
     } catch (err) {
       console.error('OAuth login failed:', err);
       throw err;

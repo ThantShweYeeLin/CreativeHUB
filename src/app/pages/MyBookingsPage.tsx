@@ -116,7 +116,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             <ChevronLeft className="w-5 h-5" />
             Back
           </button>
-          <h1 className="text-2xl font-bold text-gray-900">My Bookings</h1>
+          <h1 className="text-2xl font-bold text-gray-900">My Booked List</h1>
           <p className="text-sm text-gray-600">{normalizedBookings.length} bookings</p>
         </div>
       </div>
