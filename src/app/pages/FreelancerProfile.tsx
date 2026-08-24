@@ -24,8 +24,6 @@ interface FreelancerProfileProps {
   onOpenChat?: () => void;
 }
 
-type FollowRelationship = 'follow' | 'following' | 'follow_back' | 'friends';
-
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
@@ -53,8 +51,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
-  const [friendshipState, setFriendshipState] = useState<'none' | 'outgoing' | 'incoming' | 'friends'>('none');
-  const [isFriendLoading, setIsFriendLoading] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [bookingMode, setBookingMode] = useState<'individual' | 'group'>('individual');
@@ -200,11 +197,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
 
       if (user?.id && user.id !== targetId) {
-        const [favoriteResponse, followResponse, followedByTargetResponse, friendshipResponse] = await Promise.all([
+        const [favoriteResponse, followResponse, followedByTargetResponse] = await Promise.all([
           DataService.isFavorited(user.id, targetId),
           DataService.isFollowing(user.id, targetId),
           DataService.isFollowing(targetId, user.id),
-          DataService.getFriendshipState(user.id, targetId),
         ]);
 
         if (isMounted && !favoriteResponse.error) {
@@ -218,26 +214,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         if (isMounted && !followedByTargetResponse.error) {
           setIsFollowedByTarget(followedByTargetResponse.isFollowing);
         }
-
-        if (isMounted && !friendshipResponse.error) {
-          setFriendshipState(friendshipResponse.state);
-        }
       } else {
         setIsFavorited(false);
         setIsFollowing(false);
         setIsFollowedByTarget(false);
-        setFriendshipState('none');
-      }
-
-      // Re-check friendship state shortly after load to avoid timing/race conditions
-      if (user?.id && user.id !== targetId) {
-        setTimeout(async () => {
-          if (!isMounted) return;
-          const refreshed = await DataService.getFriendshipState(user.id, targetId);
-          if (!refreshed.error && isMounted) {
-            setFriendshipState(refreshed.state);
-          }
-        }, 600);
       }
 
       const followCountsResponse = await DataService.getFollowCounts(targetId);
@@ -306,11 +286,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
 
-  const followRelationship: FollowRelationship = isFollowing
-    ? (isFollowedByTarget ? 'friends' : 'following')
-    : (isFollowedByTarget ? 'follow_back' : 'follow');
-
-  const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (friendshipState === 'friends' || (isFollowing && isFollowedByTarget)));
+  const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (isFollowing || isFollowedByTarget));
 
   const handleFavoriteToggle = async () => {
     if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
@@ -331,147 +307,35 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsFavorited((current) => !current);
   };
 
-  const refreshFriendshipState = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    const response = await DataService.getFriendshipState(user.id, targetFreelancerUserId);
-    if (!response.error) {
-      setFriendshipState(response.state);
-    }
-
-    const followCountsResponse = await DataService.getFollowCounts(targetFreelancerUserId);
-    if (!followCountsResponse.error) {
-      setFollowCounts({
-        followers: followCountsResponse.followerCount,
-        following: followCountsResponse.followingCount,
-      });
-    }
-  };
-
-  const handleSendFriendRequest = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    setError(null);
-    setIsFriendLoading(true);
-
-    const response = await DataService.sendFriendRequest(user.id, targetFreelancerUserId);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to send friend request.');
-      setIsFriendLoading(false);
-      return;
-    }
-
-    setFriendshipState('outgoing');
-    setSuccessMessage('Friend request sent.');
-    setIsFriendLoading(false);
-  };
-
   const handleFollowToggle = async () => {
     if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) return;
 
     setError(null);
-    setIsFriendLoading(true);
+    setIsFollowLoading(true);
 
     if (isFollowing) {
       const resp = await DataService.unfollowUser(user.id, targetFreelancerUserId);
       if (resp.error) {
         setError((resp.error as any).message || 'Unable to unfollow.');
-        setIsFriendLoading(false);
+        setIsFollowLoading(false);
         return;
       }
       setIsFollowing(false);
       setFollowCounts((c) => ({ ...c, followers: Math.max(0, c.followers - 1) }));
-      setIsFriendLoading(false);
+      setIsFollowLoading(false);
       return;
     }
 
     const resp = await DataService.followUser(user.id, targetFreelancerUserId);
     if (resp.error) {
       setError((resp.error as any).message || 'Unable to follow.');
-      setIsFriendLoading(false);
+      setIsFollowLoading(false);
       return;
     }
 
-    // refresh friendship state from backend to pick up mutual follow
     setIsFollowing(true);
     setFollowCounts((c) => ({ ...c, followers: c.followers + 1 }));
-    await refreshFriendshipState();
-    setIsFriendLoading(false);
-  };
-
-  const handleAcceptFriendRequest = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    setError(null);
-    setIsFriendLoading(true);
-
-    const response = await DataService.acceptFriendRequest(targetFreelancerUserId, user.id);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to accept friend request.');
-      setIsFriendLoading(false);
-      return;
-    }
-
-    // Surface RPC debug message if present
-    if ((response as any).rpcAttempted && (response as any).rpcErrorMessage) {
-      setError((response as any).rpcErrorMessage || 'RPC accept_friend_request failed');
-      setIsFriendLoading(false);
-      return;
-    }
-
-    await refreshFriendshipState();
-    setSuccessMessage('Friend request accepted.');
-    setIsFriendLoading(false);
-  };
-
-  const handleDenyFriendRequest = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    setError(null);
-    setIsFriendLoading(true);
-
-    const response = await DataService.denyFriendRequest(targetFreelancerUserId, user.id);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to decline friend request.');
-      setIsFriendLoading(false);
-      return;
-    }
-
-    await refreshFriendshipState();
-    setSuccessMessage('Friend request declined.');
-    setIsFriendLoading(false);
-  };
-
-  const handleUnfriend = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
-      return;
-    }
-
-    setError(null);
-    setIsFriendLoading(true);
-
-    const response = await DataService.removeFriendship(user.id, targetFreelancerUserId);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to remove friendship.');
-      setIsFriendLoading(false);
-      return;
-    }
-
-    await refreshFriendshipState();
-    setSuccessMessage('Friendship removed.');
-    setIsFriendLoading(false);
+    setIsFollowLoading(false);
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -839,58 +703,24 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
                   {user?.id !== targetFreelancerUserId && (
                     <div className="flex flex-wrap gap-2">
-                      {friendshipState === 'incoming' ? (
-                        <>
-                          <button
-                            onClick={() => void handleAcceptFriendRequest()}
-                            disabled={isFriendLoading}
-                            className="rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-                          >
-                            {isFriendLoading ? 'Updating...' : 'Accept'}
-                          </button>
-                          <button
-                            onClick={() => void handleDenyFriendRequest()}
-                            disabled={isFriendLoading}
-                            className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60"
-                          >
-                            {isFriendLoading ? 'Updating...' : 'Deny'}
-                          </button>
-                        </>
-                      ) : friendshipState === 'friends' ? (
-                        <button
-                          onClick={async () => {
-                            if (confirm('Remove friendship with this user?')) {
-                              await handleUnfriend();
-                            }
-                          }}
-                          disabled={isFriendLoading}
-                          className="rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60"
-                        >
-                          {isFriendLoading ? 'Updating...' : 'Friends'}
-                        </button>
-                      ) : friendshipState === 'outgoing' ? (
-                        <button
-                          disabled
-                          className="cursor-default rounded-xl bg-gray-200 px-6 py-3 text-base font-semibold text-gray-900"
-                        >
-                          Requested
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => void handleFollowToggle()}
-                          disabled={isFriendLoading}
-                          className="rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
-                        >
-                          {isFriendLoading
-                            ? 'Updating...'
-                            : isFollowing
-                            ? 'Following'
-                            : isFollowedByTarget
-                            ? 'Follow back'
-                            : 'Follow'
-                          }
-                        </button>
-                      )}
+                      <button
+                        onClick={() => void handleFollowToggle()}
+                        disabled={isFollowLoading}
+                        className={
+                          isFollowing
+                            ? 'rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
+                            : 'rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
+                        }
+                      >
+                        {isFollowLoading
+                          ? 'Updating...'
+                          : isFollowing
+                          ? 'Following'
+                          : isFollowedByTarget
+                          ? 'Follow back'
+                          : 'Follow'
+                        }
+                      </button>
                     </div>
                   )}
                 </div>

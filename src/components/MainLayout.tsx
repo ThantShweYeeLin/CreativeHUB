@@ -22,7 +22,6 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationPanelItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
-  const [processingNotificationId, setProcessingNotificationId] = useState<string | null>(null);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
 
@@ -74,18 +73,6 @@ export function MainLayout({ children }: MainLayoutProps) {
         return `${finalActorName} sent you a message.`;
       }
 
-      if (type === 'friend_request') {
-        return `${finalActorName} sent you a friend request.`;
-      }
-
-      if (type === 'friend_request_accepted') {
-        return `${finalActorName} accepted your friend request.`;
-      }
-
-      if (type === 'friend_request_declined') {
-        return `${finalActorName} declined your friend request.`;
-      }
-
       if (type === 'follow') {
         return `${finalActorName} followed you.`;
       }
@@ -100,9 +87,6 @@ export function MainLayout({ children }: MainLayoutProps) {
       'request_rejected',
       'message',
       'group_message',
-      'friend_request',
-      'friend_request_accepted',
-      'friend_request_declined',
       'follow',
       'booking_cancelled',
     ].includes(String(row.type || 'system'));
@@ -448,42 +432,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate(`/profile/${targetUserId}`);
   };
 
-  const handleAcceptFriendRequest = async (notification: NotificationPanelItem) => {
-    if (!user?.id) {
-      return;
-    }
-
-    const requesterId = await resolveNotificationUserId(notification);
-    if (!requesterId) {
-      return;
-    }
-
-    setProcessingNotificationId(notification.id);
-    const response = await DataService.acceptFriendRequest(requesterId, user.id);
-    if (!response.error) {
-      setNotifications((current) => current.filter((item) => item.id !== notification.id));
-    }
-    setProcessingNotificationId(null);
-  };
-
-  const handleDenyFriendRequest = async (notification: NotificationPanelItem) => {
-    if (!user?.id) {
-      return;
-    }
-
-    const requesterId = await resolveNotificationUserId(notification);
-    if (!requesterId) {
-      return;
-    }
-
-    setProcessingNotificationId(notification.id);
-    const response = await DataService.denyFriendRequest(requesterId, user.id);
-    if (!response.error) {
-      setNotifications((current) => current.filter((item) => item.id !== notification.id));
-    }
-    setProcessingNotificationId(null);
-  };
-
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
     setShowUserMenu(false);
     switch (item) {
@@ -607,8 +555,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                       navigate('/messages');
                     }}
                     onOpenProfile={handleOpenNotificationProfile}
-                    onAcceptFriendRequest={handleAcceptFriendRequest}
-                    onDenyFriendRequest={handleDenyFriendRequest}
                   />
                 )}
               </div>

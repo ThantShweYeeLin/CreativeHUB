@@ -13,6 +13,7 @@ interface FollowersModalProps {
 }
 
 export function FollowersModal({ userId, type, onClose }: FollowersModalProps) {
+  const navigate = useNavigate();
   const [items, setItems] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

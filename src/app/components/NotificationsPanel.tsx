@@ -25,8 +25,6 @@ interface NotificationsPanelProps {
   onOpenRequests?: (notification?: NotificationPanelItem) => void;
   onOpenMessages?: () => void;
   onOpenProfile?: (notification: NotificationPanelItem) => void;
-  onAcceptFriendRequest?: (notification: NotificationPanelItem) => void;
-  onDenyFriendRequest?: (notification: NotificationPanelItem) => void;
 }
 
 const getNotificationIcon = (type: string) => {
@@ -45,12 +43,6 @@ const getNotificationIcon = (type: string) => {
       return <MessageSquare className="w-4 h-4 text-gray-900" />;
     case 'follow':
       return <Users className="w-4 h-4 text-green-600" />;
-    case 'friend_request':
-      return <Users className="w-4 h-4 text-blue-600" />;
-    case 'friend_request_accepted':
-      return <Check className="w-4 h-4 text-green-600" />;
-    case 'friend_request_declined':
-      return <XIcon className="w-4 h-4 text-red-600" />;
     case 'booking_cancelled':
       return <XIcon className="w-4 h-4 text-red-600" />;
     case 'booking_completed':
@@ -135,8 +127,6 @@ export function NotificationsPanel({
   onOpenRequests,
   onOpenMessages,
   onOpenProfile,
-  onAcceptFriendRequest,
-  onDenyFriendRequest,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -187,7 +177,7 @@ export function NotificationsPanel({
                     onMarkAsRead?.(notification.id);
                   }
 
-                  if (notification.type === 'friend_request') {
+                  if (notification.type === 'follow') {
                     onOpenProfile?.(notification);
                     onClose();
                     return;
@@ -230,22 +220,6 @@ export function NotificationsPanel({
                       <span className="font-bold">{notification.actorName || 'User'}</span>{' '}
                       <span className="text-gray-700">{normalizeNotificationText(notification)}</span>
                     </p>
-                    {notification.type === 'friend_request' && (
-                      <div className="mt-3 flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
-                        <button
-                          onClick={() => onAcceptFriendRequest?.(notification)}
-                          className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-black"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => onDenyFriendRequest?.(notification)}
-                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                        >
-                          Deny
-                        </button>
-                      </div>
-                    )}
                     <p className="text-xs text-gray-500 mt-1">{formatRelativeTime(notification.createdAt)}</p>
                   </div>
 
