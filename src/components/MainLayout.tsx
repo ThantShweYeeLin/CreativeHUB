@@ -196,8 +196,8 @@ export function MainLayout({ children }: MainLayoutProps) {
           return;
         }
 
-<<<<<<< Updated upstream
-      if (response.error) {
+        if (response.error) {
+          console.error('Failed to load notifications:', response.error);
         setNotifications([]);
       } else {
         const rows = response.data || [];
@@ -224,27 +224,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                 notification.actorName === 'User'
               )
             );
-=======
-        if (response.error) {
-          console.error('Failed to load notifications:', response.error);
-          setNotifications([]);
-        } else {
-          const rows = response.data || [];
-          const mapped = await Promise.all(
-            rows.map(async (row: any) => {
-              const notification = mapNotificationRecord(row);
-              const shouldResolveActorName = (
-                (!!notification.actorId || !!row.actor_id || !!row.metadata?.requester_id || !!row.metadata?.actor_id || !!row.related_id) &&
-                (
-                  !notification.actorName ||
-                  /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(notification.actorName || '')) ||
-                  /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(row.message || '')) ||
-                  notification.actorName === 'Freelancer' ||
-                  notification.actorName === 'Someone' ||
-                  notification.actorName === 'User'
-                )
-              );
->>>>>>> Stashed changes
 
               if (!shouldResolveActorName) {
                 return notification;
@@ -293,8 +272,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 }
               }
 
-<<<<<<< Updated upstream
-            if (!resolvedActorId && ['request', 'request_accepted', 'request_rejected'].includes(String(row.type || ''))) {
+              if (!resolvedActorId && ['request', 'request_accepted', 'request_rejected'].includes(String(row.type || ''))) {
               const projectName = String(
                 row.metadata?.project_name ||
                 row.metadata?.projectName ||
@@ -317,7 +295,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               }
             }
 
-            if (!resolvedActorId) {
+              if (!resolvedActorId) {
               const requestProjectName = String(
                 row.metadata?.project_name ||
                 row.metadata?.projectName ||
@@ -335,15 +313,11 @@ export function MainLayout({ children }: MainLayoutProps) {
                   .limit(1);
 
                 if (!legacyRequestResponse.error && legacyRequestResponse.data?.[0]?.client_id) {
-                  const legacyActorResponse = await DataService.getUser(String(legacyRequestResponse.data[0].client_id));
-                  if (!legacyActorResponse.error && legacyActorResponse.data?.full_name) {
-                    return {
-                      ...notification,
-                      actorName: legacyActorResponse.data.full_name,
-                    };
-                  }
+                  resolvedActorId = String(legacyRequestResponse.data[0].client_id);
                 }
-=======
+              }
+              }
+
               if (!resolvedActorId) {
                 const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();
                 if (messageName && !/^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(messageName)) {
@@ -393,7 +367,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                   ...notification,
                   actorName: String(row.metadata.actor_name),
                 };
->>>>>>> Stashed changes
               }
 
               const messageName = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i)?.[1]?.trim();

@@ -4,7 +4,7 @@ import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react'
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import { AIImageMatcher, AIImageMatcherResults, type AIMatcherFreelancer } from '../components/AIImageMatcher';
+import { AIImageMatcher, AIImageMatcherResults, type AIMatcherResult } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -131,7 +131,7 @@ export function ExplorePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAIMatcher, setShowAIMatcher] = useState(false);
-  const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherFreelancer[] | null>(null);
+  const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherResult[] | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -519,6 +519,12 @@ export function ExplorePage() {
           onSearch={(nextFilters) => setFilters(nextFilters)}
         />
       )}
+      <AIImageMatcher
+        open={showAIMatcher}
+        freelancers={freelancers}
+        onClose={() => setShowAIMatcher(false)}
+        onResults={setAIMatcherResults}
+      />
     </>
   );
 }
