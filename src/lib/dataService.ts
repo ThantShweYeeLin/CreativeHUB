@@ -1776,7 +1776,7 @@ export class DataService {
         type: 'request',
         title: 'New booking request',
         message: `New booking request: ${request.project_name}`,
-        related_id: null,
+        related_id: (data as any)?.id || null,
         post_id: null,
         comment_id: null,
         metadata: {

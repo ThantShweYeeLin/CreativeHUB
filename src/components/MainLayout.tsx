@@ -583,8 +583,10 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onOpenRequests={(notification) => {
                       setShowNotifications(false);
                       const requestId = notification?.relatedId || notification?.id;
-                      // If the current user is a freelancer, open the freelancer requests dashboard
-                      if (user?.role === 'freelancer') {
+                      // Only a new incoming request belongs in the freelancer inbox.
+                      // A freelancer can also send requests; acceptance/rejection updates for
+                      // those requests belong to their own My Requests page.
+                      if (notification?.type === 'request' && user?.role === 'freelancer') {
                         if (requestId) {
                           navigate('/freelancer-dashboard/requests', { state: { openRequestId: requestId } });
                         } else {

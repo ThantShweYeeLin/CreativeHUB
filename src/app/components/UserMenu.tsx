@@ -9,7 +9,7 @@ interface UserMenuProps {
 export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
   const menuItems = [
     { id: 'bookings' as const, label: 'My Bookings', icon: Package },
-    { id: 'requests' as const, label: 'Requests', icon: Send },
+    { id: 'requests' as const, label: 'My Requests', icon: Send },
     { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
     { id: 'favorites' as const, label: 'Favorites', icon: Heart },
     { id: 'settings' as const, label: 'Settings', icon: Settings },

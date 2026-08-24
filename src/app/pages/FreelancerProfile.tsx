@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +30,7 @@ const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
@@ -73,7 +74,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
 
   useEffect(() => {
-    if (!showBookingForm) {
+    if (!showBookingForm || profile?.role !== 'freelancer') {
       return;
     }
 
@@ -101,7 +102,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     return () => {
       isMounted = false;
     };
-  }, [showBookingForm, user?.id]);
+  }, [showBookingForm, user?.id, profile?.role]);
 
   useEffect(() => {
     let isMounted = true;
@@ -247,13 +248,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         });
       }
 
-      const bookingsResponse = await DataService.getFreelancerBookings(targetId);
-      if (isMounted && !bookingsResponse.error) {
-        const bookingRows = bookingsResponse.data || [];
-        setActiveProjects(
-          bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
-        );
-        setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
+      if (userResponse.data.role === 'freelancer' && freelancerResponse.data) {
+        const bookingsResponse = await DataService.getFreelancerBookings(targetId);
+        if (isMounted && !bookingsResponse.error) {
+          const bookingRows = bookingsResponse.data || [];
+          setActiveProjects(
+            bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
+          );
+          setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
+        }
+      } else if (isMounted) {
+        setActiveProjects(0);
+        setCompletedProjects(0);
       }
 
       const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
@@ -287,8 +293,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const avatarUrl = profile?.avatar_url || fallbackProfileImage;
   const coverUrl = profile?.cover_url || freelancerProfile?.cover_image_url || freelancerProfile?.image_urls?.[0] || '';
   const location = profile?.location || 'Location not provided';
-  const bio = profile?.bio || freelancerProfile?.description || 'This freelancer has not added a bio yet.';
-  const title = freelancerProfile?.title || 'Freelancer';
+  const isBookableFreelancer = profile?.role === 'freelancer' && Boolean(freelancerProfile?.id);
+  const bio = profile?.bio || (isBookableFreelancer ? freelancerProfile?.description : null) || 'This client has not added a bio yet.';
+  const title = isBookableFreelancer ? (freelancerProfile?.title || 'Freelancer') : 'Client';
   const rating = Number(profile?.rating || 0);
   const totalReviews = Number(profile?.total_reviews || 0);
   const portfolioCount = Number(freelancerProfile?.portfolio_count || portfolioItems.length || 0);
@@ -470,6 +477,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const handleSubmitRequest = async (event: FormEvent) => {
     event.preventDefault();
 
+    if (!isBookableFreelancer) {
+      setError('Booking requests can only be sent to freelancer profiles.');
+      setShowBookingForm(false);
+      return;
+    }
+
     if (!user?.id || !targetFreelancerUserId) {
       setError('You must be signed in to send a booking request.');
       return;
@@ -508,7 +521,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       ? Array.from(new Set([targetFreelancerUserId, ...selectedRecipientIds]))
       : [targetFreelancerUserId];
 
-    const { error: requestError } = await DataService.createBookingRequests({
+    const { data: createdRequests, error: requestError } = await DataService.createBookingRequests({
       clientId: user.id,
       recipientIds: recipients,
       projectName: formData.projectName,
@@ -531,6 +544,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setBookingMode('individual');
     setSelectedRecipientIds([]);
     setGroupFreelancerSearch('');
+    navigate('/requests', { state: createdRequests?.[0]?.id ? { openRequestId: createdRequests[0].id } : undefined });
     setFormData((current) => ({
       ...current,
       projectName: '',
@@ -814,7 +828,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     </button>
                   )}
 
-                  {user?.id !== targetFreelancerUserId && (
+                  {isBookableFreelancer && user?.id !== targetFreelancerUserId && (
                     <button
                       onClick={() => setShowBookingForm(true)}
                       className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
@@ -892,10 +906,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <MapPin className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{location}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                    <span>{availability}</span>
-                  </div>
+                  {isBookableFreelancer && (
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                      <span>{availability}</span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{profile?.email || 'Email unavailable'}</span>
@@ -915,6 +931,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
             </div>
 
+            {isBookableFreelancer && (
             <div className="mt-6 grid grid-cols-2 gap-4 border-y border-gray-200 py-5 md:grid-cols-6">
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
@@ -959,11 +976,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <p className="mt-1 text-sm text-gray-500">completed projects</p>
               </div>
             </div>
+            )}
 
             <p className="mt-6 text-gray-700 leading-7">{bio}</p>
           </div>
         </section>
 
+        {isBookableFreelancer && (
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-3xl bg-white p-6 md:p-8 shadow-xl">
             <h2 className="text-2xl font-bold text-gray-900">Portfolio</h2>
@@ -1058,6 +1077,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
           </aside>
         </section>
+        )}
 
         {profilePosts.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
@@ -1243,7 +1263,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         </div>
       )}
 
-      {showBookingForm && (
+      {showBookingForm && isBookableFreelancer && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white shadow-2xl">
             <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 md:px-8 md:py-6 rounded-t-3xl">
