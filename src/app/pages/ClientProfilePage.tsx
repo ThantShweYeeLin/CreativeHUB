@@ -1,12 +1,13 @@
 import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { GenderBadge } from '../../components/common/GenderBadge';
+import { EditableGenderBadge } from '../../components/common/EditableGenderBadge';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
+import type { Gender } from '../../lib/database.types';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -595,6 +596,28 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     setUploadingImageType(null);
   };
 
+  const handleGenderChange = async (gender: Gender) => {
+    if (!user?.id) {
+      return;
+    }
+
+    const { data, error: saveError } = await DataService.updateUser(user.id, {
+      gender,
+      updated_at: new Date().toISOString(),
+    } as any);
+
+    if (saveError) {
+      setError((saveError as any).message || 'Could not update gender.');
+      return;
+    }
+
+    setProfile((current: any) => ({
+      ...(current || {}),
+      ...(data || {}),
+      gender,
+    }));
+  };
+
   const renderField = (label: string, value: string, key: 'full_name' | 'location' | 'bio') => (
     <div>
       <label className="block text-sm font-semibold text-gray-700 mb-2">{label}</label>
@@ -702,7 +725,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <GenderBadge gender={user?.gender} size="md" position="top-right" />
+                <EditableGenderBadge gender={profile?.gender ?? user?.gender} size="md" position="top-right" onSelect={handleGenderChange} />
                 <input
                   ref={avatarInputRef}
                   type="file"
