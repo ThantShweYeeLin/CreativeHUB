@@ -1,5 +1,5 @@
 import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin } from 'lucide-react';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -87,6 +87,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
         name: counterparty?.full_name || 'CreativeHUB User',
         specialty: booking.project_name,
         image: counterparty?.avatar_url || fallbackProfileImage,
+        gender: counterparty?.gender || null,
         date: booking.start_date || 'Schedule pending',
         endDate: booking.end_date || null,
         location: counterparty?.location || 'Location to be confirmed',
@@ -146,13 +147,12 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
               {/* Booking Header */}
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-gray-200 flex-shrink-0">
-                    <ImageWithFallback
-                      src={booking.image}
-                      alt={booking.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                  <Avatar
+                    src={booking.image}
+                    alt={booking.name}
+                    gender={booking.gender}
+                    sizeClassName="w-14 h-14 ring-2 ring-gray-200 rounded-full flex-shrink-0"
+                  />
                   <div>
                     <h2 className="font-bold text-gray-900">{booking.name}</h2>
                     <p className="text-sm text-gray-600">{booking.specialty}</p>

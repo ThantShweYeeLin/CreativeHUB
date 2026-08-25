@@ -57,8 +57,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
 
     return supabase
       .from('freelancer_profiles')
@@ -74,8 +74,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
 
     let q = supabase
       .from('freelancer_profiles')
@@ -101,8 +101,8 @@ export class DataService {
     }
 
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
@@ -152,7 +152,7 @@ export class DataService {
       title: '',
       description: '',
       is_available: false,
-      users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
+      users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, gender: u.gender, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
     }));
 
     return { data: results, error: null };
@@ -175,7 +175,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('users')
-      .select('id, email, full_name, avatar_url')
+      .select('id, email, full_name, avatar_url, gender')
       .in('id', uniqueIds);
 
     return { data: (data || []) as Array<{ id: string; full_name: string | null; avatar_url: string | null; email: string }>, error };
@@ -191,7 +191,7 @@ export class DataService {
 
     let usersQuery = supabase
       .from('users')
-      .select('id, email, full_name, avatar_url, role, location')
+      .select('id, email, full_name, avatar_url, gender, role, location')
       .or(`full_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
       .limit(limit);
 
@@ -226,7 +226,7 @@ export class DataService {
     const ids = (data || []).map((r: any) => String(r.follower_id));
     if (ids.length === 0) return { data: [], error: null };
 
-    const usersResp = await supabase.from('users').select('id, full_name, avatar_url').in('id', ids).order('full_name', { ascending: true });
+    const usersResp = await supabase.from('users').select('id, full_name, avatar_url, gender').in('id', ids).order('full_name', { ascending: true });
     return { data: (usersResp.data || []), error: usersResp.error };
   }
 
@@ -241,7 +241,7 @@ export class DataService {
     const ids = (data || []).map((r: any) => String(r.following_id));
     if (ids.length === 0) return { data: [], error: null };
 
-    const usersResp = await supabase.from('users').select('id, full_name, avatar_url').in('id', ids).order('full_name', { ascending: true });
+    const usersResp = await supabase.from('users').select('id, full_name, avatar_url, gender').in('id', ids).order('full_name', { ascending: true });
     return { data: (usersResp.data || []), error: usersResp.error };
   }
 
@@ -289,7 +289,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('users')
-      .select('id, full_name, email, avatar_url')
+      .select('id, full_name, email, avatar_url, gender')
       .in('id', mutualIds)
       .order('full_name', { ascending: true });
 
@@ -376,7 +376,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
+      .select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location), portfolios(*)')
       .eq('user_id', userId)
       .single();
     return { data, error };
@@ -389,7 +389,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location), portfolios(*)')
+      .select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location), portfolios(*)')
       .eq('id', id)
       .single();
     return { data, error };
@@ -447,11 +447,11 @@ export class DataService {
     const userIds = matchedUsers.map((u) => u.id).filter(Boolean);
 
     const profilesByUser = userIds.length > 0
-      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)').in('user_id', userIds)
+      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location)').in('user_id', userIds)
       : { data: [] };
 
     const profilesByText = cleaned
-      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, rating, total_reviews, location)').or(`title.ilike.%${cleaned}%,description.ilike.%${cleaned}%`).eq('is_available', true).limit(1000)
+      ? await supabase.from('freelancer_profiles').select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location)').or(`title.ilike.%${cleaned}%,description.ilike.%${cleaned}%`).eq('is_available', true).limit(1000)
       : { data: [] };
 
     const combined = ([...(profilesByUser.data || []), ...(profilesByText.data || [])] as any[])
@@ -690,7 +690,7 @@ export class DataService {
   static async getClientBookings(clientId: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url)')
+      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, gender)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
     return { data, error };
@@ -699,7 +699,7 @@ export class DataService {
   static async getFreelancerBookings(freelancerId: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, client:client_id(id, email, full_name, avatar_url)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender)')
       .eq('freelancer_id', freelancerId)
       .order('created_at', { ascending: false });
     return { data, error };
@@ -708,7 +708,7 @@ export class DataService {
   static async getBooking(bookingId: string) {
     const { data, error } = await supabase
       .from('bookings')
-      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, rating, total_reviews, location), client:client_id(id, email, full_name, avatar_url, rating, total_reviews, location)')
+      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location), client:client_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location)')
       .eq('id', bookingId)
       .single();
     return { data, error };
@@ -860,7 +860,7 @@ export class DataService {
   static async getGroupConversationMembers(conversationId: string) {
     const { data, error } = await supabase
       .from('group_conversation_members')
-      .select('conversation_id, user_id, role, users:user_id(id, full_name, email, avatar_url)')
+      .select('conversation_id, user_id, role, users:user_id(id, full_name, email, avatar_url, gender)')
       .eq('conversation_id', conversationId)
       .order('joined_at', { ascending: true });
 
@@ -1023,7 +1023,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('client_posts')
-      .select('id, caption, image_url, client_id, client:client_id(id, full_name, avatar_url)')
+      .select('id, caption, image_url, client_id, client:client_id(id, full_name, avatar_url, gender)')
       .in('id', postIds);
 
     return { data: data || [], error };
@@ -1036,7 +1036,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('client_posts')
-      .select('id, caption, image_url, client_id, created_at, client:client_id(id, full_name, avatar_url)')
+      .select('id, caption, image_url, client_id, created_at, client:client_id(id, full_name, avatar_url, gender)')
       .in('client_id', authorIds)
       .order('created_at', { ascending: false })
       .limit(200);
@@ -1211,7 +1211,7 @@ export class DataService {
   static async getUserConversations(userId: string) {
     const { data, error } = await supabase
       .from('conversations')
-      .select('*, participant_1:participant_1_id(id, email, full_name, avatar_url), participant_2:participant_2_id(id, email, full_name, avatar_url)')
+      .select('*, participant_1:participant_1_id(id, email, full_name, avatar_url, gender), participant_2:participant_2_id(id, email, full_name, avatar_url, gender)')
       .or(`participant_1_id.eq.${userId},participant_2_id.eq.${userId}`)
       .order('last_message_at', { ascending: false });
     return { data, error };
@@ -1266,7 +1266,7 @@ export class DataService {
     const [usersResponse, profilesResponse] = await Promise.all([
       supabase
         .from('users')
-        .select('id, email, full_name, avatar_url, rating, total_reviews, location')
+        .select('id, email, full_name, avatar_url, gender, rating, total_reviews, location')
         .in('id', freelancerIds),
       supabase
         .from('freelancer_profiles')
@@ -1319,7 +1319,7 @@ export class DataService {
 
     let query = supabase
       .from('notifications')
-      .select('*, actor:actor_id(id, full_name, avatar_url)')
+      .select('*, actor:actor_id(id, full_name, avatar_url, gender)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -1810,7 +1810,7 @@ export class DataService {
   static async getFreelancerRequests(freelancerId: string) {
     const { data, error } = await supabase
       .from('requests')
-      .select('*, client:client_id(id, email, full_name, avatar_url)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender)')
       .eq('freelancer_id', freelancerId)
       .order('created_at', { ascending: false });
     return { data, error };
@@ -1819,7 +1819,7 @@ export class DataService {
   static async getClientRequests(clientId: string) {
     const { data, error } = await supabase
       .from('requests')
-      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, location)')
+      .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, gender, location)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
     return { data, error };
@@ -1829,7 +1829,7 @@ export class DataService {
   static async getClientPosts(limit = 30, userId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -1845,7 +1845,7 @@ export class DataService {
   static async getClientPostsByClientId(clientId: string, limit = 20) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
       .eq('client_id', clientId)
       .eq('is_published', true)
       .order('created_at', { ascending: false })
@@ -2036,7 +2036,7 @@ export class DataService {
   static async getClientPostComments(postId: string, limit = 40) {
     const { data, error } = await supabase
       .from('client_post_comments')
-      .select('*, user:user_id(id, full_name, avatar_url)')
+      .select('*, user:user_id(id, full_name, avatar_url, gender)')
       .eq('post_id', postId)
       .order('created_at', { ascending: true })
       .limit(limit);
@@ -2046,7 +2046,7 @@ export class DataService {
   static async getClientPostLikeUsers(postId: string) {
     const { data, error } = await supabase
       .from('client_post_likes')
-      .select('user:user_id(id, full_name, email, avatar_url)')
+      .select('user:user_id(id, full_name, email, avatar_url, gender)')
       .eq('post_id', postId);
 
     const uniqueUsersById = new Map<string, any>();
@@ -2129,7 +2129,7 @@ export class DataService {
         post_id: postId,
         content: content.trim(),
       })
-      .select('*, user:user_id(id, full_name, avatar_url)')
+      .select('*, user:user_id(id, full_name, avatar_url, gender)')
       .single();
 
     if (!error) {
@@ -2230,7 +2230,7 @@ export class DataService {
         ...post,
         is_published: post.is_published ?? true,
       })
-      .select('*, client:client_id(id, email, full_name, avatar_url, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
       .single();
     return { data, error };
   }

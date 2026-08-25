@@ -3,9 +3,10 @@ import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 import { DataService } from '../../lib/dataService';
 import { authService } from '../../lib/authService';
+import type { Gender } from '../../lib/database.types';
 
 interface SignUpPageProps {
-  onSignUp: (fullName: string, email: string, password: string, role: AccountType) => Promise<void>;
+  onSignUp: (fullName: string, email: string, password: string, role: AccountType, gender: Gender) => Promise<void>;
   onGoToLogin: () => void;
   onValidateEmail?: (email: string) => Promise<string | null>;
   onOAuthSignUp?: (provider: 'google' | 'facebook') => Promise<void>;
@@ -13,9 +14,17 @@ interface SignUpPageProps {
 
 type AccountType = 'client' | 'freelancer';
 
+const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'lgbtq_plus', label: 'LGBTQ+' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
+
 export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSignUp }: SignUpPageProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [accountType, setAccountType] = useState<AccountType>('client');
+  const [gender, setGender] = useState<Gender | ''>('');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,6 +45,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
     setError('');
     if (!fullName.trim()) { setError('Please enter your full name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
+    if (!gender) { setError('Please select a gender.'); return; }
 
     if (onValidateEmail) {
       setIsCheckingEmail(true);
@@ -72,9 +82,14 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
       return;
     }
 
+    if (!gender) {
+      setError('Please select a gender.');
+      return;
+    }
+
     setLoading(true);
     try {
-      await onSignUp(fullName.trim(), email, password, accountType);
+      await onSignUp(fullName.trim(), email, password, accountType, gender);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create account.');
     } finally {
@@ -198,6 +213,26 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                       }`}
                     >
                       {type === 'client' ? '👤 Client' : '🎨 Freelancer'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {GENDER_OPTIONS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setGender(option.value)}
+                      className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                        gender === option.value
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {option.label}
                     </button>
                   ))}
                 </div>

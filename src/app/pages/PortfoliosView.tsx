@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Filter, Layers, MapPin, Search, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { DataService } from '../../lib/dataService';
 import { normalizeFreelancer, type FreelancerMapProfile } from '../../lib/freelanceMapper';
 
@@ -23,9 +24,12 @@ function FreelancerCard({ item, onViewProfile }: FreelancerCardProps) {
       onClick={() => onViewProfile(item.userId || item.id)}
     >
       <div className="mb-4 flex items-start gap-4">
-        <div className="h-16 w-16 overflow-hidden rounded-xl ring-2 ring-white shadow-md">
-          <ImageWithFallback src={item.profileImage} alt={item.fullName} className="h-full w-full object-cover" />
-        </div>
+        <Avatar
+          src={item.profileImage}
+          alt={item.fullName}
+          gender={item.gender}
+          sizeClassName="h-16 w-16 ring-2 ring-white shadow-md"
+        />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-lg font-bold text-gray-900">{item.fullName}</h3>
           <p className="truncate text-sm text-gray-600">{item.profession}</p>

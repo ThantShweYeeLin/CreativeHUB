@@ -16,8 +16,16 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
+import type { Gender } from '../../lib/database.types';
 
 type Role = 'freelancer' | 'client';
+
+const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'lgbtq_plus', label: 'LGBTQ+' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
 
 interface PreferenceState {
   language: string;
@@ -144,6 +152,7 @@ export function SettingsPage() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [gender, setGender] = useState<Gender>('prefer_not_to_say');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -189,6 +198,7 @@ export function SettingsPage() {
       } else {
         setFullName(userResponse.data?.full_name || user.fullName || '');
         setEmail(userResponse.data?.email || user.email || '');
+        setGender((userResponse.data as any)?.gender || user.gender || 'prefer_not_to_say');
         setPreferences((current) => ({
           ...current,
           currency: normalizeCurrencyCode((userResponse.data as any)?.preferred_currency || current.currency, 'THB'),
@@ -253,6 +263,7 @@ export function SettingsPage() {
 
     const userUpdate = await DataService.updateUser(user.id, {
       full_name: fullName,
+      gender,
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -399,6 +410,11 @@ export function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="rounded-lg border border-gray-300 px-3 py-2" />
+              <select value={gender} onChange={(e) => setGender(e.target.value as Gender)} className="rounded-lg border border-gray-300 px-3 py-2">
+                {GENDER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
               <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Phone number" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="New password" className="rounded-lg border border-gray-300 px-3 py-2" />

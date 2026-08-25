@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
@@ -663,9 +664,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end">
-                  <div className="h-24 w-24 overflow-hidden rounded-full ring-4 ring-white bg-gray-200 shadow-xl md:h-32 md:w-32">
-                    <ImageWithFallback src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-                  </div>
+                  <Avatar
+                    src={avatarUrl}
+                    alt={displayName}
+                    gender={profile?.gender}
+                    sizeClassName="h-24 w-24 ring-4 ring-white bg-gray-200 shadow-xl md:h-32 md:w-32 rounded-full"
+                    badgeSize="md"
+                  />
                   <div className="text-white">
                     <h1 className="text-2xl font-bold md:text-3xl">{displayName}</h1>
                     <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
@@ -992,9 +997,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             <div className="max-h-[35vh] overflow-y-auto p-5">
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3 text-left">
-                  <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
-                    <ImageWithFallback src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-                  </div>
+                  <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full" />
                   <div>
                     <p className="font-semibold text-gray-900">{displayName}</p>
                     <p className="text-xs text-gray-500">{title}</p>
@@ -1034,10 +1037,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <div className="flex flex-wrap gap-3">
                       {likedUsersByPostId[focusedPost.id].map((likedUser: any) => (
                         <div key={likedUser.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
-                          <ImageWithFallback
+                          <Avatar
                             src={likedUser.avatar_url || fallbackProfileImage}
                             alt={likedUser.full_name || likedUser.email || 'User'}
-                            className="h-8 w-8 rounded-full object-cover"
+                            gender={likedUser.gender}
+                            sizeClassName="h-8 w-8 rounded-full"
                           />
                           <div>
                             <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
@@ -1178,9 +1182,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
               <div className="rounded-2xl bg-gray-50 p-5">
                 <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 overflow-hidden rounded-full ring-2 ring-gray-200">
-                    <ImageWithFallback src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
-                  </div>
+                  <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-16 w-16 ring-2 ring-gray-200 rounded-full" />
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">{displayName}</h3>
                     <p className="text-gray-600">{title}</p>

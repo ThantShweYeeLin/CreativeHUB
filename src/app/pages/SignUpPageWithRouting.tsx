@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignUpPage as SignUpPageComponent } from '../components/SignUpPage';
 import { authService } from '../../lib/authService';
+import type { Gender } from '../../lib/database.types';
 
 export function SignUpPageWithRouting() {
   const navigate = useNavigate();
@@ -21,9 +22,9 @@ export function SignUpPageWithRouting() {
     return null;
   };
 
-  const handleSignUp = async (fullName: string, email: string, password: string, role: 'freelancer' | 'client') => {
+  const handleSignUp = async (fullName: string, email: string, password: string, role: 'freelancer' | 'client', gender: Gender) => {
     try {
-      await signUp(email, password, fullName, role);
+      await signUp(email, password, fullName, role, gender);
       navigate('/explore');
     } catch (error) {
       console.error('Sign up failed:', error);

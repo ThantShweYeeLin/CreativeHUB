@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authService, type AuthUser } from '../lib/authService';
 import { isSupabaseConfigured } from '../lib/supabase';
+import type { Gender } from '../lib/database.types';
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
@@ -41,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'freelancer' | 'client') => {
+  const signUp = async (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase is not configured.');
     }
@@ -51,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password,
       fullName,
       role,
+      gender,
     });
 
     if (error) {

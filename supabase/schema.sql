@@ -5,6 +5,7 @@ create extension if not exists "uuid-ossp";
 create type user_role as enum ('freelancer', 'client');
 create type request_status as enum ('pending', 'accepted', 'rejected', 'completed');
 create type booking_status as enum ('pending', 'confirmed', 'in_progress', 'completed', 'cancelled');
+create type gender_type as enum ('male', 'female', 'lgbtq_plus', 'prefer_not_to_say');
 
 -- Users table (extends Supabase auth)
 create table public.users (
@@ -15,6 +16,7 @@ create table public.users (
   cover_url text,
   bio text,
   role user_role default 'client',
+  gender gender_type default 'prefer_not_to_say',
   preferred_currency text default 'THB',
   location text,
   location_latitude numeric(10,7),

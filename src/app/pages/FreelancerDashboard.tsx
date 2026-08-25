@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -1097,13 +1098,14 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       <button
                         type="button"
                         onClick={() => request.client_id && navigate(`/profile/${request.client_id}`)}
-                        className="h-14 w-14 overflow-hidden rounded-full ring-2 ring-white shadow-md transition-transform hover:scale-105"
+                        className="h-14 w-14 rounded-full transition-transform hover:scale-105"
                         aria-label={`Open ${request.client?.full_name || 'Client'} profile`}
                       >
-                        <ImageWithFallback
+                        <Avatar
                           src={request.client?.avatar_url || DEFAULT_AVATAR_URL}
                           alt={request.client?.full_name || 'Client'}
-                          className="h-full w-full object-cover"
+                          gender={request.client?.gender}
+                          sizeClassName="h-full w-full ring-2 ring-white shadow-md rounded-full"
                         />
                       </button>
                       <div className="flex-1">
