@@ -9,11 +9,14 @@ export interface FreelancerPortfolioItem {
   comments?: number;
 }
 
+import type { Gender } from './database.types';
+
 export interface FreelancerMapProfile {
   id: string;
   userId?: string;
   fullName: string;
   username: string;
+  gender: Gender | null;
   profileImage: string;
   coverImage: string;
   profession: string;
@@ -161,11 +164,14 @@ export function normalizeFreelancer(row: unknown): FreelancerMapProfile {
   const isAvailable = typeof source.is_available === 'boolean' ? source.is_available : source.availability !== false;
   const availability = stringArray(source.availability);
 
+  const gender = (source.gender ?? user.gender ?? null) as Gender | null;
+
   return {
     id: stringValue(source.id, source._id),
     userId: stringValue(source.user_id, user.id, source.userId) || undefined,
     fullName,
     username,
+    gender,
     profileImage,
     coverImage,
     profession,

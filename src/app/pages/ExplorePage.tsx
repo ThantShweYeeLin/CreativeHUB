@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
+import { GenderBadge } from '../../components/common/GenderBadge';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import type { Gender } from '../../lib/database.types';
 import { AIImageMatcher, AIImageMatcherResults, type AIMatcherResult } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,10 +20,11 @@ interface ProfileCardProps {
   rating: number;
   reviews: number;
   image: string;
+  gender?: Gender | null;
   location?: string;
 }
 
-function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, rating, reviews, image, gender, location }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -37,6 +41,7 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, location }: 
             alt={name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
+          <GenderBadge gender={gender} size="md" position="top-left" className="!top-3 !left-3" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className={`absolute bottom-4 left-4 right-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
             <button
@@ -286,6 +291,7 @@ export function ExplorePage() {
       rating: Number(profile.users?.rating || 0),
       reviews: Number(profile.users?.total_reviews || 0),
       image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
+      gender: profile.users?.gender || null,
       location: profile.users?.location || undefined,
     }));
   }, [freelancers]);
@@ -392,6 +398,7 @@ export function ExplorePage() {
                 const name = s.users?.full_name || s.title || s.users?.email || 'Unknown';
                 const subtitle = s.users?.email || s.users?.username || s.title || '';
                 const avatar = s.users?.avatar_url || DEFAULT_AVATAR_URL;
+                const suggestionGender = s.users?.gender || null;
                 return (
                   <button
                     key={id || idx}
@@ -401,7 +408,7 @@ export function ExplorePage() {
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
                   >
-                    <img src={avatar} alt={name} className="w-8 h-8 rounded-full object-cover" />
+                    <Avatar src={avatar} alt={name} gender={suggestionGender} sizeClassName="w-8 h-8" />
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-900">{name}</span>
                       {subtitle && <span className="text-xs text-gray-500">{subtitle}</span>}

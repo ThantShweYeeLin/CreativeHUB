@@ -4,6 +4,7 @@ import { LatLngExpression, divIcon } from 'leaflet';
 import { Filter, Layers, Navigation, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMapper';
@@ -757,9 +758,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
               }`}
             >
               <div className="mb-3 flex items-start gap-3">
-                <div className="h-14 w-14 overflow-hidden rounded-xl ring-2 ring-white shadow">
-                  <ImageWithFallback src={freelancer.profileImage} alt={freelancer.fullName} className="h-full w-full object-cover" />
-                </div>
+                <Avatar
+                  src={freelancer.profileImage}
+                  alt={freelancer.fullName}
+                  gender={freelancer.gender}
+                  sizeClassName="h-14 w-14 ring-2 ring-white shadow"
+                />
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-base font-bold text-gray-900">{freelancer.fullName}</h3>
                   <p className="truncate text-xs text-gray-600">{freelancer.profession}</p>

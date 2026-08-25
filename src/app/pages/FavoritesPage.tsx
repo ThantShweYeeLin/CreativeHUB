@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Heart, MapPin, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { GenderBadge } from '../../components/common/GenderBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 
@@ -60,6 +61,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
       name: favorite.freelancer?.users?.full_name || 'Creative Freelancer',
       specialty: favorite.freelancer?.title || favorite.freelancer?.skills?.[0] || 'Freelancer',
       image: favorite.freelancer?.users?.avatar_url || fallbackProfileImage,
+      gender: favorite.freelancer?.users?.gender || null,
       rating: Number(favorite.freelancer?.users?.rating || 0),
       reviews: Number(favorite.freelancer?.users?.total_reviews || 0),
       location: favorite.freelancer?.users?.location || 'Location not added',
@@ -140,6 +142,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                     alt={freelancer.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
+                  <GenderBadge gender={freelancer.gender} size="md" position="top-left" className="!top-3 !left-3 md:!top-4 md:!left-4" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                   {/* Hover Actions */}

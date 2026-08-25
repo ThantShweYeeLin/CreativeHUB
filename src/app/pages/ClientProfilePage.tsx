@@ -1,5 +1,7 @@
 import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
+import { GenderBadge } from '../../components/common/GenderBadge';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -700,6 +702,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                     className="w-full h-full object-cover"
                   />
                 </div>
+                <GenderBadge gender={user?.gender} size="md" position="top-right" />
                 <input
                   ref={avatarInputRef}
                   type="file"
@@ -990,10 +993,11 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                         <div className="flex flex-wrap gap-3">
                           {likedUsersByPostId[postId].map((likedUser: any) => (
                             <div key={likedUser.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
-                              <ImageWithFallback
+                              <Avatar
                                 src={likedUser.avatar_url || DEFAULT_AVATAR_URL}
                                 alt={likedUser.full_name || likedUser.email || 'User'}
-                                className="h-8 w-8 rounded-full object-cover"
+                                gender={likedUser.gender}
+                                sizeClassName="h-8 w-8 rounded-full"
                               />
                               <div>
                                 <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>

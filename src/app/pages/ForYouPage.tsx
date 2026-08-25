@@ -26,11 +26,14 @@ import {
   X,
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
+import { GenderBadge } from '../../components/common/GenderBadge';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import type { Gender } from '../../lib/database.types';
 
 interface ForYouPageProps {
   onViewProfile?: (freelancerId: string) => void;
@@ -65,6 +68,7 @@ interface FeedPost {
   id: string;
   authorId: string;
   authorName: string;
+  authorGender?: Gender | null;
   username: string;
   avatar: string;
   specialty: string;
@@ -270,11 +274,13 @@ function isMissingClientPostsTable(error: unknown) {
 function ComposerLauncher({
   avatar,
   name,
+  gender,
   placeholder,
   onOpen,
 }: {
   avatar: string;
   name: string;
+  gender?: Gender | null;
   placeholder: string;
   onOpen: () => void;
 }) {
@@ -284,9 +290,7 @@ function ComposerLauncher({
       className="mx-4 mb-5 w-[calc(100%-2rem)] rounded-3xl border border-gray-200 bg-white p-4 text-left shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-xl md:mb-6 md:p-5"
     >
       <div className="flex items-center gap-3">
-        <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-gray-100">
-          <ImageWithFallback src={avatar} alt={name} className="h-full w-full object-cover" />
-        </div>
+        <Avatar src={avatar} alt={name} gender={gender} sizeClassName="h-12 w-12 ring-2 ring-gray-100 rounded-full" />
         <div className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 transition-colors group-hover:bg-white md:text-base">
           {placeholder}
         </div>
@@ -316,6 +320,7 @@ function CreatePostSheet({
   isOpen,
   userName,
   userAvatar,
+  userGender,
   composer,
   isPublishing,
   onClose,
@@ -328,6 +333,7 @@ function CreatePostSheet({
   isOpen: boolean;
   userName: string;
   userAvatar: string;
+  userGender?: Gender | null;
   composer: ComposerState;
   isPublishing: boolean;
   onClose: () => void;
@@ -375,9 +381,7 @@ function CreatePostSheet({
 
           <div className="flex-1 overflow-y-auto px-5 py-5">
             <div className="mb-5 flex items-center gap-3">
-              <div className="h-12 w-12 overflow-hidden rounded-full ring-2 ring-gray-100">
-                <ImageWithFallback src={userAvatar} alt={userName} className="h-full w-full object-cover" />
-              </div>
+              <Avatar src={userAvatar} alt={userName} gender={userGender} sizeClassName="h-12 w-12 ring-2 ring-gray-100 rounded-full" />
               <div>
                 <h3 className="font-bold text-gray-950">{userName}</h3>
                 <p className="text-sm text-gray-500">Share with the CreativeHUB community</p>
@@ -932,6 +936,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           id: `${authorId}-${project.id}`,
           authorId,
           authorName: freelancer.fullName,
+          authorGender: freelancer.gender,
           username,
           avatar: freelancer.profileImage || fallbackProfileImage,
           specialty,
@@ -954,6 +959,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           id: `client-post-${post.id}`,
           authorId: post.client_id,
           authorName,
+          authorGender: post.client?.gender || null,
           username,
           avatar: post.client?.avatar_url || fallbackProfileImage,
           specialty: 'Client Brief',
@@ -1538,6 +1544,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       id: createdId,
       authorId: user.id,
       authorName: userName,
+      authorGender: user.gender,
       username: ((user.email || userName).split('@')[0] || userName).toLowerCase().replace(/\s+/g, '_'),
       avatar: userAvatar,
       specialty: user.role === 'client' ? 'Client Brief' : 'Creative Update',
@@ -1607,9 +1614,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                       }}
                       className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-gray-50 last:border-b-0"
                     >
-                      <div className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-gray-200">
-                        <ImageWithFallback src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} className="h-full w-full object-cover" />
-                      </div>
+                      <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
                         <p className="truncate text-xs text-gray-500">{result.email}</p>
@@ -1640,6 +1645,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         <ComposerLauncher
           avatar={userAvatar}
           name={userName}
+          gender={user?.gender}
           placeholder={composerPlaceholder}
           onOpen={() => setIsComposerOpen(true)}
         />
@@ -1677,9 +1683,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   }}
                   className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
                 >
-                  <div className="h-12 w-12 flex-shrink-0 overflow-hidden rounded-full shadow-md ring-2 ring-white">
-                    <ImageWithFallback src={post.avatar} alt={post.authorName} className="h-full w-full object-cover" />
-                  </div>
+                  <Avatar src={post.avatar} alt={post.authorName} gender={post.authorGender} sizeClassName="h-12 w-12 flex-shrink-0 shadow-md ring-2 ring-white rounded-full" />
                   <div className="min-w-0">
                     <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
                     <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
@@ -1813,10 +1817,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                             onClick={() => onViewProfile?.(String(likedUser.id))}
                             className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
                           >
-                            <ImageWithFallback
+                            <Avatar
                               src={likedUser.avatar_url || fallbackProfileImage}
                               alt={likedUser.full_name || likedUser.email || 'User'}
-                              className="h-8 w-8 rounded-full object-cover"
+                              gender={likedUser.gender}
+                              sizeClassName="h-8 w-8 rounded-full"
                             />
                             <div>
                               <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
@@ -1983,9 +1988,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   onClick={() => onViewProfile?.(focusedPost.authorId)}
                   className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
                 >
-                  <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
-                    <ImageWithFallback src={focusedPost.avatar} alt={focusedPost.authorName} className="h-full w-full object-cover" />
-                  </div>
+                  <Avatar src={focusedPost.avatar} alt={focusedPost.authorName} gender={focusedPost.authorGender} sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full" />
                   <div>
                     <p className="font-semibold text-gray-900">{focusedPost.authorName}</p>
                     <p className="text-xs text-gray-500">@{focusedPost.username} • {focusedPost.specialty}</p>
@@ -2058,10 +2061,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                           onClick={() => onViewProfile?.(String(user.id))}
                           className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
                         >
-                          <ImageWithFallback
+                          <Avatar
                             src={user.avatar_url || fallbackProfileImage}
                             alt={user.full_name || user.email || 'User'}
-                            className="h-8 w-8 rounded-full object-cover"
+                            gender={user.gender}
+                            sizeClassName="h-8 w-8 rounded-full"
                           />
                           <div>
                             <p className="text-sm font-semibold text-gray-900">{user.full_name || user.email || 'Unknown'}</p>
@@ -2212,8 +2216,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
             <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 overflow-hidden rounded-xl">
-                  <ImageWithFallback src={sharingPost.avatar} alt={sharingPost.authorName} className="h-full w-full object-cover" />
+                <div className="relative h-12 w-12 flex-shrink-0">
+                  <div className="h-full w-full overflow-hidden rounded-xl">
+                    <ImageWithFallback src={sharingPost.avatar} alt={sharingPost.authorName} className="h-full w-full object-cover" />
+                  </div>
+                  <GenderBadge gender={sharingPost.authorGender} />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-gray-900">{sharingPost.authorName}</p>
@@ -2291,9 +2298,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                         <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-transparent'}`}>
                           <Check className="h-3 w-3" />
                         </div>
-                        <div className="h-9 w-9 overflow-hidden rounded-full ring-1 ring-gray-200">
-                          <ImageWithFallback src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} className="h-full w-full object-cover" />
-                        </div>
+                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} gender={mutual.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-gray-900">{mutual.full_name || mutual.email}</p>
                           <p className="truncate text-xs text-gray-500">{mutual.email}</p>
@@ -2326,6 +2331,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         isOpen={isComposerOpen}
         userName={userName}
         userAvatar={userAvatar}
+        userGender={user?.gender}
         composer={composer}
         isPublishing={isPublishing}
         onClose={() => {

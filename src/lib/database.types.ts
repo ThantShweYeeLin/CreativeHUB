@@ -14,6 +14,7 @@ export type CreativeProfession =
 
 export type PostMediaType = 'image' | 'video';
 export type ShareTarget = 'creativehub' | 'copy_link' | 'whatsapp' | 'telegram' | 'facebook' | 'x';
+export type Gender = 'male' | 'female' | 'lgbtq_plus' | 'prefer_not_to_say';
 
 type Row<T> = T;
 type Insert<T> = Partial<T>;
@@ -31,6 +32,7 @@ export interface Database {
           cover_url: string | null;
           bio: string | null;
           role: 'freelancer' | 'client';
+          gender: Gender | null;
           preferred_currency: string | null;
           location: string | null;
           location_latitude: number | null;

@@ -1,6 +1,7 @@
 import { Bell, Check, MessageCircle, Heart, MessageSquare, Users, X as XIcon } from 'lucide-react';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import type { Gender } from '../../lib/database.types';
 
 export interface NotificationPanelItem {
   id: string;
@@ -9,6 +10,7 @@ export interface NotificationPanelItem {
   message: string | null;
   actorName: string;
   actorAvatar: string | null;
+  actorGender?: Gender | null;
   actorId: string | null;
   requesterId: string | null;
   relatedId?: string | null;
@@ -211,13 +213,13 @@ export function NotificationsPanel({
                 <div className="flex items-start gap-3">
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white">
-                      <ImageWithFallback
-                        src={notification.actorAvatar || DEFAULT_AVATAR_URL}
-                        alt={notification.actorName}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                    <Avatar
+                      src={notification.actorAvatar || DEFAULT_AVATAR_URL}
+                      alt={notification.actorName}
+                      gender={notification.actorGender}
+                      sizeClassName="w-12 h-12 ring-2 ring-white rounded-full"
+                      badgePosition="top-right"
+                    />
                     {/* Notification Type Icon */}
                     <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md">
                       {getNotificationIcon(notification.type)}

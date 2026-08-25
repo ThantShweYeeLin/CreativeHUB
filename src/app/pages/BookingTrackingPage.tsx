@@ -1,5 +1,5 @@
 import { ChevronLeft, Clock, CheckCircle, FileText, Upload, AlertCircle, RefreshCw, Shield, Camera, MessageSquare, ChevronRight } from 'lucide-react';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -93,6 +93,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
         name: booking.freelancer?.full_name || 'CreativeHUB Freelancer',
         specialty: booking.project_name,
         image: booking.freelancer?.avatar_url || fallbackProfileImage,
+        gender: booking.freelancer?.gender || null,
         rating: Number(booking.freelancer?.rating || 0),
         reviews: Number(booking.freelancer?.total_reviews || 0),
       },
@@ -245,13 +246,12 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
         {/* Freelancer Profile Preview */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-gray-200 flex-shrink-0">
-              <ImageWithFallback
-                src={bookingData.freelancer.image}
-                alt={bookingData.freelancer.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
+            <Avatar
+              src={bookingData.freelancer.image}
+              alt={bookingData.freelancer.name}
+              gender={bookingData.freelancer.gender}
+              sizeClassName="w-16 h-16 ring-2 ring-gray-200 rounded-full flex-shrink-0"
+            />
             <div className="flex-1">
               <h2 className="font-bold text-gray-900 text-lg">{bookingData.freelancer.name}</h2>
               <p className="text-sm text-gray-600">{bookingData.freelancer.specialty}</p>

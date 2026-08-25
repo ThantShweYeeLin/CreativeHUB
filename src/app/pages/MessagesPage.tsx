@@ -2,10 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router';
 import { ChevronLeft, MessageCircle, Search, Send, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import type { Gender } from '../../lib/database.types';
 
 interface MessagesPageProps {
   onBack: () => void;
@@ -103,12 +105,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [messageReactionsById, setMessageReactionsById] = useState<Record<string, { counts: Record<string, number>; mine: string | null }>>({});
-  const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }>>({});
-  const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }>>({});
+  const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
+  const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
   const [zoomedSharedPost, setZoomedSharedPost] = useState<{
     authorName: string;
     authorId: string | null;
     authorAvatar: string;
+    authorGender?: Gender | null;
     postId: string | null;
     imageUrl: string | null;
     caption: string;
@@ -316,13 +319,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         if (uniquePostIds.length > 0) {
           const previewResponse = await DataService.getClientPostPreviews(uniquePostIds);
           if (!previewResponse.error) {
-            const previewMap: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }> = {};
+            const previewMap: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }> = {};
             (previewResponse.data || []).forEach((row: any) => {
               previewMap[String(row.id)] = {
                 image_url: row.image_url || null,
                 caption: row.caption || null,
                 avatar_url: row.client?.avatar_url || null,
                 author_name: row.client?.full_name || null,
+                author_gender: row.client?.gender || null,
               };
             });
             setSharedPostPreviewById(previewMap);
@@ -340,7 +344,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         if (authorIds.length > 0) {
           const candidatesResponse = await DataService.getClientPostsByAuthors(authorIds);
           if (!candidatesResponse.error) {
-            const fallbackByMessageId: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null }> = {};
+            const fallbackByMessageId: Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }> = {};
             const candidates = candidatesResponse.data || [];
 
             items.forEach((item: any) => {
@@ -365,6 +369,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 caption: matched?.caption || null,
                 avatar_url: matched?.client?.avatar_url || null,
                 author_name: matched?.client?.full_name || null,
+                author_gender: matched?.client?.gender || null,
               };
             });
 
@@ -587,6 +592,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             isGroup: true,
             name: conversation.title || 'Group chat',
             avatar: coverMember?.avatar_url || fallbackProfileImage,
+            avatarGender: coverMember?.gender || null,
             memberCount: (groupMembersByConversationId[groupId] || []).length,
             lastMessageAt: conversation.last_message_at,
           };
@@ -608,6 +614,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           isGroup: false,
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
+          avatarGender: otherParticipant?.gender || null,
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
         };
@@ -628,6 +635,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           otherParticipantId: otherParticipant?.id,
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
+          avatarGender: otherParticipant?.gender || null,
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
         };
@@ -646,6 +654,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         otherParticipantId: null,
         name: conversation.title || 'Group chat',
         avatar: coverMember?.avatar_url || fallbackProfileImage,
+        avatarGender: coverMember?.gender || null,
         memberCount: members.length,
         lastMessageAt: conversation.last_message_at,
       };
@@ -897,13 +906,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     selectedConversationId === conversation.id ? 'bg-gray-50' : ''
                   }`}
                 >
-                  <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm">
-                    <ImageWithFallback
-                      src={conversation.avatar}
-                      alt={conversation.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
+                  <Avatar
+                    src={conversation.avatar}
+                    alt={conversation.name}
+                    gender={conversation.avatarGender}
+                    sizeClassName="w-12 h-12 ring-2 ring-white shadow-sm rounded-full"
+                  />
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
                     <p className="mt-1 text-xs text-gray-500">
@@ -926,13 +934,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       className="w-full border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-white shadow-sm">
-                          <ImageWithFallback
-                            src={mutual.avatar_url || fallbackProfileImage}
-                            alt={mutual.full_name || mutual.email}
-                            className="h-full w-full object-cover"
-                          />
-                        </div>
+                        <Avatar
+                          src={mutual.avatar_url || fallbackProfileImage}
+                          alt={mutual.full_name || mutual.email}
+                          gender={mutual.gender}
+                          sizeClassName="h-10 w-10 ring-2 ring-white shadow-sm rounded-full"
+                        />
                         <div className="min-w-0">
                           <h3 className="truncate font-semibold text-gray-900">{mutual.full_name || mutual.email}</h3>
                           <p className="truncate text-xs text-gray-500">Tap to message</p>
@@ -967,12 +974,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       }
                     }}
                     disabled={!activeConversation.otherParticipantId}
-                    className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-white shadow-sm transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-70"
+                    className="w-12 h-12 rounded-full transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-70"
                   >
-                    <ImageWithFallback
+                    <Avatar
                       src={activeConversation.avatar}
                       alt={activeConversation.name}
-                      className="w-full h-full object-cover"
+                      gender={activeConversation.avatarGender}
+                      sizeClassName="w-full h-full ring-2 ring-white shadow-sm rounded-full"
                     />
                   </button>
                   <div>
@@ -1076,6 +1084,9 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     const senderAvatar = activeConversation?.isGroup
                       ? (senderMember?.users?.avatar_url || null)
                       : (isMine ? user?.avatar_url || null : activeConversation?.avatar || null);
+                    const senderGender = activeConversation?.isGroup
+                      ? (senderMember?.users?.gender || null)
+                      : (isMine ? user?.gender || null : activeConversation?.avatarGender || null);
                     const resolvedPreview = sharedPost?.imageUrl || sharedPost?.previewUrl || previewFromDb?.image_url || fallbackFromAuthorCaption?.image_url || null;
                     const resolvedCaption = sharedPost?.caption || previewFromDb?.caption || fallbackFromAuthorCaption?.caption || 'A post was shared with you.';
                     const resolvedAuthorAvatar =
@@ -1083,6 +1094,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       || fallbackFromAuthorCaption?.avatar_url
                       || senderAvatar
                       || fallbackProfileImage;
+                    const resolvedAuthorGender = previewFromDb?.author_gender ?? fallbackFromAuthorCaption?.author_gender ?? senderGender ?? null;
                     const resolvedAuthorName = sharedPost?.authorName || previewFromDb?.author_name || fallbackFromAuthorCaption?.author_name || 'Shared post';
                     const reactions = messageReactionsById[String(message.id)] || { counts: {}, mine: null };
                     return (
@@ -1101,12 +1113,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   <button
                                     type="button"
                                     onClick={() => sharedPost.authorId && onViewProfile?.(sharedPost.authorId as string)}
-                                    className={`h-10 w-10 rounded-full overflow-hidden flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'} transition-opacity hover:opacity-80`}
+                                    className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'} transition-opacity hover:opacity-80`}
                                   >
-                                    <ImageWithFallback
+                                    <Avatar
                                       src={resolvedAuthorAvatar}
                                       alt={resolvedAuthorName}
-                                      className="h-full w-full object-cover"
+                                      gender={resolvedAuthorGender}
+                                      sizeClassName="h-full w-full rounded-full"
                                     />
                                   </button>
                                   <div className="min-w-0">
@@ -1147,6 +1160,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                       authorName: resolvedAuthorName,
                                       authorId: sharedPost.authorId || null,
                                       authorAvatar: resolvedAuthorAvatar,
+                                      authorGender: resolvedAuthorGender,
                                       postId: sharedPost.postId || null,
                                       imageUrl: resolvedPreview,
                                       caption: resolvedCaption,
@@ -1272,9 +1286,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       }}
                       className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
                     >
-                      <div className="h-10 w-10 overflow-hidden rounded-full ring-2 ring-gray-200">
-                        <ImageWithFallback src={zoomedSharedPost.authorAvatar} alt={zoomedSharedPost.authorName} className="h-full w-full object-cover" />
-                      </div>
+                      <Avatar
+                        src={zoomedSharedPost.authorAvatar}
+                        alt={zoomedSharedPost.authorName}
+                        gender={zoomedSharedPost.authorGender}
+                        sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full"
+                      />
                       <div>
                         <p className="font-semibold text-gray-900">{zoomedSharedPost.authorName}</p>
                         <p className="text-xs text-gray-500">Shared post</p>
@@ -1311,10 +1328,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               onClick={() => onViewProfile?.(String(likedUser.id))}
                               className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-50"
                             >
-                              <ImageWithFallback
+                              <Avatar
                                 src={likedUser.avatar_url || fallbackProfileImage}
                                 alt={likedUser.full_name || likedUser.email || 'User'}
-                                className="h-8 w-8 rounded-full object-cover"
+                                gender={likedUser.gender}
+                                sizeClassName="h-8 w-8 rounded-full"
                               />
                               <div>
                                 <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
@@ -1339,10 +1357,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       sharedPostComments.map((comment) => (
                         <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
                           <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                            <ImageWithFallback
+                            <Avatar
                               src={comment.user?.avatar_url || fallbackProfileImage}
                               alt={comment.user?.full_name || 'User'}
-                              className="h-6 w-6 rounded-full object-cover"
+                              gender={comment.user?.gender}
+                              sizeClassName="h-6 w-6 rounded-full"
+                              badgeSize="xs"
                             />
                             <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
                             <span>•</span>

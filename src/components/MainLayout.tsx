@@ -8,7 +8,7 @@ import { NotificationPanelItem, NotificationsPanel } from '../app/components/Not
 import { DataService } from '../lib/dataService';
 import { FeedService } from '../lib/feedService';
 import { supabase } from '../lib/supabase';
-import { ImageWithFallback } from './common/ImageWithFallback';
+import { Avatar } from './common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../lib/defaults';
 
 interface MainLayoutProps {
@@ -122,6 +122,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       message: displayMessage,
       actorName: finalActorName,
       actorAvatar: actor?.avatar_url || null,
+      actorGender: actor?.gender || null,
       actorId: actor?.id || row.actor_id || null,
       requesterId: row.metadata?.requester_id || row.actor_id || null,
       relatedId: row.related_id || null,
@@ -614,12 +615,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               </div>
               <button
                 onClick={() => navigate('/client-profile')}
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex items-center justify-center cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-gray-200"
+                className="w-8 h-8 md:w-10 md:h-10 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-gray-200"
               >
-                <ImageWithFallback
+                <Avatar
                   src={profileAvatarUrl || DEFAULT_AVATAR_URL}
                   alt="Profile picture"
-                  className="h-full w-full object-cover"
+                  gender={user?.gender}
+                  sizeClassName="w-full h-full"
                 />
               </button>
               <div className="relative">

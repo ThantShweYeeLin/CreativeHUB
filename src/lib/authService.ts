@@ -1,11 +1,13 @@
 import { hasSupabaseConfig, supabase } from './supabase';
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { Gender } from './database.types';
 
 export interface SignUpData {
   email: string;
   password: string;
   fullName: string;
   role: 'freelancer' | 'client';
+  gender: Gender;
 }
 
 export interface SignInData {
@@ -19,6 +21,7 @@ export interface AuthUser {
   fullName: string | null;
   avatar_url: string | null;
   role: 'freelancer' | 'client';
+  gender: Gender | null;
 }
 
 class AuthService {
@@ -75,6 +78,7 @@ class AuthService {
         full_name: fullName,
         avatar_url: metadata.avatar_url || null,
         role: 'client',
+        gender: 'prefer_not_to_say',
       })
       .select('*')
       .single();
@@ -126,6 +130,7 @@ class AuthService {
         email: data.email,
         full_name: data.fullName,
         role: data.role,
+        gender: data.gender,
       });
 
       if (profileError) {
@@ -139,6 +144,7 @@ class AuthService {
           fullName: data.fullName,
           avatar_url: null,
           role: data.role,
+          gender: data.gender,
         },
         error: null,
       };
@@ -179,6 +185,7 @@ class AuthService {
           fullName: userProfile.full_name,
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
+          gender: userProfile.gender ?? null,
         },
         error: null,
       };
@@ -273,6 +280,7 @@ class AuthService {
           fullName: userProfile.full_name,
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
+          gender: userProfile.gender ?? null,
         },
         error: null,
       };
@@ -318,6 +326,7 @@ class AuthService {
             fullName: userProfile.full_name,
             avatar_url: userProfile.avatar_url,
             role: userProfile.role,
+            gender: userProfile.gender ?? null,
           });
         }
       } else {

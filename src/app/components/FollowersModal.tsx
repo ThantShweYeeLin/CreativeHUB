@@ -3,7 +3,7 @@ import { X } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { Avatar } from '../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface FollowersModalProps {
@@ -66,9 +66,7 @@ export function FollowersModal({ userId, type, onClose }: FollowersModalProps) {
                 }}
                 className="w-full text-left flex items-center gap-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
               >
-                <div className="w-10 h-10 rounded-full overflow-hidden">
-                  <ImageWithFallback src={u.avatar_url || DEFAULT_AVATAR_URL} alt={u.full_name} className="w-full h-full object-cover" />
-                </div>
+                <Avatar src={u.avatar_url || DEFAULT_AVATAR_URL} alt={u.full_name} gender={u.gender} sizeClassName="w-10 h-10" />
                 <div>
                   <div className="font-semibold text-sm">{u.full_name || 'Unknown'}</div>
                 </div>

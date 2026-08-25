@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { GenderBadge } from '../../components/common/GenderBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -168,6 +169,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           name: request.freelancer?.full_name || 'Freelancer',
           specialty: request.freelancer?.title || 'Creative Freelancer',
           avatar: request.freelancer?.avatar_url || DEFAULT_AVATAR_URL,
+          gender: request.freelancer?.gender || null,
         },
         projectName: request.project_name,
         budget: Number(request.budget || 0),
@@ -276,14 +278,15 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
               <div className="p-4 md:p-6">
                 <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
                   {/* Freelancer Avatar */}
-                  <div className="flex-shrink-0 self-center md:self-auto">
-                    <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl overflow-hidden ring-2 ring-white shadow-md">
+                  <div className="relative flex-shrink-0 self-center md:self-auto w-16 h-16 md:w-20 md:h-20">
+                    <div className="h-full w-full rounded-xl overflow-hidden ring-2 ring-white shadow-md">
                       <ImageWithFallback
                         src={request.freelancer.avatar}
                         alt={request.freelancer.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
+                    <GenderBadge gender={request.freelancer.gender} size="md" />
                   </div>
 
                   {/* Request Details */}
