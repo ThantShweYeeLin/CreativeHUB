@@ -69,6 +69,10 @@ export function MainLayout({ children }: MainLayoutProps) {
         return `${finalActorName} rejected ${projectName}.`;
       }
 
+      if (type === 'request') {
+        return `${finalActorName}: A new booking request - ${projectName}.`;
+      }
+
       if (type === 'message' || type === 'group_message') {
         return `${finalActorName} sent you a message.`;
       }
@@ -83,6 +87,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     const fallbackMessage = buildTypeMessage();
     const normalizedMessage = typeof row.message === 'string' && row.message.trim().length > 0 ? row.message.trim() : fallbackMessage;
     const typeNeedsActorFirstMessage = [
+      'request',
       'request_accepted',
       'request_rejected',
       'message',

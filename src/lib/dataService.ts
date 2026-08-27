@@ -1625,7 +1625,7 @@ export class DataService {
         actor_id: request.client_id,
         type: 'request',
         title: 'New booking request',
-        message: `New booking request: ${request.project_name}`,
+        message: `${clientName}: A new booking request - ${request.project_name}`,
         related_id: (data as any)?.id || null,
         post_id: null,
         comment_id: null,
