@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
-import { GenderBadge } from '../../components/common/GenderBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -286,7 +285,6 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <GenderBadge gender={request.freelancer.gender} size="md" />
                   </div>
 
                   {/* Request Details */}

@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { GenderBadge } from '../../components/common/GenderBadge';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
@@ -2220,7 +2219,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   <div className="h-full w-full overflow-hidden rounded-xl">
                     <ImageWithFallback src={sharingPost.avatar} alt={sharingPost.authorName} className="h-full w-full object-cover" />
                   </div>
-                  <GenderBadge gender={sharingPost.authorGender} />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-gray-900">{sharingPost.authorName}</p>

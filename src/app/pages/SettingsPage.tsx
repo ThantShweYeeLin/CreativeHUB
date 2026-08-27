@@ -54,16 +54,12 @@ interface PrivacyState {
 }
 
 interface FreelancerSettingsState {
-  portfolioLayout: 'grid' | 'masonry';
-  showProjectPrices: boolean;
-  showClientNames: boolean;
   availability: 'available' | 'busy' | 'unavailable';
   workingDays: string[];
   vacationUntil: string;
   startingPrice: string;
   pricingCurrency: string;
   mapVisibility: 'exact' | 'city' | 'hidden';
-  includeInAIMatching: boolean;
   showAnalyticsProjects: boolean;
   showAnalyticsResponseRate: boolean;
   showAnalyticsTrustScore: boolean;
@@ -108,16 +104,12 @@ const defaultPrivacy: PrivacyState = {
 };
 
 const defaultFreelancerSettings: FreelancerSettingsState = {
-  portfolioLayout: 'grid',
-  showProjectPrices: true,
-  showClientNames: true,
   availability: 'available',
   workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
   vacationUntil: '',
   startingPrice: '200',
   pricingCurrency: 'USD',
   mapVisibility: 'city',
-  includeInAIMatching: true,
   showAnalyticsProjects: true,
   showAnalyticsResponseRate: true,
   showAnalyticsTrustScore: true,
@@ -496,15 +488,6 @@ export function SettingsPage() {
               </div>
               <div className="space-y-4 text-sm text-gray-700">
                 <div>
-                  <p className="mb-2 font-semibold">Portfolio Settings</p>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <select value={freelancerSettings.portfolioLayout} onChange={(e) => setFreelancerSettings((c) => ({ ...c, portfolioLayout: e.target.value as 'grid' | 'masonry' }))} className="rounded-lg border border-gray-300 px-3 py-2"><option value="grid">Grid layout</option><option value="masonry">Masonry layout</option></select>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showProjectPrices} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showProjectPrices: e.target.checked }))} /> Show project prices</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showClientNames} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showClientNames: e.target.checked }))} /> Show client names</label>
-                  </div>
-                </div>
-
-                <div>
                   <p className="mb-2 font-semibold">Availability & Pricing</p>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                     <select value={freelancerSettings.availability} onChange={(e) => setFreelancerSettings((c) => ({ ...c, availability: e.target.value as 'available' | 'busy' | 'unavailable' }))} className="rounded-lg border border-gray-300 px-3 py-2"><option value="available">Available</option><option value="busy">Busy</option><option value="unavailable">Unavailable</option></select>
@@ -522,7 +505,6 @@ export function SettingsPage() {
                   <p className="mb-2 font-semibold">Location & AI Preferences</p>
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                     <select value={freelancerSettings.mapVisibility} onChange={(e) => setFreelancerSettings((c) => ({ ...c, mapVisibility: e.target.value as 'exact' | 'city' | 'hidden' }))} className="rounded-lg border border-gray-300 px-3 py-2"><option value="exact">Show exact location</option><option value="city">Show city only</option><option value="hidden">Hide my location</option></select>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.includeInAIMatching} onChange={(e) => setFreelancerSettings((c) => ({ ...c, includeInAIMatching: e.target.checked }))} /> Include my portfolio in AI matching</label>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsProjects} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsProjects: e.target.checked }))} /> Show total projects</label>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsResponseRate} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsResponseRate: e.target.checked }))} /> Show response rate</label>
                     <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsTrustScore} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsTrustScore: e.target.checked }))} /> Show trust score</label>

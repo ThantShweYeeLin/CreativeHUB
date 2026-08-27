@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
-import { CheckCircle2, ChevronLeft, ImagePlus, UploadCloud, X } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ImagePlus, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
@@ -16,12 +16,6 @@ interface BecomeFreelancerPageProps {
 const experienceOptions = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 years', '10+ years'] as const;
 const availabilityOptions = ['Available', 'Busy', 'Unavailable'] as const;
 const workingDayOptions = ['Monday-Friday', 'Weekends', 'Flexible'] as const;
-
-interface PortfolioUpload {
-  id: string;
-  file: File;
-  previewUrl: string;
-}
 
 interface ImageUpload {
   file: File;
@@ -166,13 +160,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [liveLocations, setLiveLocations] = useState<Array<{ name: string; detail?: string; lat?: number; lon?: number; placeId?: string | null }>>([]);
   const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const [locationSearchMessage, setLocationSearchMessage] = useState('');
-  const [portfolioUploads, setPortfolioUploads] = useState<PortfolioUpload[]>([]);
-  const [isDraggingPortfolio, setIsDraggingPortfolio] = useState(false);
-  const [showProjectUploads, setShowProjectUploads] = useState(false);
-  const [instagram, setInstagram] = useState('');
-  const [behance, setBehance] = useState('');
-  const [website, setWebsite] = useState('');
-  const [tiktok, setTiktok] = useState('');
   const [idDocumentUrl, setIdDocumentUrl] = useState('');
   const [businessLicenseUrl, setBusinessLicenseUrl] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -186,27 +173,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   useEffect(() => {
     setStartingPriceCurrency(normalizeCurrencyCode(preferredCurrency, 'THB'));
   }, [preferredCurrency]);
-
-  const addPortfolioFiles = (files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
-
-    if (imageFiles.length === 0) {
-      setError('Please choose image files for your projects');
-      return;
-    }
-
-    setError(null);
-    setPortfolioUploads((current) => {
-      const remainingSlots = Math.max(20 - current.length, 0);
-      const nextUploads = imageFiles.slice(0, remainingSlots).map((file) => ({
-        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-
-      return [...current, ...nextUploads];
-    });
-  };
 
   useEffect(() => {
     const trimmed = location.trim();
@@ -265,17 +231,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       controller.abort();
     };
   }, [location]);
-
-  const removePortfolioUpload = (uploadId: string) => {
-    setPortfolioUploads((current) => {
-      const upload = current.find((item) => item.id === uploadId);
-      if (upload) {
-        URL.revokeObjectURL(upload.previewUrl);
-      }
-
-      return current.filter((item) => item.id !== uploadId);
-    });
-  };
 
   const setProfileImageFile = (file: File) => {
     if (profilePictureUpload) {
@@ -370,10 +325,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       parsedStartingPrice > 0 ? `Starting price: ${startingPriceCurrency.toUpperCase()} ${parsedStartingPrice}` : '',
       projectBudgetRange ? `Typical project budget: ${projectBudgetRange}` : '',
       `Working days: ${workingDays}`,
-      instagram ? `Instagram: ${instagram}` : '',
-      behance ? `Behance: ${behance}` : '',
-      website ? `Website: ${website}` : '',
-      tiktok ? `TikTok: ${tiktok}` : '',
       idDocumentUrl ? 'ID verification submitted' : '',
       businessLicenseUrl ? 'Business license submitted' : '',
     ]
@@ -489,7 +440,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         projectBudgetRange,
         availability,
         workingDays,
-        socials: { instagram, behance, website, tiktok },
         verification: { idDocumentUrl, businessLicenseUrl },
       })
     );
@@ -750,122 +700,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                 </div>
               </div>
               <div className="rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-600">
-                <button
-                  type="button"
-                  onClick={() => setShowProjectUploads((current) => !current)}
-                  className="font-semibold text-gray-900 underline decoration-gray-400 underline-offset-4"
-                >
-                  Project uploads are optional during setup. You can add work samples later from your freelancer dashboard.
-                </button>
+                Instead of uploading portfolio photos, you'll add links to your Instagram, TikTok, Behance, and other social profiles after setup — from your freelancer dashboard's Settings tab. Clients can view your work there.
               </div>
-
-              {showProjectUploads && (
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-700">Project Uploads</p>
-                      <p className="mt-1 text-xs text-gray-500">Add project images to show the work you have done. Recommended: 10-20 of your best work.</p>
-                    </div>
-                    <span className={`rounded-full px-3 py-1 text-xs font-bold ${portfolioUploads.length > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                      {portfolioUploads.length} uploaded
-                    </span>
-                  </div>
-
-                  <label
-                    onDragEnter={(event) => {
-                      event.preventDefault();
-                      setIsDraggingPortfolio(true);
-                    }}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                      setIsDraggingPortfolio(true);
-                    }}
-                    onDragLeave={(event) => {
-                      event.preventDefault();
-                      setIsDraggingPortfolio(false);
-                    }}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      setIsDraggingPortfolio(false);
-                      addPortfolioFiles(event.dataTransfer.files);
-                    }}
-                    className={`flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all ${
-                      isDraggingPortfolio
-                        ? 'border-gray-900 bg-gray-100 shadow-inner'
-                        : 'border-gray-300 bg-gray-50 hover:border-gray-500 hover:bg-white'
-                    }`}
-                  >
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(event) => {
-                        if (event.target.files) {
-                          addPortfolioFiles(event.target.files);
-                          event.target.value = '';
-                        }
-                      }}
-                    />
-                    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-lg">
-                      <UploadCloud className="h-7 w-7" />
-                    </div>
-                    <p className="text-lg font-bold text-gray-900">Drag project images here or choose from your device</p>
-                    <p className="mt-2 max-w-md text-sm text-gray-500">JPG, PNG, or WebP images work best. You can add up to 20 project images.</p>
-                    <span className="mt-5 inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-bold text-white shadow-md">
-                      <ImagePlus className="h-4 w-4" />
-                      Choose Projects
-                    </span>
-                  </label>
-
-                  {portfolioUploads.length > 0 && (
-                    <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">
-                      {portfolioUploads.map((upload, index) => (
-                        <div key={upload.id} className="group relative aspect-square overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm">
-                          <img src={upload.previewUrl} alt={`Project preview ${index + 1}`} className="h-full w-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => removePortfolioUpload(upload.id)}
-                            className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-md transition-all hover:bg-gray-900 hover:text-white md:opacity-0 md:group-hover:opacity-100"
-                            aria-label={`Remove project image ${index + 1}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                          {index < 3 && (
-                            <span className="absolute bottom-2 left-2 rounded-full bg-white/90 px-2 py-1 text-[10px] font-bold text-gray-700 shadow-sm">
-                              Featured
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           )}
 
           {step === 4 && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Instagram (optional)</label>
-                  <input value={instagram} onChange={(event) => setInstagram(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Behance (optional)</label>
-                  <input value={behance} onChange={(event) => setBehance(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Website (optional)</label>
-                  <input value={website} onChange={(event) => setWebsite(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">TikTok (optional)</label>
-                  <input value={tiktok} onChange={(event) => setTiktok(event.target.value)} className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3" />
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">ID Document URL (optional)</label>

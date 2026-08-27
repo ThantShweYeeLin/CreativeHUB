@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { GenderBadge } from '../../components/common/GenderBadge';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
@@ -24,7 +23,7 @@ interface ProfileCardProps {
   location?: string;
 }
 
-function ProfileCard({ id, name, specialty, rating, reviews, image, gender, location }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -41,7 +40,6 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, gender, loca
             alt={name}
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
-          <GenderBadge gender={gender} size="md" position="top-left" className="!top-3 !left-3" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
           <div className={`absolute bottom-4 left-4 right-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
             <button

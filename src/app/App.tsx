@@ -13,7 +13,6 @@ import { MapView } from './pages/MapExplorePage';
 import { RequestsPage } from './pages/RequestsPage';
 import { ClientProfilePage } from './pages/ClientProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
-import { FreelancerDashboardPortfolioPage } from './pages/FreelancerDashboardPortfolioPage';
 import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
 import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
 import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
@@ -203,7 +202,7 @@ export default function App() {
             element={
               <ProtectedRoute>
                 {user?.role === 'freelancer' ? (
-                  <Navigate to="/freelancer-dashboard/portfolio" replace />
+                  <Navigate to="/freelancer-dashboard/requests" replace />
                 ) : (
                   <Navigate to="/become-freelancer" replace />
                 )}
@@ -212,11 +211,7 @@ export default function App() {
           />
           <Route
             path="/freelancer-dashboard/portfolio"
-            element={
-              <ProtectedRoute>
-                {user?.role === 'freelancer' ? <FreelancerDashboardPortfolioPage /> : <Navigate to="/become-freelancer" replace />}
-              </ProtectedRoute>
-            }
+            element={<Navigate to="/freelancer-dashboard/settings" replace />}
           />
           <Route
             path="/freelancer-dashboard/requests"

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Heart, MapPin, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
-import { GenderBadge } from '../../components/common/GenderBadge';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 
@@ -142,7 +141,6 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                     alt={freelancer.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
-                  <GenderBadge gender={freelancer.gender} size="md" position="top-left" className="!top-3 !left-3 md:!top-4 md:!left-4" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
                   {/* Hover Actions */}

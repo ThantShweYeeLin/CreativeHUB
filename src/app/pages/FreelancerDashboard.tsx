@@ -4,12 +4,12 @@ import {
   Calendar,
   Check,
   ChevronLeft,
-  ChevronRight,
   DollarSign,
-  Image as ImageIcon,
   Layers,
   MapPin,
+  Plus,
   Settings,
+  Trash2,
   TrendingUp,
   Users,
   X,
@@ -24,13 +24,20 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
+import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialPlatform } from '../../lib/socialPlatforms';
 
-type DashboardSection = 'portfolio' | 'requests' | 'analytics' | 'settings';
+type DashboardSection = 'requests' | 'analytics' | 'settings';
 
 interface FreelancerDashboardProps {
   onBack: () => void;
   section: DashboardSection;
   initialOpenRequestId?: string | undefined;
+}
+
+interface SocialLinkFormEntry {
+  id: string | null;
+  platform: SocialPlatform;
+  url: string;
 }
 
 interface SettingsFormState {
@@ -42,24 +49,6 @@ interface SettingsFormState {
   location: string;
   skills: string;
   styles: string;
-}
-
-interface NewPortfolioFormState {
-  title: string;
-  description: string;
-  tools: string;
-  projectUrl: string;
-  images: Array<{ id: string; file: File; previewUrl: string }>;
-}
-
-interface EditPortfolioFormState {
-  id: string;
-  title: string;
-  description: string;
-  tools: string;
-  projectUrl: string;
-  imageUrls: string[];
-  newImages: Array<{ id: string; file: File; previewUrl: string }>;
 }
 
 function parseTags(value: string) {
@@ -74,7 +63,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
-  const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
+  // Social links are edited locally and only written to Supabase when the
+  // freelancer clicks "Save Settings" — id is null for a link not yet saved.
+  const [socialLinks, setSocialLinks] = useState<SocialLinkFormEntry[]>([]);
+  const [originalSocialLinkIds, setOriginalSocialLinkIds] = useState<string[]>([]);
+  const [newSocialPlatform, setNewSocialPlatform] = useState<SocialPlatform>('Instagram');
+  const [newSocialUrl, setNewSocialUrl] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -85,18 +79,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [requestSearch, setRequestSearch] = useState('');
   const [requestMinBudget, setRequestMinBudget] = useState('');
-  const [isAddingPortfolio, setIsAddingPortfolio] = useState(false);
-  const [isSavingPortfolio, setIsSavingPortfolio] = useState(false);
-  const [newPortfolioForm, setNewPortfolioForm] = useState<NewPortfolioFormState>({
-    title: '',
-    description: '',
-    tools: '',
-    projectUrl: '',
-    images: [],
-  });
-  const [isGeneratingStyles, setIsGeneratingStyles] = useState(false);
-  const [editingPortfolio, setEditingPortfolio] = useState<EditPortfolioFormState | null>(null);
-  const [isUpdatingPortfolio, setIsUpdatingPortfolio] = useState(false);
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
     title: '',
     description: '',
@@ -131,7 +113,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       if (profileResponse.error || !profileResponse.data) {
         setError((profileResponse.error as any)?.message || 'Unable to load freelancer profile.');
         setFreelancerProfile(null);
-        setPortfolioItems([]);
+        setSocialLinks([]);
+        setOriginalSocialLinkIds([]);
         setRequests([]);
         setIsLoading(false);
         return;
@@ -140,14 +123,17 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       setFreelancerProfile(profileResponse.data);
       setRequests(requestsResponse.data || []);
 
-      const portfolioResponse = await DataService.getFreelancerPortfolio(profileResponse.data.id);
+      const socialLinksResponse = await DataService.getFreelancerSocialLinks(profileResponse.data.id);
       if (!isMounted) return;
 
-      if (portfolioResponse.error) {
-        setError((portfolioResponse.error as any)?.message || 'Unable to load portfolio items.');
-        setPortfolioItems([]);
+      if (socialLinksResponse.error) {
+        setError((socialLinksResponse.error as any)?.message || 'Unable to load social links.');
+        setSocialLinks([]);
+        setOriginalSocialLinkIds([]);
       } else {
-        setPortfolioItems(portfolioResponse.data || []);
+        const links = (socialLinksResponse.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
+        setSocialLinks(links);
+        setOriginalSocialLinkIds(links.map((link) => link.id));
       }
 
       setSettingsForm({
@@ -237,14 +223,14 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     const averageBudget = requests.length > 0 ? Math.round(totalBudget / requests.length) : 0;
 
     return {
-      portfolioCount: portfolioItems.length,
+      socialLinkCount: socialLinks.length,
       pending,
       accepted,
       rejected,
       totalRequests: requests.length,
       averageBudget,
     };
-  }, [portfolioItems, requests]);
+  }, [socialLinks, requests]);
 
   const handleRequestDecision = async (requestId: string, status: 'accepted' | 'rejected') => {
     setError(null);
@@ -327,278 +313,35 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setSuccess(status === 'accepted' ? 'Request accepted and converted to booking.' : 'Request rejected.');
   };
 
-  const handleDeletePortfolio = async (portfolioId: string) => {
-    setError(null);
-    setSuccess(null);
-
-    const response = await DataService.deletePortfolioItem(portfolioId);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to delete portfolio item.');
+  // Social links are only edited in local state here — they're written to
+  // Supabase together with the rest of the form in handleSaveSettings.
+  const handleAddSocialLink = () => {
+    if (!newSocialUrl.trim()) {
+      setError('Enter a URL for this social link.');
       return;
     }
 
-    setPortfolioItems((current) => current.filter((item) => item.id !== portfolioId));
-    setSuccess('Portfolio item removed.');
-  };
-
-  const handleCreatePortfolio = async () => {
-    if (!user?.id || !freelancerProfile?.id) {
-      setError('You need a freelancer profile before uploading portfolio items.');
+    if (!isValidSocialUrl(newSocialUrl)) {
+      setError('Enter a valid URL, e.g. https://instagram.com/username.');
       return;
     }
 
-    if (!newPortfolioForm.title.trim()) {
-      setError('Portfolio title is required.');
+    if (socialLinks.some((link) => link.platform === newSocialPlatform)) {
+      setError(`You already added a ${newSocialPlatform} link. Edit or remove it instead.`);
       return;
     }
 
     setError(null);
-    setSuccess(null);
-    setIsSavingPortfolio(true);
-
-    let imageUrls: string[] = [];
-
-    if (newPortfolioForm.images.length > 0) {
-      const uploadResults = await Promise.all(
-        newPortfolioForm.images.map(({ file }) => DataService.uploadPortfolioImage(user.id, file))
-      );
-      const failedUpload = uploadResults.find((result) => result.error || !result.publicUrl);
-      if (failedUpload) {
-        setError((failedUpload.error as any)?.message || 'Unable to upload one or more portfolio images.');
-        setIsSavingPortfolio(false);
-        return;
-      }
-
-      imageUrls = uploadResults.map((result) => result.publicUrl as string);
-    }
-
-    const createResponse = await DataService.createPortfolioItem(freelancerProfile.id, {
-      title: newPortfolioForm.title.trim(),
-      description: newPortfolioForm.description.trim() || null,
-      image_urls: imageUrls,
-      project_url: newPortfolioForm.projectUrl.trim() || null,
-      tools_used: parseTags(newPortfolioForm.tools),
-      featured: false,
-    } as any);
-
-    if (createResponse.error || !createResponse.data) {
-      setError((createResponse.error as any)?.message || 'Unable to create portfolio item.');
-      setIsSavingPortfolio(false);
-      return;
-    }
-
-    setPortfolioItems((current) => [createResponse.data, ...current]);
-    newPortfolioForm.images.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-    setNewPortfolioForm({ title: '', description: '', tools: '', projectUrl: '', images: [] });
-    setIsAddingPortfolio(false);
-    setIsSavingPortfolio(false);
-    setSuccess('Portfolio item uploaded successfully.');
+    setSocialLinks((current) => [...current, { id: null, platform: newSocialPlatform, url: newSocialUrl.trim() }]);
+    setNewSocialUrl('');
   };
 
-  const addPortfolioImages = (files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length === 0) {
-      setError('Choose image files for this portfolio post.');
-      return;
-    }
-
-    setNewPortfolioForm((current) => {
-      const availableSlots = Math.max(10 - current.images.length, 0);
-      const additions = imageFiles.slice(0, availableSlots).map((file) => ({
-        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-
-      if (imageFiles.length > availableSlots) {
-        setError('A portfolio post can contain up to 10 images.');
-      } else {
-        setError(null);
-      }
-
-      return { ...current, images: [...current.images, ...additions] };
-    });
+  const handleSocialLinkUrlChange = (platform: SocialPlatform, url: string) => {
+    setSocialLinks((current) => current.map((link) => (link.platform === platform ? { ...link, url } : link)));
   };
 
-  const removeNewPortfolioImage = (imageId: string) => {
-    setNewPortfolioForm((current) => {
-      const removedImage = current.images.find((image) => image.id === imageId);
-      if (removedImage) URL.revokeObjectURL(removedImage.previewUrl);
-      return { ...current, images: current.images.filter((image) => image.id !== imageId) };
-    });
-  };
-
-  const startEditingPortfolio = (item: any) => {
-    setEditingPortfolio({
-      id: item.id,
-      title: item.title || '',
-      description: item.description || '',
-      tools: (item.tools_used || []).join(', '),
-      projectUrl: item.project_url || '',
-      imageUrls: Array.isArray(item.image_urls) ? item.image_urls : [],
-      newImages: [],
-    });
-  };
-
-  const addEditPortfolioImages = (files: FileList | File[]) => {
-    const imageFiles = Array.from(files).filter((file) => file.type.startsWith('image/'));
-    if (imageFiles.length === 0) {
-      setError('Choose image files for this portfolio post.');
-      return;
-    }
-
-    setEditingPortfolio((current) => {
-      if (!current) return current;
-      const availableSlots = Math.max(10 - current.imageUrls.length - current.newImages.length, 0);
-      const additions = imageFiles.slice(0, availableSlots).map((file) => ({
-        id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file,
-        previewUrl: URL.createObjectURL(file),
-      }));
-
-      if (imageFiles.length > availableSlots) {
-        setError('A portfolio post can contain up to 10 images.');
-      } else {
-        setError(null);
-      }
-
-      return { ...current, newImages: [...current.newImages, ...additions] };
-    });
-  };
-
-  const removeExistingEditImage = (imageUrl: string) => {
-    setEditingPortfolio((current) =>
-      current ? { ...current, imageUrls: current.imageUrls.filter((url) => url !== imageUrl) } : current
-    );
-  };
-
-  const removeNewEditImage = (imageId: string) => {
-    setEditingPortfolio((current) => {
-      if (!current) return current;
-      const removedImage = current.newImages.find((image) => image.id === imageId);
-      if (removedImage) URL.revokeObjectURL(removedImage.previewUrl);
-      return { ...current, newImages: current.newImages.filter((image) => image.id !== imageId) };
-    });
-  };
-
-  const handleUpdatePortfolio = async () => {
-    if (!editingPortfolio) return;
-
-    if (!editingPortfolio.title.trim()) {
-      setError('Portfolio title is required.');
-      return;
-    }
-
-    setIsUpdatingPortfolio(true);
-    setError(null);
-    setSuccess(null);
-
-    let uploadedImageUrls: string[] = [];
-    if (editingPortfolio.newImages.length > 0) {
-      if (!user?.id) {
-        setError('You need to be signed in to upload portfolio images.');
-        setIsUpdatingPortfolio(false);
-        return;
-      }
-
-      const uploadResults = await Promise.all(
-        editingPortfolio.newImages.map(({ file }) => DataService.uploadPortfolioImage(user.id, file))
-      );
-      const failedUpload = uploadResults.find((result) => result.error || !result.publicUrl);
-      if (failedUpload) {
-        setError((failedUpload.error as any)?.message || 'Unable to upload one or more portfolio images.');
-        setIsUpdatingPortfolio(false);
-        return;
-      }
-      uploadedImageUrls = uploadResults.map((result) => result.publicUrl as string);
-    }
-
-    const updateResponse = await DataService.updatePortfolioItem(editingPortfolio.id, {
-      title: editingPortfolio.title.trim(),
-      description: editingPortfolio.description.trim() || null,
-      tools_used: parseTags(editingPortfolio.tools),
-      project_url: editingPortfolio.projectUrl.trim() || null,
-      image_urls: [...editingPortfolio.imageUrls, ...uploadedImageUrls],
-      updated_at: new Date().toISOString(),
-    } as any);
-
-    if (updateResponse.error || !updateResponse.data) {
-      setError((updateResponse.error as any)?.message || 'Unable to update portfolio item.');
-      setIsUpdatingPortfolio(false);
-      return;
-    }
-
-    setPortfolioItems((current) =>
-      current.map((item) => (item.id === editingPortfolio.id ? updateResponse.data : item))
-    );
-    editingPortfolio.newImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-    setEditingPortfolio(null);
-    setIsUpdatingPortfolio(false);
-    setSuccess('Portfolio item updated.');
-  };
-
-  const handleGenerateAIStyleProfile = async () => {
-    if (portfolioItems.length === 0) {
-      setError('Add at least one portfolio item before generating AI style profile.');
-      return;
-    }
-
-    const combinedText = `${settingsForm.title} ${settingsForm.description} ${portfolioItems
-      .map((item) => `${item.title || ''} ${item.description || ''}`)
-      .join(' ')}`.toLowerCase();
-
-    const stylePool = [
-      { label: 'Minimal', keywords: ['minimal', 'clean', 'simple'] },
-      { label: 'Bold', keywords: ['bold', 'vibrant', 'strong'] },
-      { label: 'Editorial', keywords: ['editorial', 'magazine', 'fashion'] },
-      { label: 'Cinematic', keywords: ['cinematic', 'film', 'moody'] },
-      { label: 'Playful', keywords: ['playful', 'fun', 'bright'] },
-      { label: 'Luxury', keywords: ['luxury', 'premium', 'elegant'] },
-      { label: 'Street', keywords: ['street', 'urban', 'city'] },
-      { label: 'Natural', keywords: ['natural', 'outdoor', 'organic'] },
-    ];
-
-    const inferredStyles = stylePool
-      .filter((style) => style.keywords.some((keyword) => combinedText.includes(keyword)))
-      .map((style) => style.label)
-      .slice(0, 4);
-
-    const generatedStyles = inferredStyles.length > 0
-      ? inferredStyles
-      : ['Clean', 'Modern', 'Versatile'];
-
-    const generatedSkills = Array.from(
-      new Set([
-        ...parseTags(settingsForm.skills),
-        ...portfolioItems.flatMap((item) => (item.tools_used || []) as string[]),
-      ])
-    ).slice(0, 8);
-
-    setIsGeneratingStyles(true);
-    setError(null);
-    setSuccess(null);
-
-    const profileUpdate = await DataService.updateFreelancerProfile(user!.id, {
-      styles: generatedStyles,
-      skills: generatedSkills,
-      portfolio_count: portfolioItems.length,
-      updated_at: new Date().toISOString(),
-    } as any);
-
-    if (profileUpdate.error) {
-      setError((profileUpdate.error as any)?.message || 'Unable to apply generated style profile.');
-      setIsGeneratingStyles(false);
-      return;
-    }
-
-    setFreelancerProfile(profileUpdate.data);
-    setSettingsForm((current) => ({
-      ...current,
-      styles: generatedStyles.join(', '),
-      skills: generatedSkills.join(', '),
-    }));
-    setIsGeneratingStyles(false);
-    setSuccess('AI style profile generated from your current portfolio.');
+  const handleRemoveSocialLink = (platform: SocialPlatform) => {
+    setSocialLinks((current) => current.filter((link) => link.platform !== platform));
   };
 
   const handleSaveSettings = async () => {
@@ -663,12 +406,37 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     }
 
     setFreelancerProfile(profileUpdate.data);
+
+    if (freelancerProfile?.id) {
+      const currentIds = socialLinks.filter((link) => link.id).map((link) => link.id as string);
+      const toDelete = originalSocialLinkIds.filter((id) => !currentIds.includes(id));
+      const toCreate = socialLinks.filter((link) => !link.id);
+      const toUpdate = socialLinks.filter((link) => link.id);
+
+      const socialLinkResults = await Promise.all([
+        ...toDelete.map((id) => DataService.deleteSocialLink(id)),
+        ...toCreate.map((link) => DataService.addSocialLink(freelancerProfile.id, link.platform, link.url)),
+        ...toUpdate.map((link) => DataService.updateSocialLink(link.id as string, { url: link.url })),
+      ]);
+
+      const socialLinkError = socialLinkResults.find((result) => result.error);
+      if (socialLinkError) {
+        setError((socialLinkError.error as any)?.message || 'Settings saved, but some social links could not be saved.');
+      }
+
+      const refreshedLinks = await DataService.getFreelancerSocialLinks(freelancerProfile.id);
+      if (!refreshedLinks.error) {
+        const links = (refreshedLinks.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
+        setSocialLinks(links);
+        setOriginalSocialLinkIds(links.map((link) => link.id));
+      }
+    }
+
     setSuccess('Settings saved successfully.');
     setIsSavingSettings(false);
   };
 
   const tabs: { id: DashboardSection; label: string; icon: any; path: string }[] = [
-    { id: 'portfolio', label: 'Portfolio', icon: ImageIcon, path: '/freelancer-dashboard/portfolio' },
     { id: 'requests', label: 'Requests', icon: Users, path: '/freelancer-dashboard/requests' },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/freelancer-dashboard/analytics' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/freelancer-dashboard/settings' },
@@ -706,7 +474,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Freelancer Dashboard</h1>
-              <p className="text-sm text-gray-600 md:text-base">Manage your portfolio, requests, analytics, and settings</p>
+              <p className="text-sm text-gray-600 md:text-base">Manage your requests, analytics, and settings</p>
             </div>
             {freelancerProfile && (
               <div className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
@@ -741,282 +509,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         {isLoading ? (
           <div className="flex justify-center py-16">
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-black" />
-          </div>
-        ) : section === 'portfolio' ? (
-          <div className="space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">My Portfolio</h2>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsAddingPortfolio((current) => !current)}
-                  className="rounded-lg bg-gradient-to-r from-gray-900 to-black px-4 py-2 text-sm font-semibold text-white hover:shadow"
-                >
-                  {isAddingPortfolio ? 'Close' : 'Upload Portfolio'}
-                </button>
-                <button
-                  onClick={() => void handleGenerateAIStyleProfile()}
-                  disabled={isGeneratingStyles}
-                  className="rounded-lg border border-gray-900 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100 disabled:opacity-60"
-                >
-                  {isGeneratingStyles ? 'Generating...' : 'AI Style Profile'}
-                </button>
-                <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600">
-                  {portfolioItems.length} items
-                </div>
-              </div>
-            </div>
-
-            {isAddingPortfolio && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6 space-y-4">
-                <h3 className="text-lg font-bold text-gray-900">Upload New Portfolio Item</h3>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <input
-                    value={newPortfolioForm.title}
-                    onChange={(event) => setNewPortfolioForm((current) => ({ ...current, title: event.target.value }))}
-                    placeholder="Project title"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <input
-                    value={newPortfolioForm.projectUrl}
-                    onChange={(event) => setNewPortfolioForm((current) => ({ ...current, projectUrl: event.target.value }))}
-                    placeholder="Project URL (optional)"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <textarea
-                  value={newPortfolioForm.description}
-                  onChange={(event) => setNewPortfolioForm((current) => ({ ...current, description: event.target.value }))}
-                  placeholder="Describe this project"
-                  className="min-h-24 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <input
-                    value={newPortfolioForm.tools}
-                    onChange={(event) => setNewPortfolioForm((current) => ({ ...current, tools: event.target.value }))}
-                    placeholder="Tools used (comma separated)"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <label className="flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 hover:border-gray-900 hover:bg-white">
-                    <span>{newPortfolioForm.images.length ? `${newPortfolioForm.images.length} image${newPortfolioForm.images.length === 1 ? '' : 's'} selected` : 'Add project images (up to 10)'}</span>
-                    <span className="font-semibold">Choose</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="sr-only"
-                      onChange={(event) => {
-                        if (event.target.files) addPortfolioImages(event.target.files);
-                        event.target.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
-                {newPortfolioForm.images.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-                    {newPortfolioForm.images.map((image, index) => (
-                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                        <img src={image.previewUrl} alt={`Project image ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeNewPortfolioImage(image.id)}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
-                          aria-label={`Remove project image ${index + 1}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        <span className="absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-0.5 text-xs font-semibold text-white">{index + 1}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <button
-                  onClick={() => void handleCreatePortfolio()}
-                  disabled={isSavingPortfolio}
-                  className="w-full rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                >
-                  {isSavingPortfolio ? 'Uploading...' : 'Save Portfolio Item'}
-                </button>
-              </div>
-            )}
-            {portfolioItems.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
-                <h3 className="text-xl font-bold text-gray-900">No portfolio items yet</h3>
-                <p className="mt-2 text-gray-600">Add projects from your freelancer profile workflow to show them here.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {portfolioItems.map((item) => (
-                  <div key={item.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                    <div id={`dashboard-portfolio-${item.id}`} className="relative flex aspect-[4/3] snap-x snap-mandatory overflow-x-auto bg-gray-100">
-                      {(item.image_urls?.length ? item.image_urls : [DEFAULT_AVATAR_URL]).map((imageUrl: string, index: number) => (
-                        <ImageWithFallback
-                          key={`${item.id}-${imageUrl}-${index}`}
-                          src={imageUrl}
-                          alt={`${item.title} image ${index + 1}`}
-                          className="h-full min-w-full snap-center object-cover"
-                        />
-                      ))}
-                      {item.image_urls?.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`dashboard-portfolio-${item.id}`)?.scrollBy({ left: -320, behavior: 'smooth' })}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
-                            aria-label={`Previous image in ${item.title}`}
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`dashboard-portfolio-${item.id}`)?.scrollBy({ left: 320, behavior: 'smooth' })}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
-                            aria-label={`Next image in ${item.title}`}
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">
-                            {item.image_urls.length} photos
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-bold text-gray-900">{item.title}</h3>
-                      <p className="mt-2 line-clamp-2 text-sm text-gray-600">{item.description || 'No description provided.'}</p>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => startEditingPortfolio(item)}
-                          className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-200"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => void handleDeletePortfolio(item.id)}
-                          className="rounded-lg bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {editingPortfolio && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6 space-y-4">
-                <h3 className="text-lg font-bold text-gray-900">Edit Portfolio Item</h3>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <input
-                    value={editingPortfolio.title}
-                    onChange={(event) =>
-                      setEditingPortfolio((current) =>
-                        current ? { ...current, title: event.target.value } : current
-                      )
-                    }
-                    placeholder="Project title"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <input
-                    value={editingPortfolio.projectUrl}
-                    onChange={(event) =>
-                      setEditingPortfolio((current) =>
-                        current ? { ...current, projectUrl: event.target.value } : current
-                      )
-                    }
-                    placeholder="Project URL (optional)"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <textarea
-                  value={editingPortfolio.description}
-                  onChange={(event) =>
-                    setEditingPortfolio((current) =>
-                      current ? { ...current, description: event.target.value } : current
-                    )
-                  }
-                  placeholder="Describe this project"
-                  className="min-h-24 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <input
-                  value={editingPortfolio.tools}
-                  onChange={(event) =>
-                    setEditingPortfolio((current) =>
-                      current ? { ...current, tools: event.target.value } : current
-                    )
-                  }
-                  placeholder="Tools used (comma separated)"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <div>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-sm font-semibold text-gray-700">Project photos</p>
-                    <span className="text-xs text-gray-500">{editingPortfolio.imageUrls.length + editingPortfolio.newImages.length}/10</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-                    {editingPortfolio.imageUrls.map((imageUrl, index) => (
-                      <div key={imageUrl} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                        <img src={imageUrl} alt={`Project image ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeExistingEditImage(imageUrl)}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
-                          aria-label={`Remove project image ${index + 1}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                    {editingPortfolio.newImages.map((image, index) => (
-                      <div key={image.id} className="group relative aspect-square overflow-hidden rounded-xl border border-gray-200 bg-gray-100">
-                        <img src={image.previewUrl} alt={`New project image ${index + 1}`} className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => removeNewEditImage(image.id)}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow hover:bg-red-600 hover:text-white"
-                          aria-label={`Remove new project image ${index + 1}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <label className="mt-3 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-2.5 text-sm text-gray-700 hover:border-gray-900 hover:bg-white">
-                    <span>Add more images</span>
-                    <span className="font-semibold">Choose</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="sr-only"
-                      onChange={(event) => {
-                        if (event.target.files) addEditPortfolioImages(event.target.files);
-                        event.target.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
-                      editingPortfolio.newImages.forEach((image) => URL.revokeObjectURL(image.previewUrl));
-                      setEditingPortfolio(null);
-                      setError(null);
-                    }}
-                    className="w-full rounded-xl border border-gray-300 bg-white px-6 py-3 font-semibold text-gray-800 hover:bg-gray-100"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => void handleUpdatePortfolio()}
-                    disabled={isUpdatingPortfolio}
-                    className="w-full rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                  >
-                    {isUpdatingPortfolio ? 'Saving...' : 'Save Changes'}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ) : section === 'requests' ? (
           <div className="space-y-6 md:space-y-8">
@@ -1191,7 +683,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 md:gap-6">
               {[
-                { label: 'Portfolio Items', value: stats.portfolioCount, icon: Layers },
+                { label: 'Social Links', value: stats.socialLinkCount, icon: Layers },
                 { label: 'Pending Requests', value: stats.pending, icon: Users },
                 { label: 'Accepted Requests', value: stats.accepted, icon: Check },
                 {
@@ -1236,6 +728,61 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   className="min-h-24 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
                 />
               </div>
+
+              <div className="border-t border-gray-100 pt-4">
+                <label className="mb-1 block text-sm font-semibold text-gray-700">Social Links</label>
+                <p className="mb-3 text-xs text-gray-500">Show your work through your social profiles instead of uploading portfolio photos.</p>
+
+                {socialLinks.length > 0 && (
+                  <div className="mb-3 space-y-2">
+                    {socialLinks.map((link) => {
+                      const Icon = SOCIAL_PLATFORM_ICONS[link.platform];
+                      return (
+                        <div key={link.platform} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                          <Icon className="h-4 w-4 flex-shrink-0 text-gray-700" />
+                          <span className="w-24 flex-shrink-0 text-sm font-semibold text-gray-900">{link.platform}</span>
+                          <input
+                            value={link.url}
+                            onChange={(event) => handleSocialLinkUrlChange(link.platform, event.target.value)}
+                            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          />
+                          <button onClick={() => handleRemoveSocialLink(link.platform)} className="flex-shrink-0 rounded-lg p-2 text-gray-500 hover:bg-red-100 hover:text-red-600" aria-label={`Remove ${link.platform} link`}>
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <select
+                    value={newSocialPlatform}
+                    onChange={(event) => setNewSocialPlatform(event.target.value as SocialPlatform)}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-40"
+                  >
+                    {SOCIAL_PLATFORMS.map((platform) => (
+                      <option key={platform} value={platform} disabled={socialLinks.some((link) => link.platform === platform)}>
+                        {platform}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={newSocialUrl}
+                    onChange={(event) => setNewSocialUrl(event.target.value)}
+                    placeholder={`https://${newSocialPlatform.toLowerCase()}.com/username`}
+                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  <button
+                    onClick={handleAddSocialLink}
+                    className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Hourly Rate (THB)</label>

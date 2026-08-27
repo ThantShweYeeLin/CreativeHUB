@@ -1,18 +1,17 @@
 import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { EditableGenderBadge } from '../../components/common/EditableGenderBadge';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
-import type { Gender } from '../../lib/database.types';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import FollowersModal from '../components/FollowersModal';
 import { geocodeAddress } from '../../lib/osmGeocoding';
+import { PRONOUN_OPTIONS, shouldDisplayPronouns } from '../../lib/pronouns';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
 
@@ -43,6 +42,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     location_longitude: null as number | null,
     location_place_id: null as string | null,
     bio: '',
+    pronouns: '',
+    pronounsCustom: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -81,6 +82,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
         setError((profileResponse.error as any).message || 'Unable to load your profile.');
       } else {
         setProfile(profileResponse.data);
+        const storedPronouns: string = profileResponse.data?.pronouns || '';
+        const isFixedPronoun = (PRONOUN_OPTIONS as readonly string[]).includes(storedPronouns) && storedPronouns !== 'Custom';
         setFormValues({
           full_name: profileResponse.data?.full_name || '',
           location: profileResponse.data?.location || '',
@@ -88,6 +91,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           location_longitude: profileResponse.data?.location_longitude ?? null,
           location_place_id: profileResponse.data?.location_place_id ?? null,
           bio: profileResponse.data?.bio || '',
+          pronouns: storedPronouns ? (isFixedPronoun ? storedPronouns : 'Custom') : '',
+          pronounsCustom: storedPronouns && !isFixedPronoun ? storedPronouns : '',
         });
 
         const followCountsResponse = await DataService.getFollowCounts(user.id);
@@ -512,6 +517,8 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       }
     }
 
+    const resolvedPronouns = formValues.pronouns === 'Custom' ? formValues.pronounsCustom.trim() : formValues.pronouns;
+
     const { data, error: saveError } = await DataService.updateUser(user.id, {
       full_name: formValues.full_name,
       location: resolvedLocation,
@@ -519,6 +526,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       location_longitude: resolvedLongitude,
       location_place_id: resolvedPlaceId,
       bio: formValues.bio,
+      pronouns: resolvedPronouns || null,
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -594,28 +602,6 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     }
 
     setUploadingImageType(null);
-  };
-
-  const handleGenderChange = async (gender: Gender) => {
-    if (!user?.id) {
-      return;
-    }
-
-    const { data, error: saveError } = await DataService.updateUser(user.id, {
-      gender,
-      updated_at: new Date().toISOString(),
-    } as any);
-
-    if (saveError) {
-      setError((saveError as any).message || 'Could not update gender.');
-      return;
-    }
-
-    setProfile((current: any) => ({
-      ...(current || {}),
-      ...(data || {}),
-      gender,
-    }));
   };
 
   const renderField = (label: string, value: string, key: 'full_name' | 'location' | 'bio') => (
@@ -725,7 +711,6 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                     className="w-full h-full object-cover"
                   />
                 </div>
-                <EditableGenderBadge gender={profile?.gender ?? user?.gender} size="md" position="top-right" onSelect={handleGenderChange} />
                 <input
                   ref={avatarInputRef}
                   type="file"
@@ -796,6 +781,35 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           <h3 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">Personal Info</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
             {renderField('Full Name', displayName, 'full_name')}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Pronouns</label>
+              {isEditMode ? (
+                <div className="space-y-3">
+                  <select
+                    value={formValues.pronouns}
+                    onChange={(event) => setFormValues((current) => ({ ...current, pronouns: event.target.value }))}
+                    className="w-full px-4 py-3 bg-gray-50 rounded-lg text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="">Not set</option>
+                    {PRONOUN_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  {formValues.pronouns === 'Custom' && (
+                    <input
+                      value={formValues.pronounsCustom}
+                      onChange={(event) => setFormValues((current) => ({ ...current, pronounsCustom: event.target.value }))}
+                      placeholder="e.g. ze/zir"
+                      className="w-full px-4 py-3 bg-gray-50 rounded-lg text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                  {shouldDisplayPronouns(profile?.pronouns) ? profile.pronouns : 'Not set'}
+                </div>
+              )}
+            </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
               <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900 capitalize">{profile?.role || user?.role || 'client'}</div>
