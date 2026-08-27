@@ -69,6 +69,10 @@ export function MainLayout({ children }: MainLayoutProps) {
         return `${finalActorName} rejected ${projectName}.`;
       }
 
+      if (type === 'request') {
+        return `${finalActorName}: A new booking request - ${projectName}.`;
+      }
+
       if (type === 'message' || type === 'group_message') {
         return `${finalActorName} sent you a message.`;
       }
@@ -83,8 +87,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     const fallbackMessage = buildTypeMessage();
     const normalizedMessage = typeof row.message === 'string' && row.message.trim().length > 0 ? row.message.trim() : fallbackMessage;
     const typeNeedsActorFirstMessage = [
-      'request_accepted',
-      'request_rejected',
       'message',
       'group_message',
       'follow',
@@ -93,8 +95,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     const displayMessage = (
       typeNeedsActorFirstMessage ||
       /^(?:creative\s*hub|freelancer)\b/i.test(normalizedMessage) ||
-      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage) ||
-      /\b(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
+      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
     )
       ? buildTypeMessage()
       : normalizedMessage;
@@ -227,9 +228,15 @@ export function MainLayout({ children }: MainLayoutProps) {
                   .maybeSingle();
 
                 if (!relatedRequestResponse.error && relatedRequestResponse.data) {
+                  const requestRow = relatedRequestResponse.data as any;
+                  // For 'request' (a new incoming booking), the actor is the client who sent it -
+                  // the freelancer is only the recipient. For request_accepted/request_rejected,
+                  // the actor is the freelancer who responded - the client is the recipient.
+                  const isFreelancerActorType = ['request_accepted', 'request_rejected'].includes(String(row.type || ''));
                   const relatedActorId = String(
-                    (relatedRequestResponse.data as any)?.freelancer_id ||
-                    (relatedRequestResponse.data as any)?.client_id ||
+                    (isFreelancerActorType ? requestRow.freelancer_id : requestRow.client_id) ||
+                    requestRow.freelancer_id ||
+                    requestRow.client_id ||
                     ''
                   );
                   if (relatedActorId) {
@@ -506,7 +513,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             <div className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={() =>
-                  navigate(canAccessFreelancerDashboard ? '/freelancer-dashboard/portfolio' : '/become-freelancer')
+                  navigate(canAccessFreelancerDashboard ? '/freelancer-dashboard/requests' : '/become-freelancer')
                 }
                 className="hidden md:block px-6 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
               >

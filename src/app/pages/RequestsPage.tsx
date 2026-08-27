@@ -7,6 +7,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
+import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -159,6 +160,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           min: Number(request.budget || 0),
           max: Number(request.budget || 0),
         },
+        scheduleMeta: extractScheduleMeta(request.message, request.description),
         id: request.id,
         groupMeta: request.group_meta || null,
         acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
@@ -317,6 +319,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       <div>
                         <span className="font-semibold text-gray-900">Budget:</span> {formatBudgetRange(request.budgetMeta)}
                       </div>
+                      {request.scheduleMeta && (
+                        <div>
+                          <span className="font-semibold text-gray-900">Schedule:</span> {formatScheduleMeta(request.scheduleMeta)}
+                        </div>
+                      )}
                       <div>
                         <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
@@ -326,20 +333,6 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         </div>
                       )}
                     </div>
-
-                    {/* Response Message */}
-                    {request.message && (
-                      <div className={`p-3 md:p-4 rounded-xl mb-4 ${
-                        request.status === 'accepted'
-                          ? 'bg-green-50 border-2 border-green-100'
-                          : request.status === 'rejected'
-                          ? 'bg-red-50 border-2 border-red-100'
-                          : 'bg-gray-50 border-2 border-gray-100'
-                      }`}>
-                        <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">Description</p>
-                        <p className="text-xs md:text-sm text-gray-700 italic">{request.message}</p>
-                      </div>
-                    )}
 
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">

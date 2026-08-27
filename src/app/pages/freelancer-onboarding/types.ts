@@ -1,25 +1,3 @@
-export type PortfolioPlatform = 'instagram' | 'facebook' | 'website';
-
-export interface PortfolioLinkDraft {
-  id: string;
-  url: string;
-  label: string;
-  platform: PortfolioPlatform;
-}
-
-export function detectPortfolioPlatform(url: string): PortfolioPlatform {
-  const lower = url.toLowerCase();
-  if (lower.includes('instagram.com')) return 'instagram';
-  if (lower.includes('facebook.com') || lower.includes('fb.com')) return 'facebook';
-  return 'website';
-}
-
-export const PORTFOLIO_PLATFORM_LABELS: Record<PortfolioPlatform, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  website: 'Website',
-};
-
 export const EXPERIENCE_YEAR_OPTIONS = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 years', '10+ years'] as const;
 export const EXPERIENCE_LEVEL_OPTIONS = ['Beginner', 'Intermediate', 'Professional', 'Expert'] as const;
 export const AVAILABILITY_OPTIONS = ['Available', 'Busy', 'Unavailable'] as const;

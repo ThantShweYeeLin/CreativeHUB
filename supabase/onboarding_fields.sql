@@ -16,6 +16,8 @@ alter table public.users
 
 -- Freelancer-specific fields, stored on public.freelancer_profiles alongside
 -- the existing title/description/hourly_rate/skills/styles/experience_years.
+-- working_hours_start/working_hours_end are added separately by
+-- add_working_hours_field.sql (already applied) — not repeated here.
 alter table public.freelancer_profiles
   add column if not exists experience_level text,
   add column if not exists pricing_type text,
@@ -24,8 +26,6 @@ alter table public.freelancer_profiles
   add column if not exists service_area_type text,
   add column if not exists service_radius_km int,
   add column if not exists working_days text[] default array[]::text[],
-  add column if not exists working_hours_start time,
-  add column if not exists working_hours_end time,
   add column if not exists requirements text,
   add column if not exists limitation_days text[] default array[]::text[],
   add column if not exists limitation_note text,

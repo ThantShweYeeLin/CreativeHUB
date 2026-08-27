@@ -23,7 +23,7 @@ interface ProfileCardProps {
   location?: string;
 }
 
-function ProfileCard({ id, name, specialty, rating, reviews, image, gender, location }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 

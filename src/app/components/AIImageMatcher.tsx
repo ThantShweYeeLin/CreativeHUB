@@ -1,10 +1,11 @@
 import { ChangeEvent, DragEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CloudUpload, ExternalLink, Globe, Instagram, Loader2, Music2, Pencil, Sparkles, Star, X } from 'lucide-react';
+import { CloudUpload, ExternalLink, Loader2, Pencil, Sparkles, Star, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { SocialLinksRow } from '../../components/common/SocialLinksRow';
 import type { Gender } from '../../lib/database.types';
 import { DataService } from '../../lib/dataService';
-import { parseSocialLinks, toSocialUrl, type SocialLinks } from '../../lib/socialLinks';
+import type { SocialLink } from '../../lib/socialPlatforms';
 
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
@@ -19,7 +20,7 @@ export interface AIMatcherResult {
   profileImage: string | null;
   profileGender: Gender | null;
   location: string | null;
-  socialLinks: SocialLinks;
+  socialLinks: SocialLink[];
 }
 
 // The set of categories/styles the AI was allowed to choose from — read live
@@ -45,7 +46,7 @@ function mapFreelancerRow(row: any, style: string | null): AIMatcherResult {
     profileImage: user.avatar_url || null,
     profileGender: user.gender || null,
     location: user.location || null,
-    socialLinks: parseSocialLinks(row.description),
+    socialLinks: Array.isArray(row.social_links) ? row.social_links : [],
   };
 }
 
@@ -268,20 +269,6 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
   );
 }
 
-function SocialButton({ platform, value, icon: Icon, label }: { platform: keyof SocialLinks; value?: string; icon: typeof Instagram; label: string }) {
-  if (!value) return null;
-  return (
-    <a
-      href={toSocialUrl(platform, value)}
-      target="_blank"
-      rel="noreferrer"
-      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
-    >
-      <Icon className="h-3.5 w-3.5" /> {label}
-    </a>
-  );
-}
-
 export function AIImageMatcherResults({ results, onReset }: AIImageMatcherResultsProps) {
   const navigate = useNavigate();
 
@@ -330,12 +317,7 @@ export function AIImageMatcherResults({ results, onReset }: AIImageMatcherResult
                 </div>
               )}
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <SocialButton platform="instagram" value={result.socialLinks.instagram} icon={Instagram} label="Instagram" />
-                <SocialButton platform="tiktok" value={result.socialLinks.tiktok} icon={Music2} label="TikTok" />
-                <SocialButton platform="behance" value={result.socialLinks.behance} icon={ExternalLink} label="Behance" />
-                <SocialButton platform="website" value={result.socialLinks.website} icon={Globe} label="Website" />
-              </div>
+              <SocialLinksRow links={result.socialLinks} className="mt-4 flex flex-wrap gap-2" />
 
               <button
                 onClick={() => navigate(`/profile/${result.id}`)}

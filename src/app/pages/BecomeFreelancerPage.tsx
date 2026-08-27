@@ -17,7 +17,8 @@ import { StepPricing } from './freelancer-onboarding/StepPricing';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
 import { StepVerification } from './freelancer-onboarding/StepVerification';
-import { parseExperienceYears, PORTFOLIO_PLATFORM_LABELS, type PortfolioLinkDraft } from './freelancer-onboarding/types';
+import { parseExperienceYears } from './freelancer-onboarding/types';
+import { isValidSocialUrl, type SocialPlatform } from '../../lib/socialPlatforms';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
@@ -65,8 +66,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [experienceYears, setExperienceYears] = useState('');
   const [experienceLevel, setExperienceLevel] = useState('');
 
-  // (e) Portfolio
-  const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLinkDraft[]>([]);
+  // (e) Portfolio — one URL per social platform (matches the social_links
+  // table's unique(freelancer_id, platform) constraint).
+  const [portfolioLinks, setPortfolioLinks] = useState<Partial<Record<SocialPlatform, string>>>({});
 
   // (f) Availability
   const [availability, setAvailability] = useState('Available');
@@ -255,7 +257,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       contact_preference: contactPreference,
       phone_verified: phoneVerified,
       identity_status: identityStatus,
-      portfolio_count: portfolioLinks.length,
+      portfolio_count: Object.values(portfolioLinks).filter((url) => url && isValidSocialUrl(url)).length,
       updated_at: new Date().toISOString(),
     };
 
@@ -281,17 +283,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     if (freelancerProfileId) {
-      for (const link of portfolioLinks) {
-        if (!link.url.trim()) continue;
-
-        await DataService.createPortfolioItem(freelancerProfileId, {
-          title: link.label.trim() || PORTFOLIO_PLATFORM_LABELS[link.platform],
-          description: null,
-          image_urls: [],
-          project_url: link.url.trim(),
-          tools_used: [link.platform],
-          featured: false,
-        } as any);
+      for (const [platform, url] of Object.entries(portfolioLinks) as Array<[SocialPlatform, string | undefined]>) {
+        if (!url || !isValidSocialUrl(url)) continue;
+        await DataService.addSocialLink(freelancerProfileId, platform, url.trim());
       }
     }
 

@@ -1,17 +1,18 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { SocialLinksRow } from '../../components/common/SocialLinksRow';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
 import { computeTrustLevel } from '../../lib/trustLevel';
 import { TrustBadge } from '../../components/common/TrustBadge';
-import { getPronounLabel } from '../../components/common/GenderBadge';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { shouldDisplayPronouns } from '../../lib/pronouns';
 import FollowersModal from '../components/FollowersModal';
 import {
   appendBudgetMeta,
@@ -20,6 +21,7 @@ import {
   SUPPORTED_CURRENCIES,
   type BudgetMeta,
 } from '../../lib/requestBudget';
+import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -37,7 +39,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
-  const [portfolioItems, setPortfolioItems] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
@@ -69,7 +70,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     budgetMin: '',
     budgetMax: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
-    description: '',
+    scheduleDate: '',
+    scheduleTime: '',
   });
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
@@ -174,29 +176,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setError((userResponse.error as any)?.message || 'Unable to load this freelancer.');
         setProfile(null);
         setFreelancerProfile(null);
-        setPortfolioItems([]);
         setIsLoading(false);
         return;
       }
 
       setProfile(userResponse.data);
       setFreelancerProfile(freelancerResponse.data || null);
-
-      if (freelancerResponse.data?.id) {
-        const portfolioResponse = await DataService.getFreelancerPortfolio(freelancerResponse.data.id);
-        if (!isMounted) {
-          return;
-        }
-
-        if (portfolioResponse.error) {
-          setError((portfolioResponse.error as any).message || 'Unable to load portfolio items.');
-          setPortfolioItems([]);
-        } else {
-          setPortfolioItems(portfolioResponse.data || []);
-        }
-      } else {
-        setPortfolioItems([]);
-      }
 
       const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
 
@@ -282,17 +267,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const title = isBookableFreelancer ? (freelancerProfile?.title || 'Freelancer') : 'Client';
   const rating = Number(profile?.rating || 0);
   const totalReviews = Number(profile?.total_reviews || 0);
-  const portfolioCount = Number(freelancerProfile?.portfolio_count || portfolioItems.length || 0);
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
-  const pronoun = getPronounLabel(profile?.gender);
+  const socialLinks = freelancerProfile?.social_links || [];
+  const pronouns = profile?.pronouns;
+  const todayDateString = new Date().toISOString().slice(0, 10);
+  const availableTimeSlots = useMemo(
+    () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
+    [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
+  );
   const trust = useMemo(
     () =>
       computeTrustLevel({
         rating,
         totalReviews,
-        portfolioCount,
+        portfolioCount: Number(freelancerProfile?.portfolio_count || socialLinks.length || 0),
         phoneVerified: Boolean(freelancerProfile?.phone_verified),
         identityStatus: freelancerProfile?.identity_status || 'not_submitted',
         profileCompletenessFields: {
@@ -304,10 +294,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           hasAvailability: (freelancerProfile?.working_days || []).length > 0,
         },
       }),
-    [rating, totalReviews, portfolioCount, freelancerProfile, profile, skills]
+    [rating, totalReviews, freelancerProfile, socialLinks, profile, skills]
   );
 
-  const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
 
   const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (isFollowing || isFollowedByTarget));
@@ -394,13 +383,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
+    if (!formData.scheduleDate || !formData.scheduleTime) {
+      setError('Choose a date and time for this booking.');
+      return;
+    }
+
     const budgetMeta: BudgetMeta = {
       currency: formData.currency,
       min: budgetMin,
       max: budgetMax,
     };
 
-    const requestMessage = appendBudgetMeta(formData.description, budgetMeta);
+    const requestMessage = appendScheduleMeta(
+      appendBudgetMeta('', budgetMeta),
+      { date: formData.scheduleDate, time: formData.scheduleTime }
+    );
 
     setIsSubmittingRequest(true);
     setError(null);
@@ -438,7 +435,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       projectName: '',
       budgetMin: '',
       budgetMax: '',
-      description: '',
+      scheduleDate: '',
+      scheduleTime: '',
     }));
     setIsSubmittingRequest(false);
   };
@@ -690,12 +688,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <Avatar
                     src={avatarUrl}
                     alt={displayName}
-                    gender={profile?.gender}
                     sizeClassName="h-24 w-24 ring-4 ring-white bg-gray-200 shadow-xl md:h-32 md:w-32 rounded-full"
                     badgeSize="md"
                   />
                   <div className="text-white">
-                    <h1 className="text-2xl font-bold md:text-3xl">{displayName}</h1>
+                    <h1 className="text-2xl font-bold md:text-3xl">
+                      {displayName}
+                      {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
+                    </h1>
                     <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
                   </div>
                 </div>
@@ -774,10 +774,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{profile?.email || 'Email unavailable'}</span>
                   </div>
-                  {pronoun && (
+                  {shouldDisplayPronouns(pronouns) && (
                     <div className="flex items-center gap-2">
                       <User className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                      <span>{pronoun}</span>
+                      <span>{pronouns}</span>
                     </div>
                   )}
                   {isBookableFreelancer && (
@@ -801,20 +801,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             {isBookableFreelancer && (
-            <div className="mt-6 grid grid-cols-2 gap-4 border-y border-gray-200 py-5 md:grid-cols-6">
+            <div className="mt-6 grid grid-cols-2 gap-4 border-y border-gray-200 py-5 md:grid-cols-5">
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 md:h-5 md:w-5" />
                   <span className="font-semibold text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
                 </div>
                 <p className="mt-1 text-sm text-gray-500">{totalReviews} reviews</p>
-              </div>
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{portfolioCount}</span>
-                </div>
-                <p className="mt-1 text-sm text-gray-500">portfolio items</p>
               </div>
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
@@ -854,62 +847,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         {isBookableFreelancer && (
         <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="rounded-3xl bg-white p-6 md:p-8 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900">Portfolio</h2>
-            {featuredPortfolio.length === 0 ? (
-              <p className="mt-4 text-gray-600">No portfolio items have been added yet.</p>
+            <h2 className="text-2xl font-bold text-gray-900">Social Links</h2>
+            {socialLinks.length === 0 ? (
+              <p className="mt-4 text-gray-600">No social links added yet.</p>
             ) : (
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                {featuredPortfolio.map((item) => (
-                  <div key={item.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <div id={`public-portfolio-${item.id}`} className="relative flex aspect-[4/3] snap-x snap-mandatory overflow-x-auto bg-white">
-                      {(item.image_urls?.length ? item.image_urls : [avatarUrl]).map((imageUrl: string, index: number) => (
-                        <ImageWithFallback
-                          key={`${item.id}-${imageUrl}-${index}`}
-                          src={imageUrl}
-                          alt={`${item.title} image ${index + 1}`}
-                          className="h-full min-w-full snap-center object-cover"
-                        />
-                      ))}
-                      {item.image_urls?.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`public-portfolio-${item.id}`)?.scrollBy({ left: -360, behavior: 'smooth' })}
-                            className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
-                            aria-label={`Previous image in ${item.title}`}
-                          >
-                            <ChevronLeft className="h-5 w-5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => document.getElementById(`public-portfolio-${item.id}`)?.scrollBy({ left: 360, behavior: 'smooth' })}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/65 p-2 text-white shadow hover:bg-black"
-                            aria-label={`Next image in ${item.title}`}
-                          >
-                            <ChevronRight className="h-5 w-5" />
-                          </button>
-                          <span className="absolute right-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-semibold text-white">
-                            {item.image_urls.length} photos
-                          </span>
-                        </>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-bold text-gray-900">{item.title}</h3>
-                      <p className="mt-2 text-sm text-gray-600">{item.description || 'No description provided.'}</p>
-                      {item.tools_used?.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {item.tools_used.map((tool: string) => (
-                            <span key={tool} className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 border border-gray-200">
-                              {tool}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <SocialLinksRow links={socialLinks} className="mt-4 flex flex-wrap gap-3" />
             )}
           </div>
 
@@ -1225,15 +1167,58 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">Project Name</label>
-                <input
-                  id="projectName"
-                  required
-                  value={formData.projectName}
-                  onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="e.g. Editorial shoot, brand campaign, portrait session"
-                />
+                <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">The Purpose</label>
+                {skills.length > 0 ? (
+                  <select
+                    id="projectName"
+                    required
+                    value={formData.projectName}
+                    onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="" disabled>Select a purpose</option>
+                    {skills.map((skill: string) => (
+                      <option key={skill} value={skill}>{skill}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                    This freelancer hasn't listed any specialties yet, so a purpose can't be selected.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Schedule</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <input
+                      type="date"
+                      required
+                      min={todayDateString}
+                      value={formData.scheduleDate}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '' }))}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      required
+                      disabled={!formData.scheduleDate}
+                      value={formData.scheduleTime}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value }))}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                    >
+                      <option value="" disabled>{formData.scheduleDate ? 'Select a time' : 'Choose a date first'}</option>
+                      {availableTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-600">
+                  Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours.
+                </p>
               </div>
 
               <div>
@@ -1281,19 +1266,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     })}
                   </p>
                 )}
-              </div>
-
-              <div>
-                <label htmlFor="description" className="mb-2 block text-sm font-semibold text-gray-900">Project Description</label>
-                <textarea
-                  id="description"
-                  required
-                  rows={6}
-                  value={formData.description}
-                  onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="Describe the deliverables, schedule, references, and any location requirements."
-                />
               </div>
 
               <div className="flex gap-3 pt-2">

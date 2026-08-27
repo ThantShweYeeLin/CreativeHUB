@@ -40,6 +40,8 @@ create table public.freelancer_profiles (
   experience_years int,
   portfolio_count int default 0,
   is_available boolean default true,
+  working_hours_start text default '09:00',
+  working_hours_end text default '18:00',
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

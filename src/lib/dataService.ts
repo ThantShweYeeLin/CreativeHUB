@@ -11,7 +11,6 @@ import {
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
-type Portfolio = Database['public']['Tables']['portfolios']['Row'];
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type Message = Database['public']['Tables']['messages']['Row'];
 type Favorite = Database['public']['Tables']['favorites']['Row'];
@@ -57,8 +56,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location';
 
     return supabase
       .from('freelancer_profiles')
@@ -74,8 +73,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location';
 
     let q = supabase
       .from('freelancer_profiles')
@@ -376,7 +375,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location), portfolios(*)')
+      .select('*, users:user_id(id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('user_id', userId)
       .single();
     return { data, error };
@@ -389,7 +388,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, gender, rating, total_reviews, location), portfolios(*)')
+      .select('*, users:user_id(id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('id', id)
       .single();
     return { data, error };
@@ -413,7 +412,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, full_name, avatar_url, gender, rating, total_reviews, location)')
+      .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), social_links(*)')
       .eq('is_available', true)
       .eq('title', category);
 
@@ -634,74 +633,40 @@ export class DataService {
     return { publicUrl: data.publicUrl, error: null };
   }
 
-  static async uploadPortfolioImage(userId: string, file: File) {
-    const fileExt = file.name.split('.').pop() || 'jpg';
-    const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-    const filePath = `${userId}/portfolio-${Date.now()}-${uniqueId}.${fileExt}`;
-
-    const { error } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, file, {
-        contentType: file.type,
-        upsert: true,
-      });
-
-    if (error) {
-      return { publicUrl: null, error };
-    }
-
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    return { publicUrl: data.publicUrl, error: null };
-  }
-
-  // PORTFOLIOS
-  static async getFreelancerPortfolio(freelancerId: string) {
+  // SOCIAL LINKS
+  static async getFreelancerSocialLinks(freelancerId: string) {
     const { data, error } = await supabase
-      .from('portfolios')
+      .from('social_links')
       .select('*')
       .eq('freelancer_id', freelancerId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
     return { data, error };
   }
 
-  static async getPortfolioItem(portfolioId: string) {
+  static async addSocialLink(freelancerId: string, platform: string, url: string) {
     const { data, error } = await supabase
-      .from('portfolios')
-      .select('*')
-      .eq('id', portfolioId)
-      .single();
-    return { data, error };
-  }
-
-  static async createPortfolioItem(freelancerId: string, portfolio: Omit<Portfolio, 'id' | 'freelancer_id' | 'created_at' | 'updated_at'>) {
-    const { data, error } = await supabase
-      .from('portfolios')
-      .insert({ freelancer_id: freelancerId, ...portfolio })
+      .from('social_links')
+      .insert({ freelancer_id: freelancerId, platform, url })
       .select()
       .single();
     return { data, error };
   }
 
-  static async updatePortfolioItem(portfolioId: string, updates: Partial<Portfolio>) {
+  static async updateSocialLink(id: string, updates: { platform?: string; url?: string }) {
     const { data, error } = await supabase
-      .from('portfolios')
-      .update(updates)
-      .eq('id', portfolioId)
+      .from('social_links')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
       .select()
       .single();
     return { data, error };
   }
 
-  static async deletePortfolioItem(portfolioId: string) {
+  static async deleteSocialLink(id: string) {
     const { error } = await supabase
-      .from('portfolios')
+      .from('social_links')
       .delete()
-      .eq('id', portfolioId);
+      .eq('id', id);
     return { error };
   }
 
@@ -1625,7 +1590,7 @@ export class DataService {
         actor_id: request.client_id,
         type: 'request',
         title: 'New booking request',
-        message: `New booking request: ${request.project_name}`,
+        message: `${clientName}: A new booking request - ${request.project_name}`,
         related_id: (data as any)?.id || null,
         post_id: null,
         comment_id: null,
@@ -2304,7 +2269,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_accepted',
             title: 'Booking accepted',
-            message: `accepted ${projectName}.`,
+            message: `${actorName} accepted ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
@@ -2319,7 +2284,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_rejected',
             title: 'Booking rejected',
-            message: `rejected ${projectName}.`,
+            message: `${actorName} rejected ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });

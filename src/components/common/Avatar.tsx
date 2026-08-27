@@ -4,6 +4,8 @@ import { ImageWithFallback } from './ImageWithFallback';
 interface AvatarProps {
   src: string;
   alt: string;
+  // Accepted for backward compatibility with existing callers, but no
+  // longer rendered — gender badges were removed from all profile pictures.
   gender?: Gender | null;
   sizeClassName?: string;
   imgClassName?: string;
