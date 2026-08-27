@@ -17,6 +17,7 @@ import {
   SUPPORTED_CURRENCIES,
   type BudgetMeta,
 } from '../../lib/requestBudget';
+import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -67,6 +68,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     budgetMax: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     description: '',
+    scheduleDate: '',
+    scheduleTime: '',
   });
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
@@ -283,6 +286,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const todayDateString = new Date().toISOString().slice(0, 10);
+  const availableTimeSlots = useMemo(
+    () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
+    [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
+  );
 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
@@ -371,13 +379,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
+    if (!formData.scheduleDate || !formData.scheduleTime) {
+      setError('Choose a date and time for this booking.');
+      return;
+    }
+
     const budgetMeta: BudgetMeta = {
       currency: formData.currency,
       min: budgetMin,
       max: budgetMax,
     };
 
-    const requestMessage = appendBudgetMeta(formData.description, budgetMeta);
+    const requestMessage = appendScheduleMeta(
+      appendBudgetMeta(formData.description, budgetMeta),
+      { date: formData.scheduleDate, time: formData.scheduleTime }
+    );
 
     setIsSubmittingRequest(true);
     setError(null);
@@ -416,6 +432,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       budgetMin: '',
       budgetMax: '',
       description: '',
+      scheduleDate: '',
+      scheduleTime: '',
     }));
     setIsSubmittingRequest(false);
   };
@@ -1210,6 +1228,39 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     This freelancer hasn't listed any specialties yet, so a purpose can't be selected.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Schedule</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div>
+                    <input
+                      type="date"
+                      required
+                      min={todayDateString}
+                      value={formData.scheduleDate}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '' }))}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <select
+                      required
+                      disabled={!formData.scheduleDate}
+                      value={formData.scheduleTime}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value }))}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                    >
+                      <option value="" disabled>{formData.scheduleDate ? 'Select a time' : 'Choose a date first'}</option>
+                      {availableTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-gray-600">
+                  Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours.
+                </p>
               </div>
 
               <div>

@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Clock,
   DollarSign,
   Image as ImageIcon,
   Layers,
@@ -24,6 +25,7 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
+import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 
 type DashboardSection = 'portfolio' | 'requests' | 'analytics' | 'settings';
 
@@ -42,6 +44,8 @@ interface SettingsFormState {
   location: string;
   skills: string;
   styles: string;
+  working_hours_start: string;
+  working_hours_end: string;
 }
 
 interface NewPortfolioFormState {
@@ -106,6 +110,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     location: '',
     skills: '',
     styles: '',
+    working_hours_start: '09:00',
+    working_hours_end: '18:00',
   });
 
   useEffect(() => {
@@ -159,6 +165,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         location: userResponse.data?.location || '',
         skills: (profileResponse.data.skills || []).join(', '),
         styles: (profileResponse.data.styles || []).join(', '),
+        working_hours_start: profileResponse.data.working_hours_start || '09:00',
+        working_hours_end: profileResponse.data.working_hours_end || '18:00',
       });
 
       setIsLoading(false);
@@ -604,6 +612,11 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const handleSaveSettings = async () => {
     if (!user?.id) return;
 
+    if (settingsForm.working_hours_start >= settingsForm.working_hours_end) {
+      setError('Working hours end time must be after the start time.');
+      return;
+    }
+
     setIsSavingSettings(true);
     setError(null);
     setSuccess(null);
@@ -641,6 +654,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         is_available: settingsForm.is_available,
         skills: parseTags(settingsForm.skills),
         styles: parseTags(settingsForm.styles),
+        working_hours_start: settingsForm.working_hours_start,
+        working_hours_end: settingsForm.working_hours_end,
         updated_at: new Date().toISOString(),
       } as any),
       DataService.updateUser(user.id, {
@@ -1084,6 +1099,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     const groupMeta = DataService.getRequestGroupMeta(request);
                     const memberNames = groupMeta?.recipients?.length ? (groupMemberNamesByRequest[String(request.id)] || []) : [];
                     const cleanMessage = stripRequestDisplayMeta(request.message || request.description || 'No message provided') || 'Group request';
+                    const scheduleMeta = extractScheduleMeta(request.message, request.description);
                     const groupSummary = groupMeta?.recipients?.length
                       ? summarizeGroupRequestMembers(groupMeta.recipients, memberNames)
                       : null;
@@ -1149,7 +1165,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-4 text-xs text-gray-600">
                           <span className="inline-flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" />{formatBudgetRange(budgetMeta)}</span>
-                          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{new Date(request.created_at).toLocaleDateString()}</span>
+                          {scheduleMeta && (
+                            <span className="inline-flex items-center gap-1 font-semibold text-gray-900"><Clock className="h-3.5 w-3.5" />{formatScheduleMeta(scheduleMeta)}</span>
+                          )}
+                          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Sent {new Date(request.created_at).toLocaleDateString()}</span>
                           <span className="rounded-full border border-gray-200 px-2 py-1 font-semibold capitalize">{request.status}</span>
                         </div>
                       </div>
@@ -1284,6 +1303,29 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours start</label>
+                  <input
+                    type="time"
+                    value={settingsForm.working_hours_start}
+                    onChange={(event) => setSettingsForm((current) => ({ ...current, working_hours_start: event.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours end</label>
+                  <input
+                    type="time"
+                    value={settingsForm.working_hours_end}
+                    onChange={(event) => setSettingsForm((current) => ({ ...current, working_hours_end: event.target.value }))}
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+                <p className="md:col-span-2 text-xs text-gray-500">
+                  Clients booking you can only choose a time within this range.
+                </p>
               </div>
               <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                 <input

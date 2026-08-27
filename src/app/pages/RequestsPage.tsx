@@ -8,6 +8,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
+import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -160,6 +161,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           min: Number(request.budget || 0),
           max: Number(request.budget || 0),
         },
+        scheduleMeta: extractScheduleMeta(request.message, request.description),
         id: request.id,
         groupMeta: request.group_meta || null,
         acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
@@ -319,6 +321,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       <div>
                         <span className="font-semibold text-gray-900">Budget:</span> {formatBudgetRange(request.budgetMeta)}
                       </div>
+                      {request.scheduleMeta && (
+                        <div>
+                          <span className="font-semibold text-gray-900">Schedule:</span> {formatScheduleMeta(request.scheduleMeta)}
+                        </div>
+                      )}
                       <div>
                         <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>

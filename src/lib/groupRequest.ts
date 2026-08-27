@@ -1,4 +1,5 @@
 import { stripBudgetMeta } from './requestBudget';
+import { stripScheduleMeta } from './requestSchedule';
 
 export interface GroupRequestMeta {
   group_id: string;
@@ -62,7 +63,7 @@ export function stripGroupRequestMeta(value: string | null | undefined) {
 }
 
 export function stripRequestDisplayMeta(value: string | null | undefined) {
-  const direct = stripBudgetMeta(stripGroupRequestMeta(value || ''));
+  const direct = stripScheduleMeta(stripBudgetMeta(stripGroupRequestMeta(value || '')));
   return direct
     .replace(/\s*(?:,\s*|\s+and\s+)?as\s+freelancer\s*$/i, '')
     .replace(/\s*(?:,\s*|\s+and\s+)?as\s+client\s*$/i, '')
