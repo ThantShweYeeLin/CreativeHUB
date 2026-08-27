@@ -87,9 +87,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     const fallbackMessage = buildTypeMessage();
     const normalizedMessage = typeof row.message === 'string' && row.message.trim().length > 0 ? row.message.trim() : fallbackMessage;
     const typeNeedsActorFirstMessage = [
-      'request',
-      'request_accepted',
-      'request_rejected',
       'message',
       'group_message',
       'follow',
@@ -98,8 +95,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     const displayMessage = (
       typeNeedsActorFirstMessage ||
       /^(?:creative\s*hub|freelancer)\b/i.test(normalizedMessage) ||
-      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage) ||
-      /\b(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
+      /^(?:accepted|rejected|sent)\b/i.test(normalizedMessage)
     )
       ? buildTypeMessage()
       : normalizedMessage;
