@@ -1191,15 +1191,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">Project Name</label>
-                <input
-                  id="projectName"
-                  required
-                  value={formData.projectName}
-                  onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="e.g. Editorial shoot, brand campaign, portrait session"
-                />
+                <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">The Purpose</label>
+                {skills.length > 0 ? (
+                  <select
+                    id="projectName"
+                    required
+                    value={formData.projectName}
+                    onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  >
+                    <option value="" disabled>Select a purpose</option>
+                    {skills.map((skill: string) => (
+                      <option key={skill} value={skill}>{skill}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                    This freelancer hasn't listed any specialties yet, so a purpose can't be selected.
+                  </p>
+                )}
               </div>
 
               <div>
