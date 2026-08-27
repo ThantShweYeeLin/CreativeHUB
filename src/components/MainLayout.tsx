@@ -228,9 +228,15 @@ export function MainLayout({ children }: MainLayoutProps) {
                   .maybeSingle();
 
                 if (!relatedRequestResponse.error && relatedRequestResponse.data) {
+                  const requestRow = relatedRequestResponse.data as any;
+                  // For 'request' (a new incoming booking), the actor is the client who sent it -
+                  // the freelancer is only the recipient. For request_accepted/request_rejected,
+                  // the actor is the freelancer who responded - the client is the recipient.
+                  const isFreelancerActorType = ['request_accepted', 'request_rejected'].includes(String(row.type || ''));
                   const relatedActorId = String(
-                    (relatedRequestResponse.data as any)?.freelancer_id ||
-                    (relatedRequestResponse.data as any)?.client_id ||
+                    (isFreelancerActorType ? requestRow.freelancer_id : requestRow.client_id) ||
+                    requestRow.freelancer_id ||
+                    requestRow.client_id ||
                     ''
                   );
                   if (relatedActorId) {
