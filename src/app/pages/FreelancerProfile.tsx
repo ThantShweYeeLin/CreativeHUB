@@ -27,6 +27,7 @@ interface FreelancerProfileProps {
 }
 
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
+const OTHER_PURPOSE_VALUE = '__other__';
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
@@ -64,6 +65,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     projectName: '',
+    customPurpose: '',
     budgetMin: '',
     budgetMax: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
@@ -365,6 +367,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
+    const resolvedPurpose = formData.projectName === OTHER_PURPOSE_VALUE
+      ? formData.customPurpose.trim()
+      : formData.projectName;
+
+    if (!resolvedPurpose) {
+      setError('Enter or select a purpose for this booking.');
+      return;
+    }
+
     const budgetMin = Number(formData.budgetMin);
     const budgetMax = Number(formData.budgetMax);
 
@@ -404,7 +415,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     const { data: createdRequests, error: requestError } = await DataService.createBookingRequests({
       clientId: user.id,
       recipientIds: recipients,
-      projectName: formData.projectName,
+      projectName: resolvedPurpose,
       description: requestMessage,
       budget: budgetMax,
     });
@@ -428,6 +439,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setFormData((current) => ({
       ...current,
       projectName: '',
+      customPurpose: '',
       budgetMin: '',
       budgetMax: '',
       scheduleDate: '',
@@ -1208,23 +1220,27 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
               <div>
                 <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">The Purpose</label>
-                {skills.length > 0 ? (
-                  <select
-                    id="projectName"
+                <select
+                  id="projectName"
+                  required
+                  value={formData.projectName}
+                  onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="" disabled>Select a purpose</option>
+                  {skills.map((skill: string) => (
+                    <option key={skill} value={skill}>{skill}</option>
+                  ))}
+                  <option value={OTHER_PURPOSE_VALUE}>Other (please specify)</option>
+                </select>
+                {formData.projectName === OTHER_PURPOSE_VALUE && (
+                  <input
                     required
-                    value={formData.projectName}
-                    onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  >
-                    <option value="" disabled>Select a purpose</option>
-                    {skills.map((skill: string) => (
-                      <option key={skill} value={skill}>{skill}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                    This freelancer hasn't listed any specialties yet, so a purpose can't be selected.
-                  </p>
+                    value={formData.customPurpose}
+                    onChange={(event) => setFormData((current) => ({ ...current, customPurpose: event.target.value }))}
+                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Type the purpose of this booking"
+                  />
                 )}
               </div>
 
