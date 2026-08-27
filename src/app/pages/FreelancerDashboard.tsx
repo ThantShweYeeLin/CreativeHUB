@@ -22,7 +22,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
+import { summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
@@ -1098,7 +1098,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
                     const groupMeta = DataService.getRequestGroupMeta(request);
                     const memberNames = groupMeta?.recipients?.length ? (groupMemberNamesByRequest[String(request.id)] || []) : [];
-                    const cleanMessage = stripRequestDisplayMeta(request.message || request.description || 'No message provided') || 'Group request';
                     const scheduleMeta = extractScheduleMeta(request.message, request.description);
                     const groupSummary = groupMeta?.recipients?.length
                       ? summarizeGroupRequestMembers(groupMeta.recipients, memberNames)
@@ -1140,9 +1139,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             <span className="font-semibold text-gray-900">Group request</span>
                           </p>
                         )}
-                        {cleanMessage && (
+                        {request.project_name && (
                           <p className="mt-2 text-sm text-gray-700">
-                            <span className="font-semibold text-gray-900">Description:</span> {cleanMessage}
+                            <span className="font-semibold text-gray-900">Purpose:</span> {request.project_name}
                           </p>
                         )}
                         {groupMeta?.recipients?.length && memberNames.length > 0 && (

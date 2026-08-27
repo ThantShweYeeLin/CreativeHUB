@@ -67,7 +67,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     budgetMin: '',
     budgetMax: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
-    description: '',
     scheduleDate: '',
     scheduleTime: '',
   });
@@ -391,7 +390,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     };
 
     const requestMessage = appendScheduleMeta(
-      appendBudgetMeta(formData.description, budgetMeta),
+      appendBudgetMeta('', budgetMeta),
       { date: formData.scheduleDate, time: formData.scheduleTime }
     );
 
@@ -431,7 +430,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       projectName: '',
       budgetMin: '',
       budgetMax: '',
-      description: '',
       scheduleDate: '',
       scheduleTime: '',
     }));
@@ -1308,19 +1306,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     })}
                   </p>
                 )}
-              </div>
-
-              <div>
-                <label htmlFor="description" className="mb-2 block text-sm font-semibold text-gray-900">Project Description</label>
-                <textarea
-                  id="description"
-                  required
-                  rows={6}
-                  value={formData.description}
-                  onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="Describe the deliverables, schedule, references, and any location requirements."
-                />
               </div>
 
               <div className="flex gap-3 pt-2">

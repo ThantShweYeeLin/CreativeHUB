@@ -336,20 +336,6 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       )}
                     </div>
 
-                    {/* Response Message */}
-                    {request.message && (
-                      <div className={`p-3 md:p-4 rounded-xl mb-4 ${
-                        request.status === 'accepted'
-                          ? 'bg-green-50 border-2 border-green-100'
-                          : request.status === 'rejected'
-                          ? 'bg-red-50 border-2 border-red-100'
-                          : 'bg-gray-50 border-2 border-gray-100'
-                      }`}>
-                        <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">Description</p>
-                        <p className="text-xs md:text-sm text-gray-700 italic">{request.message}</p>
-                      </div>
-                    )}
-
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
                       {request.status === 'pending' && (
