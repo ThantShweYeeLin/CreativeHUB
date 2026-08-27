@@ -1,18 +1,29 @@
 import { useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, Check } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
-import { DataService } from '../../lib/dataService';
-import { authService } from '../../lib/authService';
+import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import type { Gender } from '../../lib/database.types';
 
-interface SignUpPageProps {
-  onSignUp: (fullName: string, email: string, password: string, role: AccountType, gender: Gender) => Promise<void>;
-  onGoToLogin: () => void;
-  onValidateEmail?: (email: string) => Promise<string | null>;
-  onOAuthSignUp?: (provider: 'google' | 'facebook') => Promise<void>;
+export type AccountType = 'client' | 'freelancer';
+
+export interface SignUpSubmission {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  role: AccountType;
+  gender: Gender;
+  avatarFile: File | null;
+  country: string;
+  city: string;
 }
 
-type AccountType = 'client' | 'freelancer';
+interface SignUpPageProps {
+  onSignUp: (data: SignUpSubmission) => Promise<void>;
+  onGoToLogin: () => void;
+  onValidateEmail?: (email: string) => Promise<string | null>;
+  onOAuthSignUp?: (provider: 'google' | 'facebook', role: AccountType) => Promise<void>;
+}
 
 const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
   { value: 'male', label: 'Male' },
@@ -22,11 +33,16 @@ const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
 ];
 
 export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSignUp }: SignUpPageProps) {
-  const [step, setStep] = useState<1 | 2>(1);
-  const [accountType, setAccountType] = useState<AccountType>('client');
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [accountType, setAccountType] = useState<AccountType | null>(null);
   const [gender, setGender] = useState<Gender | ''>('');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [country, setCountry] = useState('');
+  const [city, setCity] = useState('');
+  const [avatarUpload, setAvatarUpload] = useState<ImageUpload | null>(null);
+  const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -40,10 +56,16 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   const strengthColors = ['', 'bg-red-400', 'bg-yellow-400', 'bg-green-500'];
   const strengthLabels = ['', 'Weak', 'Fair', 'Strong'];
 
-  const handleStep1 = async (e: React.FormEvent) => {
+  const handleSelectRole = (role: AccountType) => {
+    setAccountType(role);
+    setError('');
+    setStep(2);
+  };
+
+  const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!fullName.trim()) { setError('Please enter your full name.'); return; }
+    if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
     if (!gender) { setError('Please select a gender.'); return; }
 
@@ -58,13 +80,17 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
       }
     }
 
-    setStep(2);
+    setStep(3);
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
+    if (!accountType || !gender) {
+      setError('Please go back and complete the earlier steps.');
+      return;
+    }
     if (!password) {
       setError('Please enter a password.');
       return;
@@ -82,14 +108,19 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
       return;
     }
 
-    if (!gender) {
-      setError('Please select a gender.');
-      return;
-    }
-
     setLoading(true);
     try {
-      await onSignUp(fullName.trim(), email, password, accountType, gender);
+      await onSignUp({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        email,
+        password,
+        role: accountType,
+        gender,
+        avatarFile: avatarUpload?.file || null,
+        country: country.trim(),
+        city: city.trim(),
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create account.');
     } finally {
@@ -98,20 +129,22 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   };
 
   const handleOAuthSignUp = async (provider: 'google' | 'facebook') => {
-    if (!onOAuthSignUp) {
-      setError('Social sign up is not available right now.');
+    if (!onOAuthSignUp || !accountType) {
+      setError('Please choose an account type first.');
       return;
     }
 
     setError('');
     setOauthLoadingProvider(provider);
     try {
-      await onOAuthSignUp(provider);
+      await onOAuthSignUp(provider, accountType);
     } catch (err) {
       setError(err instanceof Error ? err.message : `Unable to continue with ${provider}.`);
       setOauthLoadingProvider(null);
     }
   };
+
+  const stepLabels = ['Role', 'Your info', 'Set password'];
 
   return (
     <div className="min-h-screen bg-white flex">
@@ -164,28 +197,21 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
           <img src={logoImage} alt="CreativeHUB AI" className="h-12 w-auto object-contain" />
         </div>
 
-        <div className="max-w-sm w-full mx-auto lg:mx-0">
+        <div className={`w-full mx-auto lg:mx-0 ${step === 2 ? 'max-w-md' : 'max-w-sm'}`}>
           {/* Step indicator */}
           <div className="flex items-center gap-2 mb-8">
-            {[1, 2].map(s => (
+            {[1, 2, 3].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                   step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'
                 }`}>
                   {step > s ? <Check className="w-3.5 h-3.5" /> : s}
                 </div>
-                {s < 2 && <div className={`w-12 h-0.5 ${step > s ? 'bg-gray-900' : 'bg-gray-200'}`} />}
+                {s < 3 && <div className={`w-8 h-0.5 ${step > s ? 'bg-gray-900' : 'bg-gray-200'}`} />}
               </div>
             ))}
-            <span className="ml-2 text-xs text-gray-500">{step === 1 ? 'Your info' : 'Set password'}</span>
+            <span className="ml-2 text-xs text-gray-500">{stepLabels[step - 1]}</span>
           </div>
-
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            {step === 1 ? 'Create account' : 'Set your password'}
-          </h2>
-          <p className="text-gray-500 mb-8">
-            {step === 1 ? 'Join CreativeHUB AI today' : `Almost done, ${fullName.split(' ')[0]}!`}
-          </p>
 
           {error && (
             <div className="mb-5 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
@@ -193,61 +219,153 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
             </div>
           )}
 
-          
+          {step === 1 && (
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">What are you here to do?</h2>
+              <p className="text-gray-500 mb-8">Join CreativeHUB AI today</p>
 
-          {step === 1 ? (
-            <form onSubmit={handleStep1} className="space-y-4">
-              {/* Account type */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">I am a</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {(['client', 'freelancer'] as AccountType[]).map(type => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => setAccountType(type)}
-                      className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold capitalize transition-all ${
-                        accountType === type
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {type === 'client' ? '👤 Client' : '🎨 Freelancer'}
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => handleSelectRole('client')}
+                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-gray-200 p-5 text-left transition-all hover:border-gray-900 hover:shadow-md"
+                >
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                    <Search className="h-6 w-6 text-gray-900" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">I'm looking for creative professionals</p>
+                    <p className="mt-1 text-sm text-gray-500">Sign up as a Client</p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectRole('freelancer')}
+                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-gray-200 p-5 text-left transition-all hover:border-gray-900 hover:shadow-md"
+                >
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                    <Briefcase className="h-6 w-6 text-gray-900" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-gray-900">I'm offering creative services</p>
+                    <p className="mt-1 text-sm text-gray-500">Sign up as a Freelancer</p>
+                  </div>
+                </button>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {GENDER_OPTIONS.map(option => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setGender(option.value)}
-                      className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
-                        gender === option.value
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="relative mt-8">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+                <div className="relative flex justify-center text-xs text-gray-400 bg-white px-3">or sign up with</div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {[{ name: 'Google', icon: 'G' }, { name: 'Facebook', icon: 'f' }].map(({ name, icon }) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => void handleOAuthSignUp(name.toLowerCase() as 'google' | 'facebook')}
+                    disabled={oauthLoadingProvider !== null || !accountType}
+                    title={!accountType ? 'Choose an account type above first' : undefined}
+                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-40"
+                  >
+                    {oauthLoadingProvider === name.toLowerCase() ? (
+                      <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <span className="font-bold">{icon}</span>
+                    )}
+                    {name}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-center text-xs text-gray-400">Choose Client or Freelancer above to continue with Google or Facebook.</p>
+            </div>
+          )}
+
+          {step === 2 && (
+            <form onSubmit={handleStep2} className="space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-gray-400 hover:text-gray-900"
+                >
+                  <ArrowLeft className="w-3 h-3" /> {accountType === 'client' ? 'Client' : 'Freelancer'}
+                </button>
+              </div>
+              <p className="-mt-3 text-sm text-gray-500">A few basics to get you started.</p>
+
+              <div className="flex items-center gap-4">
+                <label
+                  onDragOver={(e) => { e.preventDefault(); setIsDraggingAvatar(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); setIsDraggingAvatar(false); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDraggingAvatar(false);
+                    const file = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'));
+                    if (file) {
+                      if (avatarUpload) URL.revokeObjectURL(avatarUpload.previewUrl);
+                      setAvatarUpload({ file, previewUrl: URL.createObjectURL(file) });
+                    }
+                  }}
+                  className={`relative flex h-16 w-16 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed transition-all ${
+                    isDraggingAvatar ? 'border-gray-900 bg-gray-100' : 'border-gray-300 bg-gray-50 hover:border-gray-500'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (avatarUpload) URL.revokeObjectURL(avatarUpload.previewUrl);
+                        setAvatarUpload({ file, previewUrl: URL.createObjectURL(file) });
+                      }
+                      e.target.value = '';
+                    }}
+                  />
+                  {avatarUpload ? (
+                    <img src={avatarUpload.previewUrl} alt="Profile preview" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera className="h-5 w-5 text-gray-400" />
+                  )}
+                </label>
+                <div className="text-sm">
+                  <p className="font-semibold text-gray-800">Profile photo</p>
+                  <p className="text-xs text-gray-400">Optional — add it now or later.</p>
+                </div>
+                {avatarUpload && (
+                  <button
+                    type="button"
+                    onClick={() => { URL.revokeObjectURL(avatarUpload.previewUrl); setAvatarUpload(null); }}
+                    className="ml-auto text-xs font-semibold text-gray-400 hover:text-gray-700"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
                   <input
                     type="text"
-                    value={fullName}
-                    onChange={e => setFullName(e.target.value)}
-                    placeholder="Jane Smith"
-                    className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    value={firstName}
+                    onChange={e => setFirstName(e.target.value)}
+                    placeholder="Jane"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={e => setLastName(e.target.value)}
+                    placeholder="Smith"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                 </div>
               </div>
@@ -261,8 +379,51 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Country</label>
+                  <input
+                    type="text"
+                    value={country}
+                    onChange={e => setCountry(e.target.value)}
+                    placeholder="Thailand"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
+                  <input
+                    type="text"
+                    value={city}
+                    onChange={e => setCity(e.target.value)}
+                    placeholder="Bangkok"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
+                <div className="flex flex-wrap gap-2">
+                  {GENDER_OPTIONS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setGender(option.value)}
+                      className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
+                        gender === option.value
+                          ? 'border-gray-900 bg-gray-900 text-white'
+                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
@@ -279,33 +440,14 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                   </>
                 )}
               </button>
-
-              <div className="relative mt-2">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
-                <div className="relative flex justify-center text-xs text-gray-400 bg-white px-3">or sign up with</div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[{ name: 'Google', icon: 'G' }, { name: 'Facebook', icon: 'f' }].map(({ name, icon }) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => void handleOAuthSignUp(name.toLowerCase() as 'google' | 'facebook')}
-                    disabled={oauthLoadingProvider !== null}
-                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-60"
-                  >
-                    {oauthLoadingProvider === name.toLowerCase() ? (
-                      <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <span className="font-bold">{icon}</span>
-                    )}
-                    {name}
-                  </button>
-                ))}
-              </div>
             </form>
-          ) : (
+          )}
+
+          {step === 3 && (
             <form onSubmit={handleSubmit} className="space-y-4">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">Set your password</h2>
+              <p className="text-gray-500 mb-6">Almost done, {firstName || 'there'}!</p>
+
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
                 <div className="relative">
@@ -371,7 +513,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
               </label>
 
               <div className="flex gap-3 mt-2">
-                <button type="button" onClick={() => { setStep(1); setError(''); }}
+                <button type="button" onClick={() => { setStep(2); setError(''); }}
                   className="flex-1 py-3.5 border border-gray-200 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all">
                   Back
                 </button>

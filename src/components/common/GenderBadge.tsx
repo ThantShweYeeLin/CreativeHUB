@@ -1,10 +1,12 @@
 import type { Gender } from '../../lib/database.types';
 
-export const GENDER_META: Record<Gender, { label: string; symbol: string; className: string }> = {
-  male: { label: 'Male', symbol: '♂', className: 'bg-blue-500 text-white' },
-  female: { label: 'Female', symbol: '♀', className: 'bg-pink-500 text-white' },
-  lgbtq_plus: { label: 'LGBTQ+', symbol: '⚧', className: 'bg-gradient-to-br from-purple-500 via-pink-500 to-amber-400 text-white' },
-  prefer_not_to_say: { label: 'Prefer not to say', symbol: '–', className: 'bg-gray-400 text-white' },
+// Pronouns are stated as text on profile pages rather than shown as a
+// male/female symbol badge on avatar icons throughout the app.
+export const GENDER_META: Record<Gender, { label: string; pronoun: string; className: string }> = {
+  male: { label: 'Male', pronoun: 'He / Him', className: 'bg-blue-500 text-white' },
+  female: { label: 'Female', pronoun: 'She / Her', className: 'bg-pink-500 text-white' },
+  lgbtq_plus: { label: 'LGBTQ+', pronoun: 'They / Them', className: 'bg-gradient-to-br from-purple-500 via-pink-500 to-amber-400 text-white' },
+  prefer_not_to_say: { label: 'Prefer not to say', pronoun: '', className: 'bg-gray-400 text-white' },
 };
 
 export const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
@@ -26,32 +28,8 @@ export const GENDER_POSITION_CLASSES = {
   'top-left': '-top-0.5 -left-0.5',
 };
 
-const SIZE_CLASSES = GENDER_SIZE_CLASSES;
-const POSITION_CLASSES = GENDER_POSITION_CLASSES;
-
-interface GenderBadgeProps {
-  gender?: Gender | null;
-  size?: keyof typeof SIZE_CLASSES;
-  position?: keyof typeof POSITION_CLASSES;
-  className?: string;
+export function getPronounLabel(gender?: Gender | null): string | null {
+  if (!gender) return null;
+  const pronoun = GENDER_META[gender]?.pronoun;
+  return pronoun || null;
 }
-
-export function GenderBadge({ gender, size = 'sm', position = 'bottom-right', className = '' }: GenderBadgeProps) {
-  if (!gender) {
-    return null;
-  }
-
-  const meta = GENDER_META[gender] || GENDER_META.prefer_not_to_say;
-
-  return (
-    <span
-      title={meta.label}
-      aria-label={meta.label}
-      className={`absolute flex items-center justify-center rounded-full ring-2 ring-white leading-none font-bold ${POSITION_CLASSES[position]} ${SIZE_CLASSES[size]} ${meta.className} ${className}`}
-    >
-      {meta.symbol}
-    </span>
-  );
-}
-
-export default GenderBadge;

@@ -26,6 +26,7 @@ import { MessagesPage } from './pages/MessagesPage';
 import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
+import { POST_SIGNUP_REDIRECT_KEY } from './pages/SignUpPageWithRouting';
 
 // Loading component
 function LoadingScreen() {
@@ -63,6 +64,17 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
       </div>
     </div>
   );
+}
+
+// Right after sign-up, the auth state flips to authenticated (and this Routes
+// tree remounts into the authenticated branch) before the caller's own
+// navigate() call has a chance to run, so a plain post-signup navigate() gets
+// raced out by the catch-all below. Read the intended destination the sign-up
+// page stashed just before creating the account instead.
+function PostAuthLanding() {
+  const target = sessionStorage.getItem(POST_SIGNUP_REDIRECT_KEY);
+  sessionStorage.removeItem(POST_SIGNUP_REDIRECT_KEY);
+  return <Navigate to={target || '/explore'} replace />;
 }
 
 export default function App() {
@@ -287,7 +299,7 @@ export default function App() {
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/explore" replace />} />
-          <Route path="*" element={<Navigate to="/explore" replace />} />
+          <Route path="*" element={<PostAuthLanding />} />
         </>
       )}
     </Routes>

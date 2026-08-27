@@ -1,7 +1,8 @@
-import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
+import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, UserRound, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { EditableGenderBadge } from '../../components/common/EditableGenderBadge';
+import { getPronounLabel } from '../../components/common/GenderBadge';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -144,6 +145,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
   const avatarUrl = profile?.avatar_url || user?.avatar_url || DEFAULT_AVATAR_URL;
   const coverUrl = profile?.cover_url || '';
   const location = profile?.location || 'Location not added';
+  const pronoun = getPronounLabel(profile?.gender ?? user?.gender);
   const locationLatitude = profile?.location_latitude ?? formValues.location_latitude;
   const locationLongitude = profile?.location_longitude ?? formValues.location_longitude;
   const hasPreciseLocation = locationLatitude !== null && locationLongitude !== null;
@@ -754,6 +756,12 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                       <MapPin className="w-4 h-4 md:w-5 md:h-5" />
                       <span>{location}</span>
                     </div>
+                    {pronoun && (
+                      <div className="flex items-center gap-2">
+                        <UserRound className="w-4 h-4 md:w-5 md:h-5" />
+                        <span>{pronoun}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 

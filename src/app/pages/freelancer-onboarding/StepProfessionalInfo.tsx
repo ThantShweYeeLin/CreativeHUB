@@ -1,0 +1,87 @@
+import { User } from 'lucide-react';
+import { ProfileImageDropzone, type ImageUpload } from '../../../components/common/ProfileImageDropzone';
+
+interface StepProfessionalInfoProps {
+  displayName: string;
+  onDisplayNameChange: (value: string) => void;
+  bio: string;
+  onBioChange: (value: string) => void;
+  profilePictureUpload: ImageUpload | null;
+  isDraggingProfilePicture: boolean;
+  onProfilePictureDragChange: (isDragging: boolean) => void;
+  onProfilePictureChange: (file: File) => void;
+  onProfilePictureRemove: () => void;
+  coverPhotoUpload: ImageUpload | null;
+  isDraggingCoverPhoto: boolean;
+  onCoverPhotoDragChange: (isDragging: boolean) => void;
+  onCoverPhotoChange: (file: File) => void;
+  onCoverPhotoRemove: () => void;
+}
+
+export function StepProfessionalInfo({
+  displayName,
+  onDisplayNameChange,
+  bio,
+  onBioChange,
+  profilePictureUpload,
+  isDraggingProfilePicture,
+  onProfilePictureDragChange,
+  onProfilePictureChange,
+  onProfilePictureRemove,
+  coverPhotoUpload,
+  isDraggingCoverPhoto,
+  onCoverPhotoDragChange,
+  onCoverPhotoChange,
+  onCoverPhotoRemove,
+}: StepProfessionalInfoProps) {
+  return (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="md:col-span-2">
+        <label className="mb-2 block text-sm font-semibold text-gray-700">Professional Display Name</label>
+        <div className="relative">
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            value={displayName}
+            onChange={(event) => onDisplayNameChange(event.target.value)}
+            placeholder="Luna Photography"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
+        <p className="mt-1 text-xs text-gray-500">Shown publicly instead of your legal name.</p>
+      </div>
+
+      <ProfileImageDropzone
+        label="Profile Photo"
+        helper="Strongly recommended — square images work best."
+        upload={profilePictureUpload}
+        isDragging={isDraggingProfilePicture}
+        previewClassName="h-40 w-40 rounded-full object-cover"
+        onDragChange={onProfilePictureDragChange}
+        onChange={onProfilePictureChange}
+        onRemove={onProfilePictureRemove}
+      />
+
+      <ProfileImageDropzone
+        label="Cover Photo (optional)"
+        helper="Use a wide image that represents your work."
+        upload={coverPhotoUpload}
+        isDragging={isDraggingCoverPhoto}
+        previewClassName="h-40 w-full rounded-xl object-cover"
+        onDragChange={onCoverPhotoDragChange}
+        onChange={onCoverPhotoChange}
+        onRemove={onCoverPhotoRemove}
+      />
+
+      <div className="md:col-span-2">
+        <label className="mb-2 block text-sm font-semibold text-gray-700">Short Bio</label>
+        <textarea
+          value={bio}
+          onChange={(event) => onBioChange(event.target.value)}
+          rows={4}
+          placeholder="Professional wedding photographer specializing in outdoor and cinematic-style photography."
+          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { hasSupabaseConfig, supabase } from './supabase';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { Gender } from './database.types';
 
 export interface SignUpData {
@@ -22,6 +22,7 @@ export interface AuthUser {
   avatar_url: string | null;
   role: 'freelancer' | 'client';
   gender: Gender | null;
+  emailConfirmedAt: string | null;
 }
 
 class AuthService {
@@ -124,8 +125,10 @@ class AuthService {
         return { user: null, error: new Error('Please confirm your email before signing in to complete registration.') };
       }
 
-      // Create user profile
-      const { error: profileError } = await supabase.from('users').insert({
+      // Create (or, if a database trigger already created a row for this
+      // auth user, overwrite) the user profile with the details chosen on
+      // the sign-up form.
+      const { error: profileError } = await supabase.from('users').upsert({
         id: authData.user.id,
         email: data.email,
         full_name: data.fullName,
@@ -145,6 +148,7 @@ class AuthService {
           avatar_url: null,
           role: data.role,
           gender: data.gender,
+          emailConfirmedAt: session.user.email_confirmed_at ?? null,
         },
         error: null,
       };
@@ -186,6 +190,7 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          emailConfirmedAt: authData.user.email_confirmed_at ?? null,
         },
         error: null,
       };
@@ -281,6 +286,7 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
         },
         error: null,
       };
@@ -327,6 +333,7 @@ class AuthService {
             avatar_url: userProfile.avatar_url,
             role: userProfile.role,
             gender: userProfile.gender ?? null,
+            emailConfirmedAt: session.user.email_confirmed_at ?? null,
           });
         }
       } else {

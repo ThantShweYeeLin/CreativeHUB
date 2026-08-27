@@ -6,7 +6,7 @@ import type { Gender } from '../lib/database.types';
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => Promise<AuthUser>;
   signIn: (email: string, password: string) => Promise<void>;
   requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
@@ -55,11 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       gender,
     });
 
-    if (error) {
-      throw error;
+    if (error || !newUser) {
+      throw error || new Error('Sign up failed.');
     }
 
     setUser(newUser);
+    return newUser;
   };
 
   const signIn = async (email: string, password: string) => {

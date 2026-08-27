@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pencil } from 'lucide-react';
 import type { Gender } from '../../lib/database.types';
-import { GENDER_META, GENDER_OPTIONS, GENDER_POSITION_CLASSES, GENDER_SIZE_CLASSES } from './GenderBadge';
+import { GENDER_OPTIONS, GENDER_POSITION_CLASSES, GENDER_SIZE_CLASSES } from './GenderBadge';
 
 interface EditableGenderBadgeProps {
   gender: Gender | null | undefined;
@@ -14,7 +14,6 @@ interface EditableGenderBadgeProps {
 export function EditableGenderBadge({ gender, onSelect, size = 'md', position = 'top-right', disabled = false }: EditableGenderBadgeProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const meta = gender ? GENDER_META[gender] || GENDER_META.prefer_not_to_say : null;
 
   const handleSelect = async (value: Gender) => {
     setIsOpen(false);
@@ -29,17 +28,11 @@ export function EditableGenderBadge({ gender, onSelect, size = 'md', position = 
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         disabled={disabled || isSaving}
-        title="Edit gender"
-        aria-label="Edit gender"
-        className={`flex items-center justify-center rounded-full ring-2 ring-white leading-none font-bold shadow-sm transition hover:brightness-95 disabled:opacity-60 ${GENDER_SIZE_CLASSES[size]} ${meta ? meta.className : 'bg-gray-300 text-gray-700'}`}
+        title="Edit pronouns"
+        aria-label="Edit pronouns"
+        className={`flex items-center justify-center rounded-full bg-white text-gray-700 ring-2 ring-white leading-none font-bold shadow-sm transition hover:brightness-95 disabled:opacity-60 ${GENDER_SIZE_CLASSES[size]}`}
       >
-        {isSaving ? (
-          <span className="animate-pulse">…</span>
-        ) : meta ? (
-          meta.symbol
-        ) : (
-          <Pencil className="h-2.5 w-2.5" />
-        )}
+        {isSaving ? <span className="animate-pulse">…</span> : <Pencil className="h-2.5 w-2.5" />}
       </button>
 
       {isOpen && (

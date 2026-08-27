@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Bot,
+  ClipboardList,
   Globe,
   Lock,
   LogOut,
@@ -532,6 +533,25 @@ export function SettingsPage() {
 
                 <button onClick={handleSaveFreelancerSettings} className="rounded-lg bg-gray-900 px-4 py-2 font-semibold text-white hover:bg-black">Save Freelancer Settings</button>
               </div>
+            </section>
+          )}
+
+          {role === 'client' && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-gray-900">
+                <ClipboardList className="h-5 w-5" />
+                <h2 className="text-lg font-bold">Profile Setup</h2>
+              </div>
+              <p className="mb-4 text-sm text-gray-600">
+                Finish or update your client profile — client type, services you're interested in, budget, and what
+                matters most to you.
+              </p>
+              <button
+                onClick={() => navigate('/onboarding/client')}
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+              >
+                Complete your profile
+              </button>
             </section>
           )}
 

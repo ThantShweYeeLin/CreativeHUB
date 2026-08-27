@@ -1,12 +1,15 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, ChevronLeft, ChevronRight, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
+import { computeTrustLevel } from '../../lib/trustLevel';
+import { TrustBadge } from '../../components/common/TrustBadge';
+import { getPronounLabel } from '../../components/common/GenderBadge';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import FollowersModal from '../components/FollowersModal';
@@ -283,6 +286,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const pronoun = getPronounLabel(profile?.gender);
+  const trust = useMemo(
+    () =>
+      computeTrustLevel({
+        rating,
+        totalReviews,
+        portfolioCount,
+        phoneVerified: Boolean(freelancerProfile?.phone_verified),
+        identityStatus: freelancerProfile?.identity_status || 'not_submitted',
+        profileCompletenessFields: {
+          hasBio: Boolean(freelancerProfile?.description),
+          hasAvatar: Boolean(profile?.avatar_url),
+          hasServices: Boolean(freelancerProfile?.title),
+          hasSkills: skills.length > 0,
+          hasPricing: Boolean(freelancerProfile?.pricing_type || freelancerProfile?.hourly_rate),
+          hasAvailability: (freelancerProfile?.working_days || []).length > 0,
+        },
+      }),
+    [rating, totalReviews, portfolioCount, freelancerProfile, profile, skills]
+  );
 
   const featuredPortfolio = useMemo(() => portfolioItems.length > 0 ? portfolioItems : [], [portfolioItems]);
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
@@ -751,6 +774,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{profile?.email || 'Email unavailable'}</span>
                   </div>
+                  {pronoun && (
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                      <span>{pronoun}</span>
+                    </div>
+                  )}
+                  {isBookableFreelancer && (
+                    <div>
+                      <TrustBadge trust={trust} />
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
