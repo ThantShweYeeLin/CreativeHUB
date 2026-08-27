@@ -1590,7 +1590,7 @@ export class DataService {
         actor_id: request.client_id,
         type: 'request',
         title: 'New booking request',
-        message: `New booking request: ${request.project_name}`,
+        message: `${clientName}: A new booking request - ${request.project_name}`,
         related_id: (data as any)?.id || null,
         post_id: null,
         comment_id: null,
@@ -2269,7 +2269,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_accepted',
             title: 'Booking accepted',
-            message: `accepted ${projectName}.`,
+            message: `${actorName} accepted ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
@@ -2284,7 +2284,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'request_rejected',
             title: 'Booking rejected',
-            message: `rejected ${projectName}.`,
+            message: `${actorName} rejected ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
