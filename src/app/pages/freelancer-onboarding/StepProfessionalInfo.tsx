@@ -7,6 +7,7 @@ interface StepProfessionalInfoProps {
   bio: string;
   onBioChange: (value: string) => void;
   profilePictureUpload: ImageUpload | null;
+  existingAvatarUrl?: string | null;
   isDraggingProfilePicture: boolean;
   onProfilePictureDragChange: (isDragging: boolean) => void;
   onProfilePictureChange: (file: File) => void;
@@ -24,6 +25,7 @@ export function StepProfessionalInfo({
   bio,
   onBioChange,
   profilePictureUpload,
+  existingAvatarUrl,
   isDraggingProfilePicture,
   onProfilePictureDragChange,
   onProfilePictureChange,
@@ -54,6 +56,7 @@ export function StepProfessionalInfo({
         label="Profile Photo"
         helper="Strongly recommended — square images work best."
         upload={profilePictureUpload}
+        existingImageUrl={existingAvatarUrl}
         isDragging={isDraggingProfilePicture}
         previewClassName="h-40 w-40 rounded-full object-cover"
         onDragChange={onProfilePictureDragChange}

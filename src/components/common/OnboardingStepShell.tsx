@@ -8,8 +8,8 @@ interface OnboardingStepShellProps {
   stepIndex: number;
   totalSteps: number;
   error?: string | null;
-  onBack: () => void;
-  backLabel: string;
+  onBack?: () => void;
+  backLabel?: string;
   onSkip?: () => void;
   onContinue: () => void;
   continueLabel?: string;
@@ -39,13 +39,17 @@ export function OnboardingStepShell({
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
       <div className={`mx-auto w-full px-4 ${maxWidthClassName}`}>
-        <button
-          onClick={onBack}
-          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          {backLabel}
-        </button>
+        {onBack ? (
+          <button
+            onClick={onBack}
+            className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-700 hover:text-gray-900"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {backLabel}
+          </button>
+        ) : (
+          <div className="mb-6 h-[22px]" />
+        )}
 
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">{eyebrow}</p>

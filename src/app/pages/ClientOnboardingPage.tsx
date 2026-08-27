@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
 import { MapPin, User } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -28,8 +27,11 @@ function toggle(list: string[], value: string) {
 
 const TOTAL_STEPS = 5;
 
-export function ClientOnboardingPage() {
-  const navigate = useNavigate();
+interface ClientOnboardingPageProps {
+  onBack?: () => void;
+}
+
+export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const onboardingCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
@@ -52,10 +54,14 @@ export function ClientOnboardingPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState(true);
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(null);
 
   // Pre-fill from any answers already saved, so revisiting this page (e.g.
   // via "Complete your profile" in Settings after skipping) edits existing
-  // choices instead of silently resetting them to blank on Finish.
+  // choices instead of silently resetting them to blank on Finish. This is a
+  // fresh DB read rather than the auth context's user object, which can
+  // still be holding the pre-upload/pre-geocode snapshot from the moment
+  // signUp() resolved (avatar/location are written to the DB slightly later).
   useEffect(() => {
     if (!user?.id) {
       setIsLoadingExisting(false);
@@ -71,6 +77,7 @@ export function ClientOnboardingPage() {
       }
 
       if (data.location) setLocation(data.location);
+      if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
       if (Array.isArray(data.client_type)) setClientType(data.client_type);
       if (Array.isArray(data.client_interests)) setInterests(data.client_interests);
       if (data.client_budget_preference) setBudgetPreference(data.client_budget_preference);
@@ -106,11 +113,12 @@ export function ClientOnboardingPage() {
     setStep((current) => Math.min(current + 1, TOTAL_STEPS));
   };
 
+  // Going back a step is always fine; leaving the flow entirely from step 1
+  // is only offered when the caller supplied onBack — first-time onboarding
+  // (reached via the mandatory post-signup gate) passes none, so there's no
+  // way to bail before finishing. Resuming/editing later (from Settings)
+  // does supply onBack.
   const handleBack = () => {
-    if (step === 1) {
-      navigate('/explore');
-      return;
-    }
     setError(null);
     setStep((current) => Math.max(current - 1, 1));
   };
@@ -149,11 +157,12 @@ export function ClientOnboardingPage() {
       location_latitude: resolvedLat,
       location_longitude: resolvedLng,
       location_place_id: resolvedPlaceId,
-      avatar_url: uploadedAvatarUrl || user.avatar_url || null,
+      avatar_url: uploadedAvatarUrl || existingAvatarUrl || user.avatar_url || null,
       client_type: clientType,
       client_interests: interests,
       client_budget_preference: budgetPreference || null,
       client_preferences: preferences,
+      onboarding_completed: true,
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -164,7 +173,9 @@ export function ClientOnboardingPage() {
     }
 
     setIsSaving(false);
-    navigate('/explore');
+    // Full reload so AuthContext re-reads onboarding_completed and the
+    // mandatory-onboarding route gate lets the user through to /explore.
+    window.location.href = '/explore';
   };
 
   const isLastStep = step === TOTAL_STEPS;
@@ -192,7 +203,7 @@ export function ClientOnboardingPage() {
       stepIndex={step}
       totalSteps={TOTAL_STEPS}
       error={error}
-      onBack={handleBack}
+      onBack={step > 1 ? handleBack : onBack}
       backLabel={step === 1 ? 'Skip for now' : 'Back'}
       onSkip={step > 1 ? handleSkip : undefined}
       onContinue={isLastStep ? () => void handleFinish() : handleContinue}
@@ -233,6 +244,7 @@ export function ClientOnboardingPage() {
               label="Profile Photo (optional)"
               helper="Square images work best for your avatar."
               upload={avatarUpload}
+              existingImageUrl={existingAvatarUrl}
               isDragging={isDraggingAvatar}
               previewClassName="h-28 w-28 rounded-full object-cover"
               onDragChange={setIsDraggingAvatar}

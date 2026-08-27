@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
@@ -18,7 +17,7 @@ import { StepPricing } from './freelancer-onboarding/StepPricing';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
 import { StepVerification } from './freelancer-onboarding/StepVerification';
-import { parseExperienceYears, type PortfolioProjectDraft } from './freelancer-onboarding/types';
+import { parseExperienceYears, PORTFOLIO_PLATFORM_LABELS, type PortfolioLinkDraft } from './freelancer-onboarding/types';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
@@ -43,7 +42,6 @@ const STEP_META: Array<{ title: string; description: string }> = [
 const REQUIRED_STEPS = new Set([1, 2, 4]);
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { currency: preferredCurrency, setCurrency } = useCurrency();
   const [step, setStep] = useState(1);
@@ -68,7 +66,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [experienceLevel, setExperienceLevel] = useState('');
 
   // (e) Portfolio
-  const [portfolioProjects, setPortfolioProjects] = useState<PortfolioProjectDraft[]>([]);
+  const [portfolioLinks, setPortfolioLinks] = useState<PortfolioLinkDraft[]>([]);
 
   // (f) Availability
   const [availability, setAvailability] = useState('Available');
@@ -102,6 +100,26 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(null);
+
+  // Prefill from whatever was already saved (e.g. photo/location chosen at
+  // sign-up) with a fresh DB read rather than the auth context's user object,
+  // which can still be holding the pre-upload/pre-geocode snapshot from the
+  // moment signUp() resolved.
+  useEffect(() => {
+    if (!user?.id) return;
+    let isMounted = true;
+
+    DataService.getUser(user.id).then(({ data }) => {
+      if (!isMounted || !data) return;
+      if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      if (data.location) setLocation((current) => current || data.location || '');
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   const setProfileImageFile = (file: File) => {
     if (profilePictureUpload) URL.revokeObjectURL(profilePictureUpload.previewUrl);
@@ -138,11 +156,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setStep((current) => Math.min(current + 1, TOTAL_STEPS));
   };
 
+  // Going back a step is always fine; leaving the flow entirely from step 1
+  // is only offered when the caller supplied onBack — first-time onboarding
+  // (reached via the mandatory post-signup gate) passes none, so there's no
+  // way to bail before finishing. Resuming/editing later (from Settings, or
+  // the "Become a Freelancer" upgrade path) does supply onBack.
   const handleBack = () => {
-    if (step === 1) {
-      onBack ? onBack() : navigate('/explore');
-      return;
-    }
     setError(null);
     setStep((current) => Math.max(current - 1, 1));
   };
@@ -195,7 +214,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     const userUpdate = await DataService.updateUser(user.id, {
       role: 'freelancer',
       full_name: displayName.trim(),
-      avatar_url: uploadedAvatarUrl || user.avatar_url || null,
+      avatar_url: uploadedAvatarUrl || existingAvatarUrl || user.avatar_url || null,
       cover_url: uploadedCoverUrl,
       bio: bio.trim() || null,
       preferred_currency: normalizeCurrencyCode(startingPriceCurrency, 'THB'),
@@ -203,6 +222,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       location_latitude: resolvedLat,
       location_longitude: resolvedLng,
       location_place_id: resolvedPlaceId,
+      onboarding_completed: true,
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -235,7 +255,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       contact_preference: contactPreference,
       phone_verified: phoneVerified,
       identity_status: identityStatus,
-      portfolio_count: portfolioProjects.length,
+      portfolio_count: portfolioLinks.length,
       updated_at: new Date().toISOString(),
     };
 
@@ -261,26 +281,15 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     if (freelancerProfileId) {
-      for (const project of portfolioProjects) {
-        if (!project.title.trim() && project.images.length === 0) continue;
-
-        const imageUrls: string[] = [];
-        for (const image of project.images) {
-          const upload = await DataService.uploadPortfolioImage(user.id, image.file);
-          if (upload.publicUrl) imageUrls.push(upload.publicUrl);
-        }
-
-        const tags = project.tags
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean);
+      for (const link of portfolioLinks) {
+        if (!link.url.trim()) continue;
 
         await DataService.createPortfolioItem(freelancerProfileId, {
-          title: project.title.trim() || 'Untitled project',
-          description: project.description.trim() || null,
-          image_urls: imageUrls,
-          project_url: null,
-          tools_used: [project.category, ...tags].filter(Boolean),
+          title: link.label.trim() || PORTFOLIO_PLATFORM_LABELS[link.platform],
+          description: null,
+          image_urls: [],
+          project_url: link.url.trim(),
+          tools_used: [link.platform],
           featured: false,
         } as any);
       }
@@ -306,7 +315,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       stepIndex={step}
       totalSteps={TOTAL_STEPS}
       error={error}
-      onBack={handleBack}
+      onBack={step > 1 ? handleBack : onBack}
       backLabel={step === 1 ? 'Back to Explore' : 'Back'}
       onSkip={isSkippable ? handleSkip : undefined}
       onContinue={isLastStep ? () => void handleFinish() : handleContinue}
@@ -320,6 +329,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           bio={bio}
           onBioChange={setBio}
           profilePictureUpload={profilePictureUpload}
+          existingAvatarUrl={existingAvatarUrl}
           isDraggingProfilePicture={isDraggingProfilePicture}
           onProfilePictureDragChange={setIsDraggingProfilePicture}
           onProfilePictureChange={setProfileImageFile}
@@ -341,7 +351,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 3 && <StepSkills skills={skills} onSkillsChange={setSkills} />}
+      {step === 3 && <StepSkills skills={skills} onSkillsChange={setSkills} selectedServices={selectedServices} />}
 
       {step === 4 && (
         <StepExperience
@@ -352,7 +362,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 5 && <StepPortfolio projects={portfolioProjects} onProjectsChange={setPortfolioProjects} />}
+      {step === 5 && <StepPortfolio links={portfolioLinks} onLinksChange={setPortfolioLinks} />}
 
       {step === 6 && (
         <StepAvailability

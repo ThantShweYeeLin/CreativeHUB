@@ -5,11 +5,14 @@
 
 -- Client-specific fields, stored directly on public.users (no separate
 -- client_profiles table — there are only a handful of these fields).
+-- onboarding_completed is shared by both roles: it gates access to the rest
+-- of the app until the role-specific onboarding flow has been finished once.
 alter table public.users
   add column if not exists client_type text[] default array[]::text[],
   add column if not exists client_interests text[] default array[]::text[],
   add column if not exists client_budget_preference text,
-  add column if not exists client_preferences text[] default array[]::text[];
+  add column if not exists client_preferences text[] default array[]::text[],
+  add column if not exists onboarding_completed boolean default false;
 
 -- Freelancer-specific fields, stored on public.freelancer_profiles alongside
 -- the existing title/description/hourly_rate/skills/styles/experience_years.

@@ -9,6 +9,7 @@ export function ProfileImageDropzone({
   label,
   helper,
   upload,
+  existingImageUrl,
   isDragging,
   previewClassName,
   onDragChange,
@@ -18,6 +19,8 @@ export function ProfileImageDropzone({
   label: string;
   helper: string;
   upload: ImageUpload | null;
+  /** Already-saved photo (e.g. chosen at sign-up) to show until the user picks a new one. */
+  existingImageUrl?: string | null;
   isDragging: boolean;
   previewClassName: string;
   onDragChange: (isDragging: boolean) => void;
@@ -30,6 +33,8 @@ export function ProfileImageDropzone({
       onChange(file);
     }
   };
+
+  const previewUrl = upload?.previewUrl || existingImageUrl || null;
 
   return (
     <div>
@@ -66,20 +71,27 @@ export function ProfileImageDropzone({
           }}
         />
 
-        {upload ? (
+        {previewUrl ? (
           <>
-            <img src={upload.previewUrl} alt={`${label} preview`} className={previewClassName} />
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault();
-                onRemove();
-              }}
-              className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow-md transition-colors hover:bg-gray-900 hover:text-white"
-              aria-label={`Remove ${label.toLowerCase()}`}
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <img src={previewUrl} alt={`${label} preview`} className={previewClassName} />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition-opacity hover:bg-black/40 hover:opacity-100">
+              <span className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-semibold text-gray-900">
+                {upload ? 'Change photo' : 'Click or drag to change'}
+              </span>
+            </div>
+            {upload && (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onRemove();
+                }}
+                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-700 shadow-md transition-colors hover:bg-gray-900 hover:text-white"
+                aria-label={`Remove ${label.toLowerCase()}`}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </>
         ) : (
           <>

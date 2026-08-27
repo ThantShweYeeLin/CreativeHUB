@@ -44,6 +44,7 @@ export interface Database {
           client_interests: string[] | null;
           client_budget_preference: string | null;
           client_preferences: string[] | null;
+          onboarding_completed: boolean;
           created_at: string;
           updated_at: string;
         }>;

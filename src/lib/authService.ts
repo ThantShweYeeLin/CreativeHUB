@@ -23,6 +23,7 @@ export interface AuthUser {
   role: 'freelancer' | 'client';
   gender: Gender | null;
   emailConfirmedAt: string | null;
+  onboardingCompleted: boolean;
 }
 
 class AuthService {
@@ -149,6 +150,7 @@ class AuthService {
           role: data.role,
           gender: data.gender,
           emailConfirmedAt: session.user.email_confirmed_at ?? null,
+          onboardingCompleted: false,
         },
         error: null,
       };
@@ -191,6 +193,7 @@ class AuthService {
           role: userProfile.role,
           gender: userProfile.gender ?? null,
           emailConfirmedAt: authData.user.email_confirmed_at ?? null,
+          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
         error: null,
       };
@@ -287,6 +290,7 @@ class AuthService {
           role: userProfile.role,
           gender: userProfile.gender ?? null,
           emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
+          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
         error: null,
       };
@@ -309,6 +313,39 @@ class AuthService {
   async updateEmail(email: string) {
     const { data, error } = await supabase.auth.updateUser({ email });
     return { data, error };
+  }
+
+  // Permanently deletes the signed-in user's account. The anon key can't
+  // delete an auth.users row itself, so this calls the backend's
+  // service-role-backed endpoint with the current session's access token —
+  // the server re-derives the caller's own id from that token rather than
+  // trusting a client-supplied id (see server/src/routes/account.ts).
+  async deleteAccount(): Promise<{ error: Error | null }> {
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        return { error: new Error((sessionError as any).message || 'Unable to verify session.') };
+      }
+      if (!data.session?.access_token) {
+        return { error: new Error('You need to be signed in to delete your account.') };
+      }
+
+      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        return { error: new Error(body?.message || 'Unable to delete account.') };
+      }
+
+      await supabase.auth.signOut();
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unable to delete account.') };
+    }
   }
 
   async updatePassword(password: string) {
@@ -334,6 +371,7 @@ class AuthService {
             role: userProfile.role,
             gender: userProfile.gender ?? null,
             emailConfirmedAt: session.user.email_confirmed_at ?? null,
+            onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
           });
         }
       } else {

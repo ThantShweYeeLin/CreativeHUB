@@ -26,7 +26,6 @@ import { MessagesPage } from './pages/MessagesPage';
 import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
-import { POST_SIGNUP_REDIRECT_KEY } from './pages/SignUpPageWithRouting';
 
 // Loading component
 function LoadingScreen() {
@@ -66,17 +65,6 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
   );
 }
 
-// Right after sign-up, the auth state flips to authenticated (and this Routes
-// tree remounts into the authenticated branch) before the caller's own
-// navigate() call has a chance to run, so a plain post-signup navigate() gets
-// raced out by the catch-all below. Read the intended destination the sign-up
-// page stashed just before creating the account instead.
-function PostAuthLanding() {
-  const target = sessionStorage.getItem(POST_SIGNUP_REDIRECT_KEY);
-  sessionStorage.removeItem(POST_SIGNUP_REDIRECT_KEY);
-  return <Navigate to={target || '/explore'} replace />;
-}
-
 export default function App() {
   const { loading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
@@ -103,8 +91,32 @@ export default function App() {
         </>
       )}
 
+      {/* Both roles must finish their onboarding flow before reaching the
+          rest of the app — any other path bounces back to it. */}
+      {isAuthenticated && user && !user.onboardingCompleted && (
+        <>
+          <Route
+            path="/onboarding/client"
+            element={
+              <ProtectedRoute>
+                <ClientOnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/freelancer"
+            element={
+              <ProtectedRoute>
+                <BecomeFreelancerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to={`/onboarding/${user.role}`} replace />} />
+        </>
+      )}
+
       {/* Protected Routes */}
-      {isAuthenticated && (
+      {isAuthenticated && user?.onboardingCompleted && (
         <>
           {/* Explore pages */}
           <Route
@@ -258,7 +270,7 @@ export default function App() {
             path="/onboarding/client"
             element={
               <ProtectedRoute>
-                <ClientOnboardingPage />
+                <ClientOnboardingPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />
@@ -299,7 +311,7 @@ export default function App() {
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/explore" replace />} />
-          <Route path="*" element={<PostAuthLanding />} />
+          <Route path="*" element={<Navigate to="/explore" replace />} />
         </>
       )}
     </Routes>
