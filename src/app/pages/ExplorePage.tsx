@@ -528,7 +528,6 @@ export function ExplorePage() {
       )}
       <AIImageMatcher
         open={showAIMatcher}
-        freelancers={freelancers}
         onClose={() => setShowAIMatcher(false)}
         onResults={setAIMatcherResults}
       />

@@ -7,32 +7,11 @@ import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
 import { normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
+import { CATEGORIES as services, STYLES_BY_CATEGORY as specialtyMap } from '../../lib/categories';
 
 interface BecomeFreelancerPageProps {
   onBack?: () => void;
 }
-
-const services = [
-  'Photographer',
-  'Videographer',
-  'Graphic Designer',
-  'Makeup Artist',
-  'Hair Stylist',
-  'Fashion Designer',
-  'Model',
-  'Event Decoration',
-] as const;
-
-const specialtyMap: Record<string, string[]> = {
-  Photographer: ['Wedding', 'Portrait', 'Fashion', 'Food', 'Commercial'],
-  Videographer: ['Wedding Film', 'Commercial', 'Music Video', 'Event', 'Documentary'],
-  'Graphic Designer': ['Branding', 'Editorial', 'Packaging', 'Social Media', 'Illustration'],
-  'Makeup Artist': ['Bridal', 'Editorial', 'Special Effects', 'Runway', 'Beauty'],
-  'Hair Stylist': ['Bridal', 'Runway', 'Colorist', 'Editorial', 'Studio'],
-  'Fashion Designer': ['Ready-to-Wear', 'Luxury', 'Couture', 'Streetwear', 'Costume'],
-  Model: ['Runway', 'Editorial', 'E-commerce', 'Commercial', 'Beauty'],
-  'Event Decoration': ['Weddings', 'Corporate', 'Floral', 'Theme', 'Luxury Setup'],
-};
 
 const experienceOptions = ['Less than 1 year', '1-3 years', '3-5 years', '5-10 years', '10+ years'] as const;
 const availabilityOptions = ['Available', 'Busy', 'Unavailable'] as const;
@@ -200,7 +179,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   const availableSpecialties = useMemo(() => {
-    return Array.from(new Set(selectedServices.flatMap((service) => specialtyMap[service] || [])));
+    const map = specialtyMap as Record<string, string[]>;
+    return Array.from(new Set(selectedServices.flatMap((service) => map[service] || [])));
   }, [selectedServices]);
 
   useEffect(() => {

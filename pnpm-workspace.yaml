@@ -6,8 +6,12 @@ overrides:
   '@types/react': 18.3.31
   '@types/react-dom': 18.3.7
 onlyBuiltDependencies:
+  - '@google/genai'
   - '@tailwindcss/oxide'
   - esbuild
+  - protobufjs
 allowBuilds:
+  '@google/genai': false
   '@tailwindcss/oxide': false
   esbuild: false
+  protobufjs: false

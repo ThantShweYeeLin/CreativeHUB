@@ -406,6 +406,34 @@ export class DataService {
     return { data: firstAttempt.data, error: firstAttempt.error };
   }
 
+  static async searchFreelancersByCategoryAndStyle(category: string, style?: string | null) {
+    if (!hasSupabaseConfig) {
+      return { data: [], error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+    }
+
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select('*, users:user_id(id, full_name, avatar_url, gender, rating, total_reviews, location)')
+      .eq('is_available', true)
+      .eq('title', category);
+
+    if (error || !data) {
+      return { data: data ?? [], error };
+    }
+
+    // Freelancers whose styles include the detected style are ranked first;
+    // everyone else in the category still shows up beneath them.
+    const ranked = style
+      ? [...data].sort((a, b) => {
+          const aMatch = Array.isArray(a.styles) && a.styles.includes(style) ? 1 : 0;
+          const bMatch = Array.isArray(b.styles) && b.styles.includes(style) ? 1 : 0;
+          return bMatch - aMatch;
+        })
+      : data;
+
+    return { data: ranked, error: null };
+  }
+
   static async searchFreelancers(query: string, skills?: string[]) {
     const cleaned = typeof query === 'string' ? query.trim() : '';
     const stripDiacritics = (s: string) => s.normalize ? s.normalize('NFD').replace(/\p{Diacritic}/gu, '') : s;
