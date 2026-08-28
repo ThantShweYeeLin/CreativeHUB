@@ -2,8 +2,7 @@ import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { SignUpPage as SignUpPageComponent, type SignUpSubmission, type AccountType } from '../components/SignUpPage';
 import { authService } from '../../lib/authService';
-import { DataService } from '../../lib/dataService';
-import { geocodeAddress } from '../../lib/osmGeocoding';
+import { setPendingSignupProfile } from '../../lib/pendingSignupProfile';
 
 export function SignUpPageWithRouting() {
   const navigate = useNavigate();
@@ -25,28 +24,21 @@ export function SignUpPageWithRouting() {
 
   const handleSignUp = async (data: SignUpSubmission) => {
     const destination = data.role === 'freelancer' ? '/onboarding/freelancer' : '/onboarding/client';
-
     const fullName = `${data.firstName} ${data.lastName}`.trim();
-    const newUser = await signUp(data.email, data.password, fullName, data.role, data.gender);
 
-    if (data.country || data.city) {
-      const resolved = await geocodeAddress([data.city, data.country].filter(Boolean).join(', ')).catch(() => null);
-      if (resolved) {
-        await DataService.updateUser(newUser.id, {
-          location: [data.city, data.country].filter(Boolean).join(', '),
-          location_latitude: resolved.latitude,
-          location_longitude: resolved.longitude,
-          location_place_id: resolved.placeId,
-        });
-      }
-    }
+    // The onboarding page this redirects to can mount before signUp() (and
+    // its avatar upload) finishes — see pendingSignupProfile.ts — so hand it
+    // what we already know synchronously, ahead of calling signUp() at all.
+    setPendingSignupProfile({
+      fullName,
+      avatarPreviewUrl: data.avatarFile ? URL.createObjectURL(data.avatarFile) : null,
+    });
 
-    if (data.avatarFile) {
-      const upload = await DataService.uploadUserProfileImage(newUser.id, data.avatarFile, 'avatar');
-      if (upload.publicUrl) {
-        await DataService.updateUser(newUser.id, { avatar_url: upload.publicUrl });
-      }
-    }
+    // Avatar/location are resolved inside signUp() itself (one atomic write)
+    // rather than as separate calls after it returns — the mandatory
+    // onboarding gate redirects the instant the auth state flips to
+    // signed-in, which would otherwise race ahead of any writes made here.
+    await signUp(data.email, data.password, fullName, data.role, data.gender, data.avatarFile, data.country, data.city);
 
     // The mandatory-onboarding route gate in App.tsx also lands the user
     // here based on user.role/onboardingCompleted, so this navigate() is a

@@ -1,9 +1,11 @@
-import { MapPin } from 'lucide-react';
+import { MapPin, MapPinned } from 'lucide-react';
 import { SERVICE_AREA_OPTIONS, SERVICE_RADIUS_OPTIONS } from './types';
 
 interface StepServiceAreaProps {
   location: string;
   onLocationChange: (value: string) => void;
+  hasPreciseLocation: boolean;
+  onOpenLocationPicker: () => void;
   serviceAreaType: string;
   onServiceAreaTypeChange: (value: string) => void;
   serviceRadiusKm: string;
@@ -13,6 +15,8 @@ interface StepServiceAreaProps {
 export function StepServiceArea({
   location,
   onLocationChange,
+  hasPreciseLocation,
+  onOpenLocationPicker,
   serviceAreaType,
   onServiceAreaTypeChange,
   serviceRadiusKm,
@@ -22,16 +26,27 @@ export function StepServiceArea({
     <div className="space-y-6">
       <div>
         <label className="mb-2 block text-sm font-semibold text-gray-700">Your city / area</label>
-        <div className="relative">
-          <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            value={location}
-            onChange={(event) => onLocationChange(event.target.value)}
-            placeholder="Bangkok, Thailand"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              value={location}
+              onChange={(event) => onLocationChange(event.target.value)}
+              placeholder="Bangkok, Thailand"
+              className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onOpenLocationPicker}
+            className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+          >
+            <MapPinned className="h-4 w-4" /> Pin on map
+          </button>
         </div>
-        <p className="mt-1 text-xs text-gray-500">We use this for map-based discovery — no exact address needed.</p>
+        <p className="mt-1 text-xs text-gray-500">
+          {hasPreciseLocation ? 'Exact location pinned on the map.' : 'We use this for map-based discovery — no exact address needed.'}
+        </p>
       </div>
 
       <div>

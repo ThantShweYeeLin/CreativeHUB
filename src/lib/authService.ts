@@ -1,6 +1,7 @@
 import { hasSupabaseConfig, supabase } from './supabase';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { Gender } from './database.types';
+import { geocodeAddress } from './osmGeocoding';
 
 export interface SignUpData {
   email: string;
@@ -8,6 +9,15 @@ export interface SignUpData {
   fullName: string;
   role: 'freelancer' | 'client';
   gender: Gender;
+  // Optional profile extras collected on the same sign-up screen. Resolved
+  // and written as part of the same upsert below (before this method
+  // returns) rather than as separate calls afterwards — the mandatory
+  // onboarding gate redirects the instant the caller's auth state flips to
+  // signed-in, which races ahead of any writes done after signUp() returns,
+  // so anything collected at sign-up has to land in this one atomic step.
+  avatarFile?: File | null;
+  country?: string;
+  city?: string;
 }
 
 export interface SignInData {
@@ -126,6 +136,36 @@ class AuthService {
         return { user: null, error: new Error('Please confirm your email before signing in to complete registration.') };
       }
 
+      // Resolve avatar upload + location geocoding now, before the profile
+      // row is written, so both land in the same upsert below.
+      let avatarUrl: string | null = null;
+      if (data.avatarFile) {
+        const fileExt = data.avatarFile.name.split('.').pop() || 'jpg';
+        const filePath = `${authData.user.id}/avatar-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, data.avatarFile, { contentType: data.avatarFile.type, upsert: true });
+
+        if (!uploadError) {
+          avatarUrl = supabase.storage.from('avatars').getPublicUrl(filePath).data.publicUrl;
+        }
+      }
+
+      let locationText: string | null = null;
+      let locationLatitude: number | null = null;
+      let locationLongitude: number | null = null;
+      let locationPlaceId: string | null = null;
+      const combinedLocation = [data.city, data.country].filter(Boolean).join(', ');
+      if (combinedLocation) {
+        const resolved = await geocodeAddress(combinedLocation).catch(() => null);
+        if (resolved) {
+          locationText = combinedLocation;
+          locationLatitude = resolved.latitude;
+          locationLongitude = resolved.longitude;
+          locationPlaceId = resolved.placeId;
+        }
+      }
+
       // Create (or, if a database trigger already created a row for this
       // auth user, overwrite) the user profile with the details chosen on
       // the sign-up form.
@@ -135,6 +175,15 @@ class AuthService {
         full_name: data.fullName,
         role: data.role,
         gender: data.gender,
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        ...(locationText
+          ? {
+              location: locationText,
+              location_latitude: locationLatitude,
+              location_longitude: locationLongitude,
+              location_place_id: locationPlaceId,
+            }
+          : {}),
       });
 
       if (profileError) {
@@ -146,7 +195,7 @@ class AuthService {
           id: authData.user.id,
           email: authData.user.email,
           fullName: data.fullName,
-          avatar_url: null,
+          avatar_url: avatarUrl,
           role: data.role,
           gender: data.gender,
           emailConfirmedAt: session.user.email_confirmed_at ?? null,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { MapPin, User } from 'lucide-react';
+import { MapPin, MapPinned, Plus, User, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -8,8 +8,10 @@ import { geocodeAddress } from '../../lib/osmGeocoding';
 import { CATEGORY_GROUPS } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
 import { ProfileImageDropzone, type ImageUpload } from '../../components/common/ProfileImageDropzone';
+import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
+import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
 
-const CLIENT_TYPE_OPTIONS = ['Individual', 'Business', 'Event Planner', 'Wedding Organizer', 'Brand', 'Organization', 'Other'];
+const CLIENT_TYPE_CATALOG = ['Individual', 'Business', 'Event Planner', 'Wedding Organizer', 'Brand', 'Organization'];
 
 const CLIENT_PREFERENCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'affordable_pricing', label: 'Affordable pricing' },
@@ -42,19 +44,32 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
     `${formatCurrencyAmount(1000, onboardingCurrency)}+`,
   ];
 
+  const [pendingProfile] = useState(() => getPendingSignupProfile());
   const [step, setStep] = useState(1);
-  const [displayName, setDisplayName] = useState(user?.fullName || '');
+  const [displayName, setDisplayName] = useState(pendingProfile?.fullName || user?.fullName || '');
   const [location, setLocation] = useState('');
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [locationPlaceId, setLocationPlaceId] = useState<string | null>(null);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [avatarUpload, setAvatarUpload] = useState<ImageUpload | null>(null);
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
   const [clientType, setClientType] = useState<string[]>([]);
+  const [showOtherClientType, setShowOtherClientType] = useState(false);
+  const [otherClientTypeDraft, setOtherClientTypeDraft] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
+  const [showOtherInterest, setShowOtherInterest] = useState(false);
+  const [otherInterestDraft, setOtherInterestDraft] = useState('');
   const [budgetPreference, setBudgetPreference] = useState('');
   const [preferences, setPreferences] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingExisting, setIsLoadingExisting] = useState(true);
-  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(null);
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(pendingProfile?.avatarPreviewUrl || user?.avatar_url || null);
+
+  const interestCategoryLabels = new Set(CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => group.label));
+  const customClientTypes = clientType.filter((type) => !CLIENT_TYPE_CATALOG.includes(type));
+  const customInterests = interests.filter((interest) => !interestCategoryLabels.has(interest));
 
   // Pre-fill from any answers already saved, so revisiting this page (e.g.
   // via "Complete your profile" in Settings after skipping) edits existing
@@ -76,8 +91,18 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
         return;
       }
 
+      // full_name/avatar_url: only fall back to this DB read when there's no
+      // pendingProfile — a fresh signup's DB row can still be mid-flight
+      // (see pendingSignupProfile.ts), so a value it already provided must
+      // win over whatever this read happens to see.
+      if (!pendingProfile) {
+        if (data.full_name) setDisplayName(data.full_name);
+        if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      }
       if (data.location) setLocation(data.location);
-      if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      if (typeof data.location_latitude === 'number') setLocationLatitude(data.location_latitude);
+      if (typeof data.location_longitude === 'number') setLocationLongitude(data.location_longitude);
+      if (data.location_place_id) setLocationPlaceId(data.location_place_id);
       if (Array.isArray(data.client_type)) setClientType(data.client_type);
       if (Array.isArray(data.client_interests)) setInterests(data.client_interests);
       if (data.client_budget_preference) setBudgetPreference(data.client_budget_preference);
@@ -123,6 +148,14 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
     setStep((current) => Math.max(current - 1, 1));
   };
 
+  const handleLocationPicked = (point: LocationPoint) => {
+    setLocation(point.formattedAddress);
+    setLocationLatitude(point.latitude);
+    setLocationLongitude(point.longitude);
+    setLocationPlaceId(point.placeId);
+    setIsLocationPickerOpen(false);
+  };
+
   const handleFinish = async () => {
     if (!user?.id) {
       setError('Please sign in again to complete onboarding.');
@@ -132,11 +165,13 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
     setIsSaving(true);
     setError(null);
 
-    let resolvedLat: number | null = null;
-    let resolvedLng: number | null = null;
-    let resolvedPlaceId: string | null = null;
+    // Prefer an exact point picked on the map; only fall back to geocoding
+    // the typed text if the user never opened the picker (or typed over it).
+    let resolvedLat: number | null = locationLatitude;
+    let resolvedLng: number | null = locationLongitude;
+    let resolvedPlaceId: string | null = locationPlaceId;
 
-    if (location.trim()) {
+    if ((resolvedLat === null || resolvedLng === null) && location.trim()) {
       const resolved = await geocodeAddress(location.trim()).catch(() => null);
       if (resolved) {
         resolvedLat = resolved.latitude;
@@ -196,6 +231,18 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   }
 
   return (
+    <>
+    {isLocationPickerOpen && (
+      <LeafletLocationPicker
+        initialPoint={
+          locationLatitude !== null && locationLongitude !== null
+            ? { latitude: locationLatitude, longitude: locationLongitude, formattedAddress: location, placeId: locationPlaceId }
+            : null
+        }
+        onCancel={() => setIsLocationPickerOpen(false)}
+        onConfirm={handleLocationPicked}
+      />
+    )}
     <OnboardingStepShell
       eyebrow="Client Onboarding"
       title={meta.title}
@@ -228,15 +275,32 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
 
           <div className="md:col-span-2">
             <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
-            <div className="relative">
-              <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="Bangkok, Thailand"
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
-              />
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  value={location}
+                  onChange={(event) => {
+                    setLocation(event.target.value);
+                    setLocationLatitude(null);
+                    setLocationLongitude(null);
+                    setLocationPlaceId(null);
+                  }}
+                  placeholder="Bangkok, Thailand"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationPickerOpen(true)}
+                className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+              >
+                <MapPinned className="h-4 w-4" /> Pin on map
+              </button>
             </div>
+            {locationLatitude !== null && locationLongitude !== null && (
+              <p className="mt-1 text-xs text-gray-500">Exact location pinned on the map.</p>
+            )}
           </div>
 
           <div className="md:col-span-2">
@@ -259,40 +323,154 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
       )}
 
       {step === 2 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {CLIENT_TYPE_OPTIONS.map((option) => (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {CLIENT_TYPE_CATALOG.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setClientType(toggle(clientType, option))}
+                className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                  clientType.includes(option)
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
             <button
-              key={option}
               type="button"
-              onClick={() => setClientType(toggle(clientType, option))}
+              onClick={() => setShowOtherClientType((current) => !current)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
-                clientType.includes(option)
+                showOtherClientType || customClientTypes.length > 0
                   ? 'border-gray-900 bg-gray-900 text-white'
                   : 'border-gray-200 text-gray-600 hover:border-gray-400'
               }`}
             >
-              {option}
+              Other
             </button>
-          ))}
+          </div>
+
+          {(showOtherClientType || customClientTypes.length > 0) && (
+            <div>
+              <div className="mb-3 flex gap-2">
+                <input
+                  value={otherClientTypeDraft}
+                  onChange={(event) => setOtherClientTypeDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const value = otherClientTypeDraft.trim();
+                      if (value && !clientType.includes(value)) setClientType([...clientType, value]);
+                      setOtherClientTypeDraft('');
+                    }
+                  }}
+                  placeholder="Describe your client type"
+                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const value = otherClientTypeDraft.trim();
+                    if (value && !clientType.includes(value)) setClientType([...clientType, value]);
+                    setOtherClientTypeDraft('');
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+                >
+                  <Plus className="h-4 w-4" /> Add
+                </button>
+              </div>
+              {customClientTypes.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {customClientTypes.map((value) => (
+                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-sm font-semibold text-white">
+                      {value}
+                      <button type="button" onClick={() => setClientType(clientType.filter((item) => item !== value))} aria-label={`Remove ${value}`} className="text-white/70 hover:text-white">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
       {step === 3 && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-          {CATEGORY_GROUPS.map((group) => (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            {CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => (
+              <button
+                key={group.id}
+                type="button"
+                onClick={() => setInterests(toggle(interests, group.label))}
+                className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                  interests.includes(group.label)
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                }`}
+              >
+                {group.label}
+              </button>
+            ))}
             <button
-              key={group.id}
               type="button"
-              onClick={() => setInterests(toggle(interests, group.label))}
+              onClick={() => setShowOtherInterest((current) => !current)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
-                interests.includes(group.label)
+                showOtherInterest || customInterests.length > 0
                   ? 'border-gray-900 bg-gray-900 text-white'
                   : 'border-gray-200 text-gray-600 hover:border-gray-400'
               }`}
             >
-              {group.label}
+              Other
             </button>
-          ))}
+          </div>
+
+          {(showOtherInterest || customInterests.length > 0) && (
+            <div>
+              <div className="mb-3 flex gap-2">
+                <input
+                  value={otherInterestDraft}
+                  onChange={(event) => setOtherInterestDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      const value = otherInterestDraft.trim();
+                      if (value && !interests.includes(value)) setInterests([...interests, value]);
+                      setOtherInterestDraft('');
+                    }
+                  }}
+                  placeholder="What service are you looking for?"
+                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const value = otherInterestDraft.trim();
+                    if (value && !interests.includes(value)) setInterests([...interests, value]);
+                    setOtherInterestDraft('');
+                  }}
+                  className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+                >
+                  <Plus className="h-4 w-4" /> Add
+                </button>
+              </div>
+              {customInterests.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {customInterests.map((value) => (
+                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-sm font-semibold text-white">
+                      {value}
+                      <button type="button" onClick={() => setInterests(interests.filter((item) => item !== value))} aria-label={`Remove ${value}`} className="text-white/70 hover:text-white">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -345,5 +523,6 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
         </div>
       )}
     </OnboardingStepShell>
+    </>
   );
 }

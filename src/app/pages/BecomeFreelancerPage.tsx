@@ -6,6 +6,8 @@ import { geocodeAddress } from '../../lib/osmGeocoding';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
+import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
+import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
 import { StepProfessionalInfo } from './freelancer-onboarding/StepProfessionalInfo';
 import { StepServices } from './freelancer-onboarding/StepServices';
 import { StepSkills } from './freelancer-onboarding/StepSkills';
@@ -45,10 +47,11 @@ const REQUIRED_STEPS = new Set([1, 2, 4]);
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const { user } = useAuth();
   const { currency: preferredCurrency, setCurrency } = useCurrency();
+  const [pendingProfile] = useState(() => getPendingSignupProfile());
   const [step, setStep] = useState(1);
 
   // (a) Professional information
-  const [displayName, setDisplayName] = useState(user?.fullName || '');
+  const [displayName, setDisplayName] = useState(pendingProfile?.fullName || user?.fullName || '');
   const [bio, setBio] = useState('');
   const [profilePictureUpload, setProfilePictureUpload] = useState<ImageUpload | null>(null);
   const [isDraggingProfilePicture, setIsDraggingProfilePicture] = useState(false);
@@ -78,6 +81,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
   // (g) Service area
   const [location, setLocation] = useState('');
+  const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
+  const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
+  const [locationPlaceId, setLocationPlaceId] = useState<string | null>(null);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [serviceAreaType, setServiceAreaType] = useState('');
   const [serviceRadiusKm, setServiceRadiusKm] = useState('');
 
@@ -102,7 +109,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(null);
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(pendingProfile?.avatarPreviewUrl || user?.avatar_url || null);
 
   // Prefill from whatever was already saved (e.g. photo/location chosen at
   // sign-up) with a fresh DB read rather than the auth context's user object,
@@ -114,8 +121,18 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
     DataService.getUser(user.id).then(({ data }) => {
       if (!isMounted || !data) return;
-      if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      // full_name/avatar_url: only fall back to this DB read when there's no
+      // pendingProfile — a fresh signup's DB row can still be mid-flight
+      // (see pendingSignupProfile.ts), so a value it already provided must
+      // win over whatever this read happens to see.
+      if (!pendingProfile) {
+        if (data.full_name) setDisplayName(data.full_name);
+        if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      }
       if (data.location) setLocation((current) => current || data.location || '');
+      if (typeof data.location_latitude === 'number') setLocationLatitude(data.location_latitude);
+      if (typeof data.location_longitude === 'number') setLocationLongitude(data.location_longitude);
+      if (data.location_place_id) setLocationPlaceId(data.location_place_id);
     });
 
     return () => {
@@ -168,6 +185,14 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setStep((current) => Math.max(current - 1, 1));
   };
 
+  const handleLocationPicked = (point: LocationPoint) => {
+    setLocation(point.formattedAddress);
+    setLocationLatitude(point.latitude);
+    setLocationLongitude(point.longitude);
+    setLocationPlaceId(point.placeId);
+    setIsLocationPickerOpen(false);
+  };
+
   const handleFinish = async () => {
     if (!user?.id) {
       setError('Please sign in again to complete freelancer onboarding.');
@@ -177,11 +202,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setError(null);
     setIsSaving(true);
 
-    let resolvedLat: number | null = null;
-    let resolvedLng: number | null = null;
-    let resolvedPlaceId: string | null = null;
+    // Prefer an exact point picked on the map; only fall back to geocoding
+    // the typed text if the user never opened the picker (or typed over it).
+    let resolvedLat: number | null = locationLatitude;
+    let resolvedLng: number | null = locationLongitude;
+    let resolvedPlaceId: string | null = locationPlaceId;
 
-    if (location.trim()) {
+    if ((resolvedLat === null || resolvedLng === null) && location.trim()) {
       const resolved = await geocodeAddress(location.trim()).catch(() => null);
       if (resolved) {
         resolvedLat = resolved.latitude;
@@ -302,6 +329,18 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const isLastStep = step === TOTAL_STEPS;
 
   return (
+    <>
+    {isLocationPickerOpen && (
+      <LeafletLocationPicker
+        initialPoint={
+          locationLatitude !== null && locationLongitude !== null
+            ? { latitude: locationLatitude, longitude: locationLongitude, formattedAddress: location, placeId: locationPlaceId }
+            : null
+        }
+        onCancel={() => setIsLocationPickerOpen(false)}
+        onConfirm={handleLocationPicked}
+      />
+    )}
     <OnboardingStepShell
       eyebrow="Freelancer Onboarding"
       title={meta.title}
@@ -374,7 +413,14 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       {step === 7 && (
         <StepServiceArea
           location={location}
-          onLocationChange={setLocation}
+          onLocationChange={(value) => {
+            setLocation(value);
+            setLocationLatitude(null);
+            setLocationLongitude(null);
+            setLocationPlaceId(null);
+          }}
+          hasPreciseLocation={locationLatitude !== null && locationLongitude !== null}
+          onOpenLocationPicker={() => setIsLocationPickerOpen(true)}
           serviceAreaType={serviceAreaType}
           onServiceAreaTypeChange={setServiceAreaType}
           serviceRadiusKm={serviceRadiusKm}
@@ -422,5 +468,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
     </OnboardingStepShell>
+    </>
   );
 }
