@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, ChevronLeft, ChevronRight, Star, Sparkles } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { DataService } from '../../lib/dataService';
@@ -11,6 +11,8 @@ import { SearchFilterPanel, type FilterState } from '../components/SearchFilterP
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
+import { CATEGORY_GROUPS } from '../../lib/categories';
+import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
 
 interface ProfileCardProps {
   id: string;
@@ -21,9 +23,11 @@ interface ProfileCardProps {
   image: string;
   gender?: Gender | null;
   location?: string;
+  isFavorited?: boolean;
+  onToggleFavorite?: (id: string) => void;
 }
 
-function ProfileCard({ id, name, specialty, rating, reviews, image, location }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, rating, reviews, image, location, isFavorited, onToggleFavorite }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -41,6 +45,19 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, location }: 
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          {onToggleFavorite && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleFavorite(id);
+              }}
+              aria-label={isFavorited ? 'Remove from favorites' : 'Save to favorites'}
+              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
+            >
+              <Heart className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
+            </button>
+          )}
           <div className={`absolute bottom-4 left-4 right-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
             <button
               onClick={() => navigate(`/profile/${id}`)}
@@ -76,9 +93,11 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, location }: 
 interface CarouselSectionProps {
   title: string;
   profiles: ProfileCardProps[];
+  favoritedIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
 }
 
-function CarouselSection({ title, profiles }: CarouselSectionProps) {
+function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: CarouselSectionProps) {
   return (
     <div className="mb-12 md:mb-16">
       <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -94,7 +113,12 @@ function CarouselSection({ title, profiles }: CarouselSectionProps) {
       </div>
       <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide">
         {profiles.map((profile, index) => (
-          <ProfileCard key={profile.id || index} {...profile} />
+          <ProfileCard
+            key={profile.id || index}
+            {...profile}
+            isFavorited={favoritedIds?.has(profile.id)}
+            onToggleFavorite={onToggleFavorite}
+          />
         ))}
       </div>
     </div>
@@ -125,6 +149,9 @@ export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [clientInterests, setClientInterests] = useState<string[]>([]);
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [filters, setFilters] = useState<FilterState>({
     services: [],
     priceRange: [0, 10000],
@@ -197,6 +224,64 @@ export function ExplorePage() {
       isMounted = false;
     };
   }, []);
+
+  // Personalization: the categories this client said they're interested in
+  // during onboarding, used to nudge default ordering (not filter). Also
+  // pull which freelancers are already favorited so hearts render correctly.
+  useEffect(() => {
+    if (!user?.id) {
+      setClientInterests([]);
+      setFavoritedIds(new Set());
+      return;
+    }
+
+    let isMounted = true;
+
+    DataService.getUser(user.id).then(({ data }) => {
+      if (isMounted && Array.isArray((data as any)?.client_interests)) {
+        setClientInterests((data as any).client_interests);
+      }
+    });
+
+    DataService.getUserFavorites(user.id).then(({ data }) => {
+      if (!isMounted || !data) return;
+      setFavoritedIds(new Set(data.map((favorite: any) => favorite.freelancer_id).filter(Boolean)));
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const handleToggleFavorite = async (freelancerId: string) => {
+    if (!user?.id) {
+      navigate('/login');
+      return;
+    }
+
+    const alreadyFavorited = favoritedIds.has(freelancerId);
+
+    // Optimistic update, reverted on failure.
+    setFavoritedIds((current) => {
+      const next = new Set(current);
+      if (alreadyFavorited) next.delete(freelancerId);
+      else next.add(freelancerId);
+      return next;
+    });
+
+    const { error: toggleError } = alreadyFavorited
+      ? await DataService.removeFavorite(user.id, freelancerId)
+      : await DataService.addFavorite(user.id, freelancerId);
+
+    if (toggleError) {
+      setFavoritedIds((current) => {
+        const next = new Set(current);
+        if (alreadyFavorited) next.add(freelancerId);
+        else next.delete(freelancerId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     setFilters((current) => {
@@ -294,67 +379,77 @@ export function ExplorePage() {
     }));
   }, [freelancers]);
 
+  // Unifies the category pill (a hard category filter) with whatever the
+  // free-text search implies (service/style/location) into one query the
+  // scorer below can rank every freelancer against.
+  const interpretedQuery = useMemo(() => {
+    const base = interpretSearchQuery(searchQuery);
+    return selectedCategory !== 'All' ? { ...base, category: selectedCategory } : base;
+  }, [searchQuery, selectedCategory]);
+
   const filteredProfiles = useMemo(() => {
     const mapById = new Map(
       freelancers.map((item) => [item.user_id || item.users?.id || item.id, item])
     );
 
-    return profiles.filter((profile) => {
-      const source = mapById.get(profile.id);
-      const combinedText = normalizeText(
-        [
-          profile.name,
-          profile.specialty,
-          source?.title,
-          source?.description,
-          ...(source?.skills || []),
-          ...(source?.styles || []),
-          profile.location,
-        ].join(' ')
-      );
+    const scored = profiles
+      .map((profile) => {
+        const source = mapById.get(profile.id);
 
-      const query = normalizeText(searchQuery);
-      const queryMatch =
-        query.length === 0 ||
-        (() => {
-          const normalizedName = normalizeText(profile.name);
-          const nameWords = normalizedName.split(/\s+/).filter(Boolean);
-          return nameWords.some((word) => word.startsWith(query)) || normalizedName.startsWith(query);
-        })();
+        const score = scoreFreelancerMatch(
+          {
+            title: source?.title || null,
+            skills: source?.skills || [],
+            styles: source?.styles || [],
+            description: source?.description || null,
+            location: profile.location || null,
+            fullName: profile.name || null,
+          },
+          interpretedQuery,
+          clientInterests
+        );
 
-      const serviceMatch =
-        filters.services.length === 0 ||
-        filters.services.some((service) => {
-          const keywords = serviceKeywords[service] || [service];
-          return keywords.some((keyword) => combinedText.includes(normalizeText(keyword)));
-        });
+        const serviceMatch =
+          filters.services.length === 0 ||
+          filters.services.some((service) => {
+            const keywords = serviceKeywords[service] || [service];
+            const combinedText = normalizeText(
+              [profile.name, profile.specialty, source?.title, source?.description, ...(source?.skills || []), ...(source?.styles || []), profile.location].join(' ')
+            );
+            return keywords.some((keyword) => combinedText.includes(normalizeText(keyword)));
+          });
 
-      const normalizedLocation = normalizeText(profile.location);
-      const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
+        const normalizedLocation = normalizeText(profile.location);
+        const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
 
-      const locationMatch =
-        filters.locations.length === 0 ||
-        filters.locations.some((location) => {
-          const normalizedSelectedLocation = normalizeText(location);
-          if (normalizedSelectedLocation === 'others') {
-            return !!normalizedLocation && !isKnownLocation;
-          }
-          return normalizedLocation.includes(normalizedSelectedLocation);
-        });
+        const locationMatch =
+          filters.locations.length === 0 ||
+          filters.locations.some((location) => {
+            const normalizedSelectedLocation = normalizeText(location);
+            if (normalizedSelectedLocation === 'others') {
+              return !!normalizedLocation && !isKnownLocation;
+            }
+            return normalizedLocation.includes(normalizedSelectedLocation);
+          });
 
-      const hourlyRate = Number(source?.hourly_rate);
-      const sourceCurrency = normalizeCurrencyCode(source?.users?.preferred_currency || source?.preferred_currency || 'THB', 'THB');
-      const [minPrice, maxPrice] = filters.priceRange;
-      const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
-      const isDefaultPriceFilter = minPrice === 0 && maxPrice === defaultMaxForCurrency;
-      const hourlyRateInSelectedCurrency = convertAmount(hourlyRate, sourceCurrency, filters.currency);
-      const priceMatch = Number.isFinite(hourlyRate)
-        ? hourlyRateInSelectedCurrency >= minPrice && hourlyRateInSelectedCurrency <= maxPrice
-        : isDefaultPriceFilter;
+        const hourlyRate = Number(source?.hourly_rate);
+        const sourceCurrency = normalizeCurrencyCode(source?.users?.preferred_currency || source?.preferred_currency || 'THB', 'THB');
+        const [minPrice, maxPrice] = filters.priceRange;
+        const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
+        const isDefaultPriceFilter = minPrice === 0 && maxPrice === defaultMaxForCurrency;
+        const hourlyRateInSelectedCurrency = convertAmount(hourlyRate, sourceCurrency, filters.currency);
+        const priceMatch = Number.isFinite(hourlyRate)
+          ? hourlyRateInSelectedCurrency >= minPrice && hourlyRateInSelectedCurrency <= maxPrice
+          : isDefaultPriceFilter;
 
-      return queryMatch && serviceMatch && locationMatch && priceMatch;
-    });
-  }, [profiles, freelancers, filters, searchQuery]);
+        const passes = score > 0 && serviceMatch && locationMatch && priceMatch;
+        return { profile, score, passes };
+      })
+      .filter((item) => item.passes)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.map((item) => item.profile);
+  }, [profiles, freelancers, filters, interpretedQuery, clientInterests]);
 
   const sectionFor = (keywords: string[]) => {
     return filteredProfiles.filter((profile) => {
@@ -369,7 +464,7 @@ export function ExplorePage() {
   const uncategorizedProfiles = filteredProfiles.filter((profile) =>
     ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
   );
-  const hasActiveSearch = searchQuery.trim().length > 0;
+  const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
   return (
     <>
@@ -445,6 +540,32 @@ export function ExplorePage() {
           </button>
         </div>
       </div>
+
+      {/* Category navigation */}
+      <div className="mb-8 flex gap-2 overflow-x-auto pb-1 scrollbar-hide md:mb-12">
+        <button
+          type="button"
+          onClick={() => setSelectedCategory('All')}
+          className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+            selectedCategory === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+          }`}
+        >
+          All
+        </button>
+        {CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => (
+          <button
+            key={group.id}
+            type="button"
+            onClick={() => setSelectedCategory((current) => (current === group.label ? 'All' : group.label))}
+            className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+              selectedCategory === group.label ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+            }`}
+          >
+            {group.label}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
@@ -477,18 +598,23 @@ export function ExplorePage() {
       {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
           <h2 className="mb-2 text-xl font-bold text-gray-900">
-            {hasActiveSearch ? 'No name found' : 'No freelancers match these filters'}
+            {hasActiveSearch ? 'No matching freelancers' : 'No freelancers match these filters'}
           </h2>
           <p className="text-gray-600">
             {hasActiveSearch
-              ? 'No freelancer name starts with that search. Try another name.'
+              ? 'Try a different search, or choose another category.'
               : 'Adjust service, location, or price range in Advanced Filter.'}
           </p>
         </div>
       )}
 
       {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
-        <CarouselSection title="Matching Freelancers" profiles={filteredProfiles} />
+        <CarouselSection
+          title={selectedCategory !== 'All' ? `${selectedCategory} Freelancers` : 'Matching Freelancers'}
+          profiles={filteredProfiles}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
+        />
       )}
 
       {/* Carousel Sections */}
@@ -496,24 +622,32 @@ export function ExplorePage() {
         <CarouselSection
           title="Popular Makeup Artists in Thailand"
           profiles={makeupArtists}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
       {!isLoading && !hasActiveSearch && photographers.length > 0 && (
         <CarouselSection
           title="Popular Photographers in Thailand"
           profiles={photographers}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
       {!isLoading && !hasActiveSearch && models.length > 0 && (
         <CarouselSection
           title="Popular Models in Thailand"
           profiles={models}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
       {!isLoading && !hasActiveSearch && uncategorizedProfiles.length > 0 && (
         <CarouselSection
           title="Featured Creative Freelancers"
           profiles={uncategorizedProfiles}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
 
