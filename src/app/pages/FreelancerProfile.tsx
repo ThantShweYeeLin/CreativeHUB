@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -16,7 +16,6 @@ import { shouldDisplayPronouns } from '../../lib/pronouns';
 import FollowersModal from '../components/FollowersModal';
 import {
   appendBudgetMeta,
-  formatBudgetRange,
   inferCurrencyFromLocation,
   SUPPORTED_CURRENCIES,
   type BudgetMeta,
@@ -66,11 +65,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [groupFreelancerSearch, setGroupFreelancerSearch] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showBidTip, setShowBidTip] = useState(false);
   const [formData, setFormData] = useState({
     projectName: '',
     customPurpose: '',
-    budgetMin: '',
-    budgetMax: '',
+    offerAmount: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     scheduleDate: '',
     scheduleTime: '',
@@ -142,6 +141,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const convertedHourlyRate = freelancerProfile?.hourly_rate
     ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, viewerCurrency)
     : null;
+  const minimumOffer = freelancerProfile?.hourly_rate
+    ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, formData.currency)
+    : 0;
 
   useEffect(() => {
     let isMounted = true;
@@ -381,16 +383,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    const budgetMin = Number(formData.budgetMin);
-    const budgetMax = Number(formData.budgetMax);
+    const offerAmount = Number(formData.offerAmount);
 
-    if (!Number.isFinite(budgetMin) || !Number.isFinite(budgetMax) || budgetMin <= 0 || budgetMax <= 0) {
-      setError('Enter a valid budget range.');
+    if (!Number.isFinite(offerAmount) || offerAmount <= 0) {
+      setError('Enter your offer amount.');
       return;
     }
 
-    if (budgetMax < budgetMin) {
-      setError('Maximum budget must be greater than or equal to minimum budget.');
+    if (offerAmount < minimumOffer) {
+      setError(`Your offer must be at least ${formatCurrencyAmount(minimumOffer, formData.currency)}.`);
       return;
     }
 
@@ -401,8 +402,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     const budgetMeta: BudgetMeta = {
       currency: formData.currency,
-      min: budgetMin,
-      max: budgetMax,
+      min: minimumOffer,
+      max: offerAmount,
     };
 
     const requestMessage = appendScheduleMeta(
@@ -422,7 +423,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       recipientIds: recipients,
       projectName: resolvedPurpose,
       description: requestMessage,
-      budget: budgetMax,
+      budget: offerAmount,
     });
 
     if (requestError) {
@@ -445,8 +446,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       ...current,
       projectName: '',
       customPurpose: '',
-      budgetMin: '',
-      budgetMax: '',
+      offerAmount: '',
       scheduleDate: '',
       scheduleTime: '',
     }));
@@ -1238,8 +1238,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget Range</label>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
                     <input
                       value={formData.currency}
@@ -1256,32 +1256,49 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       ))}
                     </datalist>
                   </div>
-                  <input
-                    required
-                    inputMode="decimal"
-                    value={formData.budgetMin}
-                    onChange={(event) => setFormData((current) => ({ ...current, budgetMin: event.target.value }))}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                    placeholder="Min budget"
-                  />
-                  <input
-                    required
-                    inputMode="decimal"
-                    value={formData.budgetMax}
-                    onChange={(event) => setFormData((current) => ({ ...current, budgetMax: event.target.value }))}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                    placeholder="Max budget"
-                  />
+                  <div className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3">
+                    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Minimum</span>
+                    <span className="font-semibold text-gray-900">{formatCurrencyAmount(minimumOffer, formData.currency)}</span>
+                  </div>
                 </div>
-                {formData.budgetMin && formData.budgetMax && (
-                  <p className="mt-2 text-xs text-gray-600">
-                    Requested range: {formatBudgetRange({
-                      currency: formData.currency,
-                      min: Number(formData.budgetMin || 0),
-                      max: Number(formData.budgetMax || 0),
-                    })}
-                  </p>
-                )}
+
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label htmlFor="offerAmount" className="text-sm font-semibold text-gray-900">Offer Amount</label>
+                    <span className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowBidTip((current) => !current)}
+                        className="text-gray-400 transition-colors hover:text-gray-700"
+                        aria-label="Bidding tip"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                      {showBidTip && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowBidTip(false)} />
+                          <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2 text-xs text-white shadow-xl">
+                            Suggestion: Bid Higher for High Acceptance
+                          </div>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <input
+                    id="offerAmount"
+                    required
+                    inputMode="decimal"
+                    value={formData.offerAmount}
+                    onChange={(event) => setFormData((current) => ({ ...current, offerAmount: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder={`Minimum ${formatCurrencyAmount(minimumOffer, formData.currency)}`}
+                  />
+                  {formData.offerAmount && Number(formData.offerAmount) < minimumOffer && (
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      Your offer must be at least {formatCurrencyAmount(minimumOffer, formData.currency)}.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 pt-2">
