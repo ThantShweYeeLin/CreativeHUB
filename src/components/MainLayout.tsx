@@ -190,6 +190,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         const mapped = await Promise.all(
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
+            const rawMessageText = String(row.message || '');
             const shouldResolveActorName = (
               (
                 !!notification.actorId ||
