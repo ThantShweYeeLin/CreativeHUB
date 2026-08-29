@@ -33,6 +33,7 @@ export interface Database {
           bio: string | null;
           role: 'freelancer' | 'client';
           gender: Gender | null;
+          pronouns: string | null;
           preferred_currency: string | null;
           location: string | null;
           location_latitude: number | null;
