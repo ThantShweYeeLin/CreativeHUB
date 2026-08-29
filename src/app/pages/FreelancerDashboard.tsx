@@ -5,10 +5,12 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Clock,
   DollarSign,
   Edit,
   Layers,
+  MapPin,
   Plus,
   Settings,
   Star,
@@ -30,12 +32,13 @@ import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { extractLocationMeta } from '../../lib/requestLocation';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
+import { getBookingEscrowState, formatCountdown } from '../../lib/bookingEscrow';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
 import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
-type DashboardSection = 'requests' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'teams' | 'settings';
+type DashboardSection = 'requests' | 'bookings' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'teams' | 'settings';
 
 const PAYMENT_STATUS_SEQUENCE = ['unpaid', 'deposit_paid', 'paid'] as const;
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -739,6 +742,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
   const tabs: { id: DashboardSection; label: string; icon: any; path: string }[] = [
     { id: 'requests', label: 'Requests', icon: Users, path: '/freelancer-dashboard/requests' },
+    { id: 'bookings', label: 'Bookings', icon: ClipboardList, path: '/freelancer-dashboard/bookings' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/freelancer-dashboard/calendar' },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/freelancer-dashboard/analytics' },
     { id: 'reviews', label: 'Reviews', icon: Star, path: '/freelancer-dashboard/reviews' },
@@ -764,6 +768,56 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [requests, requestStatusFilter, requestSearch, requestMinBudget]);
+
+  const bookingCards = useMemo(() => {
+    const ESCROW_STATUS_LABEL: Record<string, { label: string; color: string }> = {
+      awaiting_deposit: { label: 'Awaiting deposit', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+      deposit_secured: { label: 'Deposit secured', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+      awaiting_client_confirmation: { label: 'Awaiting client confirmation', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+      disputed: { label: 'Disputed — action needed', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+      released: { label: 'Paid in full', color: 'bg-green-100 text-green-700 border-green-200' },
+      refunded: { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' },
+    };
+
+    return bookings
+      .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
+      .map((booking) => {
+        const escrowState = getBookingEscrowState(booking);
+        const status = ESCROW_STATUS_LABEL[escrowState] || { label: booking.status, color: 'bg-gray-100 text-gray-700 border-gray-200' };
+        const scheduleMeta = booking.start_date
+          ? { date: booking.start_date, time: booking.start_time || '00:00' }
+          : extractScheduleMeta(booking.description);
+        const locationMeta = extractLocationMeta(booking.description);
+        const deadline =
+          escrowState === 'awaiting_deposit'
+            ? booking.deposit_deadline
+            : escrowState === 'awaiting_client_confirmation'
+            ? booking.client_response_deadline
+            : escrowState === 'disputed'
+            ? booking.dispute_response_deadline
+            : null;
+
+        return {
+          id: booking.id,
+          bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+          clientName: booking.client?.full_name || 'CreativeHUB User',
+          clientImage: booking.client?.avatar_url || DEFAULT_AVATAR_URL,
+          clientGender: booking.client?.gender || null,
+          projectName: booking.project_name,
+          date: scheduleMeta
+            ? booking.start_date && !booking.start_time
+              ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+              : formatScheduleMeta(scheduleMeta)
+            : 'Schedule pending',
+          location: locationMeta || 'Location to be confirmed',
+          statusLabel: status.label,
+          statusColor: status.color,
+          countdown: deadline ? formatCountdown(deadline) : null,
+          totalAmount: Number(booking.budget || 0),
+          deposit: Math.round(Number(booking.budget || 0) * 0.3),
+        };
+      });
+  }, [bookings]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
@@ -1135,6 +1189,83 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     No requests match these filters.
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+        ) : section === 'bookings' ? (
+          <div className="space-y-6 md:space-y-8">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Bookings</h2>
+              <p className="text-sm text-gray-600 md:text-base">
+                Clients who booked you — deposit status, evidence submission, and dispute resolution
+              </p>
+            </div>
+
+            {bookingCards.length === 0 ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+                <p className="text-sm text-gray-500">No bookings yet.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {bookingCards.map((booking) => (
+                  <button
+                    key={booking.id}
+                    onClick={() => navigate(`/booking/${booking.id}`)}
+                    className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-lg transition-all hover:border-gray-900 hover:shadow-2xl"
+                  >
+                    <div className="mb-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          src={booking.clientImage}
+                          alt={booking.clientName}
+                          gender={booking.clientGender}
+                          sizeClassName="h-14 w-14 flex-shrink-0 rounded-full ring-2 ring-gray-200"
+                        />
+                        <div>
+                          <h3 className="font-bold text-gray-900">{booking.clientName}</h3>
+                          <p className="text-sm text-gray-600">{booking.projectName}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </div>
+
+                    <div className="mb-4 space-y-1 rounded-xl bg-gray-50 p-4">
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <Calendar className="h-3 w-3" />
+                        <span>{booking.date}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-600">
+                        <MapPin className="h-3 w-3" />
+                        <span>{booking.location}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`rounded-full border-2 px-3 py-1 text-xs font-bold ${booking.statusColor}`}>
+                          {booking.statusLabel}
+                        </div>
+                        <span className="text-xs text-gray-500">{booking.bookingId}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">Deposit</div>
+                        <div className="font-bold text-gray-900">
+                          {formatCurrencyAmount(
+                            convertAmount(booking.deposit, 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')),
+                            normalizeCurrencyCode(preferredCurrency, 'THB')
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {booking.countdown && (
+                      <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 text-xs font-semibold text-amber-700">
+                        <Clock className="h-3 w-3" />
+                        <span>{booking.countdown}</span>
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
             )}
           </div>

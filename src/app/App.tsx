@@ -15,6 +15,7 @@ import { RequestsPage } from './pages/RequestsPage';
 import { EditProfilePage } from './pages/EditProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
 import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
+import { FreelancerDashboardBookingsPage } from './pages/FreelancerDashboardBookingsPage';
 import { FreelancerDashboardCalendarPage } from './pages/FreelancerDashboardCalendarPage';
 import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
 import { FreelancerDashboardReviewsPage } from './pages/FreelancerDashboardReviewsPage';
@@ -267,6 +268,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 {user?.role === 'freelancer' ? <FreelancerDashboardRequestsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/bookings"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardBookingsPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />

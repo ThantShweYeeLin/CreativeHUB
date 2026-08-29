@@ -54,28 +54,25 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
       setIsLoading(true);
       setError(null);
 
-      // A user's role is just their primary account type - it doesn't stop a
-      // freelancer from booking someone else (acting as the client) or a
-      // client from being booked (acting as the freelancer) on any given
-      // transaction. So every booking where this user is on either side has
-      // to be fetched and shown here, not just the side matching their role.
-      const [clientResponse, freelancerResponse] = await Promise.all([
-        DataService.getClientBookings(user.id),
-        DataService.getFreelancerBookings(user.id),
-      ]);
+      // This page is the client-facing "My Booked List" - it only shows
+      // bookings this user made as the client. Bookings where this user is
+      // the freelancer being booked by someone else live in the Freelancer
+      // Dashboard's Bookings tab instead, alongside the deposit/escrow
+      // status tools that are freelancer-specific.
+      const clientResponse = await DataService.getClientBookings(user.id);
 
       if (!isMounted) {
         return;
       }
 
-      if (clientResponse.error && freelancerResponse.error) {
-        setError((clientResponse.error as any).message || (freelancerResponse.error as any).message || 'Unable to load bookings.');
+      if (clientResponse.error) {
+        setError((clientResponse.error as any).message || 'Unable to load bookings.');
         setBookings([]);
       } else {
-        const merged = [...(clientResponse.data || []), ...(freelancerResponse.data || [])];
-        const uniqueById = Array.from(new Map(merged.map((booking: any) => [booking.id, booking])).values());
-        uniqueById.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        setBookings(uniqueById);
+        const sorted = [...(clientResponse.data || [])].sort(
+          (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setBookings(sorted);
       }
 
       setIsLoading(false);
@@ -92,7 +89,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
     return bookings
       .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
       .map((booking) => {
-        const counterparty = String(booking.client_id) === String(user?.id) ? booking.freelancer : booking.client;
+        const counterparty = booking.freelancer;
         const escrowState = getBookingEscrowState(booking);
         const status =
           escrowState === 'disputed'
