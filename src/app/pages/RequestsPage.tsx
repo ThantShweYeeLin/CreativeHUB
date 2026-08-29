@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, MessageCircle, Edit, AlertCircle } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -8,6 +8,8 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { formatCurrencyAmount } from '../../lib/currency';
+import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -15,10 +17,14 @@ interface RequestsPageProps {
   onOpenMessages?: () => void;
 }
 
-const getStatusColor = (status: 'pending' | 'accepted' | 'rejected') => {
+type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered';
+
+const getStatusColor = (status: RequestStatus) => {
   switch (status) {
     case 'pending':
       return 'bg-gray-100 text-gray-700 border-gray-200';
+    case 'countered':
+      return 'bg-amber-100 text-amber-700 border-amber-200';
     case 'accepted':
       return 'bg-green-100 text-green-700 border-green-200';
     case 'rejected':
@@ -26,7 +32,7 @@ const getStatusColor = (status: 'pending' | 'accepted' | 'rejected') => {
   }
 };
 
-const getStatusText = (status: 'pending' | 'accepted' | 'rejected') => {
+const getStatusText = (status: RequestStatus) => {
   return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
@@ -40,6 +46,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [error, setError] = useState<string | null>(null);
   const [editingRequest, setEditingRequest] = useState<any | null>(null);
   const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
+  const [counterFormOpenForId, setCounterFormOpenForId] = useState<string | null>(null);
+  const [counterPriceInput, setCounterPriceInput] = useState('');
+  const [counterMessageInput, setCounterMessageInput] = useState('');
+  const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [editForm, setEditForm] = useState({
     projectName: '',
     currency: 'THB',
@@ -174,7 +184,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         },
         projectName: request.project_name,
         budget: Number(request.budget || 0),
-        status: request.status as 'pending' | 'accepted' | 'rejected',
+        status: request.status as RequestStatus,
+        counterPrice: request.counter_price != null ? Number(request.counter_price) : null,
+        counterMessage: request.counter_message || null,
+        counterBy: request.counter_by || null,
         date: request.created_at,
         message: stripRequestDisplayMeta(request.plain_message || request.message || request.description || '') || 'Group request',
       })),
@@ -236,6 +249,74 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     if (!reload.error) {
       setRequests(reload.data || []);
     }
+  };
+
+  const reloadRequests = async () => {
+    if (!user?.id) return;
+    const reload = await DataService.getClientRequestsWithProgress(user.id);
+    if (!reload.error) {
+      setRequests(reload.data || []);
+    }
+  };
+
+  const handleSendCounterOffer = async (requestId: string) => {
+    const price = Number(counterPriceInput);
+    if (!counterPriceInput.trim() || !Number.isFinite(price) || price <= 0) {
+      setError('Enter a valid proposed price.');
+      return;
+    }
+    setError(null);
+    setIsSubmittingCounter(true);
+
+    const response = await DataService.updateRequest(requestId, {
+      status: 'countered',
+      counter_price: price,
+      counter_message: counterMessageInput.trim() || null,
+      counter_by: 'client',
+    } as any);
+
+    setIsSubmittingCounter(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to send counter offer.');
+      return;
+    }
+
+    setCounterFormOpenForId(null);
+    setCounterPriceInput('');
+    setCounterMessageInput('');
+    await reloadRequests();
+  };
+
+  const handleAcceptCounter = async (normalizedRequest: any) => {
+    setError(null);
+    const rawRequest = requests.find((item) => item.id === normalizedRequest.id);
+    if (!rawRequest) return;
+
+    const counterPrice = Number(normalizedRequest.counterPrice);
+    const { error: acceptError } = await acceptRequestAndCreateBooking(rawRequest, counterPrice);
+    if (acceptError) {
+      setError(acceptError.message);
+      return;
+    }
+
+    const response = await DataService.updateRequest(normalizedRequest.id, { status: 'accepted', budget: counterPrice } as any);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to accept counter offer.');
+      return;
+    }
+
+    await reloadRequests();
+  };
+
+  const handleRejectCounter = async (requestId: string) => {
+    setError(null);
+    const response = await DataService.updateRequest(requestId, { status: 'rejected' } as any);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to reject counter offer.');
+      return;
+    }
+    await reloadRequests();
   };
 
   return (
@@ -345,6 +426,40 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           Edit Request
                         </button>
                       )}
+                      {request.status === 'countered' && request.counterBy === 'freelancer' && (
+                        <>
+                          <button
+                            onClick={() => void handleAcceptCounter(request)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-green-700 transition-colors"
+                          >
+                            <Check className="w-4 h-4" />
+                            Accept {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCounterFormOpenForId(request.id);
+                              setCounterPriceInput('');
+                              setCounterMessageInput('');
+                            }}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            Counter Again
+                          </button>
+                          <button
+                            onClick={() => void handleRejectCounter(request.id)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-200 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            Reject
+                          </button>
+                        </>
+                      )}
+                      {request.status === 'countered' && request.counterBy === 'client' && (
+                        <div className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500">
+                          Waiting for {request.freelancer.name} to respond to your {formatCurrencyAmount(request.counterPrice || 0, 'THB')} offer.
+                        </div>
+                      )}
                       {request.status === 'accepted' && (
                         <button
                           onClick={onOpenMessages}
@@ -361,12 +476,58 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         </button>
                       )}
                       <button
-                        onClick={() => onViewProfile?.(request.status)}
+                        onClick={() => onViewProfile?.(request.status as 'accepted' | 'pending' | 'rejected')}
                         className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm md:text-base font-semibold transition-colors text-center"
                       >
                         View Profile
                       </button>
                     </div>
+
+                    {request.status === 'countered' && request.counterMessage && (
+                      <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                        <span className="font-semibold text-gray-900">
+                          {request.counterBy === 'freelancer' ? "Freelancer's counter offer: " : 'Your counter offer: '}
+                        </span>
+                        {formatCurrencyAmount(request.counterPrice || 0, 'THB')} — "{request.counterMessage}"
+                      </div>
+                    )}
+
+                    {counterFormOpenForId === request.id && (
+                      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                        <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <input
+                            type="number"
+                            min={0}
+                            value={counterPriceInput}
+                            onChange={(event) => setCounterPriceInput(event.target.value)}
+                            placeholder="e.g. 6000"
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          />
+                          <input
+                            value={counterMessageInput}
+                            onChange={(event) => setCounterMessageInput(event.target.value)}
+                            placeholder="Message (optional)"
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          />
+                        </div>
+                        <div className="mt-3 flex justify-end gap-2">
+                          <button
+                            onClick={() => setCounterFormOpenForId(null)}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => void handleSendCounterOffer(request.id)}
+                            disabled={isSubmittingCounter}
+                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                          >
+                            {isSubmittingCounter ? 'Sending...' : 'Send Counter Offer'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

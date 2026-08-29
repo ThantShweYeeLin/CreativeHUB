@@ -148,6 +148,9 @@ export function SettingsPage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [accountStatus, setAccountStatus] = useState<'active' | 'paused'>('active');
+  const [isTogglingPause, setIsTogglingPause] = useState(false);
+
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [gender, setGender] = useState<Gender>('prefer_not_to_say');
@@ -197,6 +200,7 @@ export function SettingsPage() {
         setFullName(userResponse.data?.full_name || user.fullName || '');
         setEmail(userResponse.data?.email || user.email || '');
         setGender((userResponse.data as any)?.gender || user.gender || 'prefer_not_to_say');
+        setAccountStatus((userResponse.data as any)?.account_status === 'paused' ? 'paused' : 'active');
         setPreferences((current) => ({
           ...current,
           currency: normalizeCurrencyCode((userResponse.data as any)?.preferred_currency || current.currency, 'THB'),
@@ -397,6 +401,26 @@ export function SettingsPage() {
     navigate('/signup');
   };
 
+  const handleTogglePause = async () => {
+    if (!user?.id) return;
+
+    const nextStatus = accountStatus === 'active' ? 'paused' : 'active';
+    setIsTogglingPause(true);
+    setErrorMessage(null);
+
+    const response = await DataService.updateUser(user.id, { account_status: nextStatus } as any);
+
+    setIsTogglingPause(false);
+
+    if (response.error) {
+      setErrorMessage((response.error as any).message || 'Unable to update account status.');
+      return;
+    }
+
+    setAccountStatus(nextStatus);
+    setStatusMessage(nextStatus === 'paused' ? 'Your account is paused — you\'re hidden from Explore and new requests are blocked.' : 'Your account is active again.');
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -440,6 +464,15 @@ export function SettingsPage() {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Save Account</button>
               <button onClick={handleLogout} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Log out</button>
+              {role === 'freelancer' && (
+                <button
+                  onClick={() => void handleTogglePause()}
+                  disabled={isTogglingPause}
+                  className="rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+                >
+                  {isTogglingPause ? 'Updating…' : accountStatus === 'paused' ? 'Reactivate Account' : 'Pause Account'}
+                </button>
+              )}
               <button
                 onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmText(''); setDeleteError(null); }}
                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
@@ -447,6 +480,11 @@ export function SettingsPage() {
                 Delete Account
               </button>
             </div>
+            {role === 'freelancer' && accountStatus === 'paused' && (
+              <p className="mt-3 text-xs font-semibold text-amber-700">
+                Your account is paused: you're hidden from Explore and search, and clients can't send you new booking requests.
+              </p>
+            )}
           </section>
 
           {showDeleteConfirm && (

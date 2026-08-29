@@ -61,8 +61,10 @@ export class DataService {
 
     return supabase
       .from('freelancer_profiles')
-      .select(`*, users:user_id(${userFields})`)
+      .select(`*, users:user_id!inner(${userFields})`)
       .eq('is_available', true)
+      .neq('visibility', 'limited')
+      .eq('users.account_status', 'active')
       .limit(limit)
       .range(offset, offset + limit - 1);
   }
@@ -78,7 +80,7 @@ export class DataService {
 
     let q = supabase
       .from('freelancer_profiles')
-      .select(`*, users:user_id(${userFields})`);
+      .select(`*, users:user_id!inner(${userFields})`);
 
     if (query) {
       q = q.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
@@ -88,7 +90,7 @@ export class DataService {
       q = q.overlaps('skills', skills);
     }
 
-    return q.eq('is_available', true);
+    return q.eq('is_available', true).neq('visibility', 'limited').eq('users.account_status', 'active');
   }
 
   private static async getFreelancersByUserIds(
@@ -138,12 +140,30 @@ export class DataService {
 
     const users = (usersResp.data || []) as Array<any>;
 
-    const matched = users.filter((u) => {
+    const nameMatched = users.filter((u) => {
       const name = stripDiacritics((u.full_name || '')).replace(/\s+/g, '').toLowerCase();
       const emailLocal = stripDiacritics(((u.email || '').split('@')[0] || '')).replace(/\s+/g, '').toLowerCase();
       const initials = (u.full_name || '').split(/\s+/).map((p: string) => (p[0] || '')).join('').toLowerCase();
       return name.includes(normQuery) || emailLocal.includes(normQuery) || initials.includes(normQuery) || (u.email || '').toLowerCase().includes(cleaned.toLowerCase());
     });
+
+    // This is an Explore-search-box helper, so it should also respect a
+    // freelancer's visibility/account_status — unlike DataService.searchUsers
+    // (used for @-mentions, a "find someone you already know" feature that
+    // should ignore visibility).
+    const freelancerIds = nameMatched.filter((u) => u.role === 'freelancer').map((u) => u.id);
+    const hiddenUserIds = new Set<string>();
+    if (freelancerIds.length > 0) {
+      const visibilityResp = await supabase
+        .from('freelancer_profiles')
+        .select('user_id, visibility')
+        .in('user_id', freelancerIds);
+      for (const row of (visibilityResp.data || []) as Array<any>) {
+        if (row.visibility === 'limited') hiddenUserIds.add(row.user_id);
+      }
+    }
+
+    const matched = nameMatched.filter((u) => !hiddenUserIds.has(u.id) && u.account_status !== 'paused');
 
     const results = matched.map((u) => ({
       id: `user-${u.id}`,
@@ -665,6 +685,80 @@ export class DataService {
   static async deleteSocialLink(id: string) {
     const { error } = await supabase
       .from('social_links')
+      .delete()
+      .eq('id', id);
+    return { error };
+  }
+
+  // FREELANCER BLOCKED DATES
+  static async getFreelancerBlockedDates(freelancerId: string) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_blocked_dates')
+      .select('*')
+      .eq('freelancer_id', freelancerId)
+      .order('blocked_date', { ascending: true });
+    return { data, error };
+  }
+
+  static async addBlockedDate(freelancerId: string, blockedDate: string, reason: string | null) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_blocked_dates')
+      .insert({ freelancer_id: freelancerId, blocked_date: blockedDate, reason })
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async removeBlockedDate(id: string) {
+    const { error } = await (supabase as any)
+      .from('freelancer_blocked_dates')
+      .delete()
+      .eq('id', id);
+    return { error };
+  }
+
+  // FREELANCER SERVICES
+  static async getFreelancerServices(freelancerId: string) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_services')
+      .select('*')
+      .eq('freelancer_id', freelancerId)
+      .order('position', { ascending: true });
+    return { data, error };
+  }
+
+  static async createFreelancerService(service: {
+    freelancer_id: string;
+    name: string;
+    description?: string | null;
+    starting_price?: number | null;
+    pricing_type?: string;
+    duration?: string | null;
+    included?: string | null;
+    extras?: Array<{ label: string; price: number }>;
+    requirements?: string | null;
+  }) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_services')
+      .insert(service)
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async updateFreelancerService(id: string, updates: Record<string, any>) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_services')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async deleteFreelancerService(id: string) {
+    const { error } = await (supabase as any)
+      .from('freelancer_services')
       .delete()
       .eq('id', id);
     return { error };
@@ -1531,6 +1625,271 @@ export class DataService {
     });
   }
 
+  // TEAMS
+  static async createTeam(ownerId: string, name: string, description: string | null) {
+    const { data: team, error } = await (supabase as any)
+      .from('teams')
+      .insert({ owner_id: ownerId, name, description })
+      .select()
+      .single();
+
+    if (error || !team) {
+      return { data: null, error };
+    }
+
+    const memberResponse = await (supabase as any)
+      .from('team_members')
+      .insert({ team_id: team.id, user_id: ownerId, role: 'owner', revenue_share_percent: 100 })
+      .select()
+      .single();
+
+    if (memberResponse.error) {
+      return { data: null, error: memberResponse.error };
+    }
+
+    return { data: team, error: null };
+  }
+
+  static async getUserTeams(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('team_members')
+      .select('*, team:team_id(*, owner:owner_id(id, full_name, avatar_url))')
+      .eq('user_id', userId)
+      .eq('status', 'active');
+    return { data, error };
+  }
+
+  static async getTeam(teamId: string) {
+    const { data, error } = await (supabase as any)
+      .from('teams')
+      .select('*, owner:owner_id(id, full_name, avatar_url)')
+      .eq('id', teamId)
+      .single();
+    return { data, error };
+  }
+
+  static async getTeamMembers(teamId: string) {
+    const { data, error } = await (supabase as any)
+      .from('team_members')
+      .select('*, user:user_id(id, full_name, avatar_url, gender)')
+      .eq('team_id', teamId)
+      .eq('status', 'active')
+      .order('joined_at', { ascending: true });
+    return { data, error };
+  }
+
+  static async inviteToTeam(teamId: string, inviterId: string, inviteeId: string, revenueSharePercent: number | null) {
+    const { data, error } = await (supabase as any)
+      .from('team_invitations')
+      .insert({ team_id: teamId, inviter_id: inviterId, invitee_id: inviteeId, revenue_share_percent: revenueSharePercent })
+      .select()
+      .single();
+
+    if (!error && data) {
+      const team = await this.getTeam(teamId);
+      await this.notifyTeamInvitation(inviteeId, inviterId, team.data?.name || 'a team');
+    }
+
+    return { data, error };
+  }
+
+  static async getMyTeamInvitations(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('team_invitations')
+      .select('*, team:team_id(*, owner:owner_id(id, full_name, avatar_url)), inviter:inviter_id(id, full_name)')
+      .eq('invitee_id', userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
+  static async respondToTeamInvitation(invitationId: string, accept: boolean) {
+    const { data: invitation, error: fetchError } = await (supabase as any)
+      .from('team_invitations')
+      .select('*')
+      .eq('id', invitationId)
+      .single();
+
+    if (fetchError || !invitation) {
+      return { data: null, error: fetchError };
+    }
+
+    const { data, error } = await (supabase as any)
+      .from('team_invitations')
+      .update({ status: accept ? 'accepted' : 'declined', responded_at: new Date().toISOString() })
+      .eq('id', invitationId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data: null, error };
+    }
+
+    if (accept) {
+      const memberResponse = await (supabase as any)
+        .from('team_members')
+        .insert({
+          team_id: invitation.team_id,
+          user_id: invitation.invitee_id,
+          role: 'member',
+          revenue_share_percent: invitation.revenue_share_percent || 0,
+        })
+        .select()
+        .single();
+
+      if (memberResponse.error) {
+        return { data: null, error: memberResponse.error };
+      }
+
+      const [team, members] = await Promise.all([this.getTeam(invitation.team_id), this.getTeamMembers(invitation.team_id)]);
+      const teamName = team.data?.name || 'the team';
+      for (const member of members.data || []) {
+        if (member.user_id !== invitation.invitee_id) {
+          await this.notifyTeamMemberJoined(member.user_id, invitation.invitee_id, teamName);
+        }
+      }
+    }
+
+    return { data, error: null };
+  }
+
+  static async createTeamBooking(input: { teamId: string; clientId: string; projectName: string; description: string; budget: number }) {
+    const { data: teamBooking, error } = await (supabase as any)
+      .from('team_bookings')
+      .insert({
+        team_id: input.teamId,
+        client_id: input.clientId,
+        project_name: input.projectName,
+        description: input.description,
+        budget: input.budget,
+        status: 'pending',
+      })
+      .select()
+      .single();
+
+    if (error || !teamBooking) {
+      return { data: null, error };
+    }
+
+    const membersResponse = await this.getTeamMembers(input.teamId);
+    const members = membersResponse.data || [];
+
+    for (const member of members) {
+      await (supabase as any)
+        .from('team_booking_confirmations')
+        .insert({ team_booking_id: teamBooking.id, member_id: member.user_id });
+
+      await this.notifyEvent({
+        userId: member.user_id,
+        actorId: input.clientId,
+        type: 'team_booking_request',
+        title: 'New team booking request',
+        message: `A client requested your team for "${input.projectName}".`,
+        relatedId: teamBooking.id,
+      });
+    }
+
+    return { data: teamBooking, error: null };
+  }
+
+  static async getFreelancerTeamBookingConfirmations(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('team_booking_confirmations')
+      .select('*, team_booking:team_booking_id(*, team:team_id(id, name), client:client_id(id, full_name, avatar_url))')
+      .eq('member_id', userId)
+      .order('responded_at', { ascending: true });
+    return { data, error };
+  }
+
+  static async respondToTeamBookingConfirmation(confirmationId: string, decision: 'confirmed' | 'declined') {
+    const { data: confirmation, error: fetchError } = await (supabase as any)
+      .from('team_booking_confirmations')
+      .select('*, team_booking:team_booking_id(*)')
+      .eq('id', confirmationId)
+      .single();
+
+    if (fetchError || !confirmation) {
+      return { data: null, error: fetchError };
+    }
+
+    const { data, error } = await (supabase as any)
+      .from('team_booking_confirmations')
+      .update({ status: decision, responded_at: new Date().toISOString() })
+      .eq('id', confirmationId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data: null, error };
+    }
+
+    const teamBooking = confirmation.team_booking;
+
+    if (decision === 'declined') {
+      await (supabase as any)
+        .from('team_bookings')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', teamBooking.id);
+
+      await this.notifyEvent({
+        userId: teamBooking.client_id,
+        type: 'team_booking_request',
+        title: 'Team booking declined',
+        message: `Your team booking request for "${teamBooking.project_name}" was declined.`,
+        relatedId: teamBooking.id,
+      });
+
+      return { data, error: null };
+    }
+
+    const allConfirmations = await (supabase as any)
+      .from('team_booking_confirmations')
+      .select('status')
+      .eq('team_booking_id', teamBooking.id);
+
+    const allConfirmed = (allConfirmations.data || []).every((row: any) => row.status === 'confirmed');
+
+    if (allConfirmed) {
+      const team = await this.getTeam(teamBooking.team_id);
+      const ownerId = team.data?.owner_id;
+
+      const bookingResponse = await this.createBooking({
+        client_id: teamBooking.client_id,
+        freelancer_id: ownerId,
+        project_name: teamBooking.project_name,
+        description: teamBooking.description,
+        budget: Number(teamBooking.budget || 0),
+        status: 'confirmed',
+        payment_status: 'unpaid',
+        deliverables: `Auto-created from team booking ${teamBooking.id}`,
+      } as any);
+
+      await (supabase as any)
+        .from('team_bookings')
+        .update({ status: 'confirmed', booking_id: bookingResponse.data?.id || null, updated_at: new Date().toISOString() })
+        .eq('id', teamBooking.id);
+
+      await this.notifyEvent({
+        userId: teamBooking.client_id,
+        type: 'team_booking_request',
+        title: 'Team booking confirmed',
+        message: `Your team booking for "${teamBooking.project_name}" was confirmed by everyone.`,
+        relatedId: teamBooking.id,
+      });
+    }
+
+    return { data, error: null };
+  }
+
+  static async getTeamBookingsForTeam(teamId: string) {
+    const { data, error } = await (supabase as any)
+      .from('team_bookings')
+      .select('*, client:client_id(id, full_name, avatar_url)')
+      .eq('team_id', teamId)
+      .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
   static async notifyAccountSecurityAlert(userId: string, message: string, severity: 'info' | 'warning' | 'critical' = 'info') {
     return this.notifyEvent({
       userId,
@@ -1616,6 +1975,18 @@ export class DataService {
     const recipients = Array.from(new Set(input.recipientIds.filter(Boolean)));
     if (!recipients.length) {
       return { data: [], error: new Error('Please select at least one recipient.') };
+    }
+
+    const pausedCheck = await supabase
+      .from('users')
+      .select('id, full_name, account_status' as any)
+      .in('id', recipients);
+    const pausedRecipient = (pausedCheck.data || []).find((row: any) => row.account_status === 'paused');
+    if (pausedRecipient) {
+      return {
+        data: [],
+        error: new Error(`${(pausedRecipient as any).full_name || 'This freelancer'} isn't accepting new requests right now.`),
+      };
     }
 
     const isGroup = recipients.length > 1;
@@ -2211,6 +2582,37 @@ export class DataService {
     return { data, error };
   }
 
+  static async getFreelancerReviews(freelancerUserId: string) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .select('*, reviewer:reviewer_id(id, full_name, avatar_url, gender)')
+      .eq('reviewee_id', freelancerUserId)
+      .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
+  static async replyToReview(reviewId: string, reply: string) {
+    const { data, error } = await supabase
+      .from('reviews')
+      .update({ reply, replied_at: new Date().toISOString() } as any)
+      .eq('id', reviewId)
+      .select()
+      .single();
+
+    if (!error && data) {
+      await this.notifyEvent({
+        userId: (data as any).reviewer_id,
+        actorId: (data as any).reviewee_id,
+        type: 'review_reply',
+        title: 'New reply to your review',
+        message: 'The freelancer replied to your review.',
+        relatedId: (data as any).booking_id,
+      });
+    }
+
+    return { data, error };
+  }
+
   static async createClientPost(post: {
     client_id: string;
     caption: string;
@@ -2241,7 +2643,7 @@ export class DataService {
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {
     const previous = await supabase
       .from('requests')
-      .select('id, client_id, freelancer_id, project_name, status')
+      .select('id, client_id, freelancer_id, project_name, status, counter_by' as any)
       .eq('id', requestId)
       .maybeSingle();
 
@@ -2255,18 +2657,50 @@ export class DataService {
     if (!error && data) {
       const previousStatus = String(previous.data?.status || '');
       const nextStatus = String((data as any).status || '');
+      const previousCounterBy = String((previous.data as any)?.counter_by || '');
+      const nextCounterBy = String((data as any).counter_by || '');
       const clientId = String((data as any).client_id || previous.data?.client_id || '');
       const freelancerId = String((data as any).freelancer_id || previous.data?.freelancer_id || '');
       const projectName = String((data as any).project_name || previous.data?.project_name || 'your request');
+      const acceptedViaClientCounter = nextStatus === 'accepted' && String((data as any).counter_by || '') === 'client';
 
-      if (nextStatus !== previousStatus) {
-        if (nextStatus === 'accepted' && clientId) {
-          const freelancerUser = freelancerId ? await this.getUser(freelancerId) : null;
-          const actorName = freelancerUser?.data?.full_name || 'Someone';
+      // A counter offer keeps status === 'countered' across an entire
+      // back-and-forth thread, so this must key off counter_by changing —
+      // not the outer status-transition guard below, which only fires once.
+      if (nextCounterBy && nextCounterBy !== previousCounterBy) {
+        const recipientId = nextCounterBy === 'freelancer' ? clientId : freelancerId;
+        const actorId = nextCounterBy === 'freelancer' ? freelancerId : clientId;
+        if (recipientId) {
+          const actorUser = actorId ? await this.getUser(actorId) : null;
+          const actorName = actorUser?.data?.full_name || 'Someone';
+          const counterPrice = (data as any).counter_price;
 
           await this.notifyEvent({
-            userId: clientId,
-            actorId: freelancerId || null,
+            userId: recipientId,
+            actorId: actorId || null,
+            type: 'request_countered',
+            title: 'New counter offer',
+            message: counterPrice
+              ? `${actorName} sent a counter offer of ${counterPrice} for ${projectName}.`
+              : `${actorName} sent a counter offer for ${projectName}.`,
+            relatedId: requestId,
+            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
+          });
+        }
+      }
+
+      if (nextStatus !== previousStatus) {
+        if (nextStatus === 'accepted' && (acceptedViaClientCounter ? freelancerId : clientId)) {
+          // If the client accepted the freelancer's counter, the client did
+          // the accepting — notify the freelancer instead of the client.
+          const recipientId = acceptedViaClientCounter ? freelancerId : clientId;
+          const actorId = acceptedViaClientCounter ? clientId : freelancerId;
+          const actorUser = actorId ? await this.getUser(actorId) : null;
+          const actorName = actorUser?.data?.full_name || 'Someone';
+
+          await this.notifyEvent({
+            userId: recipientId,
+            actorId: actorId || null,
             type: 'request_accepted',
             title: 'Booking accepted',
             message: `${actorName} accepted ${projectName}.`,

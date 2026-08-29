@@ -9,12 +9,17 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
 // Authenticated page imports
 import { FreelancerProfile } from './pages/FreelancerProfile';
+import { TeamProfilePage } from './pages/TeamProfilePage';
 import { MapView } from './pages/MapExplorePage';
 import { RequestsPage } from './pages/RequestsPage';
 import { ClientProfilePage } from './pages/ClientProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
 import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
+import { FreelancerDashboardCalendarPage } from './pages/FreelancerDashboardCalendarPage';
 import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
+import { FreelancerDashboardReviewsPage } from './pages/FreelancerDashboardReviewsPage';
+import { FreelancerDashboardEarningsPage } from './pages/FreelancerDashboardEarningsPage';
+import { FreelancerDashboardTeamsPage } from './pages/FreelancerDashboardTeamsPage';
 import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
 import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -170,6 +175,14 @@ export default function App() {
             }
           />
           <Route
+            path="/team/:id"
+            element={
+              <ProtectedRoute>
+                <TeamProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/client-profile"
             element={
               <ProtectedRoute>
@@ -246,10 +259,42 @@ export default function App() {
             }
           />
           <Route
+            path="/freelancer-dashboard/calendar"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardCalendarPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/freelancer-dashboard/analytics"
             element={
               <ProtectedRoute>
                 {user?.role === 'freelancer' ? <FreelancerDashboardAnalyticsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/reviews"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardReviewsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/earnings"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardEarningsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/teams"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardTeamsPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />
