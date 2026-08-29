@@ -456,7 +456,11 @@ export function MainLayout({ children }: MainLayoutProps) {
         navigate('/premium');
         break;
       case 'bookings':
-        navigate(user?.role === 'freelancer' ? '/freelancer-dashboard/bookings' : '/my-bookings');
+        // "My Booked List" is always the client-side function - bookings this
+        // user made with other freelancers - regardless of their account's
+        // primary role. Freelancer-side bookings (where others booked them)
+        // have their own entry point: the Freelancer Dashboard's Bookings tab.
+        navigate('/my-bookings');
         break;
       case 'settings':
         navigate('/settings');
