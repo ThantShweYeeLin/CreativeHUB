@@ -15,9 +15,13 @@ export interface SignUpData {
   // onboarding gate redirects the instant the caller's auth state flips to
   // signed-in, which races ahead of any writes done after signUp() returns,
   // so anything collected at sign-up has to land in this one atomic step.
+  /** E.164 format, e.g. "+66812345678". */
   phone?: string;
   avatarFile?: File | null;
+  /** Display name, e.g. "Thailand". */
   country?: string;
+  /** ISO 3166-1 alpha-2, e.g. "TH". */
+  countryCode?: string;
   city?: string;
 }
 
@@ -170,7 +174,9 @@ class AuthService {
 
       // Create (or, if a database trigger already created a row for this
       // auth user, overwrite) the user profile with the details chosen on
-      // the sign-up form.
+      // the sign-up form. country/country_code/city are the structured
+      // general-location fields; location/lat/lng stay as the geocoded
+      // point derived from them, used for map/distance features elsewhere.
       const { error: profileError } = await supabase.from('users').upsert({
         id: authData.user.id,
         email: data.email,
@@ -178,6 +184,9 @@ class AuthService {
         role: data.role,
         gender: data.gender,
         ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.country ? { country: data.country } : {}),
+        ...(data.countryCode ? { country_code: data.countryCode } : {}),
+        ...(data.city ? { city: data.city } : {}),
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         ...(locationText
           ? {

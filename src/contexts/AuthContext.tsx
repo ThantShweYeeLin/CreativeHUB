@@ -1,22 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { authService, type AuthUser } from '../lib/authService';
+import { authService, type AuthUser, type SignUpData } from '../lib/authService';
 import { isSupabaseConfigured } from '../lib/supabase';
-import type { Gender } from '../lib/database.types';
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signUp: (
-    email: string,
-    password: string,
-    fullName: string,
-    role: 'freelancer' | 'client',
-    gender: Gender,
-    phone?: string,
-    avatarFile?: File | null,
-    country?: string,
-    city?: string
-  ) => Promise<AuthUser>;
+  signUp: (data: SignUpData) => Promise<AuthUser>;
   signIn: (email: string, password: string) => Promise<void>;
   requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
@@ -52,32 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signUp = async (
-    email: string,
-    password: string,
-    fullName: string,
-    role: 'freelancer' | 'client',
-    gender: Gender,
-    phone?: string,
-    avatarFile?: File | null,
-    country?: string,
-    city?: string
-  ) => {
+  const signUp = async (data: SignUpData) => {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase is not configured.');
     }
 
-    const { user: newUser, error } = await authService.signUp({
-      email,
-      password,
-      fullName,
-      role,
-      gender,
-      phone,
-      avatarFile,
-      country,
-      city,
-    });
+    const { user: newUser, error } = await authService.signUp(data);
 
     if (error || !newUser) {
       throw error || new Error('Sign up failed.');
