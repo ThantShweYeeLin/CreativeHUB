@@ -1,6 +1,7 @@
 import { DataService } from './dataService';
 import { extractBudgetMeta, stripBudgetMeta } from './requestBudget';
 import { extractScheduleMeta } from './requestSchedule';
+import { DEPOSIT_DEADLINE_HOURS } from './bookingEscrow';
 
 // Shared by both sides of a request/counter-offer negotiation
 // (FreelancerDashboard accepting a request or a client's counter, and
@@ -10,6 +11,10 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   const budgetMeta = extractBudgetMeta(request.message, request.description);
   const budget = overrideBudget ?? Number(budgetMeta?.max ?? request.budget ?? 0);
   const scheduleMeta = extractScheduleMeta(request.message, request.description);
+  // A counter offer may have proposed a different date/time — if the offer
+  // being accepted is a counter, that takes precedence over the original ask.
+  const startDate = request.status === 'countered' && request.counter_date ? request.counter_date : scheduleMeta?.date || null;
+  const startTime = request.status === 'countered' && request.counter_time ? request.counter_time : scheduleMeta?.time || null;
 
   const bookingResponse = await DataService.createBooking({
     client_id: request.client_id,
@@ -20,8 +25,9 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     status: 'pending',
     payment_status: 'unpaid',
     deliverables: `Auto-created from request ${request.id}`,
-    start_date: scheduleMeta?.date || null,
-    start_time: scheduleMeta?.time || null,
+    start_date: startDate,
+    start_time: startTime,
+    deposit_deadline: new Date(Date.now() + DEPOSIT_DEADLINE_HOURS * 60 * 60 * 1000).toISOString(),
   } as any);
 
   if (bookingResponse.error) {

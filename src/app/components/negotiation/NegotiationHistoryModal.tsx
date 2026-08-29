@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Check, MessageCircle, X } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { formatCurrencyAmount } from '../../../lib/currency';
+import { extractScheduleMeta, formatScheduleMeta } from '../../../lib/requestSchedule';
 
 interface NegotiationHistoryModalProps {
   request: any;
@@ -57,6 +58,8 @@ export function NegotiationHistoryModal({
     .split('\n')
     .map((line: string) => line.trim())
     .filter(Boolean);
+  const originalSchedule = extractScheduleMeta(request.message, request.description);
+  const currentSchedule = hasCounter && request.counter_date ? { date: request.counter_date, time: (request.counter_time || '00:00').slice(0, 5) } : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm md:items-center md:p-4">
@@ -89,6 +92,13 @@ export function NegotiationHistoryModal({
                 <tr>
                   <td className="px-4 py-3 font-semibold text-gray-700">Service</td>
                   <td className="px-4 py-3 text-gray-900" colSpan={2}>{request.project_name}</td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-semibold text-gray-700">Date & Time</td>
+                  <td className="px-4 py-3 text-gray-900">{originalSchedule ? formatScheduleMeta(originalSchedule) : '—'}</td>
+                  <td className="px-4 py-3 font-semibold text-gray-900">
+                    {currentSchedule ? formatScheduleMeta(currentSchedule) : '—'}
+                  </td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-semibold text-gray-700">Price</td>
@@ -140,6 +150,7 @@ export function NegotiationHistoryModal({
                     <p className="text-sm font-semibold text-gray-900">
                       {ACTION_LABEL[offer.action] || offer.action}
                       {offer.price != null && ` — ${formatCurrencyAmount(Number(offer.price), 'THB')}`}
+                      {offer.date && ` · ${formatScheduleMeta({ date: offer.date, time: (offer.time || '00:00').slice(0, 5) })}`}
                     </p>
                     {offer.message && <p className="mt-1 text-sm text-gray-600">"{offer.message}"</p>}
                   </div>

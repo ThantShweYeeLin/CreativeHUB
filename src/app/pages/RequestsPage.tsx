@@ -54,6 +54,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
   const [counterIncludesInput, setCounterIncludesInput] = useState('');
+  const [counterDateInput, setCounterDateInput] = useState('');
+  const [counterTimeInput, setCounterTimeInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
@@ -199,6 +201,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         counterMessage: request.counter_message || null,
         counterBy: request.counter_by || null,
         counterRound: Number(request.counter_round || 1),
+        counterDate: request.counter_date || null,
+        counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
         includes: request.includes || null,
         date: request.created_at,
         message: stripRequestDisplayMeta(request.plain_message || request.message || request.description || '') || 'Group request',
@@ -271,10 +275,31 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     }
   };
 
+  const getEffectiveSchedule = (normalizedRequest: any) => {
+    if (normalizedRequest?.status === 'countered' && normalizedRequest.counterDate) {
+      return { date: normalizedRequest.counterDate, time: normalizedRequest.counterTime || '' };
+    }
+    return normalizedRequest?.scheduleMeta || { date: '', time: '' };
+  };
+
+  const openCounterForm = (normalizedRequest: any) => {
+    const schedule = getEffectiveSchedule(normalizedRequest);
+    setCounterFormOpenForId(normalizedRequest.id);
+    setCounterPriceInput('');
+    setCounterMessageInput('');
+    setCounterIncludesInput('');
+    setCounterDateInput(schedule.date || '');
+    setCounterTimeInput(schedule.time || '');
+  };
+
   const handleSendCounterOffer = async (requestId: string) => {
     const price = Number(counterPriceInput);
     if (!counterPriceInput.trim() || !Number.isFinite(price) || price <= 0) {
       setError('Enter a valid proposed price.');
+      return;
+    }
+    if (!counterDateInput || !counterTimeInput) {
+      setError('Choose a date and time for your counter offer.');
       return;
     }
     const rawRequest = requests.find((item) => item.id === requestId);
@@ -290,6 +315,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       counter_by: 'client',
       counter_round: nextRound,
       includes: counterIncludesInput.trim() || null,
+      counter_date: counterDateInput,
+      counter_time: counterTimeInput,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -303,6 +330,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterPriceInput('');
     setCounterMessageInput('');
     setCounterIncludesInput('');
+    setCounterDateInput('');
+    setCounterTimeInput('');
     await reloadRequests();
   };
 
@@ -478,12 +507,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           </button>
                           {Number(request.counterRound || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
-                              onClick={() => {
-                                setCounterFormOpenForId(request.id);
-                                setCounterPriceInput('');
-                                setCounterMessageInput('');
-                                setCounterIncludesInput('');
-                              }}
+                              onClick={() => openCounterForm(request)}
                               className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
                             >
                               <DollarSign className="w-4 h-4" />
@@ -541,12 +565,14 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       </button>
                     </div>
 
-                    {request.status === 'countered' && request.counterMessage && (
+                    {request.status === 'countered' && (
                       <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
                         <span className="font-semibold text-gray-900">
                           {request.counterBy === 'freelancer' ? "Freelancer's counter offer: " : 'Your counter offer: '}
                         </span>
-                        {formatCurrencyAmount(request.counterPrice || 0, 'THB')} — "{request.counterMessage}"
+                        {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
+                        {request.counterDate && <> · {formatScheduleMeta({ date: request.counterDate, time: request.counterTime || '00:00' })}</>}
+                        {request.counterMessage && <> — "{request.counterMessage}"</>}
                       </div>
                     )}
 
@@ -568,6 +594,26 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             placeholder="Message (optional)"
                             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
                           />
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date</label>
+                            <input
+                              type="date"
+                              value={counterDateInput}
+                              onChange={(event) => setCounterDateInput(event.target.value)}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time</label>
+                            <input
+                              type="time"
+                              value={counterTimeInput}
+                              onChange={(event) => setCounterTimeInput(event.target.value)}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
                         </div>
                         <div className="mt-3">
                           <label className="mb-1 block text-xs font-semibold text-gray-600">What's included (optional, one per line)</label>

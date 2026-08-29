@@ -136,6 +136,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
   const [counterIncludesInput, setCounterIncludesInput] = useState('');
+  const [counterDateInput, setCounterDateInput] = useState('');
+  const [counterTimeInput, setCounterTimeInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
@@ -422,10 +424,31 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setSuccess(status === 'accepted' ? 'Request accepted and converted to booking.' : 'Request rejected.');
   };
 
+  const getEffectiveSchedule = (request: any) => {
+    if (request?.status === 'countered' && request.counter_date) {
+      return { date: request.counter_date, time: (request.counter_time || '').slice(0, 5) };
+    }
+    return extractScheduleMeta(request?.message, request?.description) || { date: '', time: '' };
+  };
+
+  const openCounterForm = (request: any) => {
+    const schedule = getEffectiveSchedule(request);
+    setCounterFormOpenForId(request.id);
+    setCounterPriceInput('');
+    setCounterMessageInput('');
+    setCounterIncludesInput('');
+    setCounterDateInput(schedule.date || '');
+    setCounterTimeInput(schedule.time || '');
+  };
+
   const handleSendCounterOffer = async (requestId: string) => {
     const price = Number(counterPriceInput);
     if (!counterPriceInput.trim() || !Number.isFinite(price) || price <= 0) {
       setError('Enter a valid proposed price.');
+      return;
+    }
+    if (!counterDateInput || !counterTimeInput) {
+      setError('Choose a date and time for your counter offer.');
       return;
     }
 
@@ -444,6 +467,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       counter_by: 'freelancer',
       counter_round: nextRound,
       includes,
+      counter_date: counterDateInput,
+      counter_time: counterTimeInput,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -464,6 +489,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               counter_by: 'freelancer',
               counter_round: nextRound,
               includes,
+              counter_date: counterDateInput,
+              counter_time: counterTimeInput,
             }
           : request
       )
@@ -472,6 +499,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setCounterPriceInput('');
     setCounterMessageInput('');
     setCounterIncludesInput('');
+    setCounterDateInput('');
+    setCounterTimeInput('');
     setSuccess('Counter offer sent.');
   };
 
@@ -1176,12 +1205,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           </button>
                           {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
-                              onClick={() => {
-                                setCounterFormOpenForId(request.id);
-                                setCounterPriceInput('');
-                                setCounterMessageInput('');
-                                setCounterIncludesInput('');
-                              }}
+                              onClick={() => openCounterForm(request)}
                               className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
                             >
                               <DollarSign className="h-4 w-4" /> Counter Offer
@@ -1211,12 +1235,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           </button>
                           {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
-                              onClick={() => {
-                                setCounterFormOpenForId(request.id);
-                                setCounterPriceInput('');
-                                setCounterMessageInput('');
-                                setCounterIncludesInput('');
-                              }}
+                              onClick={() => openCounterForm(request)}
                               className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
                             >
                               <DollarSign className="h-4 w-4" /> Counter Again
@@ -1251,12 +1270,16 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       )}
                     </div>
 
-                    {request.status === 'countered' && request.counter_message && (
+                    {request.status === 'countered' && (
                       <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
                         <span className="font-semibold text-gray-900">
                           {request.counter_by === 'client' ? "Client's counter offer: " : 'Your counter offer: '}
                         </span>
-                        {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')} — "{request.counter_message}"
+                        {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')}
+                        {request.counter_date && (
+                          <> · {formatScheduleMeta({ date: request.counter_date, time: (request.counter_time || '00:00').slice(0, 5) })}</>
+                        )}
+                        {request.counter_message && <> — "{request.counter_message}"</>}
                       </div>
                     )}
 
@@ -1281,6 +1304,26 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               value={counterMessageInput}
                               onChange={(event) => setCounterMessageInput(event.target.value)}
                               placeholder='e.g. "I can provide the requested service for ฿7,000."'
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date</label>
+                            <input
+                              type="date"
+                              value={counterDateInput}
+                              onChange={(event) => setCounterDateInput(event.target.value)}
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time</label>
+                            <input
+                              type="time"
+                              value={counterTimeInput}
+                              onChange={(event) => setCounterTimeInput(event.target.value)}
                               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
                             />
                           </div>
@@ -1472,10 +1515,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             ) : (
               <div className="space-y-3">
                 {bookings.map((booking) => {
+                  const isDisputed = booking.dispute_status === 'open';
+                  const isRefunded = booking.payment_status === 'refunded';
                   // unpaid -> deposit_paid is a client-only action (paying money in) —
                   // a freelancer can only advance deposit_paid -> paid from here.
                   const nextStatus =
-                    booking.payment_status === 'unpaid'
+                    isDisputed || isRefunded || booking.payment_status === 'unpaid'
                       ? null
                       : PAYMENT_STATUS_SEQUENCE[PAYMENT_STATUS_SEQUENCE.indexOf(booking.payment_status) + 1];
                   return (
@@ -1494,9 +1539,22 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
-                          {PAYMENT_STATUS_LABEL[booking.payment_status] || booking.payment_status} {booking.payment_status === 'paid' ? '✓' : ''}
-                        </span>
+                        {isDisputed ? (
+                          <button
+                            onClick={() => navigate(`/booking/${booking.id}`)}
+                            className="flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                          >
+                            Disputed — action needed
+                          </button>
+                        ) : isRefunded ? (
+                          <span className="flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
+                            Refunded
+                          </span>
+                        ) : (
+                          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
+                            {PAYMENT_STATUS_LABEL[booking.payment_status] || booking.payment_status} {booking.payment_status === 'paid' ? '✓' : ''}
+                          </span>
+                        )}
                         {nextStatus ? (
                           <button
                             onClick={() => void handleAdvancePaymentStatus(booking)}
@@ -1505,7 +1563,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           >
                             {isUpdatingPaymentForId === booking.id ? 'Updating...' : `Mark as ${PAYMENT_STATUS_LABEL[nextStatus]}`}
                           </button>
-                        ) : booking.payment_status === 'unpaid' ? (
+                        ) : !isDisputed && !isRefunded && booking.payment_status === 'unpaid' ? (
                           <span className="flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
                             Awaiting client deposit
                           </span>

@@ -6,6 +6,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { getBookingEscrowState } from '../../lib/bookingEscrow';
 
 interface MyBookingsPageProps {
   onBack: () => void;
@@ -77,26 +78,34 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
   }, [user]);
 
   const normalizedBookings = useMemo(() => {
-    return bookings.map((booking) => {
-      const counterparty = user?.role === 'freelancer' ? booking.client : booking.freelancer;
-      const status = formatStatus(booking.status);
+    return bookings
+      .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
+      .map((booking) => {
+        const counterparty = user?.role === 'freelancer' ? booking.client : booking.freelancer;
+        const escrowState = getBookingEscrowState(booking);
+        const status =
+          escrowState === 'disputed'
+            ? { label: 'Disputed', color: 'bg-amber-100 text-amber-700 border-amber-200' }
+            : escrowState === 'refunded'
+            ? { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' }
+            : formatStatus(booking.status);
 
-      return {
-        id: booking.id,
-        bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
-        name: counterparty?.full_name || 'CreativeHUB User',
-        specialty: booking.project_name,
-        image: counterparty?.avatar_url || fallbackProfileImage,
-        gender: counterparty?.gender || null,
-        date: booking.start_date || 'Schedule pending',
-        endDate: booking.end_date || null,
-        location: counterparty?.location || 'Location to be confirmed',
-        statusLabel: status.label,
-        statusColor: status.color,
-        totalAmount: Number(booking.budget || 0),
-        deposit: Math.round(Number(booking.budget || 0) * 0.3),
-      };
-    });
+        return {
+          id: booking.id,
+          bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+          name: counterparty?.full_name || 'CreativeHUB User',
+          specialty: booking.project_name,
+          image: counterparty?.avatar_url || fallbackProfileImage,
+          gender: counterparty?.gender || null,
+          date: booking.start_date || 'Schedule pending',
+          endDate: booking.end_date || null,
+          location: counterparty?.location || 'Location to be confirmed',
+          statusLabel: status.label,
+          statusColor: status.color,
+          totalAmount: Number(booking.budget || 0),
+          deposit: Math.round(Number(booking.budget || 0) * 0.3),
+        };
+      });
   }, [bookings, user?.role]);
 
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');

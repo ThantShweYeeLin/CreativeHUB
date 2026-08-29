@@ -9,6 +9,8 @@ import {
   stripRequestDisplayMeta,
 } from './groupRequest';
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
+import { extractScheduleMeta } from './requestSchedule';
+import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS, MAX_DISPUTE_ROUNDS } from './bookingEscrow';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -800,6 +802,262 @@ export class DataService {
       .eq('id', bookingId)
       .single();
     return { data, error };
+  }
+
+  // BOOKING ESCROW / DISPUTE LIFECYCLE
+  static async reconcileBookingEscrow(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('reconcile_booking_escrow', { p_booking_id: bookingId });
+    return { data, error };
+  }
+
+  static async arbitrateBookingDispute(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('arbitrate_booking_dispute', { p_booking_id: bookingId });
+    return { data, error };
+  }
+
+  static async getBookingEvents(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('booking_events')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at', { ascending: true });
+    return { data, error };
+  }
+
+  static async uploadBookingEvidencePhoto(userId: string, bookingId: string, file: File) {
+    const path = `${userId}/${bookingId}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('booking-evidence').upload(path, file, {
+      contentType: file.type,
+      upsert: true,
+    });
+    if (error) {
+      return { path: null, error };
+    }
+    return { path, error: null };
+  }
+
+  static async getBookingEvidenceSignedUrl(path: string) {
+    const { data, error } = await supabase.storage.from('booking-evidence').createSignedUrl(path, 3600);
+    return { url: data?.signedUrl || null, error };
+  }
+
+  static async submitBookingCompletion(bookingId: string, input: { text: string; photoPaths: string[] }) {
+    const clientResponseDeadline = new Date(Date.now() + CLIENT_RESPONSE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        completion_evidence_text: input.text || null,
+        completion_evidence_photos: input.photoPaths,
+        completed_at: new Date().toISOString(),
+        client_response_deadline: clientResponseDeadline,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'freelancer',
+      action: 'completion_submitted',
+      evidence_text: input.text || null,
+      evidence_photos: input.photoPaths,
+    });
+
+    await this.notifyEvent({
+      userId: (data as any).client_id,
+      actorId: (data as any).freelancer_id,
+      type: 'booking_completion_submitted',
+      title: 'Work marked complete',
+      message: 'The freelancer submitted evidence that the work is complete. You have 7 days to confirm or report a problem.',
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
+  }
+
+  static async confirmBookingCompletion(bookingId: string) {
+    const previous = await supabase.from('bookings').select('dispute_status').eq('id', bookingId).maybeSingle();
+    const wasDisputed = (previous.data as any)?.dispute_status === 'open';
+
+    const response = await this.updateBooking(bookingId, { payment_status: 'paid' } as any);
+    if (response.error) {
+      return response;
+    }
+
+    if (wasDisputed) {
+      await supabase
+        .from('bookings')
+        .update({ dispute_status: 'resolved', dispute_awaiting: null } as any)
+        .eq('id', bookingId);
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'client',
+      action: 'confirmed',
+    });
+
+    return response;
+  }
+
+  static async openBookingDispute(
+    bookingId: string,
+    input: { category: 'no_show' | 'not_as_agreed' | 'other'; reason: string; evidenceText?: string | null; evidencePhotoPaths?: string[] }
+  ) {
+    const disputeResponseDeadline = new Date(Date.now() + DISPUTE_RESPONSE_HOURS * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        dispute_status: 'open',
+        dispute_round: 1,
+        dispute_awaiting: 'freelancer',
+        dispute_response_deadline: disputeResponseDeadline,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      round: 1,
+      actor: 'client',
+      action: 'complain',
+      category: input.category,
+      reason: input.reason,
+      evidence_text: input.evidenceText || null,
+      evidence_photos: input.evidencePhotoPaths || [],
+    });
+
+    await this.notifyEvent({
+      userId: (data as any).freelancer_id,
+      actorId: (data as any).client_id,
+      type: 'booking_disputed',
+      title: 'Client reported a problem',
+      message: `The client disputed this booking: ${input.reason}`,
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
+  }
+
+  static async respondToBookingDispute(
+    bookingId: string,
+    input: {
+      actor: 'freelancer' | 'client';
+      hasEvidence?: boolean;
+      evidenceText?: string | null;
+      evidencePhotoPaths?: string[];
+      reason?: string;
+    }
+  ) {
+    const previous = await supabase
+      .from('bookings')
+      .select('dispute_round, client_id, freelancer_id')
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (!previous.data) {
+      return { data: null, error: new Error('Booking not found.') };
+    }
+
+    const currentRound = Number((previous.data as any).dispute_round || 1);
+    const disputeResponseDeadline = new Date(Date.now() + DISPUTE_RESPONSE_HOURS * 60 * 60 * 1000).toISOString();
+
+    if (input.actor === 'freelancer') {
+      if (!input.hasEvidence) {
+        await (supabase as any).from('booking_events').insert({
+          booking_id: bookingId,
+          round: currentRound,
+          actor: 'freelancer',
+          action: 'conceded',
+          reason: input.reason || null,
+        });
+        return this.arbitrateBookingDispute(bookingId);
+      }
+
+      const { data, error } = await supabase
+        .from('bookings')
+        .update({ dispute_awaiting: 'client', dispute_response_deadline: disputeResponseDeadline } as any)
+        .eq('id', bookingId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        return { data, error };
+      }
+
+      await (supabase as any).from('booking_events').insert({
+        booking_id: bookingId,
+        round: currentRound,
+        actor: 'freelancer',
+        action: 'evidence',
+        evidence_text: input.evidenceText || null,
+        evidence_photos: input.evidencePhotoPaths || [],
+      });
+
+      await this.notifyEvent({
+        userId: (data as any).client_id,
+        actorId: (data as any).freelancer_id,
+        type: 'booking_disputed',
+        title: 'Freelancer responded to your dispute',
+        message: 'The freelancer provided evidence in response to your complaint. Please review it.',
+        relatedId: bookingId,
+      });
+
+      return { data, error: null };
+    }
+
+    // actor === 'client', trying to escalate to another round
+    if (currentRound >= MAX_DISPUTE_ROUNDS) {
+      return this.arbitrateBookingDispute(bookingId);
+    }
+
+    const nextRound = currentRound + 1;
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        dispute_round: nextRound,
+        dispute_awaiting: 'freelancer',
+        dispute_response_deadline: disputeResponseDeadline,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      round: nextRound,
+      actor: 'client',
+      action: 'complain',
+      reason: input.reason || null,
+      evidence_text: input.evidenceText || null,
+      evidence_photos: input.evidencePhotoPaths || [],
+    });
+
+    await this.notifyEvent({
+      userId: (data as any).freelancer_id,
+      actorId: (data as any).client_id,
+      type: 'booking_disputed',
+      title: 'Client is still disputing this booking',
+      message: input.reason ? `The client responded: ${input.reason}` : 'The client is still disputing this booking.',
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
   }
 
   static async updateBooking(bookingId: string, updates: Partial<Booking>) {
@@ -1995,6 +2253,8 @@ export class DataService {
     price?: number | null;
     message?: string | null;
     includes?: string | null;
+    date?: string | null;
+    time?: string | null;
   }) {
     const { error } = await (supabase as any).from('request_offers').insert(row);
     return { error };
@@ -2048,6 +2308,7 @@ export class DataService {
 
       created.push(response.data);
       if (response.data?.id) {
+        const scheduleMeta = extractScheduleMeta(payloadMessage);
         await this.logRequestOffer({
           request_id: response.data.id,
           round: 1,
@@ -2056,6 +2317,8 @@ export class DataService {
           price: input.budget,
           message: payloadMessage,
           includes: null,
+          date: scheduleMeta?.date || null,
+          time: scheduleMeta?.time || null,
         });
       }
     }
@@ -2746,6 +3009,8 @@ export class DataService {
           price: (data as any).counter_price ?? null,
           message: (data as any).counter_message ?? null,
           includes: (data as any).includes ?? null,
+          date: (data as any).counter_date ?? null,
+          time: (data as any).counter_time ?? null,
         });
       }
 
