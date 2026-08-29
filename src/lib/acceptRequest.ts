@@ -1,5 +1,6 @@
 import { DataService } from './dataService';
 import { extractBudgetMeta, stripBudgetMeta } from './requestBudget';
+import { extractScheduleMeta } from './requestSchedule';
 
 // Shared by both sides of a request/counter-offer negotiation
 // (FreelancerDashboard accepting a request or a client's counter, and
@@ -8,6 +9,7 @@ import { extractBudgetMeta, stripBudgetMeta } from './requestBudget';
 export async function acceptRequestAndCreateBooking(request: any, overrideBudget?: number): Promise<{ error: Error | null }> {
   const budgetMeta = extractBudgetMeta(request.message, request.description);
   const budget = overrideBudget ?? Number(budgetMeta?.max ?? request.budget ?? 0);
+  const scheduleMeta = extractScheduleMeta(request.message, request.description);
 
   const bookingResponse = await DataService.createBooking({
     client_id: request.client_id,
@@ -18,6 +20,8 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     status: 'confirmed',
     payment_status: 'unpaid',
     deliverables: `Auto-created from request ${request.id}`,
+    start_date: scheduleMeta?.date || null,
+    start_time: scheduleMeta?.time || null,
   } as any);
 
   if (bookingResponse.error) {
