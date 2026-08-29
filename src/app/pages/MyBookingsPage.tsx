@@ -91,7 +91,11 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
     return bookings.map((booking) => {
       const counterparty = String(booking.client_id) === String(user?.id) ? booking.freelancer : booking.client;
       const status = formatStatus(booking.status);
-      const scheduleMeta = extractScheduleMeta(booking.description);
+      // Prefer the real start_date/start_time columns (populated going forward);
+      // fall back to the SCHEDULE_META tag in description for older bookings.
+      const scheduleMeta = booking.start_date
+        ? { date: booking.start_date, time: booking.start_time || '00:00' }
+        : extractScheduleMeta(booking.description);
       const locationMeta = extractLocationMeta(booking.description);
 
       return {
@@ -101,8 +105,12 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
         specialty: booking.project_name,
         image: counterparty?.avatar_url || fallbackProfileImage,
         gender: counterparty?.gender || null,
-        date: scheduleMeta ? formatScheduleMeta(scheduleMeta) : (booking.start_date || 'Schedule pending'),
-        endDate: scheduleMeta ? null : booking.end_date || null,
+        date: scheduleMeta
+          ? (booking.start_date && !booking.start_time
+              ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+              : formatScheduleMeta(scheduleMeta))
+          : 'Schedule pending',
+        endDate: null,
         location: locationMeta || counterparty?.location || 'Location to be confirmed',
         statusLabel: status.label,
         statusColor: status.color,

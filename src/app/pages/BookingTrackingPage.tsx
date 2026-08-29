@@ -126,14 +126,18 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
 
     const servicePrice = Number(booking.budget || 0);
     const deposit = Math.round(servicePrice * 0.3);
-    const scheduleMeta = extractScheduleMeta(booking.description);
+    // Prefer the real start_date/start_time columns (populated going forward);
+    // fall back to the SCHEDULE_META tag in description for older bookings.
+    const scheduleMeta = booking.start_date
+      ? { date: booking.start_date, time: booking.start_time || '00:00' }
+      : extractScheduleMeta(booking.description);
     const locationMeta = extractLocationMeta(booking.description);
     const scheduleDateLabel = scheduleMeta
       ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-      : (booking.start_date || 'Schedule pending');
-    const scheduleTimeLabel = scheduleMeta
+      : 'Schedule pending';
+    const scheduleTimeLabel = scheduleMeta && (booking.start_time || !booking.start_date)
       ? formatTimeLabel(scheduleMeta.time)
-      : (booking.end_date ? `Ends ${booking.end_date}` : 'Time to be confirmed');
+      : 'Time to be confirmed';
 
     return {
       bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
