@@ -2,6 +2,7 @@ import { ChevronLeft, Clock, CheckCircle, FileText, Upload, AlertCircle, Refresh
 import { Avatar } from '../../components/common/Avatar';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
+import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
@@ -14,31 +15,35 @@ type BookingStage = 'requested' | 'confirmed' | 'inProgress' | 'issue' | 'refund
 
 const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
 
-function getInitialStage(status: string | undefined): BookingStage {
-  switch (status) {
-    case 'confirmed':
-      return 'confirmed';
-    case 'in_progress':
-      return 'inProgress';
-    case 'completed':
-      return 'completed';
-    case 'cancelled':
-      return 'refundReview';
-    default:
-      return 'requested';
+// Derives the displayed stage purely from the real booking's status/payment_status
+// (no local override) — a bookings row only exists once terms are agreed, so the
+// 'requested' stage never actually applies here; it's kept only as a type member
+// for the stage-list metadata below.
+function deriveStage(booking: any): BookingStage {
+  if (!booking) return 'confirmed';
+  if (booking.status === 'cancelled') return 'refundReview';
+  if (booking.status === 'completed') {
+    return booking.payment_status === 'paid' ? 'released' : 'completed';
   }
+  if (booking.status === 'confirmed' || booking.status === 'in_progress') {
+    return 'inProgress';
+  }
+  return 'confirmed';
 }
 
 export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
   const { id } = useParams();
+  const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState<BookingStage>('requested');
+  const [isPayingDeposit, setIsPayingDeposit] = useState(false);
   const [showReportIssue, setShowReportIssue] = useState(false);
   const [issueDescription, setIssueDescription] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+
+  const currentStage = useMemo(() => deriveStage(booking), [booking]);
 
   useEffect(() => {
     let isMounted = true;
@@ -66,7 +71,6 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
         setBooking(null);
       } else {
         setBooking(response.data);
-        setCurrentStage(getInitialStage(response.data.status));
       }
 
       setIsLoading(false);
@@ -78,6 +82,40 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
       isMounted = false;
     };
   }, [id]);
+
+  const handleTransferDeposit = async () => {
+    if (!booking) return;
+    setIsPayingDeposit(true);
+    setError(null);
+
+    const response = await DataService.updateBooking(booking.id, { status: 'confirmed', payment_status: 'deposit_paid' } as any);
+
+    setIsPayingDeposit(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to transfer deposit.');
+      return;
+    }
+
+    setBooking((current: any) => ({ ...current, status: 'confirmed', payment_status: 'deposit_paid' }));
+  };
+
+  const handleConfirmAndRelease = async () => {
+    if (!booking) return;
+    setIsPayingDeposit(true);
+    setError(null);
+
+    const response = await DataService.updateBooking(booking.id, { payment_status: 'paid' } as any);
+
+    setIsPayingDeposit(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to release payment.');
+      return;
+    }
+
+    setBooking((current: any) => ({ ...current, payment_status: 'paid' }));
+  };
 
   const bookingData = useMemo(() => {
     if (!booking) {
@@ -307,9 +345,17 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                   </div>
                   <p className="text-xs text-gray-500">This amount will be held until service completion</p>
                 </div>
-                <button className="w-full bg-white text-gray-900 py-3 px-4 rounded-xl font-bold hover:bg-gray-100 transition-all">
-                  Transfer Deposit Now
-                </button>
+                {user?.role === 'client' ? (
+                  <button
+                    onClick={() => void handleTransferDeposit()}
+                    disabled={isPayingDeposit}
+                    className="w-full bg-white text-gray-900 py-3 px-4 rounded-xl font-bold hover:bg-gray-100 transition-all disabled:opacity-60"
+                  >
+                    {isPayingDeposit ? 'Transferring...' : 'Transfer Deposit Now'}
+                  </button>
+                ) : (
+                  <p className="text-center text-sm text-gray-300">Waiting for the client to transfer the deposit.</p>
+                )}
               </>
             )}
 
@@ -415,9 +461,15 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                           <p className="text-xs text-gray-600 mb-3">
                             Transfer {formatMoney(bookingData.pricing.deposit)} to secure your booking
                           </p>
-                          <button className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-2 px-4 rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
-                            Transfer Deposit
-                          </button>
+                          {user?.role === 'client' && (
+                            <button
+                              onClick={() => void handleTransferDeposit()}
+                              disabled={isPayingDeposit}
+                              className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-2 px-4 rounded-lg text-sm font-semibold hover:shadow-lg transition-all disabled:opacity-60"
+                            >
+                              {isPayingDeposit ? 'Transferring...' : 'Transfer Deposit'}
+                            </button>
+                          )}
                         </div>
                       )}
 
@@ -438,13 +490,18 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
                           <p className="text-sm text-gray-700 mb-3">
                             Service has been completed. Please confirm to release the deposit to the freelancer.
                           </p>
-                          <button
-                            onClick={() => setCurrentStage('released')}
-                            className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
-                          >
-                            <CheckCircle className="w-5 h-5" />
-                            Confirm & Release Deposit
-                          </button>
+                          {user?.role === 'client' ? (
+                            <button
+                              onClick={() => void handleConfirmAndRelease()}
+                              disabled={isPayingDeposit}
+                              className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                              <CheckCircle className="w-5 h-5" />
+                              {isPayingDeposit ? 'Releasing...' : 'Confirm & Release Deposit'}
+                            </button>
+                          ) : (
+                            <p className="text-center text-xs text-gray-500">Waiting for the client to confirm and release payment.</p>
+                          )}
                         </div>
                       )}
 
@@ -572,10 +629,7 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
             </div>
 
             <button
-              onClick={() => {
-                setShowReportIssue(false);
-                setCurrentStage('refundReview');
-              }}
+              onClick={() => setShowReportIssue(false)}
               className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all"
             >
               Submit Issue Report
@@ -656,21 +710,6 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
               <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-gray-200">Report issues anytime during project progress</p>
             </div>
-          </div>
-        </div>
-
-        {/* Debug Controls - Remove in production */}
-        <div className="mt-6 bg-gray-100 rounded-xl p-4">
-          <p className="text-xs text-gray-600 mb-2">Demo Controls:</p>
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => setCurrentStage('requested')} className="text-xs px-3 py-1 bg-white rounded-lg">Requested</button>
-            <button onClick={() => setCurrentStage('confirmed')} className="text-xs px-3 py-1 bg-white rounded-lg">Confirmed</button>
-            <button onClick={() => setCurrentStage('inProgress')} className="text-xs px-3 py-1 bg-white rounded-lg">In Progress</button>
-            <button onClick={() => setCurrentStage('refundReview')} className="text-xs px-3 py-1 bg-white rounded-lg">Refund Review</button>
-            <button onClick={() => setCurrentStage('refundApproved')} className="text-xs px-3 py-1 bg-white rounded-lg">Refund Approved</button>
-            <button onClick={() => setCurrentStage('replacement')} className="text-xs px-3 py-1 bg-white rounded-lg">Replacement</button>
-            <button onClick={() => setCurrentStage('completed')} className="text-xs px-3 py-1 bg-white rounded-lg">Completed</button>
-            <button onClick={() => setCurrentStage('released')} className="text-xs px-3 py-1 bg-white rounded-lg">Released</button>
           </div>
         </div>
       </div>

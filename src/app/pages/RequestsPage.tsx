@@ -10,11 +10,13 @@ import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
+import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
+import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
 interface RequestsPageProps {
   onBack: () => void;
   onViewProfile?: (status: 'accepted' | 'pending' | 'rejected') => void;
-  onOpenMessages?: () => void;
+  onOpenMessages?: (recipientId?: string) => void;
 }
 
 type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered';
@@ -49,7 +51,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [counterFormOpenForId, setCounterFormOpenForId] = useState<string | null>(null);
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
+  const [counterIncludesInput, setCounterIncludesInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
+  const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     projectName: '',
     currency: 'THB',
@@ -188,6 +194,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         counterPrice: request.counter_price != null ? Number(request.counter_price) : null,
         counterMessage: request.counter_message || null,
         counterBy: request.counter_by || null,
+        counterRound: Number(request.counter_round || 1),
+        includes: request.includes || null,
         date: request.created_at,
         message: stripRequestDisplayMeta(request.plain_message || request.message || request.description || '') || 'Group request',
       })),
@@ -265,6 +273,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       setError('Enter a valid proposed price.');
       return;
     }
+    const rawRequest = requests.find((item) => item.id === requestId);
+    const nextRound = Number(rawRequest?.counter_round || 1) + 1;
+
     setError(null);
     setIsSubmittingCounter(true);
 
@@ -273,6 +284,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       counter_price: price,
       counter_message: counterMessageInput.trim() || null,
       counter_by: 'client',
+      counter_round: nextRound,
+      includes: counterIncludesInput.trim() || null,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -285,6 +298,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterFormOpenForId(null);
     setCounterPriceInput('');
     setCounterMessageInput('');
+    setCounterIncludesInput('');
     await reloadRequests();
   };
 
@@ -317,6 +331,18 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       return;
     }
     await reloadRequests();
+  };
+
+  const handleConfirmedAction = async () => {
+    if (!confirmAction) return;
+    setIsSubmittingConfirm(true);
+    if (confirmAction.type === 'accept') {
+      await handleAcceptCounter(confirmAction.request);
+    } else {
+      await handleRejectCounter(confirmAction.request.id);
+    }
+    setIsSubmittingConfirm(false);
+    setConfirmAction(null);
   };
 
   return (
@@ -429,40 +455,57 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       {request.status === 'countered' && request.counterBy === 'freelancer' && (
                         <>
                           <button
-                            onClick={() => void handleAcceptCounter(request)}
+                            onClick={() => setConfirmAction({ type: 'accept', request })}
                             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-green-700 transition-colors"
                           >
                             <Check className="w-4 h-4" />
                             Accept {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
                           </button>
+                          {Number(request.counterRound || 1) < 3 && (
+                            <button
+                              onClick={() => {
+                                setCounterFormOpenForId(request.id);
+                                setCounterPriceInput('');
+                                setCounterMessageInput('');
+                                setCounterIncludesInput('');
+                              }}
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
+                            >
+                              <DollarSign className="w-4 h-4" />
+                              Counter Again
+                            </button>
+                          )}
                           <button
-                            onClick={() => {
-                              setCounterFormOpenForId(request.id);
-                              setCounterPriceInput('');
-                              setCounterMessageInput('');
-                            }}
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
-                          >
-                            <DollarSign className="w-4 h-4" />
-                            Counter Again
-                          </button>
-                          <button
-                            onClick={() => void handleRejectCounter(request.id)}
+                            onClick={() => setConfirmAction({ type: 'reject', request })}
                             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-200 transition-colors"
                           >
                             <X className="w-4 h-4" />
                             Reject
                           </button>
+                          <button
+                            onClick={() => setHistoryModalRequestId(request.id)}
+                            className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            View Details
+                          </button>
                         </>
                       )}
                       {request.status === 'countered' && request.counterBy === 'client' && (
-                        <div className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-500">
-                          Waiting for {request.freelancer.name} to respond to your {formatCurrencyAmount(request.counterPrice || 0, 'THB')} offer.
+                        <div className="flex flex-wrap items-center gap-3">
+                          <div className="px-4 py-2.5 text-sm text-gray-500">
+                            Waiting for {request.freelancer.name} to respond to your {formatCurrencyAmount(request.counterPrice || 0, 'THB')} offer.
+                          </div>
+                          <button
+                            onClick={() => setHistoryModalRequestId(request.id)}
+                            className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            View Details
+                          </button>
                         </div>
                       )}
                       {request.status === 'accepted' && (
                         <button
-                          onClick={onOpenMessages}
+                          onClick={() => onOpenMessages?.(request.freelancer.id)}
                           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
                         >
                           <MessageCircle className="w-4 h-4" />
@@ -508,6 +551,16 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             value={counterMessageInput}
                             onChange={(event) => setCounterMessageInput(event.target.value)}
                             placeholder="Message (optional)"
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-xs font-semibold text-gray-600">What's included (optional, one per line)</label>
+                          <textarea
+                            value={counterIncludesInput}
+                            onChange={(event) => setCounterIncludesInput(event.target.value)}
+                            rows={3}
+                            placeholder={'8 hours photography\nEdited photos\nOnline gallery'}
                             className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
                           />
                         </div>
@@ -625,6 +678,59 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             </div>
           </div>
         </div>
+      )}
+
+      {confirmAction && (
+        <ConfirmOfferDialog
+          type={confirmAction.type}
+          projectName={confirmAction.request.projectName}
+          price={confirmAction.request.status === 'countered' ? Number(confirmAction.request.counterPrice || 0) : Number(confirmAction.request.budget || 0)}
+          isSubmitting={isSubmittingConfirm}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => void handleConfirmedAction()}
+        />
+      )}
+
+      {historyModalRequestId && (
+        <NegotiationHistoryModal
+          request={requests.find((item) => item.id === historyModalRequestId)}
+          onClose={() => setHistoryModalRequestId(null)}
+          canAccept={
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.status === 'countered' &&
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterBy === 'freelancer'
+          }
+          canReject={
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.status === 'countered' &&
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterBy === 'freelancer'
+          }
+          canCounter={
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.status === 'countered' &&
+            normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterBy === 'freelancer' &&
+            Number(normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterRound || 1) < 3
+          }
+          onAccept={() => {
+            const request = normalizedRequests.find((item) => item.id === historyModalRequestId);
+            if (request) setConfirmAction({ type: 'accept', request });
+            setHistoryModalRequestId(null);
+          }}
+          onReject={() => {
+            const request = normalizedRequests.find((item) => item.id === historyModalRequestId);
+            if (request) setConfirmAction({ type: 'reject', request });
+            setHistoryModalRequestId(null);
+          }}
+          onCounter={() => {
+            setCounterFormOpenForId(historyModalRequestId);
+            setCounterPriceInput('');
+            setCounterMessageInput('');
+            setCounterIncludesInput('');
+            setHistoryModalRequestId(null);
+          }}
+          onMessage={() => {
+            const request = normalizedRequests.find((item) => item.id === historyModalRequestId);
+            setHistoryModalRequestId(null);
+            if (request) onOpenMessages?.(request.freelancer.id);
+          }}
+        />
       )}
     </div>
   );

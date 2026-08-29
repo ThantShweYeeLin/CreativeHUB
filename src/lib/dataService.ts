@@ -872,6 +872,18 @@ export class DataService {
           });
         }
 
+        if (freelancerId && nextPaymentStatus === 'deposit_paid') {
+          await this.notifyEvent({
+            userId: freelancerId,
+            actorId: clientId || null,
+            type: 'payment_update',
+            title: 'Deposit secured',
+            message: 'The client transferred the deposit for your booking.',
+            relatedId: bookingId,
+            metadata: { payment_status: nextPaymentStatus },
+          });
+        }
+
         if (freelancerId && (nextPaymentStatus === 'paid' || nextPaymentStatus === 'released')) {
           await this.notifyEvent({
             userId: freelancerId,
@@ -1965,6 +1977,28 @@ export class DataService {
     return { data, error };
   }
 
+  static async getRequestOffers(requestId: string) {
+    const { data, error } = await (supabase as any)
+      .from('request_offers')
+      .select('*')
+      .eq('request_id', requestId)
+      .order('round', { ascending: true });
+    return { data, error };
+  }
+
+  private static async logRequestOffer(row: {
+    request_id: string;
+    round: number;
+    offered_by: 'client' | 'freelancer';
+    action: 'request' | 'counter' | 'accept' | 'reject';
+    price?: number | null;
+    message?: string | null;
+    includes?: string | null;
+  }) {
+    const { error } = await (supabase as any).from('request_offers').insert(row);
+    return { error };
+  }
+
   static async createBookingRequests(input: {
     clientId: string;
     recipientIds: string[];
@@ -2012,6 +2046,17 @@ export class DataService {
       }
 
       created.push(response.data);
+      if (response.data?.id) {
+        await this.logRequestOffer({
+          request_id: response.data.id,
+          round: 1,
+          offered_by: 'client',
+          action: 'request',
+          price: input.budget,
+          message: payloadMessage,
+          includes: null,
+        });
+      }
     }
 
     return { data: created, error: null };
@@ -2643,9 +2688,13 @@ export class DataService {
   static async updateRequest(requestId: string, updates: Partial<Database['public']['Tables']['requests']['Row']>) {
     const previous = await supabase
       .from('requests')
-      .select('id, client_id, freelancer_id, project_name, status, counter_by' as any)
+      .select('id, client_id, freelancer_id, project_name, status, counter_by, counter_round' as any)
       .eq('id', requestId)
       .maybeSingle();
+
+    if ((updates as any).counter_by && Number((previous.data as any)?.counter_round || 1) >= 3) {
+      return { data: null, error: new Error('Maximum negotiation rounds reached — accept or reject this offer.') };
+    }
 
     const { data, error } = await supabase
       .from('requests')
@@ -2687,6 +2736,16 @@ export class DataService {
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
         }
+
+        await this.logRequestOffer({
+          request_id: requestId,
+          round: Number((data as any).counter_round || 1),
+          offered_by: nextCounterBy as 'client' | 'freelancer',
+          action: 'counter',
+          price: (data as any).counter_price ?? null,
+          message: (data as any).counter_message ?? null,
+          includes: (data as any).includes ?? null,
+        });
       }
 
       if (nextStatus !== previousStatus) {
@@ -2707,6 +2766,14 @@ export class DataService {
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
+
+          await this.logRequestOffer({
+            request_id: requestId,
+            round: Number((data as any).counter_round || 1),
+            offered_by: acceptedViaClientCounter ? 'client' : 'freelancer',
+            action: 'accept',
+            price: (data as any).counter_price ?? (data as any).budget ?? null,
+          });
         }
 
         if (nextStatus === 'rejected' && clientId) {
@@ -2721,6 +2788,14 @@ export class DataService {
             message: `${actorName} rejected ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
+          });
+
+          await this.logRequestOffer({
+            request_id: requestId,
+            round: Number((data as any).counter_round || 1),
+            offered_by: String((data as any).counter_by || '') === 'freelancer' ? 'client' : 'freelancer',
+            action: 'reject',
+            price: (data as any).counter_price ?? (data as any).budget ?? null,
           });
         }
 

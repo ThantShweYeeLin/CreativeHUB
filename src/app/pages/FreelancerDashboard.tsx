@@ -34,6 +34,8 @@ import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialP
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { LIMITATION_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
+import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
+import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
 type DashboardSection = 'requests' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'teams' | 'settings';
 
@@ -130,7 +132,11 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [counterFormOpenForId, setCounterFormOpenForId] = useState<string | null>(null);
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
+  const [counterIncludesInput, setCounterIncludesInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
+  const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
   const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
     title: '',
     description: '',
@@ -418,6 +424,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       return;
     }
 
+    const request = requests.find((item) => item.id === requestId);
+    const nextRound = Number(request?.counter_round || 1) + 1;
+    const includes = counterIncludesInput.trim() || null;
+
     setError(null);
     setSuccess(null);
     setIsSubmittingCounter(true);
@@ -427,6 +437,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       counter_price: price,
       counter_message: counterMessageInput.trim() || null,
       counter_by: 'freelancer',
+      counter_round: nextRound,
+      includes,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -439,13 +451,22 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setRequests((current) =>
       current.map((request) =>
         request.id === requestId
-          ? { ...request, status: 'countered', counter_price: price, counter_message: counterMessageInput.trim() || null, counter_by: 'freelancer' }
+          ? {
+              ...request,
+              status: 'countered',
+              counter_price: price,
+              counter_message: counterMessageInput.trim() || null,
+              counter_by: 'freelancer',
+              counter_round: nextRound,
+              includes,
+            }
           : request
       )
     );
     setCounterFormOpenForId(null);
     setCounterPriceInput('');
     setCounterMessageInput('');
+    setCounterIncludesInput('');
     setSuccess('Counter offer sent.');
   };
 
@@ -484,6 +505,29 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
     setRequests((current) => current.map((item) => (item.id === requestId ? { ...item, status: 'rejected' } : item)));
     setSuccess('Counter offer rejected.');
+  };
+
+  const handleConfirmedAction = async () => {
+    if (!confirmAction) return;
+    const { type, request } = confirmAction;
+    setIsSubmittingConfirm(true);
+
+    if (type === 'accept') {
+      if (request.status === 'countered') {
+        await handleAcceptCounter(request);
+      } else {
+        await handleRequestDecision(request.id, 'accepted');
+      }
+    } else {
+      if (request.status === 'countered') {
+        await handleRejectCounter(request.id);
+      } else {
+        await handleRequestDecision(request.id, 'rejected');
+      }
+    }
+
+    setIsSubmittingConfirm(false);
+    setConfirmAction(null);
   };
 
   const handleToggleWorkingDay = (day: string) => {
@@ -1090,58 +1134,84 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       {request.status === 'pending' && (
                         <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={() => void handleRequestDecision(request.id, 'accepted')}
+                            onClick={() => setConfirmAction({ type: 'accept', request })}
                             className="flex items-center gap-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                           >
                             <Check className="h-4 w-4" /> Accept
                           </button>
+                          {Number(request.counter_round || 1) < 3 && (
+                            <button
+                              onClick={() => {
+                                setCounterFormOpenForId(request.id);
+                                setCounterPriceInput('');
+                                setCounterMessageInput('');
+                                setCounterIncludesInput('');
+                              }}
+                              className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                            >
+                              <DollarSign className="h-4 w-4" /> Counter Offer
+                            </button>
+                          )}
                           <button
-                            onClick={() => {
-                              setCounterFormOpenForId(request.id);
-                              setCounterPriceInput('');
-                              setCounterMessageInput('');
-                            }}
-                            className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
-                          >
-                            <DollarSign className="h-4 w-4" /> Counter Offer
-                          </button>
-                          <button
-                            onClick={() => void handleRequestDecision(request.id, 'rejected')}
+                            onClick={() => setConfirmAction({ type: 'reject', request })}
                             className="flex items-center gap-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
                           >
                             <X className="h-4 w-4" /> Reject
+                          </button>
+                          <button
+                            onClick={() => setHistoryModalRequestId(request.id)}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            View Details
                           </button>
                         </div>
                       )}
                       {request.status === 'countered' && request.counter_by === 'client' && (
                         <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={() => void handleAcceptCounter(request)}
+                            onClick={() => setConfirmAction({ type: 'accept', request })}
                             className="flex items-center gap-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                           >
                             <Check className="h-4 w-4" /> Accept {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')}
                           </button>
+                          {Number(request.counter_round || 1) < 3 && (
+                            <button
+                              onClick={() => {
+                                setCounterFormOpenForId(request.id);
+                                setCounterPriceInput('');
+                                setCounterMessageInput('');
+                                setCounterIncludesInput('');
+                              }}
+                              className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                            >
+                              <DollarSign className="h-4 w-4" /> Counter Again
+                            </button>
+                          )}
                           <button
-                            onClick={() => {
-                              setCounterFormOpenForId(request.id);
-                              setCounterPriceInput('');
-                              setCounterMessageInput('');
-                            }}
-                            className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
-                          >
-                            <DollarSign className="h-4 w-4" /> Counter Again
-                          </button>
-                          <button
-                            onClick={() => void handleRejectCounter(request.id)}
+                            onClick={() => setConfirmAction({ type: 'reject', request })}
                             className="flex items-center gap-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
                           >
                             <X className="h-4 w-4" /> Reject
                           </button>
+                          <button
+                            onClick={() => setHistoryModalRequestId(request.id)}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            View Details
+                          </button>
                         </div>
                       )}
                       {request.status === 'countered' && request.counter_by === 'freelancer' && (
-                        <div className="text-right text-sm text-gray-500">
-                          Waiting for client to respond to your {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')} offer.
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="text-right text-sm text-gray-500">
+                            Waiting for client to respond to your {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')} offer.
+                          </div>
+                          <button
+                            onClick={() => setHistoryModalRequestId(request.id)}
+                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            View Details
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1179,6 +1249,16 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
                             />
                           </div>
+                        </div>
+                        <div className="mt-3">
+                          <label className="mb-1 block text-xs font-semibold text-gray-600">What's included (optional, one per line)</label>
+                          <textarea
+                            value={counterIncludesInput}
+                            onChange={(event) => setCounterIncludesInput(event.target.value)}
+                            rows={3}
+                            placeholder={'8 hours photography\nEdited photos\nOnline gallery'}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          />
                         </div>
                         <div className="mt-3 flex justify-end gap-2">
                           <button
@@ -1351,7 +1431,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             ) : (
               <div className="space-y-3">
                 {bookings.map((booking) => {
-                  const nextStatus = PAYMENT_STATUS_SEQUENCE[PAYMENT_STATUS_SEQUENCE.indexOf(booking.payment_status) + 1];
+                  // unpaid -> deposit_paid is a client-only action (paying money in) —
+                  // a freelancer can only advance deposit_paid -> paid from here.
+                  const nextStatus =
+                    booking.payment_status === 'unpaid'
+                      ? null
+                      : PAYMENT_STATUS_SEQUENCE[PAYMENT_STATUS_SEQUENCE.indexOf(booking.payment_status) + 1];
                   return (
                     <div
                       key={booking.id}
@@ -1371,7 +1456,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
                           {PAYMENT_STATUS_LABEL[booking.payment_status] || booking.payment_status} {booking.payment_status === 'paid' ? '✓' : ''}
                         </span>
-                        {nextStatus && (
+                        {nextStatus ? (
                           <button
                             onClick={() => void handleAdvancePaymentStatus(booking)}
                             disabled={isUpdatingPaymentForId === booking.id}
@@ -1379,7 +1464,11 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           >
                             {isUpdatingPaymentForId === booking.id ? 'Updating...' : `Mark as ${PAYMENT_STATUS_LABEL[nextStatus]}`}
                           </button>
-                        )}
+                        ) : booking.payment_status === 'unpaid' ? (
+                          <span className="flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                            Awaiting client deposit
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   );
@@ -2054,6 +2143,65 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           </div>
         )}
       </div>
+
+      {confirmAction && (
+        <ConfirmOfferDialog
+          type={confirmAction.type}
+          projectName={confirmAction.request.project_name}
+          price={
+            confirmAction.request.status === 'countered'
+              ? Number(confirmAction.request.counter_price || 0)
+              : Number(confirmAction.request.budget || 0)
+          }
+          isSubmitting={isSubmittingConfirm}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={() => void handleConfirmedAction()}
+        />
+      )}
+
+      {historyModalRequestId && (
+        <NegotiationHistoryModal
+          request={requests.find((item) => item.id === historyModalRequestId)}
+          onClose={() => setHistoryModalRequestId(null)}
+          canAccept={['pending', 'countered'].includes(
+            requests.find((item) => item.id === historyModalRequestId)?.status
+          ) && requests.find((item) => item.id === historyModalRequestId)?.counter_by !== 'freelancer'}
+          canReject={['pending', 'countered'].includes(
+            requests.find((item) => item.id === historyModalRequestId)?.status
+          ) && requests.find((item) => item.id === historyModalRequestId)?.counter_by !== 'freelancer'}
+          canCounter={
+            (() => {
+              const request = requests.find((item) => item.id === historyModalRequestId);
+              if (!request) return false;
+              if (request.status === 'pending') return Number(request.counter_round || 1) < 3;
+              if (request.status === 'countered' && request.counter_by === 'client') return Number(request.counter_round || 1) < 3;
+              return false;
+            })()
+          }
+          onAccept={() => {
+            const request = requests.find((item) => item.id === historyModalRequestId);
+            if (request) setConfirmAction({ type: 'accept', request });
+            setHistoryModalRequestId(null);
+          }}
+          onReject={() => {
+            const request = requests.find((item) => item.id === historyModalRequestId);
+            if (request) setConfirmAction({ type: 'reject', request });
+            setHistoryModalRequestId(null);
+          }}
+          onCounter={() => {
+            setCounterFormOpenForId(historyModalRequestId);
+            setCounterPriceInput('');
+            setCounterMessageInput('');
+            setCounterIncludesInput('');
+            setHistoryModalRequestId(null);
+          }}
+          onMessage={() => {
+            const request = requests.find((item) => item.id === historyModalRequestId);
+            setHistoryModalRequestId(null);
+            if (request) navigate('/messages', { state: { openConversationWithUserId: request.client_id } });
+          }}
+        />
+      )}
     </div>
   );
 }
