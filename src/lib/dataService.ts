@@ -8,6 +8,7 @@ import {
   summarizeGroupRequestMembers,
   stripRequestDisplayMeta,
 } from './groupRequest';
+import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -2692,7 +2693,7 @@ export class DataService {
       .eq('id', requestId)
       .maybeSingle();
 
-    if ((updates as any).counter_by && Number((previous.data as any)?.counter_round || 1) >= 3) {
+    if ((updates as any).counter_by && Number((previous.data as any)?.counter_round || 1) >= MAX_NEGOTIATION_ROUNDS) {
       return { data: null, error: new Error('Maximum negotiation rounds reached — accept or reject this offer.') };
     }
 

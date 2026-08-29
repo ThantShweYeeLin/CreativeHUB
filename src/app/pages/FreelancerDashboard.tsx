@@ -35,6 +35,7 @@ import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialP
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { LIMITATION_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
+import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
@@ -1156,7 +1157,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           >
                             <Check className="h-4 w-4" /> Accept
                           </button>
-                          {Number(request.counter_round || 1) < 3 && (
+                          {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => {
                                 setCounterFormOpenForId(request.id);
@@ -1191,7 +1192,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           >
                             <Check className="h-4 w-4" /> Accept {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')}
                           </button>
-                          {Number(request.counter_round || 1) < 3 && (
+                          {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => {
                                 setCounterFormOpenForId(request.id);
@@ -2200,8 +2201,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             (() => {
               const request = requests.find((item) => item.id === historyModalRequestId);
               if (!request) return false;
-              if (request.status === 'pending') return Number(request.counter_round || 1) < 3;
-              if (request.status === 'countered' && request.counter_by === 'client') return Number(request.counter_round || 1) < 3;
+              if (request.status === 'pending') return Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS;
+              if (request.status === 'countered' && request.counter_by === 'client') return Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS;
               return false;
             })()
           }

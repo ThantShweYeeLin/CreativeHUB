@@ -13,6 +13,7 @@ import { formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
+import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -475,7 +476,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             <Check className="w-4 h-4" />
                             Accept {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
                           </button>
-                          {Number(request.counterRound || 1) < 3 && (
+                          {Number(request.counterRound || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => {
                                 setCounterFormOpenForId(request.id);
@@ -720,7 +721,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           canCounter={
             normalizedRequests.find((item) => item.id === historyModalRequestId)?.status === 'countered' &&
             normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterBy === 'freelancer' &&
-            Number(normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterRound || 1) < 3
+            Number(normalizedRequests.find((item) => item.id === historyModalRequestId)?.counterRound || 1) < MAX_NEGOTIATION_ROUNDS
           }
           onAccept={() => {
             const request = normalizedRequests.find((item) => item.id === historyModalRequestId);
