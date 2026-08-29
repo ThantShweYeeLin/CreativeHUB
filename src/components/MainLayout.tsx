@@ -456,7 +456,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         navigate('/premium');
         break;
       case 'bookings':
-        navigate('/my-bookings');
+        navigate(user?.role === 'freelancer' ? '/freelancer-dashboard/bookings' : '/my-bookings');
         break;
       case 'settings':
         navigate('/settings');

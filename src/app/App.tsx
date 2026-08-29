@@ -24,7 +24,8 @@ import { FreelancerDashboardTeamsPage } from './pages/FreelancerDashboardTeamsPa
 import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
 import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { BookingTrackingPage } from './pages/BookingTrackingPage';
+import { BookingTrackingClientPage } from './pages/BookingTrackingClientPage';
+import { BookingTrackingFreelancerPage } from './pages/BookingTrackingFreelancerPage';
 import { MyBookingsPage } from './pages/MyBookingsPage';
 import { FavoritesPage } from './pages/FavoritesPage';
 import { MessagesPage } from './pages/MessagesPage';
@@ -225,7 +226,15 @@ export default function App() {
             path="/booking/:id"
             element={
               <ProtectedRoute>
-                <BookingTrackingPage onBack={() => navigate('/my-bookings')} />
+                <BookingTrackingClientPage onBack={() => navigate('/my-bookings')} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-booking/:id"
+            element={
+              <ProtectedRoute>
+                <BookingTrackingFreelancerPage onBack={() => navigate('/freelancer-dashboard/bookings')} />
               </ProtectedRoute>
             }
           />

@@ -22,7 +22,7 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     project_name: request.project_name,
     description: stripBudgetMeta(request.description || request.message || 'Auto-created from accepted request.'),
     budget,
-    // Stays 'pending' until the client pays the deposit (BookingTrackingPage's
+    // Stays 'pending' until the client pays the deposit (BookingTrackingClientPage's
     // Transfer Deposit flips it to 'confirmed') — this is the first state of
     // the deposit escrow lifecycle, not a bug. See src/lib/bookingEscrow.ts.
     status: 'pending',

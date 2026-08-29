@@ -681,6 +681,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       type="number"
                       value={freelancerForm.experience_years}
                       onChange={(event) => setFreelancerForm((current) => ({ ...current, experience_years: Number(event.target.value) }))}
+                      placeholder="e.g. 3"
                       className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   </div>
@@ -690,6 +691,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       type="number"
                       value={freelancerForm.hourly_rate}
                       onChange={(event) => setFreelancerForm((current) => ({ ...current, hourly_rate: Number(event.target.value) }))}
+                      placeholder="e.g. 800"
                       className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   </div>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   ClipboardList,
+  CreditCard,
   Globe,
   Lock,
   LogOut,
@@ -15,6 +16,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
+import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
 
 type Role = 'freelancer' | 'client';
 
@@ -346,11 +348,11 @@ export function SettingsPage() {
               <h2 className="text-lg font-bold">Account Settings</h2>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="rounded-lg border border-gray-300 px-3 py-2" />
-              <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Phone number" className="rounded-lg border border-gray-300 px-3 py-2" />
-              <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-gray-300 px-3 py-2" />
-              <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="New password" className="rounded-lg border border-gray-300 px-3 py-2" />
-              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Confirm new password" className="rounded-lg border border-gray-300 px-3 py-2" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. jane@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
+              <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +66 81 234 5678" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
+              <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
+              <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="At least 6 characters" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
+              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Re-enter new password" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Save Account</button>
@@ -479,8 +481,8 @@ export function SettingsPage() {
                 <option value="Thai">ไทย</option>
               </select>
               <select value={preferences.theme} onChange={(e) => setPreferences((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="light">Light</option><option value="dark">Dark</option></select>
-              <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="Time zone" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="Currency" className="rounded-lg border border-gray-300 px-3 py-2 text-sm" />
+              <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="e.g. Asia/Bangkok" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900" />
+              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="e.g. USD" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900" />
               <select value={preferences.distanceUnit} onChange={(e) => setPreferences((c) => ({ ...c, distanceUnit: e.target.value as 'km' | 'miles' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="km">Kilometers</option><option value="miles">Miles</option></select>
             </div>
           </section>
@@ -493,6 +495,17 @@ export function SettingsPage() {
             <p className="text-sm text-gray-700">Current Plan: <span className="font-semibold">{planLabel}</span></p>
             <button onClick={() => navigate('/premium')} className="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Upgrade / Manage Plan</button>
           </section>
+
+          {role === 'client' && user?.id && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-gray-900">
+                <CreditCard className="h-5 w-5" />
+                <h2 className="text-lg font-bold">Payment Methods</h2>
+              </div>
+              <p className="mb-4 text-sm text-gray-600">Cards saved here can be used to pay booking deposits.</p>
+              <PaymentMethodPicker userId={user.id} />
+            </section>
+          )}
 
           {role === 'client' && (
             <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">

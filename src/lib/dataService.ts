@@ -841,6 +841,93 @@ export class DataService {
     return { url: data?.signedUrl || null, error };
   }
 
+  // PAYMENT METHODS (simulated — only display info is ever stored, never
+  // the full card number or CVC)
+  static async getPaymentMethods(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('payment_methods')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+    return { data, error };
+  }
+
+  static async addPaymentMethod(
+    userId: string,
+    input: { cardholderName: string; brand: string; last4: string; expMonth: number; expYear: number }
+  ) {
+    const existing = await (supabase as any).from('payment_methods').select('id').eq('user_id', userId).limit(1);
+    const isFirstCard = !existing.data || existing.data.length === 0;
+
+    const { data, error } = await (supabase as any)
+      .from('payment_methods')
+      .insert({
+        user_id: userId,
+        cardholder_name: input.cardholderName,
+        brand: input.brand,
+        last4: input.last4,
+        exp_month: input.expMonth,
+        exp_year: input.expYear,
+        is_default: isFirstCard,
+      })
+      .select()
+      .single();
+
+    return { data, error };
+  }
+
+  static async deletePaymentMethod(id: string) {
+    const { error } = await (supabase as any).from('payment_methods').delete().eq('id', id);
+    return { error };
+  }
+
+  static async setDefaultPaymentMethod(userId: string, id: string) {
+    await (supabase as any).from('payment_methods').update({ is_default: false }).eq('user_id', userId);
+    const { data, error } = await (supabase as any)
+      .from('payment_methods')
+      .update({ is_default: true })
+      .eq('id', id)
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async payBookingDeposit(bookingId: string, input: { cardLabel: string }) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        status: 'confirmed',
+        payment_status: 'deposit_paid',
+        deposit_paid_via: input.cardLabel,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'client',
+      action: 'deposit_paid',
+      reason: `Paid via ${input.cardLabel}`,
+    });
+
+    await this.notifyEvent({
+      userId: (data as any).freelancer_id,
+      actorId: (data as any).client_id,
+      type: 'booking_deposit_paid',
+      title: 'Deposit received',
+      message: 'The client transferred the deposit — the booking is now confirmed.',
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
+  }
+
   static async submitBookingCompletion(bookingId: string, input: { text: string; photoPaths: string[] }) {
     const clientResponseDeadline = new Date(Date.now() + CLIENT_RESPONSE_DAYS * 24 * 60 * 60 * 1000).toISOString();
 

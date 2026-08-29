@@ -911,8 +911,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   type="number"
                   value={requestMinBudget}
                   onChange={(event) => setRequestMinBudget(event.target.value)}
-                  placeholder="Minimum budget"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  placeholder="e.g. 2000"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                 />
               </div>
             </div>
@@ -1119,7 +1119,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               value={counterPriceInput}
                               onChange={(event) => setCounterPriceInput(event.target.value)}
                               placeholder="e.g. 7000"
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                             />
                           </div>
                           <div>
@@ -1210,7 +1210,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 {bookingCards.map((booking) => (
                   <button
                     key={booking.id}
-                    onClick={() => navigate(`/booking/${booking.id}`)}
+                    onClick={() => navigate(`/freelancer-booking/${booking.id}`)}
                     className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-lg transition-all hover:border-gray-900 hover:shadow-2xl"
                   >
                     <div className="mb-4 flex items-center justify-between">
@@ -1442,7 +1442,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       <div className="flex items-center gap-3">
                         {isDisputed ? (
                           <button
-                            onClick={() => navigate(`/booking/${booking.id}`)}
+                            onClick={() => navigate(`/freelancer-booking/${booking.id}`)}
                             className="flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                           >
                             Disputed — action needed
@@ -1654,8 +1654,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             <input
                               value={inviteEmail}
                               onChange={(event) => setInviteEmail(event.target.value)}
-                              placeholder="Freelancer's email"
-                              className="sm:col-span-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              placeholder="e.g. name@example.com"
+                              className="sm:col-span-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                             />
                             <input
                               type="number"
@@ -1663,8 +1663,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               max={100}
                               value={inviteRevenueShare}
                               onChange={(event) => setInviteRevenueShare(event.target.value)}
-                              placeholder="Revenue share %"
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              placeholder="e.g. 30"
+                              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                             />
                           </div>
                           <button
@@ -1843,9 +1843,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       min={0}
                       value={serviceForm.starting_price}
                       onChange={(event) => setServiceForm((current) => ({ ...current, starting_price: event.target.value }))}
-                      placeholder="Price (THB)"
+                      placeholder="e.g. 1500"
                       disabled={serviceForm.pricing_type === 'custom_quote'}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
                     />
                     <input
                       value={serviceForm.duration}

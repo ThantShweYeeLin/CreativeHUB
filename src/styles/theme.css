@@ -1,6 +1,12 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
+  /* Without this, browsers/OS with a dark theme enabled repaint native form
+     control chrome (number spinners, date pickers, checkboxes) using their
+     own dark palette — white text on our still-white input boxes — even
+     though the page itself is always light. This opts the whole app out of
+     that reinterpretation. */
+  color-scheme: light;
   --font-size: 16px;
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);

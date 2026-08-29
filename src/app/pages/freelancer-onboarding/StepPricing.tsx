@@ -67,8 +67,8 @@ export function StepPricing({
             min={0}
             value={startingPrice}
             onChange={(event) => onStartingPriceChange(event.target.value)}
-            placeholder="3000"
-            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            placeholder="e.g. 3000"
+            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
       </div>
@@ -81,7 +81,8 @@ export function StepPricing({
             min={0}
             value={minPrice}
             onChange={(event) => onMinPriceChange(event.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            placeholder="e.g. 1000"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
         <div>
@@ -91,7 +92,8 @@ export function StepPricing({
             min={0}
             value={maxPrice}
             onChange={(event) => onMaxPriceChange(event.target.value)}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            placeholder="e.g. 8000"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
         </div>
       </div>
