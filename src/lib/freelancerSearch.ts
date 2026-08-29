@@ -1,20 +1,16 @@
-import { CATEGORY_GROUPS } from './categories';
+import { FREELANCER_CATEGORIES } from './categories';
 
 // Common ways people phrase a search that should resolve to one of our
-// canonical CATEGORY_GROUPS labels (freelancer_profiles.title is always set
-// to one of those labels at onboarding, so this is what lets "photographer"
-// find someone whose title is literally "Photography").
+// canonical FREELANCER_CATEGORIES labels (freelancer_profiles.title is
+// always set to exactly one of those labels, so this is what lets
+// "photographer" or "mua" find someone whose title is literally
+// "Photographer" / "Makeup Artist").
 const CATEGORY_ALIASES: Array<{ label: string; aliases: string[] }> = [
-  { label: 'Photography', aliases: ['photography', 'photographer', 'photographers', 'photo', 'photos'] },
-  { label: 'Videography', aliases: ['videography', 'videographer', 'videographers', 'video', 'film', 'cinematography', 'cinematographer'] },
-  { label: 'Makeup', aliases: ['makeup', 'mua', 'beauty'] },
-  { label: 'Hair Styling', aliases: ['hair', 'hairstylist', 'hairstyling', 'hairdresser'] },
-  { label: 'Graphic Design', aliases: ['design', 'designer', 'graphic', 'branding', 'logo'] },
-  { label: 'Illustration', aliases: ['illustration', 'illustrator'] },
-  { label: 'UI/UX Design', aliases: ['ui', 'ux', 'ui/ux', 'uiux', 'product design'] },
-  { label: 'Fashion Design', aliases: ['fashion'] },
-  { label: 'Modeling', aliases: ['model', 'models', 'modeling', 'modelling'] },
-  { label: 'Event Services', aliases: ['event', 'events', 'decor', 'decoration', 'planner', 'planning'] },
+  { label: 'Photographer', aliases: ['photography', 'photographer', 'photographers', 'photo', 'photos'] },
+  { label: 'Makeup Artist', aliases: ['makeup', 'makeup artist', 'mua', 'beauty'] },
+  { label: 'Hair Stylist', aliases: ['hair', 'hairstylist', 'hair stylist', 'hairstyling', 'hairdresser'] },
+  { label: 'Fashion Designer', aliases: ['fashion', 'fashion designer', 'designer', 'design'] },
+  { label: 'Model', aliases: ['model', 'models', 'modeling', 'modelling'] },
 ];
 
 const STOPWORDS = new Set(['a', 'an', 'the', 'in', 'at', 'for', 'with', 'and', 'or', 'of', 'near', 'me']);
@@ -58,10 +54,10 @@ export function interpretSearchQuery(query: string): InterpretedQuery {
     }
   }
 
-  const specialtySource = category ? CATEGORY_GROUPS.filter((g) => g.label === category) : CATEGORY_GROUPS;
+  const specialtySource = category ? FREELANCER_CATEGORIES.filter((g) => g.label === category) : FREELANCER_CATEGORIES;
   const specialtyByWord = new Map<string, string>();
   for (const group of specialtySource) {
-    for (const specialty of group.specialties) {
+    for (const specialty of group.styles) {
       const lower = specialty.toLowerCase();
       specialtyByWord.set(lower, specialty);
       for (const w of lower.split(/\s+/)) {

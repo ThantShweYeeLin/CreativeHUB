@@ -953,6 +953,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map((post: any) => {
         const authorName = post.client?.full_name || 'Client';
         const username = (post.client?.email || 'client').split('@')[0];
+        // client_posts.client_id can belong to a client OR a freelancer —
+        // the table name is legacy, not a role guarantee — so the actual
+        // poster's role decides the label/behavior, same as a freshly
+        // composed post does further down in this file.
+        const isFromClient = post.client?.role !== 'freelancer';
 
         return {
           id: `client-post-${post.id}`,
@@ -961,7 +966,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           authorGender: post.client?.gender || null,
           username,
           avatar: post.client?.avatar_url || fallbackProfileImage,
-          specialty: 'Client Brief',
+          specialty: isFromClient ? 'Client Brief' : 'Creative Update',
           image: post.image_url || null,
           caption: post.caption,
           likes: Math.max(0, Number(post.likes_count || 0)),
@@ -970,7 +975,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           createdAtRaw: post.created_at,
           isLiked: !!post.liked_by_me,
           isSaved: !!post.saved_by_me,
-          isClientPost: true,
+          isClientPost: isFromClient,
         };
       });
 

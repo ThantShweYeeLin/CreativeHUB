@@ -5,7 +5,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
-import { CATEGORY_GROUPS } from '../../lib/categories';
+import { FREELANCER_CATEGORIES } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
 import { ProfileImageDropzone, type ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
@@ -67,7 +67,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   const [isLoadingExisting, setIsLoadingExisting] = useState(true);
   const [existingAvatarUrl, setExistingAvatarUrl] = useState<string | null>(pendingProfile?.avatarPreviewUrl || user?.avatar_url || null);
 
-  const interestCategoryLabels = new Set(CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => group.label));
+  const interestCategoryLabels = new Set(FREELANCER_CATEGORIES.map((group) => group.label));
   const customClientTypes = clientType.filter((type) => !CLIENT_TYPE_CATALOG.includes(type));
   const customInterests = interests.filter((interest) => !interestCategoryLabels.has(interest));
 
@@ -401,7 +401,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
       {step === 3 && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => (
+            {FREELANCER_CATEGORIES.map((group) => (
               <button
                 key={group.id}
                 type="button"

@@ -12,7 +12,7 @@ import { FreelancerProfile } from './pages/FreelancerProfile';
 import { TeamProfilePage } from './pages/TeamProfilePage';
 import { MapView } from './pages/MapExplorePage';
 import { RequestsPage } from './pages/RequestsPage';
-import { ClientProfilePage } from './pages/ClientProfilePage';
+import { EditProfilePage } from './pages/EditProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
 import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
 import { FreelancerDashboardCalendarPage } from './pages/FreelancerDashboardCalendarPage';
@@ -186,7 +186,15 @@ export default function App() {
             path="/client-profile"
             element={
               <ProtectedRoute>
-                <ClientProfilePage onBack={() => navigate(-1)} />
+                {user?.id ? <Navigate to={`/profile/${user.id}`} replace /> : null}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/edit-profile"
+            element={
+              <ProtectedRoute>
+                <EditProfilePage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />

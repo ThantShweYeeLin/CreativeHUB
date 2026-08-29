@@ -5,9 +5,21 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import { GoogleGenAI, Type, createUserContent, createPartFromBase64 } from '@google/genai';
 import { z } from 'zod';
-import { createSupabaseForRequest } from '../lib/supabase.js';
 
 const router = Router();
+
+// CreativeHUB's ONLY supported freelancer categories. This must be kept in
+// sync by hand with src/lib/categories.ts's FREELANCER_CATEGORIES — this is
+// a separately-built TS project (see server/tsconfig.json's rootDir) so it
+// can't import that file directly. The AI Matcher must never classify an
+// image into anything outside this fixed list.
+const TAXONOMY: Record<string, string[]> = {
+  'Photographer': ['Cinematic', 'Bright & Airy', 'Moody', 'Vintage', 'Editorial', 'Minimalist', 'Natural', 'Luxury', 'Documentary'],
+  'Makeup Artist': ['Douyin Makeup', 'Soft Glam', 'Natural Glam', 'Bridal Glam', 'Korean-Inspired', 'Chinese-Inspired', 'Glitter Makeup', 'Bold Glam', 'Minimal Makeup'],
+  'Hair Stylist': ['Korean-Inspired', 'Elegant', 'Romantic', 'Y2K', 'Natural', 'Glamorous', 'Vintage', 'Modern', 'Bridal'],
+  'Fashion Designer': ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
+  'Model': ['Editorial', 'Streetwear', 'Elegant', 'High Fashion', 'Commercial', 'Minimalist', 'Luxury', 'Casual', 'Beauty'],
+};
 
 const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const uploadDirectory = path.join(os.tmpdir(), 'creativehub-ai-matcher');
@@ -25,33 +37,6 @@ const upload = multer({
   },
 });
 
-// The AI must only choose a category/style that a real freelancer on
-// CreativeHUB already has, so we read the live set of values out of
-// freelancer_profiles instead of a hardcoded list — profiles are free-text
-// on category (title) and style, and existing data doesn't follow any fixed
-// enum (e.g. "Brand Designer" / "Douyin" show up alongside "Photographer").
-async function loadTaxonomy(): Promise<Record<string, string[]>> {
-  const supabase = createSupabaseForRequest();
-  const { data, error } = await supabase
-    .from('freelancer_profiles')
-    .select('title, styles')
-    .eq('is_available', true);
-
-  if (error) throw error;
-
-  const taxonomy: Record<string, Set<string>> = {};
-  for (const row of data ?? []) {
-    const category = (row as any).title?.trim();
-    if (!category) continue;
-    if (!taxonomy[category]) taxonomy[category] = new Set();
-    for (const style of (row as any).styles ?? []) {
-      if (typeof style === 'string' && style.trim()) taxonomy[category].add(style.trim());
-    }
-  }
-
-  return Object.fromEntries(Object.entries(taxonomy).map(([category, styles]) => [category, Array.from(styles)]));
-}
-
 router.post('/detect', upload.single('image'), async (req, res) => {
   const file = req.file;
   if (!file) {
@@ -64,18 +49,14 @@ router.post('/detect', upload.single('image'), async (req, res) => {
   }
 
   try {
-    const taxonomy = await loadTaxonomy();
+    const taxonomy = TAXONOMY;
     const categories = Object.keys(taxonomy);
-    if (categories.length === 0) {
-      return res.status(502).json({ message: 'No freelancer categories are set up yet.' });
-    }
-
     const allStyles = Array.from(new Set(Object.values(taxonomy).flat()));
 
     const imageData = (await fs.readFile(file.path)).toString('base64');
     const mediaType = file.mimetype;
 
-    const responseSchema = {
+    const detectionItemSchema = {
       type: Type.OBJECT,
       properties: {
         category: { type: Type.STRING, format: 'enum', enum: categories },
@@ -84,11 +65,25 @@ router.post('/detect', upload.single('image'), async (req, res) => {
           format: 'enum',
           enum: allStyles,
           nullable: true,
-          description: 'Set to null if no style under the chosen category clearly matches the image.',
+          description: 'Set to null if no style under this category clearly matches the image.',
         },
         confidence: { type: Type.NUMBER },
       },
       required: ['category', 'style', 'confidence'],
+    };
+
+    const responseSchema = {
+      type: Type.OBJECT,
+      properties: {
+        detections: {
+          type: Type.ARRAY,
+          minItems: '1',
+          maxItems: '3',
+          items: detectionItemSchema,
+          description: 'Up to 3 candidate categories this image could belong to, ranked most likely first.',
+        },
+      },
+      required: ['detections'],
     };
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -106,12 +101,12 @@ router.post('/detect', upload.single('image'), async (req, res) => {
           model: modelsToTry[attempt],
           contents: createUserContent([
             createPartFromBase64(imageData, mediaType),
-            'Classify this inspiration image into the closest category and, if a clearly matching one exists, style from the allowed lists.',
+            'Classify this inspiration image against the allowed category/style lists. Return your top 1-3 most likely categories, ranked most likely first — only include a second or third candidate if it is a genuinely plausible alternative, not just to fill the list. For each, include a style only if one clearly matches.',
           ]),
           config: {
             systemInstruction:
               'You classify creative-industry reference photos for CreativeHUB, a freelancer marketplace. ' +
-              'You must only choose values from this exact category -> styles mapping (real freelancer data), never invent new ones:\n' +
+              'You must only choose values from this exact category -> styles mapping (CreativeHUB\'s only supported freelancer categories), never invent new ones:\n' +
               JSON.stringify(taxonomy, null, 2),
             responseMimeType: 'application/json',
             responseSchema,
@@ -135,20 +130,39 @@ router.post('/detect', upload.single('image'), async (req, res) => {
     }
 
     const DetectionSchema = z.object({
-      category: z.enum(categories as [string, ...string[]]),
-      style: z.string().nullable(),
-      confidence: z.number().min(0).max(1),
+      detections: z
+        .array(
+          z.object({
+            category: z.enum(categories as [string, ...string[]]),
+            style: z.string().nullable(),
+            confidence: z.number().min(0).max(1),
+          })
+        )
+        .min(1)
+        .max(3),
     });
 
     const parsed = DetectionSchema.parse(JSON.parse(raw));
-    const styleBelongsToCategory = Boolean(parsed.style && taxonomy[parsed.category]?.includes(parsed.style));
 
-    return res.json({
-      category: parsed.category,
-      style: styleBelongsToCategory ? parsed.style : null,
-      confidence: parsed.confidence,
-      taxonomy,
-    });
+    // De-dupe by category (keep the highest-confidence one) in case the
+    // model returns the same category twice with different styles.
+    const byCategory = new Map<string, (typeof parsed.detections)[number]>();
+    for (const detection of parsed.detections) {
+      const existing = byCategory.get(detection.category);
+      if (!existing || detection.confidence > existing.confidence) {
+        byCategory.set(detection.category, detection);
+      }
+    }
+
+    const detections = Array.from(byCategory.values())
+      .sort((a, b) => b.confidence - a.confidence)
+      .map((detection) => ({
+        category: detection.category,
+        style: detection.style && taxonomy[detection.category]?.includes(detection.style) ? detection.style : null,
+        confidence: detection.confidence,
+      }));
+
+    return res.json({ detections, taxonomy });
   } catch (error) {
     console.error(error);
     const status = (error as { status?: number } | null)?.status;

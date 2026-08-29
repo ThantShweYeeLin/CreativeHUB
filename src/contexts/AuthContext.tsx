@@ -12,6 +12,7 @@ interface AuthContextType {
     fullName: string,
     role: 'freelancer' | 'client',
     gender: Gender,
+    phone?: string,
     avatarFile?: File | null,
     country?: string,
     city?: string
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     fullName: string,
     role: 'freelancer' | 'client',
     gender: Gender,
+    phone?: string,
     avatarFile?: File | null,
     country?: string,
     city?: string
@@ -71,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fullName,
       role,
       gender,
+      phone,
       avatarFile,
       country,
       city,

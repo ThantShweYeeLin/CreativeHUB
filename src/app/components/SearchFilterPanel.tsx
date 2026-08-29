@@ -2,6 +2,7 @@ import { X, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
+import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 
 interface SearchFilterPanelProps {
   onClose: () => void;
@@ -16,15 +17,7 @@ export interface FilterState {
   currency: string;
 }
 
-const serviceOptions = [
-  'Photography',
-  'Fashion & Styling',
-  'Videography',
-  'Graphic Design',
-  'Makeup & Beauty',
-  'Wedding Planning',
-  'Others'
-];
+const serviceOptions = FREELANCER_CATEGORY_LABELS;
 
 const locationOptions = [
   'Bangkok',

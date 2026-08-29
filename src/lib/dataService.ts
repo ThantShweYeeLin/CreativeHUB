@@ -2502,7 +2502,7 @@ export class DataService {
   static async getClientPosts(limit = 30, userId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location, role)')
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);

@@ -9,6 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMapper';
 import { geocodeAddress } from '../../lib/osmGeocoding';
+import { FREELANCER_CATEGORY_LABELS, isFreelancerCategory } from '../../lib/categories';
 
 type Availability = 'available' | 'busy' | 'unavailable';
 type BudgetBand = 'all' | 'under-100' | '100-300' | '300-500' | '500-plus';
@@ -17,14 +18,7 @@ interface MapViewProps {
   onViewProfile?: (freelancerId: string) => void;
 }
 
-const professionFilters = [
-  'Photographer',
-  'Makeup Artist',
-  'Hair Stylist',
-  'Designer',
-  'Model',
-  'Videographer',
-] as const;
+const professionFilters = FREELANCER_CATEGORY_LABELS;
 
 const availabilityFilters: { key: Availability; label: string; dot: string }[] = [
   { key: 'available', label: 'Available', dot: '🟢' },
@@ -57,20 +51,12 @@ function translateMapText(language: 'en' | 'th', english: string, thai: string) 
 
 const distanceFilters = [5, 10, 25, 50] as const;
 
-function professionLabel(value: string): (typeof professionFilters)[number] | null {
-  const text = value.toLowerCase();
-  if (text.includes('photographer')) return 'Photographer';
-  if (text.includes('makeup')) return 'Makeup Artist';
-  if (text.includes('hair')) return 'Hair Stylist';
-  if (text.includes('design')) return 'Designer';
-  if (text.includes('model')) return 'Model';
-  if (text.includes('video')) return 'Videographer';
-  return null;
-}
-
+// freelancer.profession comes from freelancer_profiles.title, which is
+// always exactly one of the five FREELANCER_CATEGORY_LABELS for a valid
+// profile — an exact match, not fuzzy substring detection, now that the
+// category field is a controlled dropdown rather than free text.
 function detectProfession(freelancer: FreelancerMapProfile): (typeof professionFilters)[number] | null {
-  const combined = `${freelancer.profession} ${(freelancer.skills || []).join(' ')}`;
-  return professionLabel(combined);
+  return isFreelancerCategory(freelancer.profession) ? freelancer.profession : null;
 }
 
 function availabilityStatus(freelancer: FreelancerMapProfile): Availability {
@@ -89,12 +75,10 @@ function professionVisual(freelancer: FreelancerMapProfile) {
       return { accent: '#db2777', glyph: 'MU' };
     case 'Hair Stylist':
       return { accent: '#f59e0b', glyph: 'HR' };
-    case 'Designer':
-      return { accent: '#7c3aed', glyph: 'DS' };
+    case 'Fashion Designer':
+      return { accent: '#7c3aed', glyph: 'FD' };
     case 'Model':
       return { accent: '#14b8a6', glyph: 'MD' };
-    case 'Videographer':
-      return { accent: '#ef4444', glyph: 'VD' };
     default:
       return { accent: '#475569', glyph: 'CR' };
   }
@@ -272,6 +256,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         normalized = resolved.filter((freelancer) => freelancer.latitude !== null && freelancer.longitude !== null);
       }
+
+      // Freelancers whose category isn't one of the five supported labels
+      // don't surface on the map until they pick a valid category.
+      normalized = normalized.filter((freelancer) => isFreelancerCategory(freelancer.profession));
 
       setFreelancers(normalized);
       setSelectedId(normalized[0]?.id || null);

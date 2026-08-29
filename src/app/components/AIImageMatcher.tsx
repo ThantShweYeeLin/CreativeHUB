@@ -1,6 +1,6 @@
 import { ChangeEvent, DragEvent, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CloudUpload, ExternalLink, Loader2, Pencil, Sparkles, Star, X } from 'lucide-react';
+import { CloudUpload, ExternalLink, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
 import type { Gender } from '../../lib/database.types';
@@ -24,11 +24,11 @@ export interface AIMatcherResult {
 }
 
 // The set of categories/styles the AI was allowed to choose from — read live
-// from freelancer_profiles by the server, so "Change" only ever offers
-// values that real freelancers on CreativeHUB actually have.
+// from freelancer_profiles by the server, so manual selection only ever
+// offers values that real freelancers on CreativeHUB actually have.
 type Taxonomy = Record<string, string[]>;
-interface Detection { category: string; style: string | null }
-type Step = 'upload' | 'analyzing' | 'confirm' | 'searching';
+interface Detection { category: string; style: string | null; confidence: number }
+type Step = 'upload' | 'analyzing' | 'select-category' | 'searching';
 
 interface AIImageMatcherProps { open: boolean; onClose: () => void; onResults: (results: AIMatcherResult[]) => void }
 interface AIImageMatcherResultsProps { results: AIMatcherResult[]; onReset: () => void }
@@ -55,11 +55,11 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('upload');
   const [dragging, setDragging] = useState(false);
-  const [detection, setDetection] = useState<Detection | null>(null);
+  const [detections, setDetections] = useState<Detection[]>([]);
   const [taxonomy, setTaxonomy] = useState<Taxonomy>({});
-  const [isEditing, setIsEditing] = useState(false);
-  const [category, setCategory] = useState<string | null>(null);
-  const [style, setStyle] = useState<string | null>(null);
+  const [showManualPicker, setShowManualPicker] = useState(false);
+  const [manualCategory, setManualCategory] = useState<string | null>(null);
+  const [manualStyle, setManualStyle] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
@@ -68,11 +68,11 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
     setStep('upload');
-    setDetection(null);
+    setDetections([]);
     setTaxonomy({});
-    setIsEditing(false);
-    setCategory(null);
-    setStyle(null);
+    setShowManualPicker(false);
+    setManualCategory(null);
+    setManualStyle(null);
     setError(null);
   };
 
@@ -95,12 +95,17 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
         throw new Error(body.message || 'Unable to analyze the image right now.');
       }
 
-      setDetection({ category: body.category, style: body.style ?? null });
+      const nextDetections: Detection[] = Array.isArray(body.detections) ? body.detections : [];
+      if (nextDetections.length === 0) {
+        throw new Error('AI could not classify this image. Please try another photo.');
+      }
+
+      setDetections(nextDetections);
       setTaxonomy(body.taxonomy ?? {});
-      setCategory(body.category);
-      setStyle(body.style ?? null);
-      setIsEditing(false);
-      setStep('confirm');
+      setShowManualPicker(false);
+      setManualCategory(null);
+      setManualStyle(null);
+      setStep('select-category');
     } catch (analyzeError) {
       setError(analyzeError instanceof Error ? analyzeError.message : 'Unable to analyze the image right now.');
       setStep('upload');
@@ -121,15 +126,14 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
     void analyze(file);
   };
 
-  const findFreelancers = async () => {
-    if (!category) return;
+  const findFreelancers = async (category: string, style: string | null) => {
     setStep('searching');
     setError(null);
 
     const { data, error: searchError } = await DataService.searchFreelancersByCategoryAndStyle(category, style);
     if (searchError) {
       setError((searchError as any).message || 'Unable to search freelancers.');
-      setStep('confirm');
+      setStep('select-category');
       return;
     }
 
@@ -191,45 +195,60 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
                 <Loader2 className="h-7 w-7 animate-spin" />
               </div>
               <h3 className="text-lg font-bold text-gray-950">Analyzing your photo...</h3>
-              <p className="mt-2 text-sm text-gray-600">Detecting category and style.</p>
+              <p className="mt-2 text-sm text-gray-600">Detecting possible categories.</p>
             </div>
           )}
 
-          {(step === 'confirm' || step === 'searching') && detection && category && (
+          {(step === 'select-category' || step === 'searching') && detections.length > 0 && (
             <div>
               <div className="flex flex-col gap-5 sm:flex-row">
-                {previewUrl && <img src={previewUrl} alt="Inspiration upload" className="h-40 w-40 flex-shrink-0 rounded-2xl object-cover" />}
+                {previewUrl && <img src={previewUrl} alt="Inspiration upload" className="h-32 w-32 flex-shrink-0 rounded-2xl object-cover" />}
                 <div className="flex-1">
                   <div className="mb-3 flex items-center gap-2 text-sm font-bold text-gray-950">
-                    <Sparkles className="h-4 w-4" /> AI Detected
+                    <Sparkles className="h-4 w-4" /> Which category matches best?
+                  </div>
+                  <p className="mb-4 text-sm text-gray-600">Pick a category to see matching freelancers.</p>
+
+                  <div className="space-y-2">
+                    {detections.map((detection, index) => (
+                      <button
+                        key={detection.category}
+                        type="button"
+                        disabled={step === 'searching'}
+                        onClick={() => void findFreelancers(detection.category, detection.style)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:border-gray-950 hover:bg-gray-50 disabled:opacity-60"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-gray-950">{detection.category}</p>
+                          {detection.style && <p className="truncate text-xs text-gray-500">{detection.style}</p>}
+                        </div>
+                        {index === 0 && (
+                          <span className="flex-shrink-0 rounded-full bg-gray-950 px-2.5 py-1 text-xs font-bold text-white">Best match</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
 
-                  {!isEditing ? (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm text-gray-600">Category</p>
-                        <p className="text-lg font-bold text-gray-950">{category}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Style</p>
-                        <p className="text-lg font-bold text-gray-950">{style || 'No exact style match'}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsEditing(true)}
-                        className="mt-2 inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                      >
-                        <Pencil className="h-4 w-4" /> Change
-                      </button>
-                    </div>
+                  {!showManualPicker ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowManualPicker(true);
+                        setManualCategory(Object.keys(taxonomy)[0] ?? null);
+                        setManualStyle(null);
+                      }}
+                      className="mt-4 text-sm font-bold text-gray-600 underline hover:text-gray-950"
+                    >
+                      Not the right category? Choose manually
+                    </button>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="mt-4 space-y-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
                       <div>
                         <label className="mb-1 block text-sm text-gray-600">Category</label>
                         <select
-                          value={category}
-                          onChange={(event) => { setCategory(event.target.value); setStyle(null); }}
-                          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold"
+                          value={manualCategory ?? ''}
+                          onChange={(event) => { setManualCategory(event.target.value); setManualStyle(null); }}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold"
                         >
                           {Object.keys(taxonomy).map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
@@ -237,29 +256,26 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
                       <div>
                         <label className="mb-1 block text-sm text-gray-600">Style</label>
                         <select
-                          value={style ?? ''}
-                          onChange={(event) => setStyle(event.target.value || null)}
-                          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold"
+                          value={manualStyle ?? ''}
+                          onChange={(event) => setManualStyle(event.target.value || null)}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm font-semibold"
                         >
                           <option value="">Any style</option>
-                          {(taxonomy[category] ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+                          {(taxonomy[manualCategory ?? ''] ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
                         </select>
                       </div>
+                      <button
+                        type="button"
+                        disabled={!manualCategory || step === 'searching'}
+                        onClick={() => manualCategory && void findFreelancers(manualCategory, manualStyle)}
+                        className="inline-flex items-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        {step === 'searching' && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Find Freelancers
+                      </button>
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="mt-6 flex justify-end gap-3 border-t border-gray-100 pt-5">
-                <button
-                  type="button"
-                  onClick={() => void findFreelancers()}
-                  disabled={step === 'searching'}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-gray-950 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
-                >
-                  {step === 'searching' && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Find Freelancers
-                </button>
               </div>
             </div>
           )}

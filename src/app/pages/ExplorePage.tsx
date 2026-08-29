@@ -11,7 +11,7 @@ import { SearchFilterPanel, type FilterState } from '../components/SearchFilterP
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
-import { CATEGORY_GROUPS } from '../../lib/categories';
+import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
 
 interface ProfileCardProps {
@@ -127,33 +127,14 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
 
 const knownLocations = ['bangkok', 'chiang mai', 'pattaya', 'phuket', 'nakhon ratchasima', 'khon kaen', 'udon thani'];
 
-const serviceKeywords: Record<string, string[]> = {
-  'Photography': ['photography', 'photographer', 'photo', 'portrait', 'studio'],
-  'Fashion & Styling': ['fashion', 'styling', 'stylist', 'wardrobe', 'editorial'],
-  'Videography': ['videography', 'videographer', 'video', 'cinematic', 'editing'],
-  'Graphic Design': ['graphic design', 'designer', 'branding', 'logo', 'visual identity', 'illustration'],
-  'Makeup & Beauty': ['makeup', 'beauty', 'hairstyle', 'hair', 'bridal', 'cosmetic'],
-  'Wedding Planning': ['wedding', 'wedding planning', 'planner', 'event planning'],
-  'Others': ['creative', 'freelancer'],
-};
-
 function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-// freelancer_profiles.title values written before CATEGORY_GROUPS was
-// finalized (e.g. "Photographer" instead of today's "Photography") — an
-// explicit exact-match table, not substring matching, so it can't collide
-// across unrelated categories the way keyword matching did.
-const LEGACY_CATEGORY_ALIASES: Record<string, string> = {
-  Photographer: 'Photography',
-  Videographer: 'Videography',
-  'Makeup Artist': 'Makeup',
-  'Hair Stylist': 'Hair Styling',
-  Model: 'Modeling',
-  'Graphic Designer': 'Graphic Design',
-  'Fashion Designer': 'Fashion Design',
-};
+/** "Photographer" -> "Photographers", "Makeup Artist" -> "Makeup Artists", etc. — a plain "s" suffix works for all five canonical labels. */
+function pluralizeCategory(label: string) {
+  return `${label}s`;
+}
 
 export function ExplorePage() {
   const { user } = useAuth();
@@ -380,17 +361,23 @@ export function ExplorePage() {
     return () => document.removeEventListener('click', onDocClick);
   }, []);
 
+  // Freelancers whose category isn't one of the five supported labels
+  // (legacy data, or a profile mid-way through picking a valid category)
+  // are excluded from Explore entirely — they still have an account, they
+  // just don't surface here until they pick a supported category.
   const profiles = useMemo<ProfileCardProps[]>(() => {
-    return freelancers.map((profile) => ({
-      id: profile.user_id || profile.users?.id || profile.id,
-      name: profile.users?.full_name || profile.title || 'Creative Freelancer',
-      specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
-      rating: Number(profile.users?.rating || 0),
-      reviews: Number(profile.users?.total_reviews || 0),
-      image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
-      gender: profile.users?.gender || null,
-      location: profile.users?.location || undefined,
-    }));
+    return freelancers
+      .filter((profile) => isFreelancerCategory(profile.title))
+      .map((profile) => ({
+        id: profile.user_id || profile.users?.id || profile.id,
+        name: profile.users?.full_name || profile.title || 'Creative Freelancer',
+        specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
+        rating: Number(profile.users?.rating || 0),
+        reviews: Number(profile.users?.total_reviews || 0),
+        image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
+        gender: profile.users?.gender || null,
+        location: profile.users?.location || undefined,
+      }));
   }, [freelancers]);
 
   // Unifies the category pill (a hard category filter) with whatever the
@@ -423,15 +410,11 @@ export function ExplorePage() {
           clientInterests
         );
 
-        const serviceMatch =
-          filters.services.length === 0 ||
-          filters.services.some((service) => {
-            const keywords = serviceKeywords[service] || [service];
-            const combinedText = normalizeText(
-              [profile.name, profile.specialty, source?.title, source?.description, ...(source?.skills || []), ...(source?.styles || []), profile.location].join(' ')
-            );
-            return keywords.some((keyword) => combinedText.includes(normalizeText(keyword)));
-          });
+        // Advanced Filter's category checkboxes are now the exact five
+        // canonical labels, so this is a straight equality check against
+        // title — no more fuzzy keyword matching that could cross-match
+        // unrelated categories.
+        const serviceMatch = filters.services.length === 0 || (!!source?.title && filters.services.includes(source.title));
 
         const normalizedLocation = normalizeText(profile.location);
         const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
@@ -466,47 +449,35 @@ export function ExplorePage() {
   }, [profiles, freelancers, filters, interpretedQuery, clientInterests]);
 
   // Group by the freelancer's actual category (freelancer_profiles.title,
-  // which onboarding sets to an exact CATEGORY_GROUPS label) rather than
-  // fuzzy keyword matching — keyword lists collide across categories (e.g.
-  // a Modeling freelancer's "Editorial Shoots" skill contains "editorial",
-  // which used to sweep them into Photographers) and only covered 3 of the
-  // catalog's categories, dumping everyone else into one bucket.
+  // which is always one of the five FREELANCER_CATEGORIES labels — profiles
+  // is already filtered to drop anything else, so every entry here has a
+  // recognized category and there's no "uncategorized" fallback bucket.
   const categorySections = useMemo(() => {
     const sourceById = new Map(freelancers.map((item) => [item.user_id || item.users?.id || item.id, item]));
-    const categoryLabels = CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => group.label);
+    const categoryLabels = FREELANCER_CATEGORIES.map((category) => category.label);
     const labelSet = new Set(categoryLabels);
 
     const grouped = new Map<string, ProfileCardProps[]>();
-    const uncategorized: ProfileCardProps[] = [];
 
     for (const profile of filteredProfiles) {
-      const rawTitle = sourceById.get(profile.id)?.title;
-      const title = rawTitle && (labelSet.has(rawTitle) ? rawTitle : LEGACY_CATEGORY_ALIASES[rawTitle]);
+      const title = sourceById.get(profile.id)?.title;
       if (title && labelSet.has(title)) {
         if (!grouped.has(title)) grouped.set(title, []);
         grouped.get(title)!.push(profile);
-      } else {
-        uncategorized.push(profile);
       }
     }
 
     // Categories the client chose as interests at sign-up float to the top,
     // in the order they picked them; the rest of the catalog follows in its
-    // canonical order, and anyone with no recognized category comes last.
+    // canonical order.
     const orderedLabels = [
       ...clientInterests.filter((label) => labelSet.has(label)),
       ...categoryLabels.filter((label) => !clientInterests.includes(label)),
     ];
 
-    const sections = orderedLabels
-      .map((label) => ({ title: `Popular ${label} Freelancers in Thailand`, profiles: grouped.get(label) || [] }))
+    return orderedLabels
+      .map((label) => ({ title: `Popular ${pluralizeCategory(label)} in Thailand`, profiles: grouped.get(label) || [] }))
       .filter((section) => section.profiles.length > 0);
-
-    if (uncategorized.length > 0) {
-      sections.push({ title: 'Featured Creative Freelancers', profiles: uncategorized });
-    }
-
-    return sections;
   }, [filteredProfiles, freelancers, clientInterests]);
 
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
@@ -597,16 +568,16 @@ export function ExplorePage() {
         >
           All
         </button>
-        {CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => (
+        {FREELANCER_CATEGORIES.map((category) => (
           <button
-            key={group.id}
+            key={category.id}
             type="button"
-            onClick={() => setSelectedCategory((current) => (current === group.label ? 'All' : group.label))}
+            onClick={() => setSelectedCategory((current) => (current === category.label ? 'All' : category.label))}
             className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-              selectedCategory === group.label ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+              selectedCategory === category.label ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
             }`}
           >
-            {group.label}
+            {category.label}
           </button>
         ))}
       </div>
@@ -655,7 +626,7 @@ export function ExplorePage() {
 
       {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
         <CarouselSection
-          title={selectedCategory !== 'All' ? `${selectedCategory} Freelancers` : 'Matching Freelancers'}
+          title={selectedCategory !== 'All' ? `Popular ${pluralizeCategory(selectedCategory)} in Thailand` : 'Popular Freelancers in Thailand'}
           profiles={filteredProfiles}
           favoritedIds={favoritedIds}
           onToggleFavorite={handleToggleFavorite}

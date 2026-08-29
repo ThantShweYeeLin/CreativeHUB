@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
-  Bot,
   ClipboardList,
   Globe,
   Lock,
@@ -9,7 +8,6 @@ import {
   Shield,
   Star,
   User,
-  Wrench,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,16 +15,8 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
-import type { Gender } from '../../lib/database.types';
 
 type Role = 'freelancer' | 'client';
-
-const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'lgbtq_plus', label: 'LGBTQ+' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
 
 interface PreferenceState {
   language: string;
@@ -52,28 +42,6 @@ interface PrivacyState {
   hideEmailFromPublic: boolean;
   hidePhoneFromPublic: boolean;
   twoFactorFuture: boolean;
-}
-
-interface FreelancerSettingsState {
-  availability: 'available' | 'busy' | 'unavailable';
-  workingDays: string[];
-  vacationUntil: string;
-  startingPrice: string;
-  pricingCurrency: string;
-  mapVisibility: 'exact' | 'city' | 'hidden';
-  showAnalyticsProjects: boolean;
-  showAnalyticsResponseRate: boolean;
-  showAnalyticsTrustScore: boolean;
-  showAnalyticsCompletedBookings: boolean;
-}
-
-interface ClientSettingsState {
-  preferredStyles: string;
-  preferredFreelancerTypes: string;
-  defaultBudgetRange: string;
-  preferredSearchArea: string;
-  preferredSearchRadius: string;
-  useAIRecommendations: boolean;
 }
 
 const SETTINGS_STORAGE_KEY = 'creativehub.settings.v1';
@@ -104,35 +72,11 @@ const defaultPrivacy: PrivacyState = {
   twoFactorFuture: false,
 };
 
-const defaultFreelancerSettings: FreelancerSettingsState = {
-  availability: 'available',
-  workingDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-  vacationUntil: '',
-  startingPrice: '200',
-  pricingCurrency: 'USD',
-  mapVisibility: 'city',
-  showAnalyticsProjects: true,
-  showAnalyticsResponseRate: true,
-  showAnalyticsTrustScore: true,
-  showAnalyticsCompletedBookings: true,
-};
-
-const defaultClientSettings: ClientSettingsState = {
-  preferredStyles: 'Minimalist, Luxury, Vintage',
-  preferredFreelancerTypes: 'Photographers, Designers, Videographers',
-  defaultBudgetRange: 'USD 200-500',
-  preferredSearchArea: 'Bangkok',
-  preferredSearchRadius: '50',
-  useAIRecommendations: true,
-};
-
 interface SavedSettingsPayload {
   phoneNumber: string;
   preferences: PreferenceState;
   notifications: NotificationState;
   privacy: PrivacyState;
-  freelancer: FreelancerSettingsState;
-  client: ClientSettingsState;
 }
 
 export function SettingsPage() {
@@ -151,9 +95,7 @@ export function SettingsPage() {
   const [accountStatus, setAccountStatus] = useState<'active' | 'paused'>('active');
   const [isTogglingPause, setIsTogglingPause] = useState(false);
 
-  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [gender, setGender] = useState<Gender>('prefer_not_to_say');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -162,8 +104,8 @@ export function SettingsPage() {
   const [preferences, setPreferences] = useState(defaultPreferences);
   const [notifications, setNotifications] = useState(defaultNotifications);
   const [privacy, setPrivacy] = useState(defaultPrivacy);
-  const [freelancerSettings, setFreelancerSettings] = useState(defaultFreelancerSettings);
-  const [clientSettings, setClientSettings] = useState(defaultClientSettings);
+  const [profileVisibility, setProfileVisibility] = useState<'public' | 'limited'>('public');
+  const [isSavingVisibility, setIsSavingVisibility] = useState(false);
 
   const role = (user?.role || 'client') as Role;
 
@@ -197,9 +139,7 @@ export function SettingsPage() {
       if (userResponse.error) {
         setErrorMessage((userResponse.error as any).message || 'Unable to load settings.');
       } else {
-        setFullName(userResponse.data?.full_name || user.fullName || '');
         setEmail(userResponse.data?.email || user.email || '');
-        setGender((userResponse.data as any)?.gender || user.gender || 'prefer_not_to_say');
         setAccountStatus((userResponse.data as any)?.account_status === 'paused' ? 'paused' : 'active');
         setPreferences((current) => ({
           ...current,
@@ -208,11 +148,7 @@ export function SettingsPage() {
       }
 
       if (freelancerResponse.data) {
-        setFreelancerSettings((current) => ({
-          ...current,
-          availability: freelancerResponse.data.is_available ? 'available' : 'unavailable',
-          startingPrice: freelancerResponse.data.hourly_rate ? String(freelancerResponse.data.hourly_rate) : current.startingPrice,
-        }));
+        setProfileVisibility(freelancerResponse.data.visibility === 'limited' ? 'limited' : 'public');
       }
 
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -223,8 +159,6 @@ export function SettingsPage() {
           setPreferences({ ...defaultPreferences, ...(parsed.preferences || {}) });
           setNotifications({ ...defaultNotifications, ...(parsed.notifications || {}) });
           setPrivacy({ ...defaultPrivacy, ...(parsed.privacy || {}) });
-          setFreelancerSettings({ ...defaultFreelancerSettings, ...(parsed.freelancer || {}) });
-          setClientSettings({ ...defaultClientSettings, ...(parsed.client || {}) });
         } catch {
           // Ignore malformed local settings.
         }
@@ -246,8 +180,6 @@ export function SettingsPage() {
       preferences,
       notifications,
       privacy,
-      freelancer: freelancerSettings,
-      client: clientSettings,
     };
 
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
@@ -262,17 +194,6 @@ export function SettingsPage() {
 
     setErrorMessage(null);
     setStatusMessage(null);
-
-    const userUpdate = await DataService.updateUser(user.id, {
-      full_name: fullName,
-      gender,
-      updated_at: new Date().toISOString(),
-    } as any);
-
-    if (userUpdate.error) {
-      setErrorMessage((userUpdate.error as any).message || 'Unable to update profile info.');
-      return;
-    }
 
     if (email.trim() && email !== user.email) {
       const emailResult = await authService.updateEmail(email.trim());
@@ -329,52 +250,28 @@ export function SettingsPage() {
     setErrorMessage(null);
   };
 
-  const handleSaveFreelancerSettings = async () => {
+  const handleSaveVisibility = async () => {
     if (!user?.id || role !== 'freelancer') {
       return;
     }
 
     setStatusMessage(null);
     setErrorMessage(null);
-
-    const hourlyRate = Number(freelancerSettings.startingPrice);
+    setIsSavingVisibility(true);
 
     const response = await DataService.updateFreelancerProfile(user.id, {
-      hourly_rate: Number.isFinite(hourlyRate) ? hourlyRate : null,
-      is_available: freelancerSettings.availability === 'available',
+      visibility: profileVisibility,
       updated_at: new Date().toISOString(),
     } as any);
 
+    setIsSavingVisibility(false);
+
     if (response.error) {
-      setErrorMessage((response.error as any).message || 'Unable to save freelancer settings.');
+      setErrorMessage((response.error as any).message || 'Unable to save profile visibility.');
       return;
     }
 
-    const preferredCurrency = normalizeCurrencyCode(freelancerSettings.pricingCurrency || preferences.currency, 'THB');
-    await DataService.updateUser(user.id, {
-      preferred_currency: preferredCurrency,
-      updated_at: new Date().toISOString(),
-    } as any);
-    await setCurrency(preferredCurrency, false);
-    setPreferences((current) => ({ ...current, currency: preferredCurrency }));
-
-    persistLocalSettings();
-    setStatusMessage('Freelancer settings saved.');
-  };
-
-  const handleSaveClientSettings = () => {
-    persistLocalSettings();
-    setStatusMessage('Client preferences saved.');
-    setErrorMessage(null);
-  };
-
-  const toggleWorkingDay = (day: string) => {
-    setFreelancerSettings((current) => ({
-      ...current,
-      workingDays: current.workingDays.includes(day)
-        ? current.workingDays.filter((item) => item !== day)
-        : [...current.workingDays, day],
-    }));
+    setStatusMessage('Profile visibility saved.');
   };
 
   const handleLogout = async () => {
@@ -449,13 +346,7 @@ export function SettingsPage() {
               <h2 className="text-lg font-bold">Account Settings</h2>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Full name" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="rounded-lg border border-gray-300 px-3 py-2" />
-              <select value={gender} onChange={(e) => setGender(e.target.value as Gender)} className="rounded-lg border border-gray-300 px-3 py-2">
-                {GENDER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
               <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="Phone number" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-gray-300 px-3 py-2" />
               <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="New password" className="rounded-lg border border-gray-300 px-3 py-2" />
@@ -534,6 +425,29 @@ export function SettingsPage() {
               <label className="flex items-center gap-2"><input type="checkbox" checked={privacy.hidePhoneFromPublic} onChange={(e) => setPrivacy((c) => ({ ...c, hidePhoneFromPublic: e.target.checked }))} /> Hide phone from public</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={privacy.twoFactorFuture} onChange={(e) => setPrivacy((c) => ({ ...c, twoFactorFuture: e.target.checked }))} /> Enable 2FA (future)</label>
             </div>
+
+            {role === 'freelancer' && (
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <p className="mb-2 text-sm font-semibold text-gray-900">Profile visibility</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={profileVisibility}
+                    onChange={(e) => setProfileVisibility(e.target.value as 'public' | 'limited')}
+                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="public">Public — visible in search & Explore</option>
+                    <option value="limited">Limited — hidden from search & Explore</option>
+                  </select>
+                  <button
+                    onClick={() => void handleSaveVisibility()}
+                    disabled={isSavingVisibility}
+                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                  >
+                    {isSavingVisibility ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -580,43 +494,6 @@ export function SettingsPage() {
             <button onClick={() => navigate('/premium')} className="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Upgrade / Manage Plan</button>
           </section>
 
-          {role === 'freelancer' && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2 text-gray-900">
-                <Wrench className="h-5 w-5" />
-                <h2 className="text-lg font-bold">Freelancer Settings</h2>
-              </div>
-              <div className="space-y-4 text-sm text-gray-700">
-                <div>
-                  <p className="mb-2 font-semibold">Availability & Pricing</p>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                    <select value={freelancerSettings.availability} onChange={(e) => setFreelancerSettings((c) => ({ ...c, availability: e.target.value as 'available' | 'busy' | 'unavailable' }))} className="rounded-lg border border-gray-300 px-3 py-2"><option value="available">Available</option><option value="busy">Busy</option><option value="unavailable">Unavailable</option></select>
-                    <input value={freelancerSettings.startingPrice} onChange={(e) => setFreelancerSettings((c) => ({ ...c, startingPrice: e.target.value }))} placeholder="Starting price" className="rounded-lg border border-gray-300 px-3 py-2" />
-                    <input value={freelancerSettings.pricingCurrency} onChange={(e) => setFreelancerSettings((c) => ({ ...c, pricingCurrency: e.target.value }))} placeholder="Currency" className="rounded-lg border border-gray-300 px-3 py-2" />
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
-                      <button key={day} type="button" onClick={() => toggleWorkingDay(day)} className={`rounded-full border px-3 py-1 text-xs ${freelancerSettings.workingDays.includes(day) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 text-gray-700'}`}>{day}</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 font-semibold">Location & AI Preferences</p>
-                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                    <select value={freelancerSettings.mapVisibility} onChange={(e) => setFreelancerSettings((c) => ({ ...c, mapVisibility: e.target.value as 'exact' | 'city' | 'hidden' }))} className="rounded-lg border border-gray-300 px-3 py-2"><option value="exact">Show exact location</option><option value="city">Show city only</option><option value="hidden">Hide my location</option></select>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsProjects} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsProjects: e.target.checked }))} /> Show total projects</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsResponseRate} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsResponseRate: e.target.checked }))} /> Show response rate</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsTrustScore} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsTrustScore: e.target.checked }))} /> Show trust score</label>
-                    <label className="flex items-center gap-2"><input type="checkbox" checked={freelancerSettings.showAnalyticsCompletedBookings} onChange={(e) => setFreelancerSettings((c) => ({ ...c, showAnalyticsCompletedBookings: e.target.checked }))} /> Show completed bookings</label>
-                  </div>
-                </div>
-
-                <button onClick={handleSaveFreelancerSettings} className="rounded-lg bg-gray-900 px-4 py-2 font-semibold text-white hover:bg-black">Save Freelancer Settings</button>
-              </div>
-            </section>
-          )}
-
           {role === 'client' && (
             <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center gap-2 text-gray-900">
@@ -633,24 +510,6 @@ export function SettingsPage() {
               >
                 Complete your profile
               </button>
-            </section>
-          )}
-
-          {role === 'client' && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2 text-gray-900">
-                <Bot className="h-5 w-5" />
-                <h2 className="text-lg font-bold">Client Preferences</h2>
-              </div>
-              <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
-                <input value={clientSettings.preferredStyles} onChange={(e) => setClientSettings((c) => ({ ...c, preferredStyles: e.target.value }))} placeholder="Preferred styles" className="rounded-lg border border-gray-300 px-3 py-2" />
-                <input value={clientSettings.preferredFreelancerTypes} onChange={(e) => setClientSettings((c) => ({ ...c, preferredFreelancerTypes: e.target.value }))} placeholder="Preferred freelancer types" className="rounded-lg border border-gray-300 px-3 py-2" />
-                <input value={clientSettings.defaultBudgetRange} onChange={(e) => setClientSettings((c) => ({ ...c, defaultBudgetRange: e.target.value }))} placeholder="Default budget range" className="rounded-lg border border-gray-300 px-3 py-2" />
-                <input value={clientSettings.preferredSearchArea} onChange={(e) => setClientSettings((c) => ({ ...c, preferredSearchArea: e.target.value }))} placeholder="Preferred search area" className="rounded-lg border border-gray-300 px-3 py-2" />
-                <input value={clientSettings.preferredSearchRadius} onChange={(e) => setClientSettings((c) => ({ ...c, preferredSearchRadius: e.target.value }))} placeholder="Radius" className="rounded-lg border border-gray-300 px-3 py-2" />
-                <label className="flex items-center gap-2"><input type="checkbox" checked={clientSettings.useAIRecommendations} onChange={(e) => setClientSettings((c) => ({ ...c, useAIRecommendations: e.target.checked }))} /> Use AI recommendations</label>
-              </div>
-              <button onClick={handleSaveClientSettings} className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Save Client Settings</button>
             </section>
           )}
 

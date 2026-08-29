@@ -1,111 +1,91 @@
-// Canonical taxonomy of freelancer categories and their per-category
-// specialties. This is the single source of truth for sign-up/onboarding
-// category pickers (freelancer services, client interests). The AI Matcher
-// (server/src/routes/aiMatcher.ts) does NOT read this file — it builds its
-// own taxonomy live from freelancer_profiles.title/styles — so as long as
-// onboarding keeps writing title = one category label and styles = chosen
-// specialty labels, this file is free to change shape independently.
-export interface CategoryGroup {
+// Canonical taxonomy of CreativeHUB's freelancer categories — the ONE
+// source of truth for every category picker, filter, and matcher in the
+// app (onboarding, Edit Profile, Explore, Advanced Filter, AI Matcher,
+// search). freelancer_profiles.title must always be set to exactly one of
+// these five labels — no free text, no other values.
+//
+// server/src/routes/aiMatcher.ts is a separately-built TS project
+// (server/tsconfig.json has its own rootDir) and can't import this file
+// directly, so it keeps its own copy of this same taxonomy in sync by hand.
+export interface FreelancerCategoryDef {
   id: string;
   label: string;
-  specialties: string[];
-  /** Suggested skill tags shown as quick-add chips when this service is selected. */
-  commonSkills: string[];
+  /** Suggested skill tags shown as quick-add chips for this category. */
+  skills: string[];
+  /** Suggested style tags — what the AI Matcher searches by within this category. */
+  styles: string[];
 }
 
-export const CATEGORY_GROUPS: CategoryGroup[] = [
+export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
   {
-    id: 'photography',
-    label: 'Photography',
-    specialties: ['Wedding Photography', 'Portrait Photography', 'Event Photography', 'Product Photography', 'Fashion Photography'],
-    commonSkills: ['Adobe Lightroom', 'Adobe Photoshop', 'Studio Lighting', 'Natural Light', 'Photo Retouching', 'Drone Photography'],
+    id: 'photographer',
+    label: 'Photographer',
+    skills: ['Portrait Photography', 'Wedding Photography', 'Event Photography', 'Product Photography', 'Fashion Photography', 'Lifestyle Photography', 'Photo Editing'],
+    styles: ['Cinematic', 'Bright & Airy', 'Moody', 'Vintage', 'Editorial', 'Minimalist', 'Natural', 'Luxury', 'Documentary'],
   },
   {
-    id: 'videography',
-    label: 'Videography',
-    specialties: ['Wedding Film', 'Commercial', 'Music Video', 'Event', 'Documentary'],
-    commonSkills: ['Adobe Premiere Pro', 'Final Cut Pro', 'DaVinci Resolve', 'Color Grading', 'Drone Videography', 'Motion Graphics'],
+    id: 'makeup-artist',
+    label: 'Makeup Artist',
+    skills: ['Makeup Application', 'Bridal Makeup', 'Eye Makeup', 'False Lash Application', 'Contouring', 'Base Makeup', 'Event Makeup'],
+    styles: ['Douyin Makeup', 'Soft Glam', 'Natural Glam', 'Bridal Glam', 'Korean-Inspired', 'Chinese-Inspired', 'Glitter Makeup', 'Bold Glam', 'Minimal Makeup'],
   },
   {
-    id: 'makeup',
-    label: 'Makeup',
-    specialties: ['Bridal Makeup', 'Event Makeup', 'Editorial Makeup', 'Special Effects Makeup'],
-    commonSkills: ['Airbrush Makeup', 'Bridal Makeup', 'Special Effects (SFX)', 'Skin Prep', 'Contouring'],
+    id: 'hair-stylist',
+    label: 'Hair Stylist',
+    skills: ['Hair Styling', 'Bridal Hairstyling', 'Braiding', 'Hair Curling', 'Hair Straightening', 'Updos', 'Hair Coloring', 'Event Hairstyling'],
+    styles: ['Korean-Inspired', 'Elegant', 'Romantic', 'Y2K', 'Natural', 'Glamorous', 'Vintage', 'Modern', 'Bridal'],
   },
   {
-    id: 'hair',
-    label: 'Hair Styling',
-    specialties: ['Bridal Hair', 'Event Hair', 'Styling', 'Colorist'],
-    commonSkills: ['Hair Coloring', 'Updos', 'Extensions', 'Bridal Hair', 'Balayage'],
+    id: 'fashion-designer',
+    label: 'Fashion Designer',
+    skills: ['Custom Dress Design', 'Bridal Wear', 'Evening Wear', 'Formal Wear', 'Costume Design', 'Alterations & Fitting', 'Fashion Consultation', 'Custom Outfit Design'],
+    styles: ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
   },
   {
-    id: 'graphic-design',
-    label: 'Graphic Design',
-    specialties: ['Branding', 'Logo Design', 'Editorial', 'Packaging', 'Social Media'],
-    commonSkills: ['Adobe Illustrator', 'Adobe Photoshop', 'Figma', 'Typography', 'Brand Identity'],
+    id: 'model',
+    label: 'Model',
+    skills: ['Fashion Modeling', 'Commercial Modeling', 'Product Modeling', 'Editorial Modeling', 'Runway Modeling', 'Event Modeling', 'Beauty Modeling', 'Photoshoot Modeling'],
+    styles: ['Editorial', 'Streetwear', 'Elegant', 'High Fashion', 'Commercial', 'Minimalist', 'Luxury', 'Casual', 'Beauty'],
   },
-  {
-    id: 'illustration',
-    label: 'Illustration',
-    specialties: ['Character Design', 'Editorial Illustration', 'Concept Art', 'Digital Painting'],
-    commonSkills: ['Procreate', 'Adobe Illustrator', 'Character Design', 'Digital Painting', 'Storyboarding'],
-  },
-  {
-    id: 'ui-ux',
-    label: 'UI/UX Design',
-    specialties: ['Web Design', 'App Design', 'Design Systems', 'Prototyping'],
-    commonSkills: ['Figma', 'Adobe XD', 'Wireframing', 'Prototyping', 'User Research', 'Design Systems'],
-  },
-  {
-    id: 'fashion',
-    label: 'Fashion Design',
-    specialties: ['Ready-to-Wear', 'Luxury', 'Couture', 'Streetwear', 'Costume'],
-    commonSkills: ['Pattern Making', 'Draping', 'Sewing', 'Fabric Sourcing', 'Fashion Illustration'],
-  },
-  {
-    id: 'modeling',
-    label: 'Modeling',
-    specialties: ['Fashion Model', 'Commercial Model', 'Event Model', 'Runway'],
-    commonSkills: ['Runway Walk', 'Posing', 'Editorial Shoots', 'Commercial Print'],
-  },
-  {
-    id: 'event-services',
-    label: 'Event Services',
-    specialties: ['Wedding Planning', 'Corporate Events', 'Floral Design', 'Theme Decoration'],
-    commonSkills: ['Event Planning', 'Floral Design', 'Vendor Coordination', 'Budget Management'],
-  },
-  { id: 'other', label: 'Other', specialties: [], commonSkills: [] },
 ];
 
-// Back-compat flat exports for any code (or future code) that only needs a
-// simple list of category labels rather than the grouped/nested shape.
-export const CATEGORIES = CATEGORY_GROUPS.map((group) => group.label);
+export const FREELANCER_CATEGORY_LABELS = FREELANCER_CATEGORIES.map((category) => category.label);
 
-export type Category = (typeof CATEGORIES)[number];
+export type FreelancerCategory = (typeof FREELANCER_CATEGORY_LABELS)[number];
 
-export const STYLES_BY_CATEGORY: Record<string, string[]> = Object.fromEntries(
-  CATEGORY_GROUPS.map((group) => [group.label, group.specialties])
-);
-
-export function isCategory(value: string): value is Category {
-  return CATEGORIES.includes(value);
+export function isFreelancerCategory(value: string | null | undefined): value is FreelancerCategory {
+  return !!value && FREELANCER_CATEGORY_LABELS.includes(value as FreelancerCategory);
 }
 
-/** Suggested skill chips for the given set of selected service labels (custom, non-catalog services yield none). */
-export function suggestedSkillsForServices(selectedServiceLabels: string[]): string[] {
-  const seen = new Set<string>();
-  const suggestions: string[] = [];
+export function getFreelancerCategory(label: string | null | undefined): FreelancerCategoryDef | undefined {
+  return FREELANCER_CATEGORIES.find((category) => category.label === label);
+}
 
-  for (const label of selectedServiceLabels) {
-    const group = CATEGORY_GROUPS.find((item) => item.label === label);
-    if (!group) continue;
-    for (const skill of group.commonSkills) {
-      if (!seen.has(skill)) {
-        seen.add(skill);
-        suggestions.push(skill);
-      }
-    }
-  }
+export const STYLES_BY_CATEGORY: Record<string, string[]> = Object.fromEntries(
+  FREELANCER_CATEGORIES.map((category) => [category.label, category.styles])
+);
 
-  return suggestions;
+/** Suggested skill chips for a single selected category (unsupported/empty label yields none). */
+export function suggestedSkillsForCategory(categoryLabel: string | null | undefined): string[] {
+  return getFreelancerCategory(categoryLabel || undefined)?.skills ?? [];
+}
+
+/** Suggested style chips for a single selected category. */
+export function suggestedStylesForCategory(categoryLabel: string | null | undefined): string[] {
+  return getFreelancerCategory(categoryLabel || undefined)?.styles ?? [];
+}
+
+// Custom (user-typed, via "+ Other") skills/styles are never written to any
+// separate column — a value simply IS custom if it doesn't appear in its
+// category's standardized list. This is what keeps the AI Matcher's fixed
+// taxonomy (server/src/routes/aiMatcher.ts's TAXONOMY) safe from arbitrary
+// user text: the matcher only ever offers standardized styles as an output
+// enum, so a custom style can never surface there, while still living on
+// the freelancer's profile and being reachable through normal text search.
+export function isStandardSkill(categoryLabel: string | null | undefined, skill: string): boolean {
+  return suggestedSkillsForCategory(categoryLabel).includes(skill);
+}
+
+export function isStandardStyle(categoryLabel: string | null | undefined, style: string): boolean {
+  return suggestedStylesForCategory(categoryLabel).includes(style);
 }

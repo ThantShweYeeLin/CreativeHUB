@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Edit, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -176,7 +176,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       let freelancerResponse = await DataService.getFreelancerProfile(id);
 
       if (!userResponse.data && freelancerResponse.error) {
-        const profileIdResponse = await DataService.getFreelancerProfileById(id);
+        const profileIdResponse = await DataService.getFreelancerById(id);
         if (profileIdResponse.data?.user_id) {
           freelancerResponse = profileIdResponse;
           userResponse = await DataService.getUser(profileIdResponse.data.user_id);
@@ -301,14 +301,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const coverUrl = profile?.cover_url || freelancerProfile?.cover_image_url || freelancerProfile?.image_urls?.[0] || '';
   const location = profile?.location || 'Location not provided';
   const isBookableFreelancer = profile?.role === 'freelancer' && Boolean(freelancerProfile?.id);
-  const bio = profile?.bio || (isBookableFreelancer ? freelancerProfile?.description : null) || 'This client has not added a bio yet.';
+  // Bio is canonical from freelancer_profiles.description for freelancers,
+  // users.bio for everyone else — this must match the priority Edit Profile
+  // saves to, or the two pages would show different bios again.
+  const bio = (isBookableFreelancer ? freelancerProfile?.description : profile?.bio) || 'No bio added yet.';
+  const isOwner = Boolean(user?.id && targetFreelancerUserId && user.id === targetFreelancerUserId);
   const title = isBookableFreelancer ? (freelancerProfile?.title || 'Freelancer') : 'Client';
   const rating = Number(profile?.rating || 0);
   const totalReviews = Number(profile?.total_reviews || 0);
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
-  const bookingLocations = freelancerProfile?.locations || [];
+  const studioName: string = freelancerProfile?.studio_name || '';
+  const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
+  const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
+  const studioLocationOptions = studioLocations.map((loc) => (studioName ? `${studioName} — ${loc.formattedAddress}` : loc.formattedAddress));
+  const bookingLocations = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress)];
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const todayDateString = new Date().toISOString().slice(0, 10);
@@ -560,6 +568,30 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setFocusedPostId(null);
   };
 
+  const deletePost = async (postId: string) => {
+    if (!user?.id) return;
+
+    const targetPost = profilePosts.find((post) => String(post.id) === postId);
+    if (!targetPost || String(targetPost.client_id) !== user.id) return;
+
+    const confirmed = window.confirm('Delete this post? This action cannot be undone.');
+    if (!confirmed) return;
+
+    const response = await DataService.deleteClientPost(postId, user.id);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to delete post.');
+      return;
+    }
+
+    setProfilePosts((current) => current.filter((post) => String(post.id) !== postId));
+    setPostEngagement((current) => {
+      const next = { ...current };
+      delete next[postId];
+      return next;
+    });
+    setFocusedPostId(null);
+  };
+
   const togglePostLike = async (postId: string) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
@@ -777,55 +809,63 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {user?.id !== targetFreelancerUserId && (
+                  {isOwner ? (
                     <button
-                      onClick={handleFavoriteToggle}
-                      className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
-                    >
-                      <Heart className={`h-6 w-6 ${isFavorited ? 'fill-current' : ''}`} />
-                    </button>
-                  )}
-
-                  {showMessageButton && (
-                    <button
-                      onClick={onOpenChat}
+                      onClick={() => navigate('/edit-profile')}
                       className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
                     >
-                      <MessageCircle className="h-5 w-5" />
-                      Message
+                      <Edit className="h-5 w-5" />
+                      Edit Profile
                     </button>
-                  )}
-
-                  {isBookableFreelancer && user?.id !== targetFreelancerUserId && (
-                    <button
-                      onClick={() => setShowBookingForm(true)}
-                      className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
-                    >
-                      Request Booking
-                    </button>
-                  )}
-
-                  {user?.id !== targetFreelancerUserId && (
-                    <div className="flex flex-wrap gap-2">
+                  ) : (
+                    <>
                       <button
-                        onClick={() => void handleFollowToggle()}
-                        disabled={isFollowLoading}
-                        className={
-                          isFollowing
-                            ? 'rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
-                            : 'rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
-                        }
+                        onClick={handleFavoriteToggle}
+                        className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
                       >
-                        {isFollowLoading
-                          ? 'Updating...'
-                          : isFollowing
-                          ? 'Following'
-                          : isFollowedByTarget
-                          ? 'Follow back'
-                          : 'Follow'
-                        }
+                        <Heart className={`h-6 w-6 ${isFavorited ? 'fill-current' : ''}`} />
                       </button>
-                    </div>
+
+                      {showMessageButton && (
+                        <button
+                          onClick={onOpenChat}
+                          className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
+                        >
+                          <MessageCircle className="h-5 w-5" />
+                          Message
+                        </button>
+                      )}
+
+                      {isBookableFreelancer && (
+                        <button
+                          onClick={() => setShowBookingForm(true)}
+                          className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
+                        >
+                          Request Booking
+                        </button>
+                      )}
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => void handleFollowToggle()}
+                          disabled={isFollowLoading}
+                          className={
+                            isFollowing
+                              ? 'rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
+                              : 'rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
+                          }
+                        >
+                          {isFollowLoading
+                            ? 'Updating...'
+                            : isFollowing
+                            ? 'Following'
+                            : isFollowedByTarget
+                            ? 'Follow back'
+                            : 'Follow'
+                          }
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -850,12 +890,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{profile?.email || 'Email unavailable'}</span>
                   </div>
-                  {shouldDisplayPronouns(pronouns) && (
-                    <div className="flex items-center gap-2">
-                      <User className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                      <span>{pronouns}</span>
-                    </div>
-                  )}
                   {isBookableFreelancer && (
                     <div>
                       <TrustBadge trust={trust} />
@@ -960,6 +994,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
                 <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
                 <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
+                {studioName && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Studio:</span> {studioName}
+                    {studioLocations.length > 0 ? ` — ${studioLocations.map((loc) => loc.formattedAddress).join(', ')}` : ''}
+                  </p>
+                )}
+                {bookingLocations.length > 0 && (
+                  <p><span className="font-semibold text-gray-900">Shoot locations:</span> {bookingLocations.join(', ')}</p>
+                )}
               </div>
             </div>
           </aside>
@@ -1149,6 +1192,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
                 <span className="text-xs text-gray-500">{focusedPost.created_at ? new Date(focusedPost.created_at).toLocaleString() : ''}</span>
               </div>
+
+              {isOwner && (
+                <div className="mb-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void deletePost(String(focusedPost.id))}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </button>
+                </div>
+              )}
 
               <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption || 'No caption'}</p>
 

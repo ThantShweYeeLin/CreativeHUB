@@ -4,17 +4,19 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { normalizeCurrencyCode } from '../../lib/currency';
+import { isFreelancerCategory } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
 import { StepProfessionalInfo } from './freelancer-onboarding/StepProfessionalInfo';
-import { StepServices } from './freelancer-onboarding/StepServices';
+import { StepCategory } from './freelancer-onboarding/StepCategory';
 import { StepSkills } from './freelancer-onboarding/StepSkills';
+import { StepStyles } from './freelancer-onboarding/StepStyles';
 import { StepExperience } from './freelancer-onboarding/StepExperience';
 import { StepPortfolio } from './freelancer-onboarding/StepPortfolio';
 import { StepAvailability } from './freelancer-onboarding/StepAvailability';
-import { StepServiceArea } from './freelancer-onboarding/StepServiceArea';
+import { StepServiceLocations } from './freelancer-onboarding/StepServiceLocations';
 import { StepPricing } from './freelancer-onboarding/StepPricing';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
@@ -26,23 +28,34 @@ interface BecomeFreelancerPageProps {
   onBack?: () => void;
 }
 
-const TOTAL_STEPS = 11;
+interface StoredLocation {
+  formattedAddress: string;
+  latitude: number | null;
+  longitude: number | null;
+  placeId: string | null;
+  city: string | null;
+  district: string | null;
+}
+
+const TOTAL_STEPS = 12;
 
 const STEP_META: Array<{ title: string; description: string }> = [
-  { title: 'Professional information', description: 'Tell clients who you are.' },
-  { title: 'Select your services', description: 'What creative services do you offer?' },
-  { title: 'Skills', description: 'Add tags that describe your toolkit.' },
+  { title: 'Profile', description: 'Tell clients who you are.' },
+  { title: 'Freelancer category', description: 'What service do you provide?' },
+  { title: 'Skills', description: 'What you can do.' },
+  { title: 'Styles', description: 'What your work looks like.' },
   { title: 'Experience', description: 'How long have you been working professionally?' },
-  { title: 'Portfolio', description: 'Show off your best work (optional — add more later).' },
+  { title: 'Social links', description: 'Show off your best work (optional — add more later).' },
   { title: 'Availability', description: 'When can clients book you?' },
-  { title: 'Service area', description: 'Where do you provide services?' },
+  { title: 'Service information', description: 'Where and how you provide services.' },
   { title: 'Pricing', description: 'Give clients a sense of your rates.' },
   { title: 'Requirements & limitations', description: 'Set expectations up front.' },
   { title: 'Contact preferences', description: 'How should clients reach you?' },
   { title: 'Verification', description: 'Build trust with a verified badge.' },
 ];
 
-const REQUIRED_STEPS = new Set([1, 2, 4]);
+const REQUIRED_STEPS = new Set([1, 2, 3, 4, 5]);
+const TRAVEL_ANYWHERE = 'Open to travel anywhere';
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const { user } = useAuth();
@@ -50,60 +63,65 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [pendingProfile] = useState(() => getPendingSignupProfile());
   const [step, setStep] = useState(1);
 
-  // (a) Professional information
+  // (a) Profile
   const [displayName, setDisplayName] = useState(pendingProfile?.fullName || user?.fullName || '');
+  const [pronouns, setPronouns] = useState('');
+  const [pronounsCustom, setPronounsCustom] = useState('');
   const [bio, setBio] = useState('');
   const [profilePictureUpload, setProfilePictureUpload] = useState<ImageUpload | null>(null);
   const [isDraggingProfilePicture, setIsDraggingProfilePicture] = useState(false);
   const [coverPhotoUpload, setCoverPhotoUpload] = useState<ImageUpload | null>(null);
   const [isDraggingCoverPhoto, setIsDraggingCoverPhoto] = useState(false);
 
-  // (b) Services
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
-  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
-
-  // (c) Skills
+  // (b) Category, (c) Skills, (d) Styles
+  const [category, setCategory] = useState<string | null>(null);
   const [skills, setSkills] = useState<string[]>([]);
+  const [styles, setStyles] = useState<string[]>([]);
+  const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
 
-  // (d) Experience
+  // (e) Experience
   const [experienceYears, setExperienceYears] = useState('');
   const [experienceLevel, setExperienceLevel] = useState('');
 
-  // (e) Portfolio — one URL per social platform (matches the social_links
+  // (f) Social links — one URL per platform (matches the social_links
   // table's unique(freelancer_id, platform) constraint).
   const [portfolioLinks, setPortfolioLinks] = useState<Partial<Record<SocialPlatform, string>>>({});
 
-  // (f) Availability
+  // (g) Availability
   const [availability, setAvailability] = useState('Available');
   const [workingDays, setWorkingDays] = useState<string[]>([]);
   const [workingHoursStart, setWorkingHoursStart] = useState('');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('');
 
-  // (g) Service area
+  // (h) Service information — base location (users.location) plus
+  // freelancer_profiles.locations/studio_name/studio_locations, the same
+  // fields Edit Profile's map picker writes to (no separate/duplicate
+  // service_area_type + service_radius_km system).
   const [location, setLocation] = useState('');
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
   const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
   const [locationPlaceId, setLocationPlaceId] = useState<string | null>(null);
-  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
-  const [serviceAreaType, setServiceAreaType] = useState('');
-  const [serviceRadiusKm, setServiceRadiusKm] = useState('');
+  const [locationPickerTarget, setLocationPickerTarget] = useState<'basic' | 'studio' | 'preferred' | null>(null);
+  const [studioName, setStudioName] = useState('');
+  const [studioLocations, setStudioLocations] = useState<StoredLocation[]>([]);
+  const [preferredLocations, setPreferredLocations] = useState<StoredLocation[]>([]);
 
-  // (h) Pricing
+  // (i) Pricing
   const [pricingType, setPricingType] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
   const [startingPriceCurrency, setStartingPriceCurrency] = useState(normalizeCurrencyCode(preferredCurrency, 'THB'));
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
 
-  // (i) Requirements / limitations
+  // (j) Requirements / limitations
   const [requirements, setRequirements] = useState('');
   const [limitationDays, setLimitationDays] = useState<string[]>([]);
   const [limitationNote, setLimitationNote] = useState('');
 
-  // (j) Contact preferences
+  // (k) Contact preferences
   const [contactPreference, setContactPreference] = useState<string[]>(['creativehub_messages']);
 
-  // (k) Verification
+  // (l) Verification
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [identityStatus, setIdentityStatus] = useState<'not_submitted' | 'pending' | 'verified'>('not_submitted');
 
@@ -150,13 +168,34 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setCoverPhotoUpload({ file, previewUrl: URL.createObjectURL(file) });
   };
 
+  // Switching category means the Skills/Styles chosen so far almost
+  // certainly don't apply to the new one, so this asks first, then clears
+  // both and lets the next two steps' suggestions repopulate from scratch.
+  const applyCategoryChange = (nextCategory: string) => {
+    if (category && category !== nextCategory && (skills.length > 0 || styles.length > 0)) {
+      setPendingCategoryChange(nextCategory);
+      return;
+    }
+    setCategory(nextCategory);
+  };
+
+  const confirmCategoryChange = () => {
+    if (!pendingCategoryChange) return;
+    setCategory(pendingCategoryChange);
+    setSkills([]);
+    setStyles([]);
+    setPendingCategoryChange(null);
+  };
+
   const validateStep = (current: number): string | null => {
     if (current === 1) {
       if (!displayName.trim()) return 'Professional display name is required.';
       if (!bio.trim()) return 'Add a short professional bio.';
     }
-    if (current === 2 && selectedServices.length === 0) return 'Choose at least one service.';
-    if (current === 4 && !experienceYears) return 'Select your years of experience.';
+    if (current === 2 && !isFreelancerCategory(category)) return 'Select a freelancer category.';
+    if (current === 3 && skills.length === 0) return 'Select or add at least one skill.';
+    if (current === 4 && styles.length === 0) return 'Select or add at least one style.';
+    if (current === 5 && !experienceYears) return 'Select your years of experience.';
     return null;
   };
 
@@ -186,16 +225,52 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   };
 
   const handleLocationPicked = (point: LocationPoint) => {
-    setLocation(point.formattedAddress);
-    setLocationLatitude(point.latitude);
-    setLocationLongitude(point.longitude);
-    setLocationPlaceId(point.placeId);
-    setIsLocationPickerOpen(false);
+    const storedPoint: StoredLocation = {
+      formattedAddress: point.formattedAddress,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      placeId: point.placeId,
+      city: point.city ?? null,
+      district: point.district ?? null,
+    };
+
+    if (locationPickerTarget === 'studio') {
+      setStudioLocations((current) => (current.some((item) => item.formattedAddress === storedPoint.formattedAddress) ? current : [...current, storedPoint]));
+    } else if (locationPickerTarget === 'preferred') {
+      setPreferredLocations((current) => (current.some((item) => item.formattedAddress === storedPoint.formattedAddress) ? current : [...current, storedPoint]));
+    } else {
+      setLocation(point.formattedAddress);
+      setLocationLatitude(point.latitude);
+      setLocationLongitude(point.longitude);
+      setLocationPlaceId(point.placeId);
+    }
+    setLocationPickerTarget(null);
+  };
+
+  const addPreferredPreset = () => {
+    setPreferredLocations((current) =>
+      current.some((item) => item.formattedAddress === TRAVEL_ANYWHERE)
+        ? current
+        : [...current, { formattedAddress: TRAVEL_ANYWHERE, latitude: null, longitude: null, placeId: null, city: null, district: null }]
+    );
   };
 
   const handleFinish = async () => {
     if (!user?.id) {
       setError('Please sign in again to complete freelancer onboarding.');
+      return;
+    }
+
+    if (!isFreelancerCategory(category)) {
+      setError('Select a freelancer category before finishing.');
+      return;
+    }
+    if (skills.length === 0) {
+      setError('Select or add at least one skill before finishing.');
+      return;
+    }
+    if (styles.length === 0) {
+      setError('Select or add at least one style before finishing.');
       return;
     }
 
@@ -240,9 +315,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       uploadedCoverUrl = upload.publicUrl;
     }
 
+    const resolvedPronouns = pronouns === 'Custom' ? pronounsCustom.trim() : pronouns;
+
     const userUpdate = await DataService.updateUser(user.id, {
       role: 'freelancer',
       full_name: displayName.trim(),
+      pronouns: resolvedPronouns || null,
       avatar_url: uploadedAvatarUrl || existingAvatarUrl || user.avatar_url || null,
       cover_url: uploadedCoverUrl,
       bio: bio.trim() || null,
@@ -262,19 +340,20 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
 
     const freelancerProfilePayload = {
-      title: selectedServices[0] || null,
+      title: category,
       description: bio.trim() || null,
       hourly_rate: startingPrice ? Number(startingPrice) : null,
       skills,
-      styles: selectedSpecialties,
+      styles,
       experience_years: parseExperienceYears(experienceYears),
       experience_level: experienceLevel ? experienceLevel.toLowerCase() : null,
       is_available: availability === 'Available',
       working_days: workingDays,
       working_hours_start: workingHoursStart || null,
       working_hours_end: workingHoursEnd || null,
-      service_area_type: serviceAreaType || null,
-      service_radius_km: serviceRadiusKm && serviceRadiusKm !== 'anywhere' ? Number(serviceRadiusKm) : null,
+      studio_name: studioName.trim() || null,
+      studio_locations: studioLocations,
+      locations: preferredLocations,
       pricing_type: pricingType || null,
       min_price: minPrice ? Number(minPrice) : null,
       max_price: maxPrice ? Number(maxPrice) : null,
@@ -330,14 +409,14 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
   return (
     <>
-    {isLocationPickerOpen && (
+    {locationPickerTarget && (
       <LeafletLocationPicker
         initialPoint={
-          locationLatitude !== null && locationLongitude !== null
+          locationPickerTarget === 'basic' && locationLatitude !== null && locationLongitude !== null
             ? { latitude: locationLatitude, longitude: locationLongitude, formattedAddress: location, placeId: locationPlaceId }
             : null
         }
-        onCancel={() => setIsLocationPickerOpen(false)}
+        onCancel={() => setLocationPickerTarget(null)}
         onConfirm={handleLocationPicked}
       />
     )}
@@ -359,6 +438,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         <StepProfessionalInfo
           displayName={displayName}
           onDisplayNameChange={setDisplayName}
+          pronouns={pronouns}
+          onPronounsChange={setPronouns}
+          pronounsCustom={pronounsCustom}
+          onPronounsCustomChange={setPronounsCustom}
           bio={bio}
           onBioChange={setBio}
           profilePictureUpload={profilePictureUpload}
@@ -376,17 +459,42 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       )}
 
       {step === 2 && (
-        <StepServices
-          selectedServices={selectedServices}
-          onSelectedServicesChange={setSelectedServices}
-          selectedSpecialties={selectedSpecialties}
-          onSelectedSpecialtiesChange={setSelectedSpecialties}
-        />
+        <div>
+          <StepCategory selectedCategory={category} onSelectCategory={applyCategoryChange} />
+          {pendingCategoryChange && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                Changing your freelancer category will require you to update your Skills and Styles.
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Your current Skills and Styles don't apply to {pendingCategoryChange} and will be cleared.
+              </p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={confirmCategoryChange}
+                  className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black"
+                >
+                  Change category
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPendingCategoryChange(null)}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {step === 3 && <StepSkills skills={skills} onSkillsChange={setSkills} selectedServices={selectedServices} />}
+      {step === 3 && <StepSkills category={category} skills={skills} onSkillsChange={setSkills} />}
 
-      {step === 4 && (
+      {step === 4 && <StepStyles category={category} styles={styles} onStylesChange={setStyles} />}
+
+      {step === 5 && (
         <StepExperience
           experienceYears={experienceYears}
           onExperienceYearsChange={setExperienceYears}
@@ -395,9 +503,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 5 && <StepPortfolio links={portfolioLinks} onLinksChange={setPortfolioLinks} />}
+      {step === 6 && <StepPortfolio links={portfolioLinks} onLinksChange={setPortfolioLinks} />}
 
-      {step === 6 && (
+      {step === 7 && (
         <StepAvailability
           availability={availability}
           onAvailabilityChange={setAvailability}
@@ -410,8 +518,8 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 7 && (
-        <StepServiceArea
+      {step === 8 && (
+        <StepServiceLocations
           location={location}
           onLocationChange={(value) => {
             setLocation(value);
@@ -420,15 +528,20 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
             setLocationPlaceId(null);
           }}
           hasPreciseLocation={locationLatitude !== null && locationLongitude !== null}
-          onOpenLocationPicker={() => setIsLocationPickerOpen(true)}
-          serviceAreaType={serviceAreaType}
-          onServiceAreaTypeChange={setServiceAreaType}
-          serviceRadiusKm={serviceRadiusKm}
-          onServiceRadiusKmChange={setServiceRadiusKm}
+          onOpenBaseLocationPicker={() => setLocationPickerTarget('basic')}
+          studioName={studioName}
+          onStudioNameChange={setStudioName}
+          studioLocations={studioLocations}
+          onOpenStudioLocationPicker={() => setLocationPickerTarget('studio')}
+          onRemoveStudioLocation={(address) => setStudioLocations((current) => current.filter((item) => item.formattedAddress !== address))}
+          preferredLocations={preferredLocations}
+          onOpenPreferredLocationPicker={() => setLocationPickerTarget('preferred')}
+          onRemovePreferredLocation={(address) => setPreferredLocations((current) => current.filter((item) => item.formattedAddress !== address))}
+          onAddPreferredPreset={addPreferredPreset}
         />
       )}
 
-      {step === 8 && (
+      {step === 9 && (
         <StepPricing
           pricingType={pricingType}
           onPricingTypeChange={setPricingType}
@@ -443,7 +556,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 9 && (
+      {step === 10 && (
         <StepRequirements
           requirements={requirements}
           onRequirementsChange={setRequirements}
@@ -454,11 +567,11 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 10 && (
+      {step === 11 && (
         <StepContactPreferences contactPreference={contactPreference} onContactPreferenceChange={setContactPreference} />
       )}
 
-      {step === 11 && (
+      {step === 12 && (
         <StepVerification
           emailVerified={Boolean(user?.emailConfirmedAt)}
           phoneVerified={phoneVerified}

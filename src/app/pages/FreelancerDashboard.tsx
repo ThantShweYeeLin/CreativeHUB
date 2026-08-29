@@ -9,7 +9,6 @@ import {
   DollarSign,
   Edit,
   Layers,
-  MapPin,
   Plus,
   Settings,
   Star,
@@ -27,13 +26,10 @@ import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../.
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
-import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { extractLocationMeta } from '../../lib/requestLocation';
-import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialPlatform } from '../../lib/socialPlatforms';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
-import { LIMITATION_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
 import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
@@ -48,38 +44,12 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid: 'Paid in full',
 };
 
-const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SERVICE_PRICING_TYPES = ['fixed', 'starting_from', 'custom_quote'] as const;
 
 interface FreelancerDashboardProps {
   onBack: () => void;
   section: DashboardSection;
   initialOpenRequestId?: string | undefined;
-}
-
-interface SocialLinkFormEntry {
-  id: string | null;
-  platform: SocialPlatform;
-  url: string;
-}
-
-interface SettingsFormState {
-  title: string;
-  description: string;
-  hourly_rate: number;
-  experience_years: number;
-  is_available: boolean;
-  visibility: 'public' | 'limited';
-  location: string;
-  skills: string;
-  styles: string;
-  locations: string;
-  working_hours_start: string;
-  working_hours_end: string;
-  working_days: string[];
-  requirements: string;
-  limitation_days: string[];
-  limitation_note: string;
 }
 
 interface ServiceFormState {
@@ -104,27 +74,13 @@ const EMPTY_SERVICE_FORM: ServiceFormState = {
   requirements: '',
 };
 
-function parseTags(value: string) {
-  return value
-    .split(',')
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: FreelancerDashboardProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
-  // Social links are edited locally and only written to Supabase when the
-  // freelancer clicks "Save Settings" — id is null for a link not yet saved.
-  const [socialLinks, setSocialLinks] = useState<SocialLinkFormEntry[]>([]);
-  const [originalSocialLinkIds, setOriginalSocialLinkIds] = useState<string[]>([]);
-  const [newSocialPlatform, setNewSocialPlatform] = useState<SocialPlatform>('Instagram');
-  const [newSocialUrl, setNewSocialUrl] = useState('');
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [highlightRequestId, setHighlightRequestId] = useState<string | null>(null);
@@ -142,24 +98,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
   const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
-  const [settingsForm, setSettingsForm] = useState<SettingsFormState>({
-    title: '',
-    description: '',
-    hourly_rate: 0,
-    experience_years: 0,
-    is_available: true,
-    visibility: 'public',
-    location: '',
-    skills: '',
-    styles: '',
-    locations: '',
-    working_hours_start: '09:00',
-    working_hours_end: '18:00',
-    working_days: [],
-    requirements: '',
-    limitation_days: [],
-    limitation_note: '',
-  });
   const [bookings, setBookings] = useState<any[]>([]);
   const [blockedDates, setBlockedDates] = useState<any[]>([]);
   const [newBlockedDate, setNewBlockedDate] = useState('');
@@ -202,10 +140,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       setIsLoading(true);
       setError(null);
 
-      const [profileResponse, requestsResponse, userResponse, bookingsResponse] = await Promise.all([
+      const [profileResponse, requestsResponse, bookingsResponse] = await Promise.all([
         DataService.getFreelancerProfile(user.id),
         DataService.getFreelancerRequests(user.id),
-        DataService.getUser(user.id),
         DataService.getFreelancerBookings(user.id),
       ]);
 
@@ -214,8 +151,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       if (profileResponse.error || !profileResponse.data) {
         setError((profileResponse.error as any)?.message || 'Unable to load freelancer profile.');
         setFreelancerProfile(null);
-        setSocialLinks([]);
-        setOriginalSocialLinkIds([]);
         setRequests([]);
         setIsLoading(false);
         return;
@@ -225,8 +160,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       setRequests(requestsResponse.data || []);
       setBookings(bookingsResponse.data || []);
 
-      const [socialLinksResponse, blockedDatesResponse, servicesResponse, reviewsResponse] = await Promise.all([
-        DataService.getFreelancerSocialLinks(profileResponse.data.id),
+      const [blockedDatesResponse, servicesResponse, reviewsResponse] = await Promise.all([
         DataService.getFreelancerBlockedDates(profileResponse.data.id),
         DataService.getFreelancerServices(profileResponse.data.id),
         DataService.getFreelancerReviews(user.id),
@@ -237,35 +171,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       setServices(servicesResponse.data || []);
       setReviews(reviewsResponse.data || []);
       void loadTeamsData(user.id);
-
-      if (socialLinksResponse.error) {
-        setError((socialLinksResponse.error as any)?.message || 'Unable to load social links.');
-        setSocialLinks([]);
-        setOriginalSocialLinkIds([]);
-      } else {
-        const links = (socialLinksResponse.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
-        setSocialLinks(links);
-        setOriginalSocialLinkIds(links.map((link) => link.id));
-      }
-
-      setSettingsForm({
-        title: profileResponse.data.title || '',
-        description: profileResponse.data.description || '',
-        hourly_rate: Number(profileResponse.data.hourly_rate || 0),
-        experience_years: Number(profileResponse.data.experience_years || 0),
-        is_available: profileResponse.data.is_available !== false,
-        visibility: profileResponse.data.visibility === 'limited' ? 'limited' : 'public',
-        location: userResponse.data?.location || '',
-        skills: (profileResponse.data.skills || []).join(', '),
-        styles: (profileResponse.data.styles || []).join(', '),
-        locations: (profileResponse.data.locations || []).join(', '),
-        working_hours_start: profileResponse.data.working_hours_start || '09:00',
-        working_hours_end: profileResponse.data.working_hours_end || '18:00',
-        working_days: profileResponse.data.working_days || [],
-        requirements: profileResponse.data.requirements || '',
-        limitation_days: profileResponse.data.limitation_days || [],
-        limitation_note: profileResponse.data.limitation_note || '',
-      });
 
       setIsLoading(false);
     }
@@ -380,14 +285,14 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     const averageBudget = requests.length > 0 ? Math.round(totalBudget / requests.length) : 0;
 
     return {
-      socialLinkCount: socialLinks.length,
+      socialLinkCount: (freelancerProfile?.social_links || []).length,
       pending,
       accepted,
       rejected,
       totalRequests: requests.length,
       averageBudget,
     };
-  }, [socialLinks, requests]);
+  }, [freelancerProfile, requests]);
 
   const earningsStats = useMemo(() => {
     const totalEarned = bookings
@@ -568,9 +473,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setConfirmAction(null);
   };
 
-  const handleToggleWorkingDay = (day: string) => {
-    setSettingsForm((current) => ({ ...current, working_days: toggle(current.working_days, day) }));
-  };
 
   const handleAddBlockedDate = async () => {
     if (!freelancerProfile?.id || !newBlockedDate) {
@@ -835,142 +737,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     await loadTeamsData(user.id);
   };
 
-  // Social links are only edited in local state here — they're written to
-  // Supabase together with the rest of the form in handleSaveSettings.
-  const handleAddSocialLink = () => {
-    if (!newSocialUrl.trim()) {
-      setError('Enter a URL for this social link.');
-      return;
-    }
-
-    if (!isValidSocialUrl(newSocialUrl)) {
-      setError('Enter a valid URL, e.g. https://instagram.com/username.');
-      return;
-    }
-
-    if (socialLinks.some((link) => link.platform === newSocialPlatform)) {
-      setError(`You already added a ${newSocialPlatform} link. Edit or remove it instead.`);
-      return;
-    }
-
-    setError(null);
-    setSocialLinks((current) => [...current, { id: null, platform: newSocialPlatform, url: newSocialUrl.trim() }]);
-    setNewSocialUrl('');
-  };
-
-  const handleSocialLinkUrlChange = (platform: SocialPlatform, url: string) => {
-    setSocialLinks((current) => current.map((link) => (link.platform === platform ? { ...link, url } : link)));
-  };
-
-  const handleRemoveSocialLink = (platform: SocialPlatform) => {
-    setSocialLinks((current) => current.filter((link) => link.platform !== platform));
-  };
-
-  const handleSaveSettings = async () => {
-    if (!user?.id) return;
-
-    if (settingsForm.working_hours_start >= settingsForm.working_hours_end) {
-      setError('Working hours end time must be after the start time.');
-      return;
-    }
-
-    setIsSavingSettings(true);
-    setError(null);
-    setSuccess(null);
-
-    const locationText = settingsForm.location.trim();
-    let locationLatitude: number | null = null;
-    let locationLongitude: number | null = null;
-    let locationPlaceId: string | null = null;
-
-    if (locationText) {
-      try {
-        const resolved = await geocodeAddress(locationText);
-        if (!resolved) {
-          setError('Unable to resolve your location. Please use a more specific address.');
-          setIsSavingSettings(false);
-          return;
-        }
-
-        locationLatitude = resolved.latitude;
-        locationLongitude = resolved.longitude;
-        locationPlaceId = resolved.placeId;
-      } catch (resolveError) {
-        setError(resolveError instanceof Error ? resolveError.message : 'Unable to resolve your location.');
-        setIsSavingSettings(false);
-        return;
-      }
-    }
-
-    const [profileUpdate, userUpdate] = await Promise.all([
-      DataService.updateFreelancerProfile(user.id, {
-        title: settingsForm.title,
-        description: settingsForm.description,
-        hourly_rate: settingsForm.hourly_rate,
-        experience_years: settingsForm.experience_years,
-        is_available: settingsForm.is_available,
-        visibility: settingsForm.visibility,
-        skills: parseTags(settingsForm.skills),
-        styles: parseTags(settingsForm.styles),
-        locations: parseTags(settingsForm.locations),
-        working_hours_start: settingsForm.working_hours_start,
-        working_hours_end: settingsForm.working_hours_end,
-        working_days: settingsForm.working_days,
-        requirements: settingsForm.requirements,
-        limitation_days: settingsForm.limitation_days,
-        limitation_note: settingsForm.limitation_note,
-        updated_at: new Date().toISOString(),
-      } as any),
-      DataService.updateUser(user.id, {
-        location: locationText || null,
-        location_latitude: locationLatitude,
-        location_longitude: locationLongitude,
-        location_place_id: locationPlaceId,
-        updated_at: new Date().toISOString(),
-      } as any),
-    ]);
-
-    if (profileUpdate.error || userUpdate.error) {
-      setError(
-        (profileUpdate.error as any)?.message ||
-          (userUpdate.error as any)?.message ||
-          'Unable to save settings.'
-      );
-      setIsSavingSettings(false);
-      return;
-    }
-
-    setFreelancerProfile(profileUpdate.data);
-
-    if (freelancerProfile?.id) {
-      const currentIds = socialLinks.filter((link) => link.id).map((link) => link.id as string);
-      const toDelete = originalSocialLinkIds.filter((id) => !currentIds.includes(id));
-      const toCreate = socialLinks.filter((link) => !link.id);
-      const toUpdate = socialLinks.filter((link) => link.id);
-
-      const socialLinkResults = await Promise.all([
-        ...toDelete.map((id) => DataService.deleteSocialLink(id)),
-        ...toCreate.map((link) => DataService.addSocialLink(freelancerProfile.id, link.platform, link.url)),
-        ...toUpdate.map((link) => DataService.updateSocialLink(link.id as string, { url: link.url })),
-      ]);
-
-      const socialLinkError = socialLinkResults.find((result) => result.error);
-      if (socialLinkError) {
-        setError((socialLinkError.error as any)?.message || 'Settings saved, but some social links could not be saved.');
-      }
-
-      const refreshedLinks = await DataService.getFreelancerSocialLinks(freelancerProfile.id);
-      if (!refreshedLinks.error) {
-        const links = (refreshedLinks.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
-        setSocialLinks(links);
-        setOriginalSocialLinkIds(links.map((link) => link.id));
-      }
-    }
-
-    setSuccess('Settings saved successfully.');
-    setIsSavingSettings(false);
-  };
-
   const tabs: { id: DashboardSection; label: string; icon: any; path: string }[] = [
     { id: 'requests', label: 'Requests', icon: Users, path: '/freelancer-dashboard/requests' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/freelancer-dashboard/calendar' },
@@ -978,7 +744,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     { id: 'reviews', label: 'Reviews', icon: Star, path: '/freelancer-dashboard/reviews' },
     { id: 'earnings', label: 'Earnings', icon: DollarSign, path: '/freelancer-dashboard/earnings' },
     { id: 'teams', label: 'Teams', icon: UsersRound, path: '/freelancer-dashboard/teams' },
-    { id: 'settings', label: 'Settings', icon: Settings, path: '/freelancer-dashboard/settings' },
+    { id: 'settings', label: 'Services', icon: Settings, path: '/freelancer-dashboard/settings' },
   ];
 
   const filteredRequests = useMemo(() => {
@@ -1013,7 +779,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Freelancer Dashboard</h1>
-              <p className="text-sm text-gray-600 md:text-base">Manage your requests, analytics, and settings</p>
+              <p className="text-sm text-gray-600 md:text-base">Manage requests, calendar, services, and bookings</p>
             </div>
             {freelancerProfile && (
               <div className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
@@ -1808,265 +1574,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         ) : (
           <div className="space-y-6 md:space-y-8">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Service Settings</h2>
-              <p className="text-sm text-gray-600 md:text-base">Update your public freelancer details</p>
-            </div>
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6 space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Title</label>
-                <input
-                  value={settingsForm.title}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, title: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Description</label>
-                <textarea
-                  value={settingsForm.description}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, description: event.target.value }))}
-                  className="min-h-24 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-              </div>
-
-              <div className="border-t border-gray-100 pt-4">
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Social Links</label>
-                <p className="mb-3 text-xs text-gray-500">Show your work through your social profiles instead of uploading portfolio photos.</p>
-
-                {socialLinks.length > 0 && (
-                  <div className="mb-3 space-y-2">
-                    {socialLinks.map((link) => {
-                      const Icon = SOCIAL_PLATFORM_ICONS[link.platform];
-                      return (
-                        <div key={link.platform} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                          <Icon className="h-4 w-4 flex-shrink-0 text-gray-700" />
-                          <span className="w-24 flex-shrink-0 text-sm font-semibold text-gray-900">{link.platform}</span>
-                          <input
-                            value={link.url}
-                            onChange={(event) => handleSocialLinkUrlChange(link.platform, event.target.value)}
-                            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                          />
-                          <button onClick={() => handleRemoveSocialLink(link.platform)} className="flex-shrink-0 rounded-lg p-2 text-gray-500 hover:bg-red-100 hover:text-red-600" aria-label={`Remove ${link.platform} link`}>
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <select
-                    value={newSocialPlatform}
-                    onChange={(event) => setNewSocialPlatform(event.target.value as SocialPlatform)}
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-40"
-                  >
-                    {SOCIAL_PLATFORMS.map((platform) => (
-                      <option key={platform} value={platform} disabled={socialLinks.some((link) => link.platform === platform)}>
-                        {platform}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    value={newSocialUrl}
-                    onChange={(event) => setNewSocialUrl(event.target.value)}
-                    placeholder={`https://${newSocialPlatform.toLowerCase()}.com/username`}
-                    className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <button
-                    onClick={handleAddSocialLink}
-                    className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Hourly Rate (THB)</label>
-                  <input
-                    type="number"
-                    value={settingsForm.hourly_rate}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, hourly_rate: Number(event.target.value) }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Experience Years</label>
-                  <input
-                    type="number"
-                    value={settingsForm.experience_years}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, experience_years: Number(event.target.value) }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                    <input
-                      value={settingsForm.location}
-                      onChange={(event) => setSettingsForm((current) => ({ ...current, location: event.target.value }))}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 py-3 pl-9 pr-4 outline-none focus:ring-2 focus:ring-gray-900"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Skills (comma separated)</label>
-                  <input
-                    value={settingsForm.skills}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, skills: event.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Styles (comma separated)</label>
-                  <input
-                    value={settingsForm.styles}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, styles: event.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Booking locations (comma separated)</label>
-                <input
-                  value={settingsForm.locations}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, locations: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  placeholder="e.g. Studio, Outdoor, Client's Location"
-                />
-                <p className="mt-1 text-xs text-gray-500">Clients booking you will pick from this list when choosing where the session happens.</p>
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours start</label>
-                  <input
-                    type="time"
-                    value={settingsForm.working_hours_start}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, working_hours_start: event.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours end</label>
-                  <input
-                    type="time"
-                    value={settingsForm.working_hours_end}
-                    onChange={(event) => setSettingsForm((current) => ({ ...current, working_hours_end: event.target.value }))}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                </div>
-                <p className="md:col-span-2 text-xs text-gray-500">
-                  Clients booking you can only choose a time within this range.
-                </p>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4">
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Days you're generally available</label>
-                <div className="flex flex-wrap gap-2">
-                  {WEEKDAYS.map((day) => (
-                    <button
-                      key={day}
-                      type="button"
-                      onClick={() => handleToggleWorkingDay(day)}
-                      className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-all md:text-sm ${
-                        settingsForm.working_days.includes(day)
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {day}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t border-gray-100 pt-4">
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Things I require from clients</label>
-                <textarea
-                  value={settingsForm.requirements}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, requirements: event.target.value }))}
-                  rows={3}
-                  placeholder="Minimum 3 days advance booking. 30% deposit required."
-                  className="mb-3 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <label className="mb-2 block text-sm font-semibold text-gray-700">I don't work on</label>
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {LIMITATION_DAY_OPTIONS.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setSettingsForm((current) => ({ ...current, limitation_days: toggle(current.limitation_days, option) }))}
-                      className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-all md:text-sm ${
-                        settingsForm.limitation_days.includes(option)
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Other limitations (optional)</label>
-                <input
-                  value={settingsForm.limitation_note}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, limitation_note: event.target.value }))}
-                  placeholder="I only accept outdoor shoots within Bangkok."
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <p className="mt-2 text-xs text-gray-500">Shown on your public profile.</p>
-              </div>
-
-              <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={settingsForm.is_available}
-                  onChange={(event) => setSettingsForm((current) => ({ ...current, is_available: event.target.checked }))}
-                />
-                Available for new bookings
-              </label>
-
-              <div className="border-t border-gray-100 pt-4">
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Profile visibility</label>
-                <p className="mb-3 text-xs text-gray-500">
-                  Controls whether you show up when clients browse or search Explore. Your profile stays reachable via a
-                  direct link either way.
-                </p>
-                <div className="flex gap-2">
-                  {(
-                    [
-                      { value: 'public', label: 'Public — shown in Explore' },
-                      { value: 'limited', label: 'Limited — direct link only' },
-                    ] as const
-                  ).map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setSettingsForm((current) => ({ ...current, visibility: option.value }))}
-                      className={`flex-1 rounded-lg border-2 px-3 py-2.5 text-xs font-semibold transition-all md:text-sm ${
-                        settingsForm.visibility === option.value
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={() => void handleSaveSettings()}
-                disabled={isSavingSettings}
-                className="w-full rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 font-semibold text-white hover:shadow-lg disabled:opacity-60"
-              >
-                {isSavingSettings ? 'Saving...' : 'Save Settings'}
-              </button>
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Services</h2>
+              <p className="text-sm text-gray-600 md:text-base">Manage your bookable services and blocked availability. Public profile details (title, rate, skills, styles, working hours, and more) are edited from Edit Profile.</p>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">

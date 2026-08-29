@@ -15,6 +15,7 @@ export interface SignUpData {
   // onboarding gate redirects the instant the caller's auth state flips to
   // signed-in, which races ahead of any writes done after signUp() returns,
   // so anything collected at sign-up has to land in this one atomic step.
+  phone?: string;
   avatarFile?: File | null;
   country?: string;
   city?: string;
@@ -176,6 +177,7 @@ class AuthService {
         full_name: data.fullName,
         role: data.role,
         gender: data.gender,
+        ...(data.phone ? { phone: data.phone } : {}),
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         ...(locationText
           ? {

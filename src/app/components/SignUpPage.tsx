@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import type { Gender } from '../../lib/database.types';
+import { isValidPhoneNumber, normalizePhoneNumber } from '../../lib/phone';
 
 export type AccountType = 'client' | 'freelancer';
 
@@ -10,6 +11,7 @@ export interface SignUpSubmission {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
   password: string;
   role: AccountType;
   gender: Gender;
@@ -39,6 +41,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
   const [city, setCity] = useState('');
   const [avatarUpload, setAvatarUpload] = useState<ImageUpload | null>(null);
@@ -67,6 +70,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
     setError('');
     if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
+    if (!isValidPhoneNumber(phone)) { setError('Please enter a valid phone number, e.g. 081 234 5678 or +66 81 234 5678.'); return; }
     if (!gender) { setError('Please select a gender.'); return; }
 
     if (onValidateEmail) {
@@ -114,6 +118,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email,
+        phone: normalizePhoneNumber(phone),
         password,
         role: accountType,
         gender,
@@ -382,6 +387,21 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={e => setPhone(e.target.value)}
+                    placeholder="081 234 5678 or +66 81 234 5678"
+                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">We keep this private — it's never shown on your public profile unless you choose to share it.</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

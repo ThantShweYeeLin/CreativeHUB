@@ -1,9 +1,14 @@
 import { User } from 'lucide-react';
 import { ProfileImageDropzone, type ImageUpload } from '../../../components/common/ProfileImageDropzone';
+import { PRONOUN_OPTIONS } from '../../../lib/pronouns';
 
 interface StepProfessionalInfoProps {
   displayName: string;
   onDisplayNameChange: (value: string) => void;
+  pronouns: string;
+  onPronounsChange: (value: string) => void;
+  pronounsCustom: string;
+  onPronounsCustomChange: (value: string) => void;
   bio: string;
   onBioChange: (value: string) => void;
   profilePictureUpload: ImageUpload | null;
@@ -22,6 +27,10 @@ interface StepProfessionalInfoProps {
 export function StepProfessionalInfo({
   displayName,
   onDisplayNameChange,
+  pronouns,
+  onPronounsChange,
+  pronounsCustom,
+  onPronounsCustomChange,
   bio,
   onBioChange,
   profilePictureUpload,
@@ -50,6 +59,32 @@ export function StepProfessionalInfo({
           />
         </div>
         <p className="mt-1 text-xs text-gray-500">Shown publicly instead of your legal name.</p>
+      </div>
+
+      <div className="md:col-span-2">
+        <label className="mb-2 block text-sm font-semibold text-gray-700">Pronouns (optional)</label>
+        <div className="flex flex-wrap gap-2">
+          {PRONOUN_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onPronounsChange(option)}
+              className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
+                pronouns === option ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+        {pronouns === 'Custom' && (
+          <input
+            value={pronounsCustom}
+            onChange={(event) => onPronounsCustomChange(event.target.value)}
+            placeholder="e.g. ze/zir"
+            className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        )}
       </div>
 
       <ProfileImageDropzone
