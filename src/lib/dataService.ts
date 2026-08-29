@@ -916,12 +916,15 @@ export class DataService {
       reason: `Paid via ${input.cardLabel}`,
     });
 
+    const clientResponse = await this.getUser((data as any).client_id);
+    const clientName = clientResponse.data?.full_name || 'The client';
+
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_deposit_paid',
       title: 'Deposit received',
-      message: 'The client transferred the deposit — the booking is now confirmed.',
+      message: `${clientName} transferred the deposit — the booking is now confirmed.`,
       relatedId: bookingId,
     });
 
@@ -1218,13 +1221,17 @@ export class DataService {
           });
         }
 
+        const projectName = String((data as any).project_name || 'booking');
+
         if (freelancerId && nextPaymentStatus === 'deposit_paid') {
+          const clientResponse = clientId ? await this.getUser(clientId) : { data: null };
+          const clientName = clientResponse.data?.full_name || 'The client';
           await this.notifyEvent({
             userId: freelancerId,
             actorId: clientId || null,
             type: 'payment_update',
             title: 'Deposit secured',
-            message: 'The client transferred the deposit for your booking.',
+            message: `${clientName} transferred the deposit for your ${projectName}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
@@ -1236,7 +1243,7 @@ export class DataService {
             actorId: clientId || null,
             type: 'payment_released',
             title: 'Payment released',
-            message: 'Payment was released for your booking.',
+            message: `Payment was released for your ${projectName}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
