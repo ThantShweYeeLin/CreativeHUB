@@ -6,6 +6,8 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { extractLocationMeta } from '../../lib/requestLocation';
 
 interface MyBookingsPageProps {
   onBack: () => void;
@@ -89,6 +91,8 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
     return bookings.map((booking) => {
       const counterparty = String(booking.client_id) === String(user?.id) ? booking.freelancer : booking.client;
       const status = formatStatus(booking.status);
+      const scheduleMeta = extractScheduleMeta(booking.description);
+      const locationMeta = extractLocationMeta(booking.description);
 
       return {
         id: booking.id,
@@ -97,9 +101,9 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
         specialty: booking.project_name,
         image: counterparty?.avatar_url || fallbackProfileImage,
         gender: counterparty?.gender || null,
-        date: booking.start_date || 'Schedule pending',
-        endDate: booking.end_date || null,
-        location: counterparty?.location || 'Location to be confirmed',
+        date: scheduleMeta ? formatScheduleMeta(scheduleMeta) : (booking.start_date || 'Schedule pending'),
+        endDate: scheduleMeta ? null : booking.end_date || null,
+        location: locationMeta || counterparty?.location || 'Location to be confirmed',
         statusLabel: status.label,
         statusColor: status.color,
         totalAmount: Number(booking.budget || 0),
