@@ -967,7 +967,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
           <aside className="space-y-6">
             <div className="rounded-3xl bg-white p-6 shadow-xl">
-              <h2 className="text-xl font-bold text-gray-900">Specialties</h2>
+              <h2 className="text-xl font-bold text-gray-900">Skills</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.length > 0 ? skills.map((skill: string) => (
                   <span key={skill} className="rounded-full bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700">
@@ -978,13 +978,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             <div className="rounded-3xl bg-white p-6 shadow-xl">
-              <h2 className="text-xl font-bold text-gray-900">Creative Style</h2>
+              <h2 className="text-xl font-bold text-gray-900">Styles</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {styles.length > 0 ? styles.map((style: string) => (
                   <span key={style} className="rounded-full bg-gray-900 px-3 py-2 text-sm font-semibold text-white">
                     {style}
                   </span>
-                )) : <p className="text-sm text-gray-600">No style tags listed yet.</p>}
+                )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
               </div>
             </div>
 

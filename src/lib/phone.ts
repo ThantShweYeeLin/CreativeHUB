@@ -1,23 +1,39 @@
-// Lightweight phone validation — CreativeHUB targets Thailand primarily but
-// doesn't want to block international users, so this accepts:
-//   - Thai mobile/landline numbers: 0XXXXXXXXX (10 digits, starts with 0) or
-//     +66XXXXXXXXX (Thai country code form of the same number)
-//   - General international numbers: + followed by 8-15 digits (E.164-ish)
-// Formatting characters (spaces, dashes, parentheses) are stripped before
-// validation so "081-234-5678" and "0812345678" both pass.
-const THAI_LOCAL_PATTERN = /^0\d{9}$/;
-const THAI_INTL_PATTERN = /^\+66\d{9}$/;
-const GENERAL_INTL_PATTERN = /^\+\d{8,15}$/;
+import { parsePhoneNumberFromString, getCountryCallingCode as libGetCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 
-export function isValidPhoneNumber(value: string): boolean {
-  const trimmed = value.trim();
-  if (!trimmed) return false;
-
-  const stripped = trimmed.replace(/[\s\-().]/g, '');
-  return THAI_LOCAL_PATTERN.test(stripped) || THAI_INTL_PATTERN.test(stripped) || GENERAL_INTL_PATTERN.test(stripped);
+/** "+66", "+95", "+1" — the international calling code for a country, or null if libphonenumber-js has no metadata for it. */
+export function getCountryCallingCode(isoCode: string | null | undefined): string | null {
+  if (!isoCode) return null;
+  try {
+    return `+${libGetCountryCallingCode(isoCode as CountryCode)}`;
+  } catch {
+    return null;
+  }
 }
 
-/** Strips formatting characters for storage — keeps the leading "+" for international numbers. */
-export function normalizePhoneNumber(value: string): string {
-  return value.trim().replace(/[\s\-().]/g, '');
+export interface PhoneValidationResult {
+  isValid: boolean;
+  /** E.164 format, e.g. "+66812345678" — null unless isValid. */
+  e164: string | null;
+}
+
+/**
+ * Validates a phone number against a specific country and normalizes it to
+ * E.164. Correctly drops a Thai local leading "0" (0812345678 -> +66812345678)
+ * and equivalent national-prefix conventions in other countries — this is
+ * libphonenumber-js's job, not manual string surgery.
+ */
+export function validatePhoneForCountry(rawNumber: string, isoCode: string | null | undefined): PhoneValidationResult {
+  if (!rawNumber.trim() || !isoCode) return { isValid: false, e164: null };
+
+  const phone = parsePhoneNumberFromString(rawNumber, isoCode as CountryCode);
+  if (!phone || !phone.isValid()) return { isValid: false, e164: null };
+
+  return { isValid: true, e164: phone.number };
+}
+
+/** Formats an already-stored E.164 number for display, e.g. "+66812345678" -> "+66 81 234 5678". */
+export function formatPhoneForDisplay(e164: string | null | undefined): string {
+  if (!e164) return '';
+  const phone = parsePhoneNumberFromString(e164);
+  return phone ? phone.formatInternational() : e164;
 }

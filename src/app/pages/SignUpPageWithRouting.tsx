@@ -38,7 +38,18 @@ export function SignUpPageWithRouting() {
     // rather than as separate calls after it returns — the mandatory
     // onboarding gate redirects the instant the auth state flips to
     // signed-in, which would otherwise race ahead of any writes made here.
-    await signUp(data.email, data.password, fullName, data.role, data.gender, data.phone, data.avatarFile, data.country, data.city);
+    await signUp({
+      email: data.email,
+      password: data.password,
+      fullName,
+      role: data.role,
+      gender: data.gender,
+      phone: data.phone,
+      avatarFile: data.avatarFile,
+      country: data.country,
+      countryCode: data.countryCode,
+      city: data.city,
+    });
 
     // The mandatory-onboarding route gate in App.tsx also lands the user
     // here based on user.role/onboardingCompleted, so this navigate() is a

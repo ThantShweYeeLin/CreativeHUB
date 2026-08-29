@@ -1,9 +1,13 @@
 import { useState, type FormEvent } from 'react';
-import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import type { Gender } from '../../lib/database.types';
-import { isValidPhoneNumber, normalizePhoneNumber } from '../../lib/phone';
+import { CountrySelect } from '../../components/common/CountrySelect';
+import { CitySelect } from '../../components/common/CitySelect';
+import { PhoneInput } from '../../components/common/PhoneInput';
+import { findCountryByCode } from '../../lib/geoData';
+import { validatePhoneForCountry } from '../../lib/phone';
 
 export type AccountType = 'client' | 'freelancer';
 
@@ -11,12 +15,14 @@ export interface SignUpSubmission {
   firstName: string;
   lastName: string;
   email: string;
+  /** E.164, e.g. "+66812345678". */
   phone: string;
   password: string;
   role: AccountType;
   gender: Gender;
   avatarFile: File | null;
   country: string;
+  countryCode: string;
   city: string;
 }
 
@@ -42,8 +48,8 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
+  const [countryIsoCode, setCountryIsoCode] = useState<string | null>(null);
+  const [city, setCity] = useState<string | null>(null);
   const [avatarUpload, setAvatarUpload] = useState<ImageUpload | null>(null);
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
   const [password, setPassword] = useState('');
@@ -70,7 +76,10 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
     setError('');
     if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
-    if (!isValidPhoneNumber(phone)) { setError('Please enter a valid phone number, e.g. 081 234 5678 or +66 81 234 5678.'); return; }
+    if (!countryIsoCode) { setError('Please select your country.'); return; }
+    if (!city || !city.trim()) { setError('Please select your city.'); return; }
+    const phoneResult = validatePhoneForCountry(phone, countryIsoCode);
+    if (!phoneResult.isValid) { setError('Please enter a valid phone number for the selected country.'); return; }
     if (!gender) { setError('Please select a gender.'); return; }
 
     if (onValidateEmail) {
@@ -112,18 +121,30 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
       return;
     }
 
+    if (!countryIsoCode || !city) {
+      setError('Please go back and complete your location and phone number.');
+      return;
+    }
+    const phoneResult = validatePhoneForCountry(phone, countryIsoCode);
+    if (!phoneResult.isValid || !phoneResult.e164) {
+      setError('Please go back and enter a valid phone number.');
+      return;
+    }
+    const selectedCountry = await findCountryByCode(countryIsoCode);
+
     setLoading(true);
     try {
       await onSignUp({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         email,
-        phone: normalizePhoneNumber(phone),
+        phone: phoneResult.e164,
         password,
         role: accountType,
         gender,
         avatarFile: avatarUpload?.file || null,
-        country: country.trim(),
+        country: selectedCountry?.name || '',
+        countryCode: countryIsoCode,
         city: city.trim(),
       });
     } catch (err) {
@@ -389,42 +410,28 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
-                <div className="relative">
-                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={e => setPhone(e.target.value)}
-                    placeholder="081 234 5678 or +66 81 234 5678"
-                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
-                  />
-                </div>
-                <p className="mt-1.5 text-xs text-gray-400">We keep this private — it's never shown on your public profile unless you choose to share it.</p>
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Country</label>
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={e => setCountry(e.target.value)}
-                    placeholder="Thailand"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  <CountrySelect
+                    value={countryIsoCode}
+                    onChange={(isoCode) => {
+                      setCountryIsoCode(isoCode);
+                      setCity(null);
+                    }}
+                    required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">City</label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={e => setCity(e.target.value)}
-                    placeholder="Bangkok"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
-                  />
+                  <CitySelect countryIsoCode={countryIsoCode} value={city} onChange={setCity} required />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number</label>
+                <PhoneInput countryIsoCode={countryIsoCode} value={phone} onChange={setPhone} required />
+                <p className="mt-1.5 text-xs text-gray-400">We keep this private — it's never shown on your public profile unless you choose to share it.</p>
               </div>
 
               <div>
