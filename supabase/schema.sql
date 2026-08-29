@@ -17,6 +17,7 @@ create table public.users (
   bio text,
   role user_role default 'client',
   gender gender_type default 'prefer_not_to_say',
+  pronouns text,
   preferred_currency text default 'THB',
   location text,
   location_latitude numeric(10,7),
@@ -37,6 +38,7 @@ create table public.freelancer_profiles (
   hourly_rate numeric(10,2),
   skills text[] default array[]::text[],
   styles text[] default array[]::text[],
+  locations text[] default array[]::text[],
   experience_years int,
   portfolio_count int default 0,
   is_available boolean default true,
@@ -59,6 +61,19 @@ create table public.portfolios (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
+-- Social links (freelancer profile showcase)
+create table public.social_links (
+  id uuid default uuid_generate_v4() primary key,
+  freelancer_id uuid references public.freelancer_profiles on delete cascade not null,
+  platform text not null check (platform in ('Instagram', 'TikTok', 'Behance', 'Dribbble', 'Facebook', 'YouTube', 'Website')),
+  url text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique (freelancer_id, platform)
+);
+
+create index if not exists idx_social_links_freelancer_id on public.social_links(freelancer_id);
 
 -- Bookings/Orders
 create table public.bookings (
@@ -159,6 +174,7 @@ create table public.client_posts (
 alter table public.users enable row level security;
 alter table public.freelancer_profiles enable row level security;
 alter table public.portfolios enable row level security;
+alter table public.social_links enable row level security;
 alter table public.bookings enable row level security;
 alter table public.requests enable row level security;
 alter table public.messages enable row level security;
@@ -195,6 +211,13 @@ create policy "Portfolios are viewable by everyone" on public.portfolios
   for select using (true);
 
 create policy "Freelancers can manage own portfolios" on public.portfolios
+  for all using (auth.uid() in (select user_id from public.freelancer_profiles where id = freelancer_id));
+
+-- Social links: public read
+create policy "Social links are viewable by everyone" on public.social_links
+  for select using (true);
+
+create policy "Freelancers can manage own social links" on public.social_links
   for all using (auth.uid() in (select user_id from public.freelancer_profiles where id = freelancer_id));
 
 -- Bookings: users see their own

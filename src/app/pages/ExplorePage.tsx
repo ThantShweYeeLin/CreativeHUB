@@ -141,6 +141,20 @@ function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
+// freelancer_profiles.title values written before CATEGORY_GROUPS was
+// finalized (e.g. "Photographer" instead of today's "Photography") — an
+// explicit exact-match table, not substring matching, so it can't collide
+// across unrelated categories the way keyword matching did.
+const LEGACY_CATEGORY_ALIASES: Record<string, string> = {
+  Photographer: 'Photography',
+  Videographer: 'Videography',
+  'Makeup Artist': 'Makeup',
+  'Hair Stylist': 'Hair Styling',
+  Model: 'Modeling',
+  'Graphic Designer': 'Graphic Design',
+  'Fashion Designer': 'Fashion Design',
+};
+
 export function ExplorePage() {
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
@@ -451,19 +465,50 @@ export function ExplorePage() {
     return scored.map((item) => item.profile);
   }, [profiles, freelancers, filters, interpretedQuery, clientInterests]);
 
-  const sectionFor = (keywords: string[]) => {
-    return filteredProfiles.filter((profile) => {
-      const searchable = `${profile.specialty} ${freelancers.find((item) => (item.user_id || item.users?.id || item.id) === profile.id)?.skills?.join(' ') || ''}`.toLowerCase();
-      return keywords.some((keyword) => searchable.includes(keyword));
-    });
-  };
+  // Group by the freelancer's actual category (freelancer_profiles.title,
+  // which onboarding sets to an exact CATEGORY_GROUPS label) rather than
+  // fuzzy keyword matching — keyword lists collide across categories (e.g.
+  // a Modeling freelancer's "Editorial Shoots" skill contains "editorial",
+  // which used to sweep them into Photographers) and only covered 3 of the
+  // catalog's categories, dumping everyone else into one bucket.
+  const categorySections = useMemo(() => {
+    const sourceById = new Map(freelancers.map((item) => [item.user_id || item.users?.id || item.id, item]));
+    const categoryLabels = CATEGORY_GROUPS.filter((group) => group.id !== 'other').map((group) => group.label);
+    const labelSet = new Set(categoryLabels);
 
-  const makeupArtists = sectionFor(['makeup', 'beauty', 'hair', 'stylist']);
-  const photographers = sectionFor(['photo', 'camera', 'studio', 'portrait', 'editorial']);
-  const models = sectionFor(['model', 'fashion', 'runway']);
-  const uncategorizedProfiles = filteredProfiles.filter((profile) =>
-    ![...makeupArtists, ...photographers, ...models].some((sectionProfile) => sectionProfile.id === profile.id)
-  );
+    const grouped = new Map<string, ProfileCardProps[]>();
+    const uncategorized: ProfileCardProps[] = [];
+
+    for (const profile of filteredProfiles) {
+      const rawTitle = sourceById.get(profile.id)?.title;
+      const title = rawTitle && (labelSet.has(rawTitle) ? rawTitle : LEGACY_CATEGORY_ALIASES[rawTitle]);
+      if (title && labelSet.has(title)) {
+        if (!grouped.has(title)) grouped.set(title, []);
+        grouped.get(title)!.push(profile);
+      } else {
+        uncategorized.push(profile);
+      }
+    }
+
+    // Categories the client chose as interests at sign-up float to the top,
+    // in the order they picked them; the rest of the catalog follows in its
+    // canonical order, and anyone with no recognized category comes last.
+    const orderedLabels = [
+      ...clientInterests.filter((label) => labelSet.has(label)),
+      ...categoryLabels.filter((label) => !clientInterests.includes(label)),
+    ];
+
+    const sections = orderedLabels
+      .map((label) => ({ title: `Popular ${label} Freelancers in Thailand`, profiles: grouped.get(label) || [] }))
+      .filter((section) => section.profiles.length > 0);
+
+    if (uncategorized.length > 0) {
+      sections.push({ title: 'Featured Creative Freelancers', profiles: uncategorized });
+    }
+
+    return sections;
+  }, [filteredProfiles, freelancers, clientInterests]);
+
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
   return (
@@ -617,39 +662,16 @@ export function ExplorePage() {
         />
       )}
 
-      {/* Carousel Sections */}
-      {!isLoading && !hasActiveSearch && makeupArtists.length > 0 && (
+      {/* Carousel Sections — one per real category, client's chosen interests first */}
+      {!isLoading && !hasActiveSearch && categorySections.map((section) => (
         <CarouselSection
-          title="Popular Makeup Artists in Thailand"
-          profiles={makeupArtists}
+          key={section.title}
+          title={section.title}
+          profiles={section.profiles}
           favoritedIds={favoritedIds}
           onToggleFavorite={handleToggleFavorite}
         />
-      )}
-      {!isLoading && !hasActiveSearch && photographers.length > 0 && (
-        <CarouselSection
-          title="Popular Photographers in Thailand"
-          profiles={photographers}
-          favoritedIds={favoritedIds}
-          onToggleFavorite={handleToggleFavorite}
-        />
-      )}
-      {!isLoading && !hasActiveSearch && models.length > 0 && (
-        <CarouselSection
-          title="Popular Models in Thailand"
-          profiles={models}
-          favoritedIds={favoritedIds}
-          onToggleFavorite={handleToggleFavorite}
-        />
-      )}
-      {!isLoading && !hasActiveSearch && uncategorizedProfiles.length > 0 && (
-        <CarouselSection
-          title="Featured Creative Freelancers"
-          profiles={uncategorizedProfiles}
-          favoritedIds={favoritedIds}
-          onToggleFavorite={handleToggleFavorite}
-        />
-      )}
+      ))}
 
       {showSearchFilter && (
         <SearchFilterPanel

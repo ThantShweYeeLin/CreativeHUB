@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -16,12 +16,12 @@ import { shouldDisplayPronouns } from '../../lib/pronouns';
 import FollowersModal from '../components/FollowersModal';
 import {
   appendBudgetMeta,
-  formatBudgetRange,
   inferCurrencyFromLocation,
   SUPPORTED_CURRENCIES,
   type BudgetMeta,
 } from '../../lib/requestBudget';
 import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
+import { appendLocationMeta } from '../../lib/requestLocation';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -31,6 +31,8 @@ interface FreelancerProfileProps {
 }
 
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
+const OTHER_PURPOSE_VALUE = '__other__';
+const OTHER_LOCATION_VALUE = '__other__';
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
@@ -67,10 +69,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [groupFreelancerSearch, setGroupFreelancerSearch] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showBidTip, setShowBidTip] = useState(false);
   const [formData, setFormData] = useState({
     projectName: '',
-    budgetMin: '',
-    budgetMax: '',
+    customPurpose: '',
+    location: '',
+    customLocation: '',
+    notes: '',
+    offerAmount: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     scheduleDate: '',
     scheduleTime: '',
@@ -142,6 +148,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const convertedHourlyRate = freelancerProfile?.hourly_rate
     ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, viewerCurrency)
     : null;
+  const minimumOffer = freelancerProfile?.hourly_rate
+    ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, formData.currency)
+    : 0;
 
   useEffect(() => {
     let isMounted = true;
@@ -287,6 +296,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const bookingLocations = freelancerProfile?.locations || [];
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const todayDateString = new Date().toISOString().slice(0, 10);
@@ -387,16 +397,33 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    const budgetMin = Number(formData.budgetMin);
-    const budgetMax = Number(formData.budgetMax);
+    const resolvedPurpose = formData.projectName === OTHER_PURPOSE_VALUE
+      ? formData.customPurpose.trim()
+      : formData.projectName;
 
-    if (!Number.isFinite(budgetMin) || !Number.isFinite(budgetMax) || budgetMin <= 0 || budgetMax <= 0) {
-      setError('Enter a valid budget range.');
+    if (!resolvedPurpose) {
+      setError('Enter or select a purpose for this booking.');
       return;
     }
 
-    if (budgetMax < budgetMin) {
-      setError('Maximum budget must be greater than or equal to minimum budget.');
+    const resolvedLocation = formData.location === OTHER_LOCATION_VALUE
+      ? formData.customLocation.trim()
+      : formData.location;
+
+    if (!resolvedLocation) {
+      setError('Enter or select a location for this booking.');
+      return;
+    }
+
+    const offerAmount = Number(formData.offerAmount);
+
+    if (!Number.isFinite(offerAmount) || offerAmount <= 0) {
+      setError('Enter your offer amount.');
+      return;
+    }
+
+    if (offerAmount < minimumOffer) {
+      setError(`Your offer must be at least ${formatCurrencyAmount(minimumOffer, formData.currency)}.`);
       return;
     }
 
@@ -407,13 +434,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     const budgetMeta: BudgetMeta = {
       currency: formData.currency,
-      min: budgetMin,
-      max: budgetMax,
+      min: minimumOffer,
+      max: offerAmount,
     };
 
-    const requestMessage = appendScheduleMeta(
-      appendBudgetMeta('', budgetMeta),
-      { date: formData.scheduleDate, time: formData.scheduleTime }
+    const requestMessage = appendLocationMeta(
+      appendScheduleMeta(
+        appendBudgetMeta(formData.notes, budgetMeta),
+        { date: formData.scheduleDate, time: formData.scheduleTime }
+      ),
+      resolvedLocation
     );
 
     setIsSubmittingRequest(true);
@@ -426,9 +456,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     const { data: createdRequests, error: requestError } = await DataService.createBookingRequests({
       clientId: user.id,
       recipientIds: recipients,
-      projectName: formData.projectName,
+      projectName: resolvedPurpose,
       description: requestMessage,
-      budget: budgetMax,
+      budget: offerAmount,
     });
 
     if (requestError) {
@@ -450,8 +480,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setFormData((current) => ({
       ...current,
       projectName: '',
-      budgetMin: '',
-      budgetMax: '',
+      customPurpose: '',
+      location: '',
+      customLocation: '',
+      notes: '',
+      offerAmount: '',
       scheduleDate: '',
       scheduleTime: '',
     }));
@@ -1271,24 +1304,66 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
               <div>
                 <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">The Purpose</label>
-                {skills.length > 0 ? (
-                  <select
-                    id="projectName"
+                <select
+                  id="projectName"
+                  required
+                  value={formData.projectName}
+                  onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="" disabled>Select a purpose</option>
+                  {skills.map((skill: string) => (
+                    <option key={skill} value={skill}>{skill}</option>
+                  ))}
+                  <option value={OTHER_PURPOSE_VALUE}>Other (please specify)</option>
+                </select>
+                {formData.projectName === OTHER_PURPOSE_VALUE && (
+                  <input
                     required
-                    value={formData.projectName}
-                    onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                  >
-                    <option value="" disabled>Select a purpose</option>
-                    {skills.map((skill: string) => (
-                      <option key={skill} value={skill}>{skill}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                    This freelancer hasn't listed any specialties yet, so a purpose can't be selected.
-                  </p>
+                    value={formData.customPurpose}
+                    onChange={(event) => setFormData((current) => ({ ...current, customPurpose: event.target.value }))}
+                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Type the purpose of this booking"
+                  />
                 )}
+              </div>
+
+              <div>
+                <label htmlFor="location" className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
+                <select
+                  id="location"
+                  required
+                  value={formData.location}
+                  onChange={(event) => setFormData((current) => ({ ...current, location: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="" disabled>Select a location</option>
+                  {bookingLocations.map((option: string) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                  <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
+                </select>
+                {formData.location === OTHER_LOCATION_VALUE && (
+                  <input
+                    required
+                    value={formData.customLocation}
+                    onChange={(event) => setFormData((current) => ({ ...current, customLocation: event.target.value }))}
+                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Type the location for this booking"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="notes" className="mb-2 block text-sm font-semibold text-gray-900">Notes <span className="font-normal text-gray-500">(optional)</span></label>
+                <textarea
+                  id="notes"
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(event) => setFormData((current) => ({ ...current, notes: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  placeholder="Anything else the freelancer should know?"
+                />
               </div>
 
               <div>
@@ -1325,8 +1400,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget Range</label>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <div>
                     <input
                       value={formData.currency}
@@ -1343,32 +1418,49 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       ))}
                     </datalist>
                   </div>
-                  <input
-                    required
-                    inputMode="decimal"
-                    value={formData.budgetMin}
-                    onChange={(event) => setFormData((current) => ({ ...current, budgetMin: event.target.value }))}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                    placeholder="Min budget"
-                  />
-                  <input
-                    required
-                    inputMode="decimal"
-                    value={formData.budgetMax}
-                    onChange={(event) => setFormData((current) => ({ ...current, budgetMax: event.target.value }))}
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-                    placeholder="Max budget"
-                  />
+                  <div className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3">
+                    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Minimum</span>
+                    <span className="font-semibold text-gray-900">{formatCurrencyAmount(minimumOffer, formData.currency)}</span>
+                  </div>
                 </div>
-                {formData.budgetMin && formData.budgetMax && (
-                  <p className="mt-2 text-xs text-gray-600">
-                    Requested range: {formatBudgetRange({
-                      currency: formData.currency,
-                      min: Number(formData.budgetMin || 0),
-                      max: Number(formData.budgetMax || 0),
-                    })}
-                  </p>
-                )}
+
+                <div className="mt-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label htmlFor="offerAmount" className="text-sm font-semibold text-gray-900">Offer Amount</label>
+                    <span className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setShowBidTip((current) => !current)}
+                        className="text-gray-400 transition-colors hover:text-gray-700"
+                        aria-label="Bidding tip"
+                      >
+                        <Info className="h-4 w-4" />
+                      </button>
+                      {showBidTip && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setShowBidTip(false)} />
+                          <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2 text-xs text-white shadow-xl">
+                            Suggestion: Bid Higher for High Acceptance
+                          </div>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <input
+                    id="offerAmount"
+                    required
+                    inputMode="decimal"
+                    value={formData.offerAmount}
+                    onChange={(event) => setFormData((current) => ({ ...current, offerAmount: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder={`Minimum ${formatCurrencyAmount(minimumOffer, formData.currency)}`}
+                  />
+                  {formData.offerAmount && Number(formData.offerAmount) < minimumOffer && (
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      Your offer must be at least {formatCurrencyAmount(minimumOffer, formData.currency)}.
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-3 pt-2">

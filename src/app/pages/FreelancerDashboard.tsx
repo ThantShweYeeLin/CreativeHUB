@@ -26,10 +26,11 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import { summarizeGroupRequestMembers } from '../../lib/groupRequest';
+import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { extractLocationMeta } from '../../lib/requestLocation';
 import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialPlatform } from '../../lib/socialPlatforms';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { LIMITATION_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
@@ -71,6 +72,7 @@ interface SettingsFormState {
   location: string;
   skills: string;
   styles: string;
+  locations: string;
   working_hours_start: string;
   working_hours_end: string;
   working_days: string[];
@@ -147,6 +149,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     location: '',
     skills: '',
     styles: '',
+    locations: '',
     working_hours_start: '09:00',
     working_hours_end: '18:00',
     working_days: [],
@@ -252,6 +255,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         location: userResponse.data?.location || '',
         skills: (profileResponse.data.skills || []).join(', '),
         styles: (profileResponse.data.styles || []).join(', '),
+        locations: (profileResponse.data.locations || []).join(', '),
         working_hours_start: profileResponse.data.working_hours_start || '09:00',
         working_hours_end: profileResponse.data.working_hours_end || '18:00',
         working_days: profileResponse.data.working_days || [],
@@ -857,6 +861,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         visibility: settingsForm.visibility,
         skills: parseTags(settingsForm.skills),
         styles: parseTags(settingsForm.styles),
+        locations: parseTags(settingsForm.locations),
         working_hours_start: settingsForm.working_hours_start,
         working_hours_end: settingsForm.working_hours_end,
         working_days: settingsForm.working_days,
@@ -1059,6 +1064,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     const groupMeta = DataService.getRequestGroupMeta(request);
                     const memberNames = groupMeta?.recipients?.length ? (groupMemberNamesByRequest[String(request.id)] || []) : [];
                     const scheduleMeta = extractScheduleMeta(request.message, request.description);
+                    const locationMeta = extractLocationMeta(request.message, request.description);
+                    const notesText = stripRequestDisplayMeta(request.message || request.description || '');
                     const groupSummary = groupMeta?.recipients?.length
                       ? summarizeGroupRequestMembers(groupMeta.recipients, memberNames)
                       : null;
@@ -1102,6 +1109,16 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         {request.project_name && (
                           <p className="mt-2 text-sm text-gray-700">
                             <span className="font-semibold text-gray-900">Purpose:</span> {request.project_name}
+                          </p>
+                        )}
+                        {locationMeta && (
+                          <p className="mt-2 text-sm text-gray-700">
+                            <span className="font-semibold text-gray-900">Location:</span> {locationMeta}
+                          </p>
+                        )}
+                        {notesText && (
+                          <p className="mt-2 text-sm text-gray-700">
+                            <span className="font-semibold text-gray-900">Notes:</span> {notesText}
                           </p>
                         )}
                         {groupMeta?.recipients?.length && memberNames.length > 0 && (
@@ -1828,6 +1845,16 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Booking locations (comma separated)</label>
+                <input
+                  value={settingsForm.locations}
+                  onChange={(event) => setSettingsForm((current) => ({ ...current, locations: event.target.value }))}
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none focus:ring-2 focus:ring-gray-900"
+                  placeholder="e.g. Studio, Outdoor, Client's Location"
+                />
+                <p className="mt-1 text-xs text-gray-500">Clients booking you will pick from this list when choosing where the session happens.</p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
