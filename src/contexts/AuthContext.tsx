@@ -6,7 +6,16 @@ import type { Gender } from '../lib/database.types';
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'freelancer' | 'client',
+    gender: Gender,
+    avatarFile?: File | null,
+    country?: string,
+    city?: string
+  ) => Promise<AuthUser>;
   signIn: (email: string, password: string) => Promise<void>;
   requestPasswordReset: (email: string, redirectTo: string) => Promise<void>;
   signInWithOAuth: (provider: 'google' | 'facebook', redirectTo: string) => Promise<void>;
@@ -42,7 +51,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, role: 'freelancer' | 'client', gender: Gender) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    fullName: string,
+    role: 'freelancer' | 'client',
+    gender: Gender,
+    avatarFile?: File | null,
+    country?: string,
+    city?: string
+  ) => {
     if (!isSupabaseConfigured) {
       throw new Error('Supabase is not configured.');
     }
@@ -53,13 +71,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       fullName,
       role,
       gender,
+      avatarFile,
+      country,
+      city,
     });
 
-    if (error) {
-      throw error;
+    if (error || !newUser) {
+      throw error || new Error('Sign up failed.');
     }
 
     setUser(newUser);
+    return newUser;
   };
 
   const signIn = async (email: string, password: string) => {

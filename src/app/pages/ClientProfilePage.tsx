@@ -1,4 +1,4 @@
-import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, X } from 'lucide-react';
+import { Bookmark, Briefcase, Calendar, Camera, ChevronLeft, Edit, Heart, ImagePlus, MapPin, MessageCircle, Save, Share2, Star, Trash2, UserRound, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
@@ -14,6 +14,14 @@ import { geocodeAddress } from '../../lib/osmGeocoding';
 import { PRONOUN_OPTIONS, shouldDisplayPronouns } from '../../lib/pronouns';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { LeafletLocationPicker } from '../../components/common/LeafletLocationPicker';
+import type { Gender } from '../../lib/database.types';
+
+const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
+  { value: 'male', label: 'Male' },
+  { value: 'female', label: 'Female' },
+  { value: 'lgbtq_plus', label: 'LGBTQ+' },
+  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
+];
 
 interface ClientProfilePageProps {
   onBack: () => void;
@@ -44,6 +52,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
     bio: '',
     pronouns: '',
     pronounsCustom: '',
+    gender: '' as Gender | '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -93,6 +102,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
           bio: profileResponse.data?.bio || '',
           pronouns: storedPronouns ? (isFixedPronoun ? storedPronouns : 'Custom') : '',
           pronounsCustom: storedPronouns && !isFixedPronoun ? storedPronouns : '',
+          gender: (profileResponse.data?.gender as Gender | null) || '',
         });
 
         const followCountsResponse = await DataService.getFollowCounts(user.id);
@@ -527,6 +537,7 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
       location_place_id: resolvedPlaceId,
       bio: formValues.bio,
       pronouns: resolvedPronouns || null,
+      gender: formValues.gender || null,
       updated_at: new Date().toISOString(),
     } as any);
 
@@ -739,6 +750,12 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
                       <MapPin className="w-4 h-4 md:w-5 md:h-5" />
                       <span>{location}</span>
                     </div>
+                    {shouldDisplayPronouns(profile?.pronouns) && (
+                      <div className="flex items-center gap-2">
+                        <UserRound className="w-4 h-4 md:w-5 md:h-5" />
+                        <span>{profile.pronouns}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -807,6 +824,25 @@ export function ClientProfilePage({ onBack }: ClientProfilePageProps) {
               ) : (
                 <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
                   {shouldDisplayPronouns(profile?.pronouns) ? profile.pronouns : 'Not set'}
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Gender</label>
+              {isEditMode ? (
+                <select
+                  value={formValues.gender}
+                  onChange={(event) => setFormValues((current) => ({ ...current, gender: event.target.value as Gender }))}
+                  className="w-full px-4 py-3 bg-gray-50 rounded-lg text-gray-900 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="">Not set</option>
+                  {GENDER_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="px-4 py-3 bg-gray-50 rounded-lg text-gray-900">
+                  {GENDER_OPTIONS.find((option) => option.value === profile?.gender)?.label || 'Not set'}
                 </div>
               )}
             </div>

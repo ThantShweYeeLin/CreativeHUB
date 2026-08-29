@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bell,
   Bot,
+  ClipboardList,
   Globe,
   Lock,
   LogOut,
@@ -141,6 +142,11 @@ export function SettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -372,6 +378,25 @@ export function SettingsPage() {
     navigate('/login');
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText.trim().toLowerCase() !== (email || '').trim().toLowerCase()) {
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    setDeleteError(null);
+
+    const { error } = await authService.deleteAccount();
+
+    if (error) {
+      setDeleteError(error.message || 'Unable to delete account.');
+      setIsDeletingAccount(false);
+      return;
+    }
+
+    navigate('/signup');
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -416,13 +441,50 @@ export function SettingsPage() {
               <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Save Account</button>
               <button onClick={handleLogout} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Log out</button>
               <button
-                onClick={() => setErrorMessage('Self-service account deletion is not enabled yet. Use Contact Support to request deletion.')}
+                onClick={() => { setShowDeleteConfirm(true); setDeleteConfirmText(''); setDeleteError(null); }}
                 className="rounded-lg border border-red-300 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50"
               >
                 Delete Account
               </button>
             </div>
           </section>
+
+          {showDeleteConfirm && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                <h3 className="mb-2 text-lg font-bold text-gray-900">Delete your account?</h3>
+                <p className="mb-4 text-sm text-gray-600">
+                  This permanently deletes your account, profile, portfolio, and bookings. This can't be undone.
+                </p>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">
+                  Type your email ({email}) to confirm
+                </label>
+                <input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder={email}
+                  className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                />
+                {deleteError && <p className="mb-3 text-sm text-red-600">{deleteError}</p>}
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={isDeletingAccount}
+                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleDeleteAccount()}
+                    disabled={isDeletingAccount || deleteConfirmText.trim().toLowerCase() !== email.trim().toLowerCase()}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isDeletingAccount ? 'Deleting…' : 'Permanently Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
@@ -514,6 +576,25 @@ export function SettingsPage() {
 
                 <button onClick={handleSaveFreelancerSettings} className="rounded-lg bg-gray-900 px-4 py-2 font-semibold text-white hover:bg-black">Save Freelancer Settings</button>
               </div>
+            </section>
+          )}
+
+          {role === 'client' && (
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-2 text-gray-900">
+                <ClipboardList className="h-5 w-5" />
+                <h2 className="text-lg font-bold">Profile Setup</h2>
+              </div>
+              <p className="mb-4 text-sm text-gray-600">
+                Finish or update your client profile — client type, services you're interested in, budget, and what
+                matters most to you.
+              </p>
+              <button
+                onClick={() => navigate('/onboarding/client')}
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+              >
+                Complete your profile
+              </button>
             </section>
           )}
 

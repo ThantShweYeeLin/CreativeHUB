@@ -68,6 +68,19 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
     })).filter((item) => !!item.id);
   }, [favorites]);
 
+  // Grouped into "Saved Creatives" sections by category (freelancer_profiles.title)
+  // rather than one flat grid — makes it easy to find, say, all your saved
+  // photographers when assembling a team for a shoot.
+  const groupedCards = useMemo(() => {
+    const groups = new Map<string, typeof cards>();
+    for (const card of cards) {
+      const key = card.specialty || 'Other';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(card);
+    }
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [cards]);
+
   const removeFavorite = async (freelancerId: string) => {
     if (!user?.id) {
       return;
@@ -120,8 +133,15 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
         )}
 
         {!isLoading && cards.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {cards.map((freelancer) => (
+          <div className="space-y-10 md:space-y-12">
+            {groupedCards.map(([category, categoryCards]) => (
+              <section key={category}>
+                <div className="mb-4 flex items-baseline gap-2 md:mb-6">
+                  <h2 className="text-lg font-bold text-gray-900 md:text-xl">{category}</h2>
+                  <span className="text-sm text-gray-500">({categoryCards.length})</span>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+            {categoryCards.map((freelancer) => (
               <div
                 key={freelancer.id}
                 className="group relative bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-2xl transition-all duration-300"
@@ -182,6 +202,9 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                   </div>
                 </div>
               </div>
+            ))}
+                </div>
+              </section>
             ))}
           </div>
         ) : (

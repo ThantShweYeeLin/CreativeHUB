@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Briefcase, Heart, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, User, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
+import { computeTrustLevel } from '../../lib/trustLevel';
+import { TrustBadge } from '../../components/common/TrustBadge';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { shouldDisplayPronouns } from '../../lib/pronouns';
@@ -276,6 +278,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availableTimeSlots = useMemo(
     () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
     [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
+  );
+  const trust = useMemo(
+    () =>
+      computeTrustLevel({
+        rating,
+        totalReviews,
+        portfolioCount: Number(freelancerProfile?.portfolio_count || socialLinks.length || 0),
+        phoneVerified: Boolean(freelancerProfile?.phone_verified),
+        identityStatus: freelancerProfile?.identity_status || 'not_submitted',
+        profileCompletenessFields: {
+          hasBio: Boolean(freelancerProfile?.description),
+          hasAvatar: Boolean(profile?.avatar_url),
+          hasServices: Boolean(freelancerProfile?.title),
+          hasSkills: skills.length > 0,
+          hasPricing: Boolean(freelancerProfile?.pricing_type || freelancerProfile?.hourly_rate),
+          hasAvailability: (freelancerProfile?.working_days || []).length > 0,
+        },
+      }),
+    [rating, totalReviews, freelancerProfile, socialLinks, profile, skills]
   );
 
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
@@ -765,6 +786,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{profile?.email || 'Email unavailable'}</span>
                   </div>
+                  {shouldDisplayPronouns(pronouns) && (
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                      <span>{pronouns}</span>
+                    </div>
+                  )}
+                  {isBookableFreelancer && (
+                    <div>
+                      <TrustBadge trust={trust} />
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">

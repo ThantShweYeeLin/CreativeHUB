@@ -90,8 +90,32 @@ export default function App() {
         </>
       )}
 
+      {/* Both roles must finish their onboarding flow before reaching the
+          rest of the app — any other path bounces back to it. */}
+      {isAuthenticated && user && !user.onboardingCompleted && (
+        <>
+          <Route
+            path="/onboarding/client"
+            element={
+              <ProtectedRoute>
+                <ClientOnboardingPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/onboarding/freelancer"
+            element={
+              <ProtectedRoute>
+                <BecomeFreelancerPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to={`/onboarding/${user.role}`} replace />} />
+        </>
+      )}
+
       {/* Protected Routes */}
-      {isAuthenticated && (
+      {isAuthenticated && user?.onboardingCompleted && (
         <>
           {/* Explore pages */}
           <Route
@@ -241,7 +265,7 @@ export default function App() {
             path="/onboarding/client"
             element={
               <ProtectedRoute>
-                <ClientOnboardingPage />
+                <ClientOnboardingPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />

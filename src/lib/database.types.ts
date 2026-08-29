@@ -40,6 +40,11 @@ export interface Database {
           location_place_id: string | null;
           rating: number;
           total_reviews: number;
+          client_type: string[] | null;
+          client_interests: string[] | null;
+          client_budget_preference: string | null;
+          client_preferences: string[] | null;
+          onboarding_completed: boolean;
           created_at: string;
           updated_at: string;
         }>;

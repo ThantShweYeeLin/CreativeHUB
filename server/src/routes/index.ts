@@ -4,6 +4,7 @@ import freelancersRouter from './freelancers.js';
 import bookingsRouter from './bookings.js';
 import feedRouter from './feed.js';
 import aiMatcherRouter from './aiMatcher.js';
+import accountRouter from './account.js';
 
 const router = Router();
 
@@ -12,5 +13,6 @@ router.use('/freelancers', freelancersRouter);
 router.use('/bookings', bookingsRouter);
 router.use('/feed', feedRouter);
 router.use('/ai-matcher', aiMatcherRouter);
+router.use('/account', accountRouter);
 
 export default router;

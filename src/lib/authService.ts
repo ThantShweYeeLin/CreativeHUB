@@ -1,6 +1,7 @@
 import { hasSupabaseConfig, supabase } from './supabase';
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { Gender } from './database.types';
+import { geocodeAddress } from './osmGeocoding';
 
 export interface SignUpData {
   email: string;
@@ -8,6 +9,15 @@ export interface SignUpData {
   fullName: string;
   role: 'freelancer' | 'client';
   gender: Gender;
+  // Optional profile extras collected on the same sign-up screen. Resolved
+  // and written as part of the same upsert below (before this method
+  // returns) rather than as separate calls afterwards — the mandatory
+  // onboarding gate redirects the instant the caller's auth state flips to
+  // signed-in, which races ahead of any writes done after signUp() returns,
+  // so anything collected at sign-up has to land in this one atomic step.
+  avatarFile?: File | null;
+  country?: string;
+  city?: string;
 }
 
 export interface SignInData {
@@ -22,6 +32,8 @@ export interface AuthUser {
   avatar_url: string | null;
   role: 'freelancer' | 'client';
   gender: Gender | null;
+  emailConfirmedAt: string | null;
+  onboardingCompleted: boolean;
 }
 
 class AuthService {
@@ -124,13 +136,54 @@ class AuthService {
         return { user: null, error: new Error('Please confirm your email before signing in to complete registration.') };
       }
 
-      // Create user profile
-      const { error: profileError } = await supabase.from('users').insert({
+      // Resolve avatar upload + location geocoding now, before the profile
+      // row is written, so both land in the same upsert below.
+      let avatarUrl: string | null = null;
+      if (data.avatarFile) {
+        const fileExt = data.avatarFile.name.split('.').pop() || 'jpg';
+        const filePath = `${authData.user.id}/avatar-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from('avatars')
+          .upload(filePath, data.avatarFile, { contentType: data.avatarFile.type, upsert: true });
+
+        if (!uploadError) {
+          avatarUrl = supabase.storage.from('avatars').getPublicUrl(filePath).data.publicUrl;
+        }
+      }
+
+      let locationText: string | null = null;
+      let locationLatitude: number | null = null;
+      let locationLongitude: number | null = null;
+      let locationPlaceId: string | null = null;
+      const combinedLocation = [data.city, data.country].filter(Boolean).join(', ');
+      if (combinedLocation) {
+        const resolved = await geocodeAddress(combinedLocation).catch(() => null);
+        if (resolved) {
+          locationText = combinedLocation;
+          locationLatitude = resolved.latitude;
+          locationLongitude = resolved.longitude;
+          locationPlaceId = resolved.placeId;
+        }
+      }
+
+      // Create (or, if a database trigger already created a row for this
+      // auth user, overwrite) the user profile with the details chosen on
+      // the sign-up form.
+      const { error: profileError } = await supabase.from('users').upsert({
         id: authData.user.id,
         email: data.email,
         full_name: data.fullName,
         role: data.role,
         gender: data.gender,
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+        ...(locationText
+          ? {
+              location: locationText,
+              location_latitude: locationLatitude,
+              location_longitude: locationLongitude,
+              location_place_id: locationPlaceId,
+            }
+          : {}),
       });
 
       if (profileError) {
@@ -142,9 +195,11 @@ class AuthService {
           id: authData.user.id,
           email: authData.user.email,
           fullName: data.fullName,
-          avatar_url: null,
+          avatar_url: avatarUrl,
           role: data.role,
           gender: data.gender,
+          emailConfirmedAt: session.user.email_confirmed_at ?? null,
+          onboardingCompleted: false,
         },
         error: null,
       };
@@ -186,6 +241,8 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          emailConfirmedAt: authData.user.email_confirmed_at ?? null,
+          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
         error: null,
       };
@@ -281,6 +338,8 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
+          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
         error: null,
       };
@@ -305,6 +364,39 @@ class AuthService {
     return { data, error };
   }
 
+  // Permanently deletes the signed-in user's account. The anon key can't
+  // delete an auth.users row itself, so this calls the backend's
+  // service-role-backed endpoint with the current session's access token —
+  // the server re-derives the caller's own id from that token rather than
+  // trusting a client-supplied id (see server/src/routes/account.ts).
+  async deleteAccount(): Promise<{ error: Error | null }> {
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        return { error: new Error((sessionError as any).message || 'Unable to verify session.') };
+      }
+      if (!data.session?.access_token) {
+        return { error: new Error('You need to be signed in to delete your account.') };
+      }
+
+      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/account`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        return { error: new Error(body?.message || 'Unable to delete account.') };
+      }
+
+      await supabase.auth.signOut();
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unable to delete account.') };
+    }
+  }
+
   async updatePassword(password: string) {
     const { data, error } = await supabase.auth.updateUser({ password });
     return { data, error };
@@ -327,6 +419,8 @@ class AuthService {
             avatar_url: userProfile.avatar_url,
             role: userProfile.role,
             gender: userProfile.gender ?? null,
+            emailConfirmedAt: session.user.email_confirmed_at ?? null,
+            onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
           });
         }
       } else {

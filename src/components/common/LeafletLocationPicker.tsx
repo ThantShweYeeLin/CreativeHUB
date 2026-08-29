@@ -3,7 +3,7 @@ import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
 import { LatLngExpression, divIcon } from 'leaflet';
 import { geocodeAddress, reverseGeocode } from '../../lib/osmGeocoding';
 
-interface LocationPoint {
+export interface LocationPoint {
   latitude: number;
   longitude: number;
   formattedAddress: string;
