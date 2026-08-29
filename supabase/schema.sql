@@ -38,6 +38,7 @@ create table public.freelancer_profiles (
   hourly_rate numeric(10,2),
   skills text[] default array[]::text[],
   styles text[] default array[]::text[],
+  locations text[] default array[]::text[],
   experience_years int,
   portfolio_count int default 0,
   is_available boolean default true,

@@ -8,6 +8,7 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { extractLocationMeta } from '../../lib/requestLocation';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 
@@ -171,6 +172,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           max: Number(request.budget || 0),
         },
         scheduleMeta: extractScheduleMeta(request.message, request.description),
+        locationMeta: extractLocationMeta(request.message, request.description),
+        notesText: stripRequestDisplayMeta(request.message || request.description || ''),
         id: request.id,
         groupMeta: request.group_meta || null,
         acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
@@ -405,6 +408,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           <span className="font-semibold text-gray-900">Schedule:</span> {formatScheduleMeta(request.scheduleMeta)}
                         </div>
                       )}
+                      {request.locationMeta && (
+                        <div>
+                          <span className="font-semibold text-gray-900">Location:</span> {request.locationMeta}
+                        </div>
+                      )}
                       <div>
                         <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
@@ -414,6 +422,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         </div>
                       )}
                     </div>
+
+                    {request.notesText && (
+                      <p className="mb-4 text-xs md:text-sm text-gray-600">
+                        <span className="font-semibold text-gray-900">Notes:</span> {request.notesText}
+                      </p>
+                    )}
 
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">

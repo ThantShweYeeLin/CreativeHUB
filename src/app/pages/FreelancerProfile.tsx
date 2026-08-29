@@ -21,6 +21,7 @@ import {
   type BudgetMeta,
 } from '../../lib/requestBudget';
 import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
+import { appendLocationMeta } from '../../lib/requestLocation';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -31,6 +32,7 @@ interface FreelancerProfileProps {
 
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 const OTHER_PURPOSE_VALUE = '__other__';
+const OTHER_LOCATION_VALUE = '__other__';
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
@@ -71,6 +73,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [formData, setFormData] = useState({
     projectName: '',
     customPurpose: '',
+    location: '',
+    customLocation: '',
+    notes: '',
     offerAmount: '',
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     scheduleDate: '',
@@ -291,6 +296,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const bookingLocations = freelancerProfile?.locations || [];
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const todayDateString = new Date().toISOString().slice(0, 10);
@@ -400,6 +406,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
+    const resolvedLocation = formData.location === OTHER_LOCATION_VALUE
+      ? formData.customLocation.trim()
+      : formData.location;
+
+    if (!resolvedLocation) {
+      setError('Enter or select a location for this booking.');
+      return;
+    }
+
     const offerAmount = Number(formData.offerAmount);
 
     if (!Number.isFinite(offerAmount) || offerAmount <= 0) {
@@ -423,9 +438,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       max: offerAmount,
     };
 
-    const requestMessage = appendScheduleMeta(
-      appendBudgetMeta('', budgetMeta),
-      { date: formData.scheduleDate, time: formData.scheduleTime }
+    const requestMessage = appendLocationMeta(
+      appendScheduleMeta(
+        appendBudgetMeta(formData.notes, budgetMeta),
+        { date: formData.scheduleDate, time: formData.scheduleTime }
+      ),
+      resolvedLocation
     );
 
     setIsSubmittingRequest(true);
@@ -463,6 +481,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       ...current,
       projectName: '',
       customPurpose: '',
+      location: '',
+      customLocation: '',
+      notes: '',
       offerAmount: '',
       scheduleDate: '',
       scheduleTime: '',
@@ -1305,6 +1326,44 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     placeholder="Type the purpose of this booking"
                   />
                 )}
+              </div>
+
+              <div>
+                <label htmlFor="location" className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
+                <select
+                  id="location"
+                  required
+                  value={formData.location}
+                  onChange={(event) => setFormData((current) => ({ ...current, location: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="" disabled>Select a location</option>
+                  {bookingLocations.map((option: string) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                  <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
+                </select>
+                {formData.location === OTHER_LOCATION_VALUE && (
+                  <input
+                    required
+                    value={formData.customLocation}
+                    onChange={(event) => setFormData((current) => ({ ...current, customLocation: event.target.value }))}
+                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Type the location for this booking"
+                  />
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="notes" className="mb-2 block text-sm font-semibold text-gray-900">Notes <span className="font-normal text-gray-500">(optional)</span></label>
+                <textarea
+                  id="notes"
+                  rows={4}
+                  value={formData.notes}
+                  onChange={(event) => setFormData((current) => ({ ...current, notes: event.target.value }))}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  placeholder="Anything else the freelancer should know?"
+                />
               </div>
 
               <div>
