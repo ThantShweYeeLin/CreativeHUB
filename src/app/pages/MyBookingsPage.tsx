@@ -51,19 +51,28 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
       setIsLoading(true);
       setError(null);
 
-      const response = user.role === 'freelancer'
-        ? await DataService.getFreelancerBookings(user.id)
-        : await DataService.getClientBookings(user.id);
+      // A user's role is just their primary account type - it doesn't stop a
+      // freelancer from booking someone else (acting as the client) or a
+      // client from being booked (acting as the freelancer) on any given
+      // transaction. So every booking where this user is on either side has
+      // to be fetched and shown here, not just the side matching their role.
+      const [clientResponse, freelancerResponse] = await Promise.all([
+        DataService.getClientBookings(user.id),
+        DataService.getFreelancerBookings(user.id),
+      ]);
 
       if (!isMounted) {
         return;
       }
 
-      if (response.error) {
-        setError((response.error as any).message || 'Unable to load bookings.');
+      if (clientResponse.error && freelancerResponse.error) {
+        setError((clientResponse.error as any).message || (freelancerResponse.error as any).message || 'Unable to load bookings.');
         setBookings([]);
       } else {
-        setBookings(response.data || []);
+        const merged = [...(clientResponse.data || []), ...(freelancerResponse.data || [])];
+        const uniqueById = Array.from(new Map(merged.map((booking: any) => [booking.id, booking])).values());
+        uniqueById.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setBookings(uniqueById);
       }
 
       setIsLoading(false);
@@ -78,7 +87,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
 
   const normalizedBookings = useMemo(() => {
     return bookings.map((booking) => {
-      const counterparty = user?.role === 'freelancer' ? booking.client : booking.freelancer;
+      const counterparty = String(booking.client_id) === String(user?.id) ? booking.freelancer : booking.client;
       const status = formatStatus(booking.status);
 
       return {
@@ -97,7 +106,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
         deposit: Math.round(Number(booking.budget || 0) * 0.3),
       };
     });
-  }, [bookings, user?.role]);
+  }, [bookings, user?.id]);
 
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const formatMoney = (amount: number) => {
