@@ -175,6 +175,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const normalizedRequests = useMemo(
     () =>
       requests.map((request) => ({
+        raw: request,
         budgetMeta: extractBudgetMeta(request.message, request.description) || {
           currency: 'THB',
           min: Number(request.budget || 0),
@@ -337,8 +338,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
   const handleAcceptCounter = async (normalizedRequest: any) => {
     setError(null);
-    const rawRequest = requests.find((item) => item.id === normalizedRequest.id);
-    if (!rawRequest) return;
+    const rawRequest = normalizedRequest.raw || requests.find((item) => item.id === normalizedRequest.id);
+    if (!rawRequest) {
+      setError('Unable to find this request\'s details. Please refresh the page and try again.');
+      return;
+    }
 
     const counterPrice = Number(normalizedRequest.counterPrice);
     const { error: acceptError } = await acceptRequestAndCreateBooking(rawRequest, counterPrice);

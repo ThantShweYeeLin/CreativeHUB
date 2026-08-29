@@ -7,6 +7,8 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { getBookingEscrowState, formatCountdown, MAX_DISPUTE_ROUNDS, type EscrowState } from '../../lib/bookingEscrow';
+import { extractScheduleMeta, formatTimeLabel } from '../../lib/requestSchedule';
+import { extractLocationMeta } from '../../lib/requestLocation';
 
 interface BookingTrackingPageProps {
   onBack: () => void;
@@ -285,6 +287,18 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
 
     const servicePrice = Number(booking.budget || 0);
     const deposit = Math.round(servicePrice * 0.3);
+    // Prefer the real start_date/start_time columns (populated going forward);
+    // fall back to the SCHEDULE_META tag in description for older bookings.
+    const scheduleMeta = booking.start_date
+      ? { date: booking.start_date, time: booking.start_time || '00:00' }
+      : extractScheduleMeta(booking.description);
+    const locationMeta = extractLocationMeta(booking.description);
+    const scheduleDateLabel = scheduleMeta
+      ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Schedule pending';
+    const scheduleTimeLabel = scheduleMeta && (booking.start_time || !booking.start_date)
+      ? formatTimeLabel(scheduleMeta.time)
+      : 'Time to be confirmed';
 
     return {
       bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
@@ -298,9 +312,9 @@ export function BookingTrackingPage({ onBack }: BookingTrackingPageProps) {
       },
       service: {
         title: booking.project_name,
-        date: booking.start_date || 'Schedule pending',
-        time: booking.end_date ? `Ends ${booking.end_date}` : 'Time to be confirmed',
-        location: booking.freelancer?.location || booking.client?.location || 'Location to be confirmed',
+        date: scheduleDateLabel,
+        time: scheduleTimeLabel,
+        location: locationMeta || booking.freelancer?.location || booking.client?.location || 'Location to be confirmed',
       },
       pricing: {
         servicePrice,

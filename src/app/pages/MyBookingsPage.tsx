@@ -7,6 +7,8 @@ import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../.
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { getBookingEscrowState } from '../../lib/bookingEscrow';
+import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { extractLocationMeta } from '../../lib/requestLocation';
 
 interface MyBookingsPageProps {
   onBack: () => void;
@@ -52,19 +54,28 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
       setIsLoading(true);
       setError(null);
 
-      const response = user.role === 'freelancer'
-        ? await DataService.getFreelancerBookings(user.id)
-        : await DataService.getClientBookings(user.id);
+      // A user's role is just their primary account type - it doesn't stop a
+      // freelancer from booking someone else (acting as the client) or a
+      // client from being booked (acting as the freelancer) on any given
+      // transaction. So every booking where this user is on either side has
+      // to be fetched and shown here, not just the side matching their role.
+      const [clientResponse, freelancerResponse] = await Promise.all([
+        DataService.getClientBookings(user.id),
+        DataService.getFreelancerBookings(user.id),
+      ]);
 
       if (!isMounted) {
         return;
       }
 
-      if (response.error) {
-        setError((response.error as any).message || 'Unable to load bookings.');
+      if (clientResponse.error && freelancerResponse.error) {
+        setError((clientResponse.error as any).message || (freelancerResponse.error as any).message || 'Unable to load bookings.');
         setBookings([]);
       } else {
-        setBookings(response.data || []);
+        const merged = [...(clientResponse.data || []), ...(freelancerResponse.data || [])];
+        const uniqueById = Array.from(new Map(merged.map((booking: any) => [booking.id, booking])).values());
+        uniqueById.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        setBookings(uniqueById);
       }
 
       setIsLoading(false);
@@ -81,7 +92,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
     return bookings
       .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
       .map((booking) => {
-        const counterparty = user?.role === 'freelancer' ? booking.client : booking.freelancer;
+        const counterparty = String(booking.client_id) === String(user?.id) ? booking.freelancer : booking.client;
         const escrowState = getBookingEscrowState(booking);
         const status =
           escrowState === 'disputed'
@@ -90,6 +101,13 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             ? { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' }
             : formatStatus(booking.status);
 
+        // Prefer the real start_date/start_time columns (populated going forward);
+        // fall back to the SCHEDULE_META tag in description for older bookings.
+        const scheduleMeta = booking.start_date
+          ? { date: booking.start_date, time: booking.start_time || '00:00' }
+          : extractScheduleMeta(booking.description);
+        const locationMeta = extractLocationMeta(booking.description);
+
         return {
           id: booking.id,
           bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
@@ -97,16 +115,20 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
           specialty: booking.project_name,
           image: counterparty?.avatar_url || fallbackProfileImage,
           gender: counterparty?.gender || null,
-          date: booking.start_date || 'Schedule pending',
-          endDate: booking.end_date || null,
-          location: counterparty?.location || 'Location to be confirmed',
+          date: scheduleMeta
+            ? (booking.start_date && !booking.start_time
+                ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+                : formatScheduleMeta(scheduleMeta))
+            : 'Schedule pending',
+          endDate: null,
+          location: locationMeta || counterparty?.location || 'Location to be confirmed',
           statusLabel: status.label,
           statusColor: status.color,
           totalAmount: Number(booking.budget || 0),
           deposit: Math.round(Number(booking.budget || 0) * 0.3),
         };
       });
-  }, [bookings, user?.role]);
+  }, [bookings, user?.id]);
 
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const formatMoney = (amount: number) => {

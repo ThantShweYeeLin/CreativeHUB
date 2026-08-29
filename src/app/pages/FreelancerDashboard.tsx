@@ -412,11 +412,15 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
     if (status === 'accepted') {
       const request = requests.find((item) => item.id === requestId);
-      if (request) {
-        const { error: acceptError } = await acceptRequestAndCreateBooking(request);
-        if (acceptError) {
-          setError(acceptError.message);
-        }
+      if (!request) {
+        setError('Request accepted, but could not find its details to create a booking. Please refresh and check My Bookings.');
+        return;
+      }
+
+      const { error: acceptError } = await acceptRequestAndCreateBooking(request);
+      if (acceptError) {
+        setError(acceptError.message);
+        return;
       }
     }
 
