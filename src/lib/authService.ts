@@ -32,6 +32,7 @@ export interface AuthUser {
   avatar_url: string | null;
   role: 'freelancer' | 'client';
   gender: Gender | null;
+  pronouns: string | null;
   emailConfirmedAt: string | null;
   onboardingCompleted: boolean;
 }
@@ -198,6 +199,7 @@ class AuthService {
           avatar_url: avatarUrl,
           role: data.role,
           gender: data.gender,
+          pronouns: null,
           emailConfirmedAt: session.user.email_confirmed_at ?? null,
           onboardingCompleted: false,
         },
@@ -241,6 +243,7 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: authData.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
@@ -338,6 +341,7 @@ class AuthService {
           avatar_url: userProfile.avatar_url,
           role: userProfile.role,
           gender: userProfile.gender ?? null,
+          pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
         },
@@ -419,6 +423,7 @@ class AuthService {
             avatar_url: userProfile.avatar_url,
             role: userProfile.role,
             gender: userProfile.gender ?? null,
+            pronouns: userProfile.pronouns ?? null,
             emailConfirmedAt: session.user.email_confirmed_at ?? null,
             onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
           });
