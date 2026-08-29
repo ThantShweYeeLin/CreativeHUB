@@ -39,6 +39,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
+  const [services, setServices] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
@@ -182,6 +184,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       setProfile(userResponse.data);
       setFreelancerProfile(freelancerResponse.data || null);
+
+      if (freelancerResponse.data?.id) {
+        const servicesResponse = await DataService.getFreelancerServices(freelancerResponse.data.id);
+        if (isMounted) {
+          setServices(servicesResponse.data || []);
+        }
+      }
+
+      const reviewsTargetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
+      if (reviewsTargetId) {
+        const reviewsResponse = await DataService.getFreelancerReviews(reviewsTargetId);
+        if (isMounted) {
+          setReviews(reviewsResponse.data || []);
+        }
+      }
 
       const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
 
@@ -888,6 +905,92 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
           </aside>
         </section>
+        )}
+
+        {isBookableFreelancer && services.length > 0 && (
+          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900">Services</h2>
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              {services.map((service) => (
+                <div key={service.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-bold text-gray-900">{service.name}</h3>
+                    <span className="flex-shrink-0 whitespace-nowrap rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                      {service.pricing_type === 'custom_quote'
+                        ? 'Custom quote'
+                        : service.starting_price != null
+                        ? `${service.pricing_type === 'fixed' ? '' : 'From '}${formatCurrencyAmount(convertAmount(Number(service.starting_price), 'THB', viewerCurrency), viewerCurrency)}`
+                        : 'Price on request'}
+                    </span>
+                  </div>
+                  {service.description && <p className="mt-2 text-sm text-gray-700">{service.description}</p>}
+                  {service.duration && <p className="mt-2 text-xs text-gray-500"><span className="font-semibold text-gray-700">Duration:</span> {service.duration}</p>}
+                  {service.included && <p className="mt-1 text-xs text-gray-500"><span className="font-semibold text-gray-700">Included:</span> {service.included}</p>}
+                  {Array.isArray(service.extras) && service.extras.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {service.extras.map((extra: any, index: number) => (
+                        <span key={index} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
+                          {extra.label} +{formatCurrencyAmount(convertAmount(Number(extra.price || 0), 'THB', viewerCurrency), viewerCurrency)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
+          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
+            <div className="mt-4 space-y-3 text-sm text-gray-700">
+              {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
+              {(freelancerProfile?.limitation_days || []).length > 0 && (
+                <p>
+                  <span className="font-semibold text-gray-900">Doesn't work on:</span> {(freelancerProfile.limitation_days as string[]).join(', ')}
+                </p>
+              )}
+              {freelancerProfile?.limitation_note && <p>{freelancerProfile.limitation_note}</p>}
+            </div>
+          </section>
+        )}
+
+        {isBookableFreelancer && reviews.length > 0 && (
+          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+            <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
+            <div className="mt-5 space-y-4">
+              {reviews.map((review) => (
+                <div key={review.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        src={review.reviewer?.avatar_url || avatarUrl}
+                        alt={review.reviewer?.full_name || 'Client'}
+                        gender={review.reviewer?.gender}
+                        sizeClassName="w-9 h-9"
+                      />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{review.reviewer?.full_name || 'Client'}</p>
+                        <p className="text-xs text-gray-500">{new Date(review.created_at).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      {Number(review.rating).toFixed(1)}
+                    </div>
+                  </div>
+                  {review.comment && <p className="mt-3 text-sm text-gray-700">{review.comment}</p>}
+                  {review.reply && (
+                    <div className="mt-3 rounded-xl bg-white p-4 ring-1 ring-gray-200">
+                      <p className="text-xs font-semibold text-gray-900">Response from {profile?.full_name || 'the freelancer'}</p>
+                      <p className="mt-1 text-sm text-gray-700">{review.reply}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         {profilePosts.length > 0 && (
