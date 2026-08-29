@@ -15,7 +15,7 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     project_name: request.project_name,
     description: stripBudgetMeta(request.description || request.message || 'Auto-created from accepted request.'),
     budget,
-    status: 'pending',
+    status: 'confirmed',
     payment_status: 'unpaid',
     deliverables: `Auto-created from request ${request.id}`,
   } as any);
