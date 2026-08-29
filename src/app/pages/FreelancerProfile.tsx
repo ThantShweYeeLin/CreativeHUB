@@ -22,6 +22,8 @@ import {
 } from '../../lib/requestBudget';
 import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
+import { isDateBlocked, isFreelancerFreeAt, isTimeSlotTaken } from '../../lib/availability';
+import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -43,6 +45,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [services, setServices] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
+  const [freelancerBlockedDates, setFreelancerBlockedDates] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
@@ -195,17 +199,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setFreelancerProfile(freelancerResponse.data || null);
 
       if (freelancerResponse.data?.id) {
-        const servicesResponse = await DataService.getFreelancerServices(freelancerResponse.data.id);
+        const [servicesResponse, blockedDatesResponse] = await Promise.all([
+          DataService.getFreelancerServices(freelancerResponse.data.id),
+          DataService.getFreelancerBlockedDates(freelancerResponse.data.id),
+        ]);
         if (isMounted) {
           setServices(servicesResponse.data || []);
+          setFreelancerBlockedDates(blockedDatesResponse.data || []);
         }
       }
 
       const reviewsTargetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
       if (reviewsTargetId) {
-        const reviewsResponse = await DataService.getFreelancerReviews(reviewsTargetId);
+        const [reviewsResponse, bookingsResponse] = await Promise.all([
+          DataService.getFreelancerReviews(reviewsTargetId),
+          DataService.getFreelancerBookings(reviewsTargetId),
+        ]);
         if (isMounted) {
           setReviews(reviewsResponse.data || []);
+          setFreelancerBookings(bookingsResponse.data || []);
         }
       }
 
@@ -300,9 +312,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const todayDateString = new Date().toISOString().slice(0, 10);
-  const availableTimeSlots = useMemo(
+  const allTimeSlots = useMemo(
     () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
     [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
+  );
+  const isSelectedDateBlocked = formData.scheduleDate ? isDateBlocked(freelancerBlockedDates, formData.scheduleDate) : false;
+  const availableTimeSlots = useMemo(
+    () =>
+      allTimeSlots.map((slot) => ({
+        value: slot,
+        taken: formData.scheduleDate ? isTimeSlotTaken(freelancerBookings, formData.scheduleDate, slot) : false,
+      })),
+    [allTimeSlots, freelancerBookings, formData.scheduleDate]
   );
   const trust = useMemo(
     () =>
@@ -429,6 +450,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     if (!formData.scheduleDate || !formData.scheduleTime) {
       setError('Choose a date and time for this booking.');
+      return;
+    }
+
+    if (!isFreelancerFreeAt(freelancerBookings, freelancerBlockedDates, formData.scheduleDate, formData.scheduleTime)) {
+      setError('This freelancer is already occupied at that date and time. Please choose a different slot.');
       return;
     }
 
@@ -974,6 +1000,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </section>
         )}
 
+        {isBookableFreelancer && (
+          <section className="mt-8">
+            <AvailabilityCalendar bookings={freelancerBookings} blockedDates={freelancerBlockedDates} />
+          </section>
+        )}
+
         {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
           <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
             <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
@@ -1382,21 +1414,31 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <div>
                     <select
                       required
-                      disabled={!formData.scheduleDate}
+                      disabled={!formData.scheduleDate || isSelectedDateBlocked}
                       value={formData.scheduleTime}
                       onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value }))}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
                     >
-                      <option value="" disabled>{formData.scheduleDate ? 'Select a time' : 'Choose a date first'}</option>
+                      <option value="" disabled>
+                        {!formData.scheduleDate ? 'Choose a date first' : isSelectedDateBlocked ? 'Not available this day' : 'Select a time'}
+                      </option>
                       {availableTimeSlots.map((slot) => (
-                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                        <option key={slot.value} value={slot.value} disabled={slot.taken}>
+                          {formatTimeLabel(slot.value)}{slot.taken ? ' — Already booked' : ''}
+                        </option>
                       ))}
                     </select>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-gray-600">
-                  Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours.
-                </p>
+                {isSelectedDateBlocked ? (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    This freelancer isn't available on this date. Please choose a different day.
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-gray-600">
+                    Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours. Times already booked are grayed out.
+                  </p>
+                )}
               </div>
 
               <div>

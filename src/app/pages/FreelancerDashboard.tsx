@@ -561,6 +561,23 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setSuccess('Date blocked.');
   };
 
+  const handleCalendarBlockDate = async (date: string, reason: string) => {
+    if (!freelancerProfile?.id) return;
+
+    setError(null);
+    setIsSavingBlockedDate(true);
+    const response = await DataService.addBlockedDate(freelancerProfile.id, date, reason.trim() || null);
+    setIsSavingBlockedDate(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to block that date.');
+      return;
+    }
+
+    setBlockedDates((current) => [...current, response.data].sort((a, b) => a.blocked_date.localeCompare(b.blocked_date)));
+    setSuccess('Date blocked.');
+  };
+
   const handleRemoveBlockedDate = async (id: string) => {
     setError(null);
     const response = await DataService.removeBlockedDate(id);
@@ -1309,7 +1326,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             )}
           </div>
         ) : section === 'calendar' ? (
-          <CalendarView bookings={bookings} blockedDates={blockedDates} />
+          <CalendarView
+            bookings={bookings}
+            blockedDates={blockedDates}
+            onBlockDate={handleCalendarBlockDate}
+            onUnblockDate={handleRemoveBlockedDate}
+            isSavingBlockedDate={isSavingBlockedDate}
+          />
         ) : section === 'analytics' ? (
           <div className="space-y-6 md:space-y-8">
             <div>
