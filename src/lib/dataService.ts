@@ -958,12 +958,15 @@ export class DataService {
       evidence_photos: input.photoPaths,
     });
 
+    const freelancerResponse = await this.getUser((data as any).freelancer_id);
+    const freelancerName = freelancerResponse.data?.full_name || 'The freelancer';
+
     await this.notifyEvent({
       userId: (data as any).client_id,
       actorId: (data as any).freelancer_id,
       type: 'booking_completion_submitted',
       title: 'Work marked complete',
-      message: 'The freelancer submitted evidence that the work is complete. You have 7 days to confirm or report a problem.',
+      message: `${freelancerName} submitted evidence that the work is complete. You have 7 days to confirm or report a problem.`,
       relatedId: bookingId,
     });
 
@@ -1209,19 +1212,28 @@ export class DataService {
       }
 
       if (nextPaymentStatus && nextPaymentStatus !== previousPaymentStatus) {
+        const projectName = String((data as any).project_name || 'booking');
+
         if (clientId) {
+          const freelancerResponse = freelancerId ? await this.getUser(freelancerId) : { data: null };
+          const freelancerName = freelancerResponse.data?.full_name || 'the freelancer';
+          const PAYMENT_STATUS_ACTION_LABEL: Record<string, string> = {
+            deposit_paid: 'is secured',
+            paid: 'is paid',
+            released: 'is paid',
+            refunded: 'was refunded',
+          };
+          const actionLabel = PAYMENT_STATUS_ACTION_LABEL[nextPaymentStatus] || `is now ${nextPaymentStatus}`;
           await this.notifyEvent({
             userId: clientId,
             actorId: freelancerId || null,
             type: 'payment_update',
             title: 'Payment/deposit update',
-            message: `Payment status is now ${nextPaymentStatus}.`,
+            message: `Deposit for ${projectName} with ${freelancerName} ${actionLabel}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
         }
-
-        const projectName = String((data as any).project_name || 'booking');
 
         if (freelancerId && nextPaymentStatus === 'deposit_paid') {
           const clientResponse = clientId ? await this.getUser(clientId) : { data: null };
