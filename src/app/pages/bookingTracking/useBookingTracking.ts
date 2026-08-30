@@ -4,8 +4,9 @@ import { DataService } from '../../../lib/dataService';
 import { getBookingEscrowState, type EscrowState } from '../../../lib/bookingEscrow';
 import { extractScheduleMeta, formatTimeLabel } from '../../../lib/requestSchedule';
 import { extractLocationMeta } from '../../../lib/requestLocation';
+import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
 
-export const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+export const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function useBookingTracking() {
   const { id } = useParams();

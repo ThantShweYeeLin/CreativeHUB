@@ -3,13 +3,14 @@ import { ChevronLeft, Heart, MapPin, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface FavoritesPageProps {
   onBack: () => void;
   onViewProfile: (freelancerId: string) => void;
 }
 
-const fallbackProfileImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=400';
+const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
 export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
   const { user } = useAuth();
