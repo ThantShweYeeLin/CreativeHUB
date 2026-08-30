@@ -493,7 +493,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               <img
                 src={logoImage}
                 alt="CreativeHUB"
-                className="h-12 md:h-14 w-auto object-contain"
+                className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover"
               />
             </button>
 

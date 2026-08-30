@@ -179,7 +179,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: 'radial-gradient(circle at 70% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 20% 80%, #ffffff 0%, transparent 40%)' }}
         />
-        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-auto object-contain" />
+        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-14 rounded-full object-cover" />
         <div>
           <h1 className="text-5xl font-bold text-white leading-tight mb-6">
             Start your<br />creative<br />journey.
@@ -220,7 +220,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
       {/* Right panel - form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12 overflow-y-auto">
         <div className="lg:hidden mb-10">
-          <img src={logoImage} alt="CreativeHUB AI" className="h-12 w-auto object-contain" />
+          <img src={logoImage} alt="CreativeHUB AI" className="h-12 w-12 rounded-full object-cover" />
         </div>
 
         <div className={`w-full mx-auto lg:mx-0 ${step === 2 ? 'max-w-md' : 'max-w-sm'}`}>

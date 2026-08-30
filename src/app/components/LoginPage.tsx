@@ -79,7 +79,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 80% 20%, #ffffff 0%, transparent 40%)' }}
         />
-        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-auto object-contain" />
+        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-14 rounded-full object-cover" />
         <div>
           <h1 className="text-5xl font-bold text-white leading-tight mb-6">
             Connect with<br />top creative<br />talent.
@@ -114,7 +114,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">
         {/* Mobile logo */}
         <div className="lg:hidden mb-10">
-          <img src={logoImage} alt="CreativeHUB AI" className="h-12 w-auto object-contain" />
+          <img src={logoImage} alt="CreativeHUB AI" className="h-12 w-12 rounded-full object-cover" />
         </div>
 
         <div className="max-w-sm w-full mx-auto lg:mx-0">

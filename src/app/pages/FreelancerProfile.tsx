@@ -765,7 +765,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                 <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-700" />
               </button>
-              <img src={logoImage} alt="CreativeHUB" className="h-12 md:h-14 w-auto object-contain" />
+              <img src={logoImage} alt="CreativeHUB" className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover" />
             </div>
             {successMessage && <span className="hidden md:block text-sm text-green-700">{successMessage}</span>}
           </div>
