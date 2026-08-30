@@ -1190,15 +1190,12 @@ export class DataService {
       reason: `Paid via ${input.cardLabel}`,
     });
 
-    const clientResponse = await this.getUser((data as any).client_id);
-    const clientName = clientResponse.data?.full_name || 'The client';
-
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_deposit_paid',
       title: 'Deposit received',
-      message: `${clientName} transferred the deposit — the booking is now confirmed.`,
+      message: 'The client transferred the deposit — the booking is now confirmed.',
       relatedId: bookingId,
     });
 
@@ -1488,8 +1485,6 @@ export class DataService {
         const projectName = String((data as any).project_name || 'booking');
 
         if (clientId) {
-          const freelancerResponse = freelancerId ? await this.getUser(freelancerId) : { data: null };
-          const freelancerName = freelancerResponse.data?.full_name || 'the freelancer';
           const PAYMENT_STATUS_ACTION_LABEL: Record<string, string> = {
             deposit_paid: 'is secured',
             paid: 'is paid',
@@ -1502,7 +1497,7 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'payment_update',
             title: 'Payment/deposit update',
-            message: `Deposit for ${projectName} with ${freelancerName} ${actionLabel}.`,
+            message: `Deposit for ${projectName} ${actionLabel}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
@@ -1527,8 +1522,8 @@ export class DataService {
             userId: freelancerId,
             actorId: clientId || null,
             type: 'payment_released',
-            title: 'Payment released',
-            message: `Payment was released for your ${projectName}.`,
+            title: 'Deposit released',
+            message: `Deposit was released for ${projectName}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
