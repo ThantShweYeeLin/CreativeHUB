@@ -179,12 +179,10 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         setConversations([]);
         setGroupConversations([]);
       } else {
-        const directItems = directResponse.data || [];
+        let directItems = directResponse.data || [];
         const groupItems = groupResponse.data || [];
-        setConversations(directItems);
-        setGroupConversations(groupItems);
 
-        const preferredConversation = openConversationWithUserId
+        let preferredConversation = openConversationWithUserId
           ? directItems.find((conversation: any) => {
               const participant1Id = conversation.participant_1?.id;
               const participant2Id = conversation.participant_2?.id;
@@ -192,11 +190,33 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             })
           : null;
 
+        // Arriving here from "Message" on a request/counter-offer targets a
+        // specific person, not "whichever conversation happens to be
+        // first" - if there's no existing thread with them yet, create one
+        // instead of silently falling back to an unrelated conversation.
+        if (openConversationWithUserId && !preferredConversation && user?.id) {
+          const ensured = await DataService.ensureConversation(user.id, openConversationWithUserId);
+          if (isMounted && ensured.data) {
+            const refreshed = await DataService.getUserConversations(user.id);
+            if (isMounted && !refreshed.error) {
+              directItems = refreshed.data || directItems;
+              preferredConversation = directItems.find((conversation: any) => conversation.id === ensured.data.id);
+            }
+          }
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        setConversations(directItems);
+        setGroupConversations(groupItems);
+
         setSelectedConversationId((current) => {
           const hasDirect = current && directItems.some((item: any) => item.id === current);
           const hasGroup = current && isGroupConversationKey(current) && groupItems.some((item: any) => item.id === fromGroupConversationKey(current));
 
-          if (hasDirect || hasGroup) {
+          if (!openConversationWithUserId && (hasDirect || hasGroup)) {
             return current;
           }
 
