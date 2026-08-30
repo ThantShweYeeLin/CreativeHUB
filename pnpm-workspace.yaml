@@ -5,6 +5,11 @@ overrides:
   vite: 6.3.5
   '@types/react': 18.3.31
   '@types/react-dom': 18.3.7
+  # tsx is only an unused optional peer of vite. Pinned one patch version
+  # below latest to dodge pnpm's minimumReleaseAge policy blocking
+  # tsx@4.23.13 (published within its "too new" safety window) — remove
+  # this override once that version ages out and a plain install works.
+  tsx: 4.23.12
 onlyBuiltDependencies:
   - '@google/genai'
   - '@tailwindcss/oxide'
