@@ -487,7 +487,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       ? Array.from(new Set([targetFreelancerUserId, ...selectedRecipientIds]))
       : [targetFreelancerUserId];
 
-    const { data: createdRequests, error: requestError } = await DataService.createBookingRequests({
+    const { error: requestError } = await DataService.createBookingRequests({
       clientId: user.id,
       recipientIds: recipients,
       projectName: resolvedPurpose,
@@ -510,7 +510,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setBookingMode('individual');
     setSelectedRecipientIds([]);
     setGroupFreelancerSearch('');
-    navigate('/requests', { state: createdRequests?.[0]?.id ? { openRequestId: createdRequests[0].id } : undefined });
+    // Land on the plain requests list, not the edit box — the client just
+    // submitted this, they don't need to immediately edit it.
+    navigate('/requests');
     setFormData((current) => ({
       ...current,
       projectName: '',

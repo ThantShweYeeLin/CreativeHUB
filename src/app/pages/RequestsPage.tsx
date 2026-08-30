@@ -206,7 +206,6 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
         includes: request.includes || null,
         date: request.created_at,
-        message: stripRequestDisplayMeta(request.plain_message || request.message || request.description || '') || 'Group request',
       })),
     [requests, groupMemberNamesByRequest]
   );
@@ -222,7 +221,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       currency: request.budgetMeta?.currency || 'THB',
       budgetMin: String(request.budgetMeta?.min || request.budget || ''),
       budgetMax: String(request.budgetMeta?.max || request.budget || ''),
-      description: request.message || '',
+      description: request.notesText || '',
       recipientIds: request.groupMeta?.recipients || [],
     });
   };
