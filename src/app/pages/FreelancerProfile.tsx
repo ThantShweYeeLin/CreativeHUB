@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Bookmark, Briefcase, Edit, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -65,6 +65,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
   const [isFollowLoading, setIsFollowLoading] = useState(false);
+  const [isBlockedProfile, setIsBlockedProfile] = useState(false);
+  const [isBlockingUser, setIsBlockingUser] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [bookingMode, setBookingMode] = useState<'individual' | 'group'>('individual');
@@ -194,6 +196,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setIsLoading(false);
         return;
       }
+
+      const targetIdForBlockCheck = userResponse.data?.id || freelancerResponse.data?.user_id || id;
+      if (user?.id && targetIdForBlockCheck && user.id !== targetIdForBlockCheck) {
+        const blockCheck = await DataService.isBlockedEither(user.id, targetIdForBlockCheck);
+        if (!isMounted) {
+          return;
+        }
+        if (blockCheck.isBlocked) {
+          setIsBlockedProfile(true);
+          setProfile(null);
+          setFreelancerProfile(null);
+          setIsLoading(false);
+          return;
+        }
+      }
+      setIsBlockedProfile(false);
 
       setProfile(userResponse.data);
       setFreelancerProfile(freelancerResponse.data || null);
@@ -405,6 +423,28 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsFollowing(true);
     setFollowCounts((c) => ({ ...c, followers: c.followers + 1 }));
     setIsFollowLoading(false);
+  };
+
+  const handleBlockUser = async () => {
+    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
+      return;
+    }
+
+    if (!window.confirm(`Block ${displayName}? You won't be able to message or send requests to each other, and won't see each other's content.`)) {
+      return;
+    }
+
+    setError(null);
+    setIsBlockingUser(true);
+    const response = await DataService.blockUser(user.id, targetFreelancerUserId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to block this user.');
+      setIsBlockingUser(false);
+      return;
+    }
+
+    setIsBlockedProfile(true);
+    setIsBlockingUser(false);
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -744,6 +784,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     );
   }
 
+  if (isBlockedProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
+        <div className="mx-auto max-w-[960px] rounded-3xl bg-white p-6 shadow-xl border border-gray-200">
+          <button onClick={onBack} className="mb-4 flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+            Back
+          </button>
+          <p className="text-sm text-gray-700">This profile isn't available.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (error && !profile) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
@@ -826,6 +880,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
                       >
                         <Heart className={`h-6 w-6 ${isFavorited ? 'fill-current' : ''}`} />
+                      </button>
+
+                      <button
+                        onClick={() => void handleBlockUser()}
+                        disabled={isBlockingUser}
+                        className="rounded-full bg-white/90 p-3 text-gray-700 transition-all hover:bg-white disabled:opacity-60"
+                        title="Block this user"
+                      >
+                        <Ban className="h-6 w-6" />
                       </button>
 
                       {showMessageButton && (

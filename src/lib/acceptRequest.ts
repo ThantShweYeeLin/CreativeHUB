@@ -37,7 +37,7 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     return { error: new Error((bookingResponse.error as any).message || 'Request accepted, but booking conversion failed.') };
   }
 
-  await DataService.ensureConversation(request.client_id, request.freelancer_id);
+  await DataService.ensureConversation(request.client_id, request.freelancer_id, { forceAccepted: true });
 
   const groupMeta = DataService.getRequestGroupMeta(request);
   if (groupMeta?.group_id) {

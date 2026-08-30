@@ -402,6 +402,75 @@ export class DataService {
     return { error };
   }
 
+  // BLOCKING
+  static async isBlockedEither(userIdA: string, userIdB: string) {
+    if (!userIdA || !userIdB || userIdA === userIdB) {
+      return { isBlocked: false, error: null };
+    }
+    const { data, error } = await supabase.rpc('is_blocked' as any, {
+      user_a: userIdA,
+      user_b: userIdB,
+    } as any);
+    return { isBlocked: Boolean(data), error };
+  }
+
+  static async blockUser(blockerId: string, blockedId: string) {
+    const { error } = await supabase
+      .from('blocked_users' as any)
+      .insert({ blocker_id: blockerId, blocked_id: blockedId } as any);
+
+    if (!error) {
+      await supabase
+        .from('followers')
+        .delete()
+        .or(
+          `and(follower_id.eq.${blockerId},following_id.eq.${blockedId}),and(follower_id.eq.${blockedId},following_id.eq.${blockerId})`
+        );
+    }
+
+    return { error };
+  }
+
+  static async unblockUser(blockerId: string, blockedId: string) {
+    const { error } = await supabase
+      .from('blocked_users' as any)
+      .delete()
+      .eq('blocker_id', blockerId)
+      .eq('blocked_id', blockedId);
+    return { error };
+  }
+
+  static async getBlockedUsers(userId: string) {
+    const { data, error } = await supabase
+      .from('blocked_users' as any)
+      .select('id, blocked_id, created_at, blocked:blocked_id(id, full_name, avatar_url, gender)' as any)
+      .eq('blocker_id', userId)
+      .order('created_at', { ascending: false });
+    return { data: (data || []) as any[], error };
+  }
+
+  static async acceptMessageRequest(conversationId: string) {
+    const { error } = await supabase
+      .from('conversations')
+      .update({ status: 'accepted' } as any)
+      .eq('id', conversationId);
+    return { error };
+  }
+
+  static async reportAndBlock(reporterId: string, reportedUserId: string, conversationId?: string | null) {
+    const { error: reportError } = await supabase
+      .from('message_reports' as any)
+      .insert({
+        reporter_id: reporterId,
+        reported_user_id: reportedUserId,
+        conversation_id: conversationId || null,
+        reason: 'spam',
+      } as any);
+
+    const { error: blockError } = await this.blockUser(reporterId, reportedUserId);
+    return { error: reportError || blockError };
+  }
+
   // FREELANCER PROFILES
   static async getFreelancerProfile(userId: string) {
     if (!hasSupabaseConfig) {
@@ -799,6 +868,19 @@ export class DataService {
       .insert(booking)
       .select()
       .single();
+    return { data, error };
+  }
+
+  // acceptRequestAndCreateBooking() stamps this exact deliverables string
+  // when converting an accepted request into a booking - it's the only link
+  // between the two rows, so matching on it is how "open the booking for
+  // this accepted request" navigation finds the right booking.
+  static async getBookingByRequestId(requestId: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('deliverables', `Auto-created from request ${requestId}`)
+      .maybeSingle();
     return { data, error };
   }
 
@@ -1303,25 +1385,45 @@ export class DataService {
     return { data, error };
   }
 
-  static async createConversation(participant1Id: string, participant2Id: string) {
+  static async createConversation(
+    participant1Id: string,
+    participant2Id: string,
+    options?: { forceAccepted?: boolean }
+  ) {
+    let status: 'accepted' | 'pending' = 'accepted';
+    if (!options?.forceAccepted) {
+      const [followsTarget, followedByTarget] = await Promise.all([
+        this.isFollowing(participant1Id, participant2Id),
+        this.isFollowing(participant2Id, participant1Id),
+      ]);
+      const mutual = followsTarget.isFollowing && followedByTarget.isFollowing;
+      status = mutual ? 'accepted' : 'pending';
+    }
+
     const { data, error } = await supabase
       .from('conversations')
       .insert({
         participant_1_id: participant1Id,
         participant_2_id: participant2Id,
-      })
+        status,
+        initiated_by: participant1Id,
+      } as any)
       .select()
       .single();
     return { data, error };
   }
 
-  static async ensureConversation(participant1Id: string, participant2Id: string) {
+  static async ensureConversation(
+    participant1Id: string,
+    participant2Id: string,
+    options?: { forceAccepted?: boolean }
+  ) {
     const existing = await this.getConversation(participant1Id, participant2Id);
     if (existing.data) {
       return existing;
     }
 
-    return this.createConversation(participant1Id, participant2Id);
+    return this.createConversation(participant1Id, participant2Id, options);
   }
 
   static async getUserGroupConversations(userId: string) {
@@ -1651,9 +1753,21 @@ export class DataService {
 
     // Update conversation last message time
     if (!error && data) {
+      const conversationCheck = await supabase
+        .from('conversations')
+        .select('status, initiated_by' as any)
+        .eq('id', data.conversation_id)
+        .maybeSingle();
+      const conversationRow = conversationCheck.data as any;
+      const isReplyFromRecipient =
+        conversationRow?.status === 'pending' && conversationRow?.initiated_by !== data.sender_id;
+
       await supabase
         .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
+        .update({
+          last_message_at: new Date().toISOString(),
+          ...(isReplyFromRecipient ? { status: 'accepted' } : {}),
+        } as any)
         .eq('id', data.conversation_id);
 
       if (shouldNotify) {
@@ -2412,6 +2526,19 @@ export class DataService {
       return {
         data: [],
         error: new Error(`${(pausedRecipient as any).full_name || 'This freelancer'} isn't accepting new requests right now.`),
+      };
+    }
+
+    const blockChecks = await Promise.all(
+      recipients.map((recipientId) => this.isBlockedEither(input.clientId, recipientId))
+    );
+    const blockedIndex = blockChecks.findIndex((check) => check.isBlocked);
+    if (blockedIndex !== -1) {
+      const blockedRecipientId = recipients[blockedIndex];
+      const blockedRecipient = (pausedCheck.data || []).find((row: any) => row.id === blockedRecipientId);
+      return {
+        data: [],
+        error: new Error(`You can't send a request to ${(blockedRecipient as any)?.full_name || 'this freelancer'}.`),
       };
     }
 

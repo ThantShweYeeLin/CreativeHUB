@@ -64,6 +64,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [cancellingRequest, setCancellingRequest] = useState<any | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
+  const [openingBookingForRequestId, setOpeningBookingForRequestId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     projectName: '',
     currency: 'THB',
@@ -405,6 +406,26 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     await reloadRequests();
   };
 
+  const handleOpenAcceptedRequest = async (request: any) => {
+    if (request.status !== 'accepted' || openingBookingForRequestId) {
+      return;
+    }
+
+    setOpeningBookingForRequestId(request.id);
+    setError(null);
+
+    const response = await DataService.getBookingByRequestId(request.id);
+
+    setOpeningBookingForRequestId(null);
+
+    if (response.error || !response.data?.id) {
+      setError('Unable to find the booking for this request.');
+      return;
+    }
+
+    navigate(`/booking/${response.data.id}`);
+  };
+
   const handleConfirmedAction = async () => {
     if (!confirmAction) return;
     setIsSubmittingConfirm(true);
@@ -453,7 +474,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           {normalizedRequests.map((request) => (
             <div
               key={request.id}
-              className="bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow"
+              onClick={() => request.status === 'accepted' && void handleOpenAcceptedRequest(request)}
+              className={`bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow ${
+                request.status === 'accepted' ? 'cursor-pointer' : ''
+              }`}
             >
               <div className="p-4 md:p-6">
                 <div className="flex flex-col md:flex-row items-start gap-4 md:gap-6">
@@ -478,7 +502,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         <p className="text-sm md:text-base text-gray-600">
                           <button
                             type="button"
-                            onClick={() => request.freelancer.id && navigate(`/profile/${request.freelancer.id}`)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              request.freelancer.id && navigate(`/profile/${request.freelancer.id}`);
+                            }}
                             className="font-semibold text-gray-900 hover:text-black"
                           >
                             {request.freelancer.name}
@@ -592,7 +619,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       )}
                       {request.status === 'accepted' && (
                         <button
-                          onClick={() => onOpenMessages?.(request.freelancer.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenMessages?.(request.freelancer.id);
+                          }}
                           className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
                         >
                           <MessageCircle className="w-4 h-4" />
@@ -606,7 +636,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         </button>
                       )}
                       <button
-                        onClick={() => onViewProfile?.(request.status as 'accepted' | 'pending' | 'rejected')}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewProfile?.(request.status as 'accepted' | 'pending' | 'rejected');
+                        }}
                         className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm md:text-base font-semibold transition-colors text-center"
                       >
                         View Profile

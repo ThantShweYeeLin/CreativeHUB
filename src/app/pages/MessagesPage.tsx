@@ -104,6 +104,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isHandlingRequest, setIsHandlingRequest] = useState(false);
+  const [isBlockingContact, setIsBlockingContact] = useState(false);
   const [messageReactionsById, setMessageReactionsById] = useState<Record<string, { counts: Record<string, number>; mine: string | null }>>({});
   const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
   const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
@@ -626,6 +628,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         const participant1 = conversation.participant_1;
         const participant2 = conversation.participant_2;
         const otherParticipant = participant1?.id === user?.id ? participant2 : participant1;
+        const isRequestForMe = conversation.status === 'pending' && conversation.initiated_by !== user?.id;
 
         return {
           id: conversation.id,
@@ -637,6 +640,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           avatarGender: otherParticipant?.gender || null,
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
+          status: conversation.status || 'accepted',
+          isRequestForMe,
         };
       })()
     : null;
@@ -647,6 +652,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         const participant1 = conversation.participant_1;
         const participant2 = conversation.participant_2;
         const otherParticipant = participant1?.id === user?.id ? participant2 : participant1;
+        const isRequestForMe = conversation.status === 'pending' && conversation.initiated_by !== user?.id;
 
         return {
           id: conversation.id,
@@ -658,6 +664,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           avatarGender: otherParticipant?.gender || null,
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
+          isRequestForMe,
         };
       })
       .filter((item) => !!item.otherParticipantId);
@@ -677,6 +684,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         avatarGender: coverMember?.gender || null,
         memberCount: members.length,
         lastMessageAt: conversation.last_message_at,
+        isRequestForMe: false,
       };
     });
 
@@ -746,6 +754,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const filteredConversations = normalizedConversations.filter((conversation) =>
     conversation.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
+  const filteredMessages = filteredConversations.filter((conversation) => !conversation.isRequestForMe);
+  const filteredRequests = filteredConversations.filter((conversation) => conversation.isRequestForMe);
 
   const handleSendMessage = async () => {
     if (!user?.id || !selectedConversationId || !messageInput.trim()) {
@@ -795,7 +805,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       setConversations((current) =>
         current.map((conversation) =>
           conversation.id === rawConversationId
-            ? { ...conversation, last_message_at: new Date().toISOString() }
+            ? {
+                ...conversation,
+                last_message_at: new Date().toISOString(),
+                ...(activeConversation?.isRequestForMe ? { status: 'accepted' } : {}),
+              }
             : conversation
         )
       );
@@ -867,6 +881,72 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     setSelectedConversationId(response.data.id);
   };
 
+  const removeActiveConversationFromList = () => {
+    if (!selectedConversationId) {
+      return;
+    }
+    setConversations((current) => current.filter((conversation) => conversation.id !== selectedConversationId));
+    setSelectedConversationId(null);
+  };
+
+  const handleAcceptRequest = async () => {
+    if (!selectedConversationId) {
+      return;
+    }
+
+    setIsHandlingRequest(true);
+    setError(null);
+    const response = await DataService.acceptMessageRequest(selectedConversationId);
+    if (response.error) {
+      setError((response.error as any)?.message || 'Unable to accept this request.');
+      setIsHandlingRequest(false);
+      return;
+    }
+
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === selectedConversationId ? { ...conversation, status: 'accepted' } : conversation
+      )
+    );
+    setIsHandlingRequest(false);
+  };
+
+  const handleReportSpam = async () => {
+    if (!user?.id || !activeConversation?.otherParticipantId) {
+      return;
+    }
+
+    setIsHandlingRequest(true);
+    setError(null);
+    const response = await DataService.reportAndBlock(user.id, activeConversation.otherParticipantId, selectedConversationId);
+    if (response.error) {
+      setError((response.error as any)?.message || 'Unable to report this message.');
+      setIsHandlingRequest(false);
+      return;
+    }
+
+    removeActiveConversationFromList();
+    setIsHandlingRequest(false);
+  };
+
+  const handleBlockContact = async () => {
+    if (!user?.id || !activeConversation?.otherParticipantId) {
+      return;
+    }
+
+    setIsBlockingContact(true);
+    setError(null);
+    const response = await DataService.blockUser(user.id, activeConversation.otherParticipantId);
+    if (response.error) {
+      setError((response.error as any)?.message || 'Unable to block this user.');
+      setIsBlockingContact(false);
+      return;
+    }
+
+    removeActiveConversationFromList();
+    setIsBlockingContact(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200">
@@ -918,7 +998,35 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 <div className="p-6 text-center text-sm text-gray-600">No conversations yet. Pick a mutual below to start one.</div>
               )}
 
-              {filteredConversations.map((conversation) => (
+              {filteredRequests.length > 0 && (
+                <div className="border-b border-gray-200">
+                  <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Message Requests
+                  </div>
+                  {filteredRequests.map((conversation) => (
+                    <button
+                      key={conversation.id}
+                      onClick={() => setSelectedConversationId(conversation.id)}
+                      className={`w-full p-4 flex items-center gap-3 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
+                        selectedConversationId === conversation.id ? 'bg-gray-50' : ''
+                      }`}
+                    >
+                      <Avatar
+                        src={conversation.avatar}
+                        alt={conversation.name}
+                        gender={conversation.avatarGender}
+                        sizeClassName="w-12 h-12 ring-2 ring-white shadow-sm rounded-full"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
+                        <p className="mt-1 text-xs text-gray-500">Wants to message you</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {filteredMessages.map((conversation) => (
                 <button
                   key={conversation.id}
                   onClick={() => setSelectedConversationId(conversation.id)}
@@ -1021,7 +1129,51 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       {isEndingSession ? 'Ending...' : 'End Session'}
                     </button>
                   )}
+                  {!activeConversation?.isGroup && !activeConversation?.isRequestForMe && !showBookingSessionControls && (
+                    <button
+                      type="button"
+                      onClick={() => void handleBlockContact()}
+                      disabled={isBlockingContact}
+                      className="ml-auto rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                    >
+                      {isBlockingContact ? 'Blocking...' : 'Block'}
+                    </button>
+                  )}
                 </div>
+
+                {!activeConversation?.isGroup && activeConversation?.isRequestForMe ? (
+                  <div className="border-b border-amber-200 bg-amber-50 px-6 py-3">
+                    <p className="text-sm text-amber-800">
+                      <span className="font-semibold">{activeConversation.name}</span> wants to send you a message. Accept to chat, or report/block if this looks like spam.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleAcceptRequest()}
+                        disabled={isHandlingRequest}
+                        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                      >
+                        {isHandlingRequest ? 'Working...' : 'Accept'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleReportSpam()}
+                        disabled={isHandlingRequest}
+                        className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      >
+                        Report Spam
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBlockContact()}
+                        disabled={isBlockingContact}
+                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                      >
+                        {isBlockingContact ? 'Blocking...' : 'Block'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {!activeConversation?.isGroup && (bookingSession?.status === 'accepted' || bookingSession?.status === 'confirmed' || bookingSession?.status === 'in_progress') ? (
                   <div className="border-b border-green-200 bg-green-50 px-6 py-3 text-sm text-green-700">
@@ -1033,7 +1185,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
                     Group members can chat and coordinate here.
                   </div>
-                ) : !bookingSession ? (
+                ) : !bookingSession && !activeConversation?.isRequestForMe ? (
                   <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
                     Mutuals can chat directly here.
                   </div>

@@ -9,6 +9,7 @@ import {
   Shield,
   Star,
   User,
+  UserX,
 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,6 +17,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
 
 type Role = 'freelancer' | 'client';
@@ -109,6 +111,10 @@ export function SettingsPage() {
   const [profileVisibility, setProfileVisibility] = useState<'public' | 'limited'>('public');
   const [isSavingVisibility, setIsSavingVisibility] = useState(false);
 
+  const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
+  const [isLoadingBlocked, setIsLoadingBlocked] = useState(false);
+  const [unblockingId, setUnblockingId] = useState<string | null>(null);
+
   const role = (user?.role || 'client') as Role;
 
   const planLabel = useMemo(() => {
@@ -175,6 +181,47 @@ export function SettingsPage() {
       isMounted = false;
     };
   }, [role, user?.email, user?.fullName, user?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadBlockedUsers() {
+      if (!user?.id) {
+        if (isMounted) {
+          setBlockedUsers([]);
+        }
+        return;
+      }
+
+      setIsLoadingBlocked(true);
+      const response = await DataService.getBlockedUsers(user.id);
+      if (isMounted) {
+        setBlockedUsers(response.error ? [] : response.data);
+        setIsLoadingBlocked(false);
+      }
+    }
+
+    loadBlockedUsers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
+  const handleUnblock = async (blockedId: string) => {
+    if (!user?.id) return;
+
+    setUnblockingId(blockedId);
+    const response = await DataService.unblockUser(user.id, blockedId);
+    setUnblockingId(null);
+
+    if (response.error) {
+      setErrorMessage((response.error as any).message || 'Unable to unblock this user.');
+      return;
+    }
+
+    setBlockedUsers((current) => current.filter((row) => row.blocked_id !== blockedId));
+  };
 
   const persistLocalSettings = () => {
     const payload: SavedSettingsPayload = {
@@ -448,6 +495,40 @@ export function SettingsPage() {
                     {isSavingVisibility ? 'Saving…' : 'Save'}
                   </button>
                 </div>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2 text-gray-900">
+              <UserX className="h-5 w-5" />
+              <h2 className="text-lg font-bold">Blocked Accounts</h2>
+            </div>
+            {isLoadingBlocked ? (
+              <p className="text-sm text-gray-500">Loading…</p>
+            ) : blockedUsers.length === 0 ? (
+              <p className="text-sm text-gray-500">You haven't blocked anyone.</p>
+            ) : (
+              <div className="space-y-2">
+                {blockedUsers.map((row) => (
+                  <div key={row.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={row.blocked?.avatar_url || DEFAULT_AVATAR_URL}
+                        alt={row.blocked?.full_name || 'Blocked user'}
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                      <span className="text-sm font-semibold text-gray-900">{row.blocked?.full_name || 'Unknown user'}</span>
+                    </div>
+                    <button
+                      onClick={() => void handleUnblock(row.blocked_id)}
+                      disabled={unblockingId === row.blocked_id}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {unblockingId === row.blocked_id ? 'Unblocking…' : 'Unblock'}
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </section>
