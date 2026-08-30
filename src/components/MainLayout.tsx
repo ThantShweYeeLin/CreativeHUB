@@ -518,11 +518,17 @@ export function MainLayout({ children }: MainLayoutProps) {
             <div className="flex items-center gap-2 md:gap-4">
               <button
                 onClick={() =>
-                  navigate(canAccessFreelancerDashboard ? '/freelancer-dashboard/requests' : '/become-freelancer')
+                  navigate(
+                    user?.role === 'admin'
+                      ? '/admin'
+                      : canAccessFreelancerDashboard
+                      ? '/freelancer-dashboard/requests'
+                      : '/become-freelancer'
+                  )
                 }
                 className="hidden md:block px-6 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
               >
-                {canAccessFreelancerDashboard ? 'Freelancer Dashboard' : 'Become a Freelancer'}
+                {user?.role === 'admin' ? 'Admin Dashboard' : canAccessFreelancerDashboard ? 'Freelancer Dashboard' : 'Become a Freelancer'}
               </button>
               <div className="relative">
                 <button
