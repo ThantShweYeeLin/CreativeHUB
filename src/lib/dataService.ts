@@ -2786,6 +2786,12 @@ export class DataService {
         groups.set(meta.group_id, { total: 0, accepted: 0 });
       }
       const current = groups.get(meta.group_id)!;
+      // A rejection is terminal for that one member only — excluded from the
+      // group's total so their slot doesn't sit forever as "not yet
+      // accepted" and block the rest of the group from ever showing as complete.
+      if (request.status === 'rejected') {
+        return;
+      }
       current.total += 1;
       if (request.status === 'accepted') {
         current.accepted += 1;
@@ -2910,6 +2916,99 @@ export class DataService {
     }
 
     return { data: { updated: true }, error: null };
+  }
+
+  // Lets a client add a freelancer to an existing group request at any time
+  // — including after another member has rejected — without going through
+  // updatePendingBookingRequest's edit flow, which requires the specific
+  // request being edited to still be 'pending' (a rejected or already
+  // fully-accepted group has no such row to attach the edit to). The new
+  // member inherits the group's shared location/schedule/notes (read off
+  // any existing row in the group, whatever its status) but gets their own
+  // purpose and budget, same as every other member.
+  static async addFreelancerToGroupRequest(input: {
+    clientId: string;
+    groupId: string;
+    freelancerId: string;
+    projectName: string;
+    budget: number;
+  }) {
+    const groupRowsResponse = await supabase
+      .from('requests')
+      .select('*')
+      .eq('client_id', input.clientId);
+
+    if (groupRowsResponse.error) {
+      return { data: null, error: groupRowsResponse.error };
+    }
+
+    const groupRows = (groupRowsResponse.data || []).filter(
+      (row: any) => this.getRequestGroupMeta(row)?.group_id === input.groupId
+    );
+
+    if (groupRows.length === 0) {
+      return { data: null, error: new Error('Group request not found.') };
+    }
+
+    if (groupRows.some((row: any) => String(row.freelancer_id) === input.freelancerId)) {
+      return { data: null, error: new Error('This freelancer is already part of the group.') };
+    }
+
+    const pausedCheck = await supabase
+      .from('users')
+      .select('id, full_name, account_status' as any)
+      .eq('id', input.freelancerId)
+      .maybeSingle();
+    if ((pausedCheck.data as any)?.account_status === 'paused') {
+      return { data: null, error: new Error(`${(pausedCheck.data as any).full_name || 'This freelancer'} isn't accepting new requests right now.`) };
+    }
+
+    const blockCheck = await this.isBlockedEither(input.clientId, input.freelancerId);
+    if (blockCheck.isBlocked) {
+      return { data: null, error: new Error("You can't send a request to this freelancer.") };
+    }
+
+    const anyRow = groupRows[0];
+    const meta = this.getRequestGroupMeta(anyRow)!;
+    const mergedMeta = { ...meta, recipients: Array.from(new Set([...meta.recipients, input.freelancerId])) };
+    const baseDescription = stripGroupRequestMeta(anyRow.description || anyRow.message || '');
+    const nextMessage = appendGroupRequestMeta(baseDescription, mergedMeta as any);
+
+    // Keep sibling rows' embedded recipient list in sync, but only touch the
+    // ones still pending — an already-accepted/rejected row is a resolved
+    // record at this point and shouldn't be rewritten.
+    for (const row of groupRows) {
+      if (row.status === 'pending') {
+        await this.updateRequest(row.id, { description: nextMessage, message: nextMessage } as any);
+      }
+    }
+
+    const created = await this.createRequest({
+      client_id: input.clientId,
+      freelancer_id: input.freelancerId,
+      project_name: input.projectName,
+      description: nextMessage,
+      message: nextMessage,
+      budget: input.budget,
+      status: 'pending',
+    } as any);
+
+    if (created.error) {
+      return { data: null, error: created.error };
+    }
+
+    if (created.data?.id) {
+      await this.logRequestOffer({
+        request_id: created.data.id,
+        round: 1,
+        offered_by: 'client',
+        action: 'request',
+        price: input.budget,
+        message: nextMessage,
+      });
+    }
+
+    return created;
   }
 
   static async getFreelancerRequests(freelancerId: string) {
@@ -3458,6 +3557,7 @@ export class DataService {
       const freelancerId = String((data as any).freelancer_id || previous.data?.freelancer_id || '');
       const projectName = String((data as any).project_name || previous.data?.project_name || 'your request');
       const acceptedViaClientCounter = nextStatus === 'accepted' && String((data as any).counter_by || '') === 'client';
+      const isGroupRequest = Boolean(this.getRequestGroupMeta(data)?.group_id);
 
       // A counter offer keeps status === 'countered' across an entire
       // back-and-forth thread, so this must key off counter_by changing —
@@ -3509,8 +3609,10 @@ export class DataService {
             userId: recipientId,
             actorId: actorId || null,
             type: 'request_accepted',
-            title: 'Booking accepted',
-            message: `${actorName} accepted ${projectName}.`,
+            title: isGroupRequest ? 'Group Project accepted' : 'Booking accepted',
+            message: isGroupRequest
+              ? `${actorName} accepted your Group Project request for ${projectName}.`
+              : `${actorName} accepted ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });
@@ -3532,8 +3634,10 @@ export class DataService {
             userId: clientId,
             actorId: freelancerId || null,
             type: 'request_rejected',
-            title: 'Booking rejected',
-            message: `${actorName} rejected ${projectName}.`,
+            title: isGroupRequest ? 'Group Project rejected' : 'Booking rejected',
+            message: isGroupRequest
+              ? `${actorName} rejected your Group Project request for ${projectName}.`
+              : `${actorName} rejected ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });

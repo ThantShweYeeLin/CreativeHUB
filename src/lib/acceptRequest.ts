@@ -43,8 +43,13 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   if (groupMeta?.group_id) {
     const progressResponse = await DataService.getClientRequestsWithProgress(request.client_id);
     const groupRows = (progressResponse.data || []).filter((row: any) => row.group_meta?.group_id === groupMeta.group_id);
-    const accepted = groupRows.filter((row: any) => row.status === 'accepted').length;
-    const total = groupRows.length || groupMeta.recipients.length;
+    // A rejection is terminal for that one member only — it must never block
+    // the rest of the group from completing, so rejected rows are dropped
+    // from both the "still needs to respond" pool and the completion check
+    // entirely (rather than counted as a slot that can never be accepted).
+    const activeGroupRows = groupRows.filter((row: any) => row.status !== 'rejected');
+    const accepted = activeGroupRows.filter((row: any) => row.status === 'accepted').length;
+    const total = activeGroupRows.length || groupMeta.recipients.length;
 
     await DataService.createNotification({
       user_id: request.client_id,
@@ -60,7 +65,7 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     } as any);
 
     if (accepted === total && total > 1) {
-      const recipients = Array.from(new Set(groupRows.map((row: any) => String(row.freelancer_id))));
+      const recipients = Array.from(new Set(activeGroupRows.map((row: any) => String(row.freelancer_id))));
       const members = Array.from(new Set([request.client_id, ...recipients]));
       const groupConversation = await DataService.ensureGroupConversationForRequest({
         groupRequestId: groupMeta.group_id,

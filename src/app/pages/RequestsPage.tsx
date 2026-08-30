@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -9,7 +9,7 @@ import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { extractLocationMeta } from '../../lib/requestLocation';
-import { formatCurrencyAmount } from '../../lib/currency';
+import { convertAmount, formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
@@ -22,6 +22,8 @@ interface RequestsPageProps {
 }
 
 type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'cancelled';
+
+const OTHER_PURPOSE_VALUE = '__other__';
 
 const getStatusColor = (status: RequestStatus) => {
   switch (status) {
@@ -51,7 +53,16 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingRequest, setEditingRequest] = useState<any | null>(null);
-  const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
+  const [availableFreelancers, setAvailableFreelancers] = useState<
+    Array<{ id: string; full_name: string; title: string; skills: string[]; hourlyRate: number | null; rateCurrency: string }>
+  >([]);
+  const [addReplacementFor, setAddReplacementFor] = useState<any | null>(null);
+  const [replacementSearch, setReplacementSearch] = useState('');
+  const [replacementFreelancerId, setReplacementFreelancerId] = useState<string | null>(null);
+  const [replacementPurpose, setReplacementPurpose] = useState('');
+  const [replacementCustomPurpose, setReplacementCustomPurpose] = useState('');
+  const [replacementBudget, setReplacementBudget] = useState('');
+  const [isSubmittingReplacement, setIsSubmittingReplacement] = useState(false);
   const [counterFormOpenForId, setCounterFormOpenForId] = useState<string | null>(null);
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
@@ -111,6 +122,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         id: String(item.user_id || item.users?.id || item.id),
         full_name: item.users?.full_name || item.title || 'Freelancer',
         title: item.title || item.skills?.[0] || 'Creative Freelancer',
+        skills: Array.isArray(item.skills) ? item.skills : [],
+        hourlyRate: item.hourly_rate ? Number(item.hourly_rate) : null,
+        rateCurrency: item.users?.preferred_currency || 'THB',
       }));
       setAvailableFreelancers(items);
     }
@@ -292,6 +306,65 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     if (!reload.error) {
       setRequests(reload.data || []);
     }
+  };
+
+  const openAddReplacement = (normalizedRequest: any) => {
+    setAddReplacementFor(normalizedRequest);
+    setReplacementSearch('');
+    setReplacementFreelancerId(null);
+    setReplacementPurpose('');
+    setReplacementCustomPurpose('');
+    setReplacementBudget('');
+    setError(null);
+  };
+
+  const replacementMinimum = (freelancer: { hourlyRate: number | null; rateCurrency: string }) =>
+    freelancer.hourlyRate ? convertAmount(freelancer.hourlyRate, freelancer.rateCurrency, 'THB') : 0;
+
+  const submitAddReplacement = async () => {
+    const groupId = addReplacementFor?.groupMeta?.group_id;
+    if (!user?.id || !groupId || !replacementFreelancerId) {
+      return;
+    }
+
+    const freelancer = availableFreelancers.find((item) => item.id === replacementFreelancerId);
+    const resolvedPurpose = replacementPurpose === OTHER_PURPOSE_VALUE ? replacementCustomPurpose.trim() : replacementPurpose;
+    if (!resolvedPurpose) {
+      setError('Choose a purpose for the new freelancer.');
+      return;
+    }
+
+    const budgetAmount = Number(replacementBudget);
+    if (!Number.isFinite(budgetAmount) || budgetAmount <= 0) {
+      setError('Enter a budget for the new freelancer.');
+      return;
+    }
+
+    if (freelancer) {
+      const minimum = replacementMinimum(freelancer);
+      if (budgetAmount < minimum) {
+        setError(`Your offer must be at least ${formatCurrencyAmount(minimum, 'THB')}.`);
+        return;
+      }
+    }
+
+    setIsSubmittingReplacement(true);
+    const { error: addError } = await DataService.addFreelancerToGroupRequest({
+      clientId: user.id,
+      groupId,
+      freelancerId: replacementFreelancerId,
+      projectName: resolvedPurpose,
+      budget: budgetAmount,
+    });
+    setIsSubmittingReplacement(false);
+
+    if (addError) {
+      setError((addError as any).message || 'Unable to add this freelancer.');
+      return;
+    }
+
+    setAddReplacementFor(null);
+    await reloadRequests();
   };
 
   const getEffectiveSchedule = (normalizedRequest: any) => {
@@ -635,6 +708,18 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           View Reason
                         </button>
                       )}
+                      {request.status === 'rejected' && request.isGroupRequest && (
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openAddReplacement(request);
+                          }}
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          Add Another Freelancer
+                        </button>
+                      )}
                       <button
                         onClick={(event) => {
                           event.stopPropagation();
@@ -839,6 +924,128 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             <div className="mt-5 flex gap-3">
               <button onClick={() => setEditingRequest(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2 font-semibold text-gray-700">Cancel</button>
               <button onClick={() => void saveRequestEdits()} className="flex-1 rounded-xl bg-gray-900 px-4 py-2 font-semibold text-white">Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addReplacementFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-gray-900">Add Another Freelancer</h3>
+            <p className="mt-1 text-sm text-gray-600">
+              They'll join this group request with the same location and schedule — everyone else's status is untouched.
+            </p>
+
+            {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+            {!replacementFreelancerId ? (
+              <div className="mt-4">
+                <div className="relative mb-3">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={replacementSearch}
+                    onChange={(event) => setReplacementSearch(event.target.value)}
+                    placeholder="Search freelancer by name..."
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                  />
+                </div>
+                <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+                  {availableFreelancers
+                    .filter((item) => item.id !== addReplacementFor.freelancer?.id)
+                    .filter((item) => item.full_name.toLowerCase().includes(replacementSearch.trim().toLowerCase()))
+                    .map((freelancer) => (
+                      <button
+                        key={freelancer.id}
+                        type="button"
+                        onClick={() => setReplacementFreelancerId(freelancer.id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-gray-100"
+                      >
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{freelancer.full_name}</p>
+                          <p className="text-xs text-gray-500">{freelancer.title}</p>
+                        </div>
+                        <span className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white">Select</span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              (() => {
+                const freelancer = availableFreelancers.find((item) => item.id === replacementFreelancerId);
+                if (!freelancer) return null;
+                const minimum = replacementMinimum(freelancer);
+                return (
+                  <div className="mt-4 space-y-4">
+                    <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{freelancer.full_name}</p>
+                        <p className="text-xs text-gray-500">{freelancer.title}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setReplacementFreelancerId(null)}
+                        className="text-xs font-semibold text-gray-500 hover:text-gray-800"
+                      >
+                        Change
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold text-gray-700">Purpose</label>
+                      <select
+                        value={replacementPurpose}
+                        onChange={(event) => setReplacementPurpose(event.target.value)}
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      >
+                        <option value="" disabled>Select a purpose</option>
+                        {freelancer.skills.map((skill) => (
+                          <option key={skill} value={skill}>{skill}</option>
+                        ))}
+                        <option value={OTHER_PURPOSE_VALUE}>Other (please specify)</option>
+                      </select>
+                      {replacementPurpose === OTHER_PURPOSE_VALUE && (
+                        <input
+                          value={replacementCustomPurpose}
+                          onChange={(event) => setReplacementCustomPurpose(event.target.value)}
+                          placeholder="Type the purpose"
+                          className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                        Budget <span className="font-normal text-gray-500">(min. {formatCurrencyAmount(minimum, 'THB')})</span>
+                      </label>
+                      <input
+                        inputMode="decimal"
+                        value={replacementBudget}
+                        onChange={(event) => setReplacementBudget(event.target.value)}
+                        placeholder={`Minimum ${formatCurrencyAmount(minimum, 'THB')}`}
+                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      />
+                      {replacementBudget && Number(replacementBudget) < minimum && (
+                        <p className="mt-1.5 text-xs font-semibold text-red-600">Must be at least {formatCurrencyAmount(minimum, 'THB')}.</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            )}
+
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setAddReplacementFor(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2 font-semibold text-gray-700">
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitAddReplacement()}
+                disabled={!replacementFreelancerId || isSubmittingReplacement}
+                className="flex-1 rounded-xl bg-gray-900 px-4 py-2 font-semibold text-white disabled:opacity-60"
+              >
+                {isSubmittingReplacement ? 'Sending...' : 'Send Request'}
+              </button>
             </div>
           </div>
         </div>
