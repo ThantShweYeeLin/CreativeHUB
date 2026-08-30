@@ -948,6 +948,173 @@ export class DataService {
     return { url: data?.signedUrl || null, error };
   }
 
+  // ADMIN
+  static async isAdmin(userId: string) {
+    const { data, error } = await supabase.rpc('is_admin' as any, { uid: userId } as any);
+    return { isAdmin: Boolean(data), error };
+  }
+
+  static async getAllUsersForAdmin(search: string) {
+    let query = supabase
+      .from('users')
+      .select('id, full_name, email, role, account_status, avatar_url, gender')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (search.trim()) {
+      query = query.or(`full_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);
+    }
+    const { data, error } = await query;
+    return { data: data || [], error };
+  }
+
+  static async getOpenReportCountsByUser() {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .select('reported_user_id')
+      .eq('status', 'open');
+    if (error) return { counts: {} as Record<string, number>, error };
+    const counts: Record<string, number> = {};
+    (data || []).forEach((row: any) => {
+      counts[row.reported_user_id] = (counts[row.reported_user_id] || 0) + 1;
+    });
+    return { counts, error: null };
+  }
+
+  static async adminSetAccountStatus(userId: string, status: 'active' | 'paused' | 'suspended' | 'banned', reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_set_account_status', {
+      p_user_id: userId,
+      p_status: status,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  static async uploadReportEvidencePhoto(userId: string, file: File) {
+    const path = `${userId}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('report-evidence').upload(path, file, {
+      contentType: file.type,
+      upsert: true,
+    });
+    if (error) return { path: null, error };
+    return { path, error: null };
+  }
+
+  static async getReportEvidenceSignedUrl(path: string) {
+    const { data, error } = await supabase.storage.from('report-evidence').createSignedUrl(path, 3600);
+    return { url: data?.signedUrl || null, error };
+  }
+
+  static async submitUserReport(input: {
+    reporterId: string;
+    reportedUserId: string;
+    reason: 'harassment' | 'scam_fraud' | 'fake_information' | 'inappropriate_content' | 'unprofessional_behavior' | 'other';
+    description: string;
+    evidencePhotoPaths?: string[];
+    relatedBookingId?: string | null;
+  }) {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .insert({
+        reporter_id: input.reporterId,
+        reported_user_id: input.reportedUserId,
+        reason: input.reason,
+        description: input.description,
+        evidence_photo_paths: input.evidencePhotoPaths || [],
+        related_booking_id: input.relatedBookingId || null,
+      })
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async getAllUserReportsForAdmin() {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .select('*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    return { data: data || [], error };
+  }
+
+  static async adminResolveUserReport(reportId: string, decision: 'no_action' | 'warning' | 'suspended' | 'banned', reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_resolve_user_report', {
+      p_report_id: reportId,
+      p_decision: decision,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  static async submitSupportTicket(input: {
+    userId: string;
+    category: 'technical' | 'payment' | 'account' | 'booking' | 'suggestion' | 'other';
+    description: string;
+    screenshotPath?: string | null;
+  }) {
+    const { data, error } = await (supabase as any)
+      .from('support_tickets')
+      .insert({
+        user_id: input.userId,
+        category: input.category,
+        description: input.description,
+        screenshot_path: input.screenshotPath || null,
+      })
+      .select()
+      .single();
+    return { data, error };
+  }
+
+  static async getUserSupportTickets(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_tickets')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    return { data: data || [], error };
+  }
+
+  static async getAllSupportTicketsForAdmin() {
+    const { data, error } = await (supabase as any)
+      .from('support_tickets')
+      .select('*, user:user_id(id, full_name, email)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    return { data: data || [], error };
+  }
+
+  static async adminUpdateTicketStatus(ticketId: string, status: 'open' | 'in_progress' | 'resolved' | 'closed', notes?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_update_ticket_status', {
+      p_ticket_id: ticketId,
+      p_status: status,
+      p_notes: notes || null,
+    });
+    return { data, error };
+  }
+
+  static async getAllDisputedBookingsForAdmin() {
+    const { data, error } = await (supabase as any)
+      .from('bookings')
+      .select('*, client:client_id(id, full_name, email, avatar_url), freelancer:freelancer_id(id, full_name, email, avatar_url)')
+      .in('dispute_status', ['open', 'under_admin_review'])
+      .order('dispute_status', { ascending: true })
+      .order('created_at', { ascending: false });
+    return { data: data || [], error };
+  }
+
+  static async adminResolveDispute(bookingId: string, decision: 'refund' | 'release', reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_resolve_dispute', {
+      p_booking_id: bookingId,
+      p_decision: decision,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  static async adminRequestMoreEvidence(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('admin_request_more_evidence', { p_booking_id: bookingId });
+    return { data, error };
+  }
+
   // PAYMENT METHODS (simulated — only display info is ever stored, never
   // the full card number or CVC)
   static async getPaymentMethods(userId: string) {
@@ -1107,7 +1274,12 @@ export class DataService {
 
   static async openBookingDispute(
     bookingId: string,
-    input: { category: 'no_show' | 'not_as_agreed' | 'other'; reason: string; evidenceText?: string | null; evidencePhotoPaths?: string[] }
+    input: {
+      category: 'no_show' | 'not_performed' | 'differed_from_agreement' | 'other';
+      reason: string;
+      evidenceText?: string | null;
+      evidencePhotoPaths?: string[];
+    }
   ) {
     const disputeResponseDeadline = new Date(Date.now() + DISPUTE_RESPONSE_HOURS * 60 * 60 * 1000).toISOString();
 

@@ -121,9 +121,23 @@ export function useBookingTracking() {
     const scheduleTimeLabel = scheduleMeta && (booking.start_time || !booking.start_date)
       ? formatTimeLabel(scheduleMeta.time)
       : 'Time to be confirmed';
+    // Only trust this for gating "the appointment time has passed" when we
+    // have a real time, not just a date - a bare date defaults to midnight,
+    // which would look "already passed" all day for a same-day booking.
+    // Built from numeric parts (not an ISO string) since start_time comes
+    // back as "HH:MM:SS" from Postgres's time type - formatTimeLabel()
+    // tolerates that by only reading the first two segments; this mirrors it.
+    const scheduledAt = scheduleMeta && (booking.start_time || !booking.start_date)
+      ? (() => {
+          const [year, month, day] = scheduleMeta.date.split('-').map(Number);
+          const [hour, minute] = scheduleMeta.time.split(':').map(Number);
+          return new Date(year, (month || 1) - 1, day || 1, hour || 0, minute || 0, 0, 0);
+        })()
+      : null;
 
     return {
       bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+      scheduledAt,
       freelancer: {
         name: booking.freelancer?.full_name || 'CreativeHUB Freelancer',
         specialty: booking.project_name,

@@ -35,7 +35,7 @@ export interface AuthUser {
   email: string | undefined;
   fullName: string | null;
   avatar_url: string | null;
-  role: 'freelancer' | 'client';
+  role: 'freelancer' | 'client' | 'admin';
   gender: Gender | null;
   pronouns: string | null;
   emailConfirmedAt: string | null;

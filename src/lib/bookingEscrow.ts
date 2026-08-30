@@ -8,6 +8,7 @@ export type EscrowState =
   | 'deposit_secured'
   | 'awaiting_client_confirmation'
   | 'disputed'
+  | 'under_admin_review'
   | 'released'
   | 'refunded'
   | 'annulled';
@@ -16,6 +17,7 @@ export function getBookingEscrowState(booking: any): EscrowState {
   if (booking?.status === 'cancelled' && booking?.cancellation_reason === 'deposit_not_paid') return 'annulled';
   if (booking?.payment_status === 'refunded') return 'refunded';
   if (booking?.payment_status === 'paid') return 'released';
+  if (booking?.dispute_status === 'under_admin_review') return 'under_admin_review';
   if (booking?.dispute_status === 'open') return 'disputed';
   if (booking?.payment_status === 'deposit_paid' && booking?.completed_at) return 'awaiting_client_confirmation';
   if (booking?.payment_status === 'deposit_paid') return 'deposit_secured';

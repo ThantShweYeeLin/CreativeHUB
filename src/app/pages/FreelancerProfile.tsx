@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -67,6 +67,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isFollowLoading, setIsFollowLoading] = useState(false);
   const [isBlockedProfile, setIsBlockedProfile] = useState(false);
   const [isBlockingUser, setIsBlockingUser] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState<'harassment' | 'scam_fraud' | 'fake_information' | 'inappropriate_content' | 'unprofessional_behavior' | 'other'>('harassment');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportFiles, setReportFiles] = useState<File[]>([]);
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
   const [bookingMode, setBookingMode] = useState<'individual' | 'group'>('individual');
@@ -445,6 +451,46 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
     setIsBlockedProfile(true);
     setIsBlockingUser(false);
+  };
+
+  const handleSubmitReport = async () => {
+    if (!user?.id || !targetFreelancerUserId || !reportDescription.trim()) {
+      setError('Describe what happened before submitting.');
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    setError(null);
+
+    const photoPaths: string[] = [];
+    for (const file of reportFiles) {
+      const uploadResponse = await DataService.uploadReportEvidencePhoto(user.id, file);
+      if (uploadResponse.error || !uploadResponse.path) {
+        setError('Unable to upload one of the evidence photos.');
+        setIsSubmittingReport(false);
+        return;
+      }
+      photoPaths.push(uploadResponse.path);
+    }
+
+    const response = await DataService.submitUserReport({
+      reporterId: user.id,
+      reportedUserId: targetFreelancerUserId,
+      reason: reportReason,
+      description: reportDescription.trim(),
+      evidencePhotoPaths: photoPaths,
+    });
+
+    setIsSubmittingReport(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to submit report.');
+      return;
+    }
+
+    setReportSubmitted(true);
+    setReportDescription('');
+    setReportFiles([]);
   };
 
   const handleSubmitRequest = async (event: FormEvent) => {
@@ -891,6 +937,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         <Ban className="h-6 w-6" />
                       </button>
 
+                      <button
+                        onClick={() => {
+                          setReportSubmitted(false);
+                          setShowReportModal(true);
+                        }}
+                        className="rounded-full bg-white/90 p-3 text-gray-700 transition-all hover:bg-white"
+                        title="Report this user"
+                      >
+                        <Flag className="h-6 w-6" />
+                      </button>
+
                       {showMessageButton && (
                         <button
                           onClick={onOpenChat}
@@ -1236,6 +1293,69 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           type={showFollowersModal.type}
           onClose={() => setShowFollowersModal(null)}
         />
+      )}
+
+      {showReportModal && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            {reportSubmitted ? (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-gray-900">Report submitted</h3>
+                <p className="mb-4 text-sm text-gray-600">Thanks — our team will review this report.</p>
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900">Report {displayName}</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-gray-400 hover:text-gray-900">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">Reason</label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as any)}
+                  className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="harassment">Harassment</option>
+                  <option value="scam_fraud">Scam / Fraud</option>
+                  <option value="fake_information">Fake information</option>
+                  <option value="inappropriate_content">Inappropriate content</option>
+                  <option value="unprofessional_behavior">Unprofessional behavior</option>
+                  <option value="other">Other</option>
+                </select>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">What happened?</label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Describe the issue in detail..."
+                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                />
+                <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence (optional)</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setReportFiles(Array.from(e.target.files || []).slice(0, 6))}
+                  className="mb-4 text-xs"
+                />
+                <button
+                  onClick={() => void handleSubmitReport()}
+                  disabled={isSubmittingReport}
+                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                >
+                  {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       {focusedPost && (

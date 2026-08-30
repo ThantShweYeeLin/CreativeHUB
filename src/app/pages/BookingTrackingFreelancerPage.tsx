@@ -378,6 +378,20 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           </div>
         )}
 
+        {/* Under admin review */}
+        {escrowState === 'under_admin_review' && (
+          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
+            <div className="mb-3 flex items-center gap-2">
+              <Shield className="w-6 h-6 text-gray-900" />
+              <h2 className="font-bold text-lg text-gray-900">Under Review</h2>
+            </div>
+            <p className="text-sm text-gray-600">
+              This dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
+            </p>
+            <DisputeTimeline events={events} signedUrls={signedUrls} />
+          </div>
+        )}
+
         {/* Released */}
         {escrowState === 'released' && (
           <div className="rounded-2xl shadow-lg border-2 border-green-500 bg-white p-5 mb-6">

@@ -31,7 +31,7 @@ export interface Database {
           avatar_url: string | null;
           cover_url: string | null;
           bio: string | null;
-          role: 'freelancer' | 'client';
+          role: 'freelancer' | 'client' | 'admin';
           gender: Gender | null;
           pronouns: string | null;
           preferred_currency: string | null;

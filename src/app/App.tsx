@@ -32,6 +32,7 @@ import { MessagesPage } from './pages/MessagesPage';
 import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
 import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 // Loading component
 function LoadingScreen() {
@@ -367,6 +368,14 @@ export default function App() {
                 <MainLayout>
                   <SettingsPage />
                 </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboardPage />
               </ProtectedRoute>
             }
           />

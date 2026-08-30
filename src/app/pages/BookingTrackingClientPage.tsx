@@ -26,8 +26,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeCategory, setDisputeCategory] = useState<'no_show' | 'not_as_agreed' | 'other'>('not_as_agreed');
+  const [disputeCategory, setDisputeCategory] = useState<'no_show' | 'not_performed' | 'differed_from_agreement' | 'other'>('no_show');
   const [disputeReason, setDisputeReason] = useState('');
+  const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   const [showRespondForm, setShowRespondForm] = useState(false);
@@ -71,17 +72,28 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   };
 
   const handleSubmitDispute = async () => {
-    if (!booking || !disputeReason.trim()) {
+    if (!booking || !user?.id || !disputeReason.trim()) {
       setError('Describe the problem before submitting.');
       return;
     }
     setIsSubmittingDispute(true);
     setError(null);
 
+    const photoPaths: string[] = [];
+    for (const file of disputeFiles) {
+      const uploadResponse = await DataService.uploadBookingEvidencePhoto(user.id, booking.id, file);
+      if (uploadResponse.error || !uploadResponse.path) {
+        setError('Unable to upload one of the evidence photos.');
+        setIsSubmittingDispute(false);
+        return;
+      }
+      photoPaths.push(uploadResponse.path);
+    }
+
     const response = await DataService.openBookingDispute(booking.id, {
       category: disputeCategory,
       reason: disputeReason.trim(),
-      evidencePhotoPaths: [],
+      evidencePhotoPaths: photoPaths,
     });
 
     setIsSubmittingDispute(false);
@@ -93,6 +105,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
     setShowDisputeForm(false);
     setDisputeReason('');
+    setDisputeFiles([]);
     await refresh();
   };
 
@@ -127,6 +140,56 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'client';
   const roundsExhausted = Number(booking?.dispute_round || 0) >= MAX_DISPUTE_ROUNDS;
+  // No known schedule data at all shouldn't permanently block a client from
+  // ever reporting a problem - default to allowing it in that case.
+  const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
+
+  const renderDisputeForm = () => (
+    <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="font-bold text-gray-900">Report a Problem</p>
+        <button onClick={() => setShowDisputeForm(false)} className="text-gray-400 hover:text-gray-900">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <label className="mb-1 block text-xs font-semibold text-gray-600">Reason</label>
+      <select
+        value={disputeCategory}
+        onChange={(e) => setDisputeCategory(e.target.value as any)}
+        className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+      >
+        <option value="no_show">Freelancer did not show up</option>
+        <option value="not_performed">Freelancer did not perform the service</option>
+        <option value="differed_from_agreement">Service significantly differed from agreement</option>
+        <option value="other">Other</option>
+      </select>
+      <label className="mb-1 block text-xs font-semibold text-gray-600">What went wrong?</label>
+      <textarea
+        value={disputeReason}
+        onChange={(e) => setDisputeReason(e.target.value)}
+        placeholder="Describe the issue in detail..."
+        className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+      />
+      <div className="mb-3">
+        <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence (optional) — screenshots, photos, etc.</label>
+        <input
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => setDisputeFiles(Array.from(e.target.files || []).slice(0, 6))}
+          className="text-xs"
+        />
+        {disputeFiles.length > 0 && <p className="mt-1 text-xs text-gray-500">{disputeFiles.length} file(s) selected</p>}
+      </div>
+      <button
+        onClick={() => void handleSubmitDispute()}
+        disabled={isSubmittingDispute}
+        className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
+      >
+        {isSubmittingDispute ? 'Submitting...' : 'Submit Dispute'}
+      </button>
+    </div>
+  );
 
   if (isLoading) {
     return (
@@ -279,6 +342,17 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
             </div>
             <p className="mt-2 text-xs text-gray-500">Waiting for the freelancer to mark this booking complete.</p>
+
+            {hasScheduledTimePassed && !showDisputeForm && (
+              <button
+                onClick={() => setShowDisputeForm(true)}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-all"
+              >
+                <AlertCircle className="w-4 h-4" />
+                Report a Problem
+              </button>
+            )}
+            {hasScheduledTimePassed && showDisputeForm && renderDisputeForm()}
           </div>
         )}
 
@@ -325,40 +399,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
             )}
 
-            {showDisputeForm && (
-              <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-bold text-gray-900">Report a Problem</p>
-                  <button onClick={() => setShowDisputeForm(false)} className="text-gray-400 hover:text-gray-900">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Category</label>
-                <select
-                  value={disputeCategory}
-                  onChange={(e) => setDisputeCategory(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                >
-                  <option value="no_show">Freelancer did not show up</option>
-                  <option value="not_as_agreed">Service was not as agreed</option>
-                  <option value="other">Other</option>
-                </select>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">What went wrong?</label>
-                <textarea
-                  value={disputeReason}
-                  onChange={(e) => setDisputeReason(e.target.value)}
-                  placeholder="Describe the issue in detail..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <button
-                  onClick={() => void handleSubmitDispute()}
-                  disabled={isSubmittingDispute}
-                  className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
-                >
-                  {isSubmittingDispute ? 'Submitting...' : 'Submit Dispute'}
-                </button>
-              </div>
-            )}
+            {showDisputeForm && renderDisputeForm()}
           </div>
         )}
 
@@ -398,7 +439,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             )}
 
             {canRespondToDispute && roundsExhausted && (
-              <p className="text-xs text-gray-500">Maximum dispute rounds reached — the system will make a final decision.</p>
+              <p className="text-xs text-gray-500">Maximum dispute rounds reached — this will be escalated to CreativeHUB support for a final decision.</p>
             )}
 
             {canRespondToDispute && showRespondForm && (
@@ -430,6 +471,20 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                 Waiting for {booking.dispute_awaiting === 'freelancer' ? 'the freelancer' : 'you'} to respond.
               </p>
             )}
+          </div>
+        )}
+
+        {/* Under admin review */}
+        {escrowState === 'under_admin_review' && (
+          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
+            <div className="mb-3 flex items-center gap-2">
+              <Shield className="w-6 h-6 text-gray-900" />
+              <h2 className="font-bold text-lg text-gray-900">Under Review</h2>
+            </div>
+            <p className="text-sm text-gray-600">
+              Your dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
+            </p>
+            <DisputeTimeline events={events} signedUrls={signedUrls} />
           </div>
         )}
 
