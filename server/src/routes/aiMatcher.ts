@@ -176,6 +176,39 @@ router.post('/detect', upload.single('image'), async (req, res) => {
   }
 });
 
+router.post('/embed', async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ message: 'AI matching is not configured. Set GEMINI_API_KEY in server/.env.' });
+  }
+
+  const { text } = req.body as { text?: string };
+  if (!text || !text.trim()) {
+    return res.status(400).json({ message: 'text is required.' });
+  }
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const response = await ai.models.embedContent({
+      model: 'gemini-embedding-2',
+      contents: text,
+      config: { outputDimensionality: 768 },
+    });
+    const embedding = response.embeddings?.[0]?.values;
+    if (!embedding || embedding.length !== 768) {
+      return res.status(502).json({ message: 'Embedding generation failed.' });
+    }
+    return res.json({ embedding });
+  } catch (error) {
+    console.error(error);
+    const status = (error as { status?: number } | null)?.status;
+    const message =
+      status === 503
+        ? 'The AI model is experiencing high demand right now. Please try again in a moment.'
+        : 'Unable to generate an embedding right now.';
+    return res.status(502).json({ message });
+  }
+});
+
 const handleUploadError: ErrorRequestHandler = (error, _req, res, _next) => {
   if (error instanceof multer.MulterError) {
     return res.status(400).json({ message: error.message });

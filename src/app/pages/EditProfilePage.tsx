@@ -5,6 +5,7 @@ import { LeafletLocationPicker, type LocationPoint } from '../../components/comm
 import { LocationChipList } from '../../components/common/LocationChipList';
 import { TagSelector } from '../../components/common/TagSelector';
 import { FREELANCER_CATEGORIES, isFreelancerCategory, suggestedSkillsForCategory, suggestedStylesForCategory } from '../../lib/categories';
+import { buildFreelancerStyleProfileText, embedText } from '../../lib/aiMatching';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -425,6 +426,25 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     }
 
     if (isFreelancer) {
+      // Regenerate the AI style-matching embedding on every save so it never
+      // drifts from the category/skills/styles/description actually shown on
+      // the profile. A failed embed call explicitly nulls it out rather than
+      // leaving a stale vector in place — matching a freelancer against
+      // outdated style data would be worse than temporarily excluding them
+      // from AI Match Finder until their next successful save.
+      let styleEmbedding: number[] | null = null;
+      try {
+        const profileText = buildFreelancerStyleProfileText({
+          category: freelancerForm.title,
+          skills: freelancerForm.skills,
+          styles: freelancerForm.styles,
+          description: basicForm.bio,
+        });
+        styleEmbedding = await embedText(profileText);
+      } catch {
+        setError('Style matching will update the next time you save.');
+      }
+
       const freelancerPayload = {
         title: freelancerForm.title,
         description: basicForm.bio,
@@ -433,6 +453,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         is_available: freelancerForm.is_available,
         skills: freelancerForm.skills,
         styles: freelancerForm.styles,
+        style_embedding: styleEmbedding,
         studio_name: workingForm.studio_name.trim() || null,
         studio_locations: workingForm.studio_locations,
         locations: workingForm.locations,

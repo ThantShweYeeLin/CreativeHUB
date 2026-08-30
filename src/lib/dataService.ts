@@ -428,32 +428,45 @@ export class DataService {
     return { data: firstAttempt.data, error: firstAttempt.error };
   }
 
-  static async searchFreelancersByCategoryAndStyle(category: string, style?: string | null) {
+  // Semantic style matching — ranks category-filtered freelancers by cosine
+  // similarity between queryEmbedding and each freelancer's style_embedding
+  // (see supabase/ai_style_matching.sql's match_freelancer_styles function).
+  static async matchFreelancersByStyle(category: string, queryEmbedding: number[], limit = 10) {
     if (!hasSupabaseConfig) {
       return { data: [], error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+    }
+
+    const rpcResponse = await (supabase as any).rpc('match_freelancer_styles', {
+      query_embedding: queryEmbedding,
+      match_category: category,
+      match_count: limit,
+    });
+
+    if (rpcResponse.error || !rpcResponse.data) {
+      return { data: [], error: rpcResponse.error };
+    }
+
+    const ranked: Array<{ user_id: string; similarity: number }> = rpcResponse.data;
+    const userIds = ranked.map((row) => row.user_id);
+    if (userIds.length === 0) {
+      return { data: [], error: null };
     }
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
       .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), social_links(*)')
-      .eq('is_available', true)
-      .eq('title', category);
+      .in('user_id', userIds);
 
     if (error || !data) {
-      return { data: data ?? [], error };
+      return { data: [], error };
     }
 
-    // Freelancers whose styles include the detected style are ranked first;
-    // everyone else in the category still shows up beneath them.
-    const ranked = style
-      ? [...data].sort((a, b) => {
-          const aMatch = Array.isArray(a.styles) && a.styles.includes(style) ? 1 : 0;
-          const bMatch = Array.isArray(b.styles) && b.styles.includes(style) ? 1 : 0;
-          return bMatch - aMatch;
-        })
-      : data;
+    const similarityByUserId = new Map(ranked.map((row) => [row.user_id, row.similarity]));
+    const merged = (data as any[])
+      .map((row) => ({ ...row, similarity: similarityByUserId.get(row.user_id) ?? 0 }))
+      .sort((a, b) => b.similarity - a.similarity);
 
-    return { data: ranked, error: null };
+    return { data: merged, error: null };
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {

@@ -550,8 +550,8 @@ export function ExplorePage() {
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
-              <div className="font-semibold text-sm md:text-base text-gray-900">AI Matcher</div>
-              <div className="text-xs text-gray-500 hidden md:block">Upload & Find Similar</div>
+              <div className="font-semibold text-sm md:text-base text-gray-900">AI Match Finder</div>
+              <div className="text-xs text-gray-500 hidden md:block">Describe or upload to match</div>
             </div>
           </button>
         </div>
