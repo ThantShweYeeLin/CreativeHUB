@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
-import { formatCountdown, MAX_DISPUTE_ROUNDS } from '../../lib/bookingEscrow';
+import { formatCountdown } from '../../lib/bookingEscrow';
 import { formatCardLabel } from '../../lib/paymentCard';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
@@ -139,7 +139,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   };
 
   const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'client';
-  const roundsExhausted = Number(booking?.dispute_round || 0) >= MAX_DISPUTE_ROUNDS;
   // No known schedule data at all shouldn't permanently block a client from
   // ever reporting a problem - default to allowing it in that case.
   const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
@@ -408,7 +407,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
           <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
             <div className="mb-3 flex items-center gap-2">
               <AlertCircle className="w-6 h-6 text-amber-600" />
-              <h2 className="font-bold text-lg text-gray-900">Dispute — Round {booking.dispute_round} of {MAX_DISPUTE_ROUNDS}</h2>
+              <h2 className="font-bold text-lg text-gray-900">Dispute</h2>
             </div>
             {formatCountdown(booking.dispute_response_deadline) && (
               <p className="mb-3 text-xs font-semibold text-amber-600">
@@ -427,19 +426,13 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                 >
                   <CheckCircle className="h-4 w-4" /> Accept & Confirm
                 </button>
-                {!roundsExhausted && (
-                  <button
-                    onClick={() => setShowRespondForm(true)}
-                    className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black"
-                  >
-                    Still Not Satisfied
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowRespondForm(true)}
+                  className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black"
+                >
+                  Still Not Satisfied
+                </button>
               </div>
-            )}
-
-            {canRespondToDispute && roundsExhausted && (
-              <p className="text-xs text-gray-500">Maximum dispute rounds reached — this will be escalated to CreativeHUB support for a final decision.</p>
             )}
 
             {canRespondToDispute && showRespondForm && (
@@ -450,6 +443,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+                <p className="mb-3 text-xs text-gray-500">
+                  This will freeze the deposit and send your case to CreativeHUB support for a final decision.
+                </p>
                 <textarea
                   value={respondReason}
                   onChange={(e) => setRespondReason(e.target.value)}
@@ -461,7 +457,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                   disabled={isResponding}
                   className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
                 >
-                  {isResponding ? 'Submitting...' : 'Submit'}
+                  {isResponding ? 'Submitting...' : 'Submit to Support'}
                 </button>
               </div>
             )}

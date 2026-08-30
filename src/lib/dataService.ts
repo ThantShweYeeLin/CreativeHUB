@@ -10,7 +10,7 @@ import {
 } from './groupRequest';
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
-import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS, MAX_DISPUTE_ROUNDS } from './bookingEscrow';
+import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -1389,19 +1389,13 @@ export class DataService {
       return { data, error: null };
     }
 
-    // actor === 'client', trying to escalate to another round
-    if (currentRound >= MAX_DISPUTE_ROUNDS) {
-      return this.arbitrateBookingDispute(bookingId);
-    }
-
-    const nextRound = currentRound + 1;
+    // actor === 'client', not satisfied with the freelancer's evidence.
+    // With an admin now reviewing every dispute, there's no more automatic
+    // back-and-forth round escalation - the client's continued dissatisfaction
+    // is itself what sends the case to admin review, deposit frozen either way.
     const { data, error } = await supabase
       .from('bookings')
-      .update({
-        dispute_round: nextRound,
-        dispute_awaiting: 'freelancer',
-        dispute_response_deadline: disputeResponseDeadline,
-      } as any)
+      .update({ dispute_status: 'under_admin_review', dispute_awaiting: null } as any)
       .eq('id', bookingId)
       .select()
       .single();
@@ -1412,7 +1406,7 @@ export class DataService {
 
     await (supabase as any).from('booking_events').insert({
       booking_id: bookingId,
-      round: nextRound,
+      round: currentRound,
       actor: 'client',
       action: 'complain',
       reason: input.reason || null,
@@ -1424,8 +1418,8 @@ export class DataService {
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: 'Client is still disputing this booking',
-      message: input.reason ? `The client responded: ${input.reason}` : 'The client is still disputing this booking.',
+      title: 'Dispute escalated to CreativeHUB support',
+      message: 'The client was not satisfied with your evidence. This case is now under review by CreativeHUB support.',
       relatedId: bookingId,
     });
 

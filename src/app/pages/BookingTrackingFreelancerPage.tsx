@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
-import { formatCountdown, MAX_DISPUTE_ROUNDS } from '../../lib/bookingEscrow';
+import { formatCountdown } from '../../lib/bookingEscrow';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 
@@ -308,7 +308,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
             <div className="mb-3 flex items-center gap-2">
               <AlertCircle className="w-6 h-6 text-amber-600" />
-              <h2 className="font-bold text-lg text-gray-900">Dispute — Round {booking.dispute_round} of {MAX_DISPUTE_ROUNDS}</h2>
+              <h2 className="font-bold text-lg text-gray-900">Dispute</h2>
             </div>
             {formatCountdown(booking.dispute_response_deadline) && (
               <p className="mb-3 text-xs font-semibold text-amber-600">

@@ -1,7 +1,6 @@
 export const DEPOSIT_DEADLINE_HOURS = 24;
 export const CLIENT_RESPONSE_DAYS = 7;
 export const DISPUTE_RESPONSE_HOURS = 72;
-export const MAX_DISPUTE_ROUNDS = 2;
 
 export type EscrowState =
   | 'awaiting_deposit'
