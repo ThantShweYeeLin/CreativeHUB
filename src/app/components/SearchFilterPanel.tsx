@@ -1,4 +1,4 @@
-import { X, Sparkles } from 'lucide-react';
+import { X, Sparkles, MapPin, LocateFixed, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
@@ -8,6 +8,8 @@ interface SearchFilterPanelProps {
   onClose: () => void;
   onSearch: (filters: FilterState) => void;
   initialFilters?: FilterState;
+  /** The signed-in client's own profile location, if set — surfaced as a one-click suggested chip. */
+  userLocation?: string | null;
 }
 
 export interface FilterState {
@@ -15,6 +17,8 @@ export interface FilterState {
   priceRange: [number, number];
   locations: string[];
   currency: string;
+  /** Set when "Near Me" is active — filters to freelancers within radiusKm of this point. */
+  nearMe: { latitude: number; longitude: number; radiusKm: number } | null;
 }
 
 const serviceOptions = FREELANCER_CATEGORY_LABELS;
@@ -27,8 +31,9 @@ const locationOptions = [
   'Nakhon Ratchasima',
   'Khon Kaen',
   'Udon Thani',
-  'Others'
 ];
+
+const NEAR_ME_RADIUS_OPTIONS_KM = [10, 25, 50, 100];
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 100000;
@@ -49,7 +54,7 @@ function defaultRangeForCurrency(currencyCode: string): [number, number] {
   return [PRICE_MIN, Math.max(PRICE_MIN, max)];
 }
 
-export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchFilterPanelProps) {
+export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocation }: SearchFilterPanelProps) {
   const { currency: preferredCurrency, setCurrency } = useCurrency();
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, DEFAULT_CURRENCY);
   const [filters, setFilters] = useState<FilterState>({
@@ -57,7 +62,17 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
     priceRange: initialFilters?.priceRange || defaultRangeForCurrency(normalizedPreferredCurrency),
     locations: initialFilters?.locations || [],
     currency: normalizeCurrencyCode(initialFilters?.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+    nearMe: initialFilters?.nearMe || null,
   });
+
+  // A location typed into "Other" is just another entry in filters.locations
+  // (matching already works by substring, so no separate filtering path is
+  // needed) — this only tracks which one, if any, came from that free-text
+  // box so the input can show/hide and stay in sync with it.
+  const [showOtherInput, setShowOtherInput] = useState(false);
+  const [otherLocationDraft, setOtherLocationDraft] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialFilters) {
@@ -66,6 +81,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
         priceRange: initialFilters.priceRange,
         locations: initialFilters.locations,
         currency: normalizeCurrencyCode(initialFilters.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+        nearMe: initialFilters.nearMe || null,
       });
       return;
     }
@@ -74,6 +90,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
       ...prev,
       currency: normalizeCurrencyCode(prev.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
     }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialFilters, normalizedPreferredCurrency]);
 
   const budgetPresets = useMemo(() => {
@@ -150,6 +167,48 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
         ? prev.locations.filter(l => l !== location)
         : [...prev.locations, location]
     }));
+  };
+
+  const applyOtherLocation = () => {
+    const value = otherLocationDraft.trim();
+    if (!value) return;
+    setFilters((prev) => (prev.locations.some((l) => l.toLowerCase() === value.toLowerCase()) ? prev : { ...prev, locations: [...prev.locations, value] }));
+    setOtherLocationDraft('');
+    setShowOtherInput(false);
+  };
+
+  const toggleNearMe = () => {
+    if (filters.nearMe) {
+      setFilters((prev) => ({ ...prev, nearMe: null }));
+      setLocateError(null);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setLocateError('Geolocation is not available in this browser.');
+      return;
+    }
+
+    setLocateError(null);
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setIsLocating(false);
+        setFilters((prev) => ({
+          ...prev,
+          nearMe: { latitude: position.coords.latitude, longitude: position.coords.longitude, radiusKm: 50 },
+        }));
+      },
+      (geoError) => {
+        setIsLocating(false);
+        setLocateError(geoError.code === geoError.PERMISSION_DENIED ? 'Location permission denied.' : 'Unable to get your location.');
+      },
+      { timeout: 10000 }
+    );
+  };
+
+  const setNearMeRadius = (radiusKm: number) => {
+    setFilters((prev) => (prev.nearMe ? { ...prev, nearMe: { ...prev.nearMe, radiusKm } } : prev));
   };
 
   const handleSearch = () => {
@@ -279,6 +338,50 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
           {/* Preferred Locations */}
           <div>
             <h3 className="text-xl font-bold text-gray-900 mb-4">Preferred Location</h3>
+
+            <div className="mb-3 flex flex-wrap gap-3">
+              <button
+                onClick={toggleNearMe}
+                disabled={isLocating}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all disabled:opacity-70 ${
+                  filters.nearMe
+                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
+                {isLocating ? 'Locating...' : 'Near Me'}
+              </button>
+
+              {userLocation && !filters.locations.some((l) => l.toLowerCase() === userLocation.toLowerCase()) && (
+                <button
+                  onClick={() => toggleLocation(userLocation)}
+                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white px-6 py-3 font-semibold text-gray-700 transition-all hover:border-gray-500 hover:bg-gray-50"
+                >
+                  <MapPin className="h-4 w-4" /> Use my area: {userLocation}
+                </button>
+              )}
+            </div>
+
+            {filters.nearMe && (
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 px-4 py-3">
+                <span className="text-sm font-semibold text-gray-700">Within</span>
+                {NEAR_ME_RADIUS_OPTIONS_KM.map((km) => (
+                  <button
+                    key={km}
+                    onClick={() => setNearMeRadius(km)}
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
+                      filters.nearMe?.radiusKm === km ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {km} km
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {locateError && <p className="mb-3 text-sm text-red-600">{locateError}</p>}
+
             <div className="flex flex-wrap gap-3">
               {locationOptions.map((location) => {
                 const isSelected = filters.locations.includes(location);
@@ -296,6 +399,44 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
                   </button>
                 );
               })}
+
+              {filters.locations
+                .filter((location) => !locationOptions.includes(location) && location.toLowerCase() !== (userLocation || '').toLowerCase())
+                .map((location) => (
+                  <button
+                    key={location}
+                    onClick={() => toggleLocation(location)}
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 font-semibold text-white shadow-lg scale-105"
+                  >
+                    {location} <X className="h-3.5 w-3.5" />
+                  </button>
+                ))}
+
+              {!showOtherInput ? (
+                <button
+                  onClick={() => setShowOtherInput(true)}
+                  className="rounded-xl border-2 border-dashed border-gray-300 px-6 py-3 font-semibold text-gray-600 transition-all hover:border-gray-500 hover:bg-gray-50"
+                >
+                  + Other
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    autoFocus
+                    value={otherLocationDraft}
+                    onChange={(event) => setOtherLocationDraft(event.target.value)}
+                    onKeyDown={(event) => event.key === 'Enter' && applyOtherLocation()}
+                    placeholder="e.g. Krabi"
+                    className="rounded-xl border border-gray-300 px-4 py-3 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
+                  />
+                  <button onClick={applyOtherLocation} className="rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white hover:bg-black">
+                    Add
+                  </button>
+                  <button onClick={() => { setShowOtherInput(false); setOtherLocationDraft(''); }} className="p-2 text-gray-400 hover:text-gray-900">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -303,14 +444,18 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters }: SearchF
         {/* Footer */}
         <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-6 rounded-b-3xl flex items-center justify-between">
           <button
-            onClick={() =>
+            onClick={() => {
               setFilters({
                 services: [],
                 priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
                 locations: [],
                 currency: normalizedPreferredCurrency,
-              })
-            }
+                nearMe: null,
+              });
+              setShowOtherInput(false);
+              setOtherLocationDraft('');
+              setLocateError(null);
+            }}
             className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors"
           >
             Clear All

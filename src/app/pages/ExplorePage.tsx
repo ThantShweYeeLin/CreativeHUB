@@ -125,8 +125,6 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
   );
 }
 
-const knownLocations = ['bangkok', 'chiang mai', 'pattaya', 'phuket', 'nakhon ratchasima', 'khon kaen', 'udon thani'];
-
 function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
@@ -134,6 +132,17 @@ function normalizeText(value: string | null | undefined) {
 /** "Photographer" -> "Photographers", "Makeup Artist" -> "Makeup Artists", etc. — a plain "s" suffix works for all five canonical labels. */
 function pluralizeCategory(label: string) {
   return `${label}s`;
+}
+
+/** Great-circle distance between two lat/lng points, in kilometers. */
+function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export function ExplorePage() {
@@ -147,11 +156,13 @@ export function ExplorePage() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [clientInterests, setClientInterests] = useState<string[]>([]);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
+  const [userLocation, setUserLocation] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     services: [],
     priceRange: [0, 10000],
     locations: [],
     currency: normalizedPreferredCurrency,
+    nearMe: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -234,9 +245,11 @@ export function ExplorePage() {
     let isMounted = true;
 
     DataService.getUser(user.id).then(({ data }) => {
-      if (isMounted && Array.isArray((data as any)?.client_interests)) {
+      if (!isMounted) return;
+      if (Array.isArray((data as any)?.client_interests)) {
         setClientInterests((data as any).client_interests);
       }
+      setUserLocation((data as any)?.location || null);
     });
 
     DataService.getUserFavorites(user.id).then(({ data }) => {
@@ -418,17 +431,20 @@ export function ExplorePage() {
         const serviceMatch = filters.services.length === 0 || (!!source?.title && filters.services.includes(source.title));
 
         const normalizedLocation = normalizeText(profile.location);
-        const isKnownLocation = knownLocations.some((location) => normalizedLocation.includes(location));
 
-        const locationMatch =
-          filters.locations.length === 0 ||
-          filters.locations.some((location) => {
-            const normalizedSelectedLocation = normalizeText(location);
-            if (normalizedSelectedLocation === 'others') {
-              return !!normalizedLocation && !isKnownLocation;
-            }
-            return normalizedLocation.includes(normalizedSelectedLocation);
-          });
+        const textLocationMatch =
+          filters.locations.length > 0 &&
+          filters.locations.some((location) => normalizedLocation.includes(normalizeText(location)));
+
+        const freelancerLat = Number(source?.users?.location_latitude);
+        const freelancerLng = Number(source?.users?.location_longitude);
+        const nearMeMatch =
+          !!filters.nearMe &&
+          Number.isFinite(freelancerLat) &&
+          Number.isFinite(freelancerLng) &&
+          haversineDistanceKm(filters.nearMe.latitude, filters.nearMe.longitude, freelancerLat, freelancerLng) <= filters.nearMe.radiusKm;
+
+        const locationMatch = (filters.locations.length === 0 && !filters.nearMe) || textLocationMatch || nearMeMatch;
 
         const hourlyRate = Number(source?.hourly_rate);
         const sourceCurrency = normalizeCurrencyCode(source?.users?.preferred_currency || source?.preferred_currency || 'THB', 'THB');
@@ -483,6 +499,12 @@ export function ExplorePage() {
 
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
+  const activeAdvancedFilterCount = useMemo(() => {
+    const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
+    const isDefaultPrice = filters.priceRange[0] === 0 && filters.priceRange[1] === defaultMaxForCurrency;
+    return filters.services.length + filters.locations.length + (filters.nearMe ? 1 : 0) + (isDefaultPrice ? 0 : 1);
+  }, [filters]);
+
   return (
     <>
       {/* Search and AI Matcher */}
@@ -532,7 +554,7 @@ export function ExplorePage() {
         <div className="flex gap-3">
           <button
             onClick={() => setShowSearchFilter(true)}
-            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
+            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
@@ -541,6 +563,11 @@ export function ExplorePage() {
               <div className="font-semibold text-sm md:text-base text-gray-900">Advanced Filter</div>
               <div className="text-xs text-gray-500 hidden md:block">Refine Your Search</div>
             </div>
+            {activeAdvancedFilterCount > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-900 px-1.5 text-xs font-bold text-white shadow-md">
+                {activeAdvancedFilterCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -650,6 +677,7 @@ export function ExplorePage() {
       {showSearchFilter && (
         <SearchFilterPanel
           initialFilters={filters}
+          userLocation={userLocation}
           onClose={() => setShowSearchFilter(false)}
           onSearch={(nextFilters) => setFilters(nextFilters)}
         />
