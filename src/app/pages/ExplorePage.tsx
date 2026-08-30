@@ -157,6 +157,7 @@ export function ExplorePage() {
   const [error, setError] = useState<string | null>(null);
   const [showAIMatcher, setShowAIMatcher] = useState(false);
   const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherResult[] | null>(null);
+  const [aiMatcherNote, setAIMatcherNote] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -604,8 +605,10 @@ export function ExplorePage() {
       {!isLoading && aiMatcherResults && (
         <AIImageMatcherResults
           results={aiMatcherResults}
+          note={aiMatcherNote}
           onReset={() => {
             setAIMatcherResults(null);
+            setAIMatcherNote(null);
             setShowAIMatcher(true);
           }}
         />
@@ -654,7 +657,10 @@ export function ExplorePage() {
       <AIImageMatcher
         open={showAIMatcher}
         onClose={() => setShowAIMatcher(false)}
-        onResults={setAIMatcherResults}
+        onResults={(results, note) => {
+          setAIMatcherResults(results);
+          setAIMatcherNote(note ?? null);
+        }}
       />
     </>
   );

@@ -40,16 +40,19 @@ export interface StyleDetection {
   confidence: number;
 }
 
-export async function detectImageStyle(file: File): Promise<{ detections: StyleDetection[]; taxonomy: Record<string, string[]> }> {
+export async function detectImageStyle(files: File[]): Promise<{ detections: StyleDetection[]; taxonomy: Record<string, string[]> }> {
   const formData = new FormData();
-  formData.append('image', file);
+  for (const file of files) {
+    formData.append('images', file);
+  }
 
-  // The underlying Gemini call has no server-side timeout and can, in
-  // practice, take minutes rather than seconds — image analysis is optional
-  // context here, so a slow response should fail fast (falling back to
-  // text-only matching) rather than leaving the form stuck indefinitely.
+  // The server now bounds each Gemini attempt to 15s and retries/falls back
+  // across up to 3 attempts — this client-side timeout is a backstop above
+  // that (not the primary defense), so image analysis fails fast rather
+  // than leaving the form stuck indefinitely if something upstream still
+  // hangs.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const timeoutId = setTimeout(() => controller.abort(), 50000);
 
   let response: Response;
   try {

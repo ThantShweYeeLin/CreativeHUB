@@ -26,7 +26,7 @@ const uploadDirectory = path.join(os.tmpdir(), 'creativehub-ai-matcher');
 
 const upload = multer({
   dest: uploadDirectory,
-  limits: { fileSize: 8 * 1024 * 1024, files: 1 },
+  limits: { fileSize: 8 * 1024 * 1024, files: 6 },
   fileFilter: (_req, file, callback) => {
     if (!allowedImageTypes.has(file.mimetype)) {
       callback(new Error('Only JPG, PNG, WebP, and GIF images are supported.'));
@@ -37,14 +37,21 @@ const upload = multer({
   },
 });
 
-router.post('/detect', upload.single('image'), async (req, res) => {
-  const file = req.file;
-  if (!file) {
-    return res.status(400).json({ message: 'Upload an inspiration image.' });
+// A single generateContent attempt can, in practice, hang far longer than
+// its 503/429 retry logic accounts for — Google's SDK never times an
+// attempt out on its own. Race each attempt against this so a stuck call
+// falls through to the next model/attempt instead of blocking the request
+// (and the client's own timeout) for minutes.
+const GENERATION_ATTEMPT_TIMEOUT_MS = 15000;
+
+router.post('/detect', upload.array('images', 6), async (req, res) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    return res.status(400).json({ message: 'Upload at least one inspiration image.' });
   }
 
   if (!process.env.GEMINI_API_KEY) {
-    await fs.unlink(file.path).catch(() => {});
+    await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => {})));
     return res.status(500).json({ message: 'AI matching is not configured. Set GEMINI_API_KEY in server/.env.' });
   }
 
@@ -53,8 +60,12 @@ router.post('/detect', upload.single('image'), async (req, res) => {
     const categories = Object.keys(taxonomy);
     const allStyles = Array.from(new Set(Object.values(taxonomy).flat()));
 
-    const imageData = (await fs.readFile(file.path)).toString('base64');
-    const mediaType = file.mimetype;
+    const imageParts = await Promise.all(
+      files.map(async (file) => {
+        const data = (await fs.readFile(file.path)).toString('base64');
+        return createPartFromBase64(data, file.mimetype);
+      })
+    );
 
     const detectionItemSchema = {
       type: Type.OBJECT,
@@ -88,21 +99,26 @@ router.post('/detect', upload.single('image'), async (req, res) => {
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
+    const promptText =
+      imageParts.length > 1
+        ? `Classify these ${imageParts.length} inspiration images together, as one combined style, against the allowed category/style lists. Return your top 1-3 most likely categories, ranked most likely first — only include a second or third candidate if it is a genuinely plausible alternative, not just to fill the list. For each, include a style only if one clearly matches across the images.`
+        : 'Classify this inspiration image against the allowed category/style lists. Return your top 1-3 most likely categories, ranked most likely first — only include a second or third candidate if it is a genuinely plausible alternative, not just to fill the list. For each, include a style only if one clearly matches.';
+
     // gemini-3.7-flash (very recently released) is currently under heavy
-    // capacity strain on Google's side and intermittently returns 503. Retry
-    // it once, then fall back to gemini-3.6-flash — gemini-2.5-flash is no
-    // longer available to new API keys (confirmed via a live 404 from Google).
+    // capacity strain on Google's side and intermittently returns 503, or
+    // simply hangs with no error at all. Retry it once, then fall back to
+    // gemini-3.6-flash — gemini-2.5-flash is no longer available to new API
+    // keys (confirmed via a live 404 from Google).
     const modelsToTry = ['gemini-3.7-flash', 'gemini-3.7-flash', 'gemini-3.6-flash'];
     let response: Awaited<ReturnType<typeof ai.models.generateContent>> | undefined;
     let lastError: unknown;
     for (let attempt = 0; attempt < modelsToTry.length; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), GENERATION_ATTEMPT_TIMEOUT_MS);
       try {
         response = await ai.models.generateContent({
           model: modelsToTry[attempt],
-          contents: createUserContent([
-            createPartFromBase64(imageData, mediaType),
-            'Classify this inspiration image against the allowed category/style lists. Return your top 1-3 most likely categories, ranked most likely first — only include a second or third candidate if it is a genuinely plausible alternative, not just to fill the list. For each, include a style only if one clearly matches.',
-          ]),
+          contents: createUserContent([...imageParts, promptText]),
           config: {
             systemInstruction:
               'You classify creative-industry reference photos for CreativeHUB, a freelancer marketplace. ' +
@@ -110,16 +126,22 @@ router.post('/detect', upload.single('image'), async (req, res) => {
               JSON.stringify(taxonomy, null, 2),
             responseMimeType: 'application/json',
             responseSchema,
+            abortSignal: controller.signal,
           },
         });
         lastError = undefined;
         break;
       } catch (attemptError) {
         lastError = attemptError;
-        const status = (attemptError as { status?: number } | null)?.status;
-        const retryable = status === 503 || status === 429;
+        const status = (attemptError as { status?: number; name?: string } | null)?.status;
+        const timedOut = (attemptError as { name?: string } | null)?.name === 'AbortError';
+        const retryable = status === 503 || status === 429 || timedOut;
         if (!retryable || attempt === modelsToTry.length - 1) throw attemptError;
-        await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+        if (!timedOut) {
+          await new Promise((resolve) => setTimeout(resolve, 1000 * 2 ** attempt));
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
     if (lastError || !response) throw lastError;
@@ -172,7 +194,7 @@ router.post('/detect', upload.single('image'), async (req, res) => {
         : 'Unable to analyze the image right now.';
     return res.status(502).json({ message });
   } finally {
-    await fs.unlink(file.path).catch(() => {});
+    await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => {})));
   }
 });
 

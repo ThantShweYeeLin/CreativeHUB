@@ -12,6 +12,7 @@ import { buildClientQueryText, detectImageStyle, embedText } from '../../lib/aiM
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const DESCRIPTION_MIN = 10;
 const DESCRIPTION_MAX = 500;
+const MAX_IMAGES = 6;
 
 export interface AIMatcherResult {
   id: string;
@@ -26,10 +27,8 @@ export interface AIMatcherResult {
   socialLinks: SocialLink[];
 }
 
-type ImageAnalysisState = 'idle' | 'analyzing' | 'done' | 'error';
-
-interface AIImageMatcherProps { open: boolean; onClose: () => void; onResults: (results: AIMatcherResult[]) => void }
-interface AIImageMatcherResultsProps { results: AIMatcherResult[]; onReset: () => void }
+interface AIImageMatcherProps { open: boolean; onClose: () => void; onResults: (results: AIMatcherResult[], note?: string) => void }
+interface AIImageMatcherResultsProps { results: AIMatcherResult[]; note?: string | null; onReset: () => void }
 
 function mapFreelancerRow(row: any): AIMatcherResult {
   const user = row.users || {};
@@ -53,14 +52,11 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
   const [description, setDescription] = useState('');
   const [dragging, setDragging] = useState(false);
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysisState>('idle');
-  const [detectedCategory, setDetectedCategory] = useState<string | null>(null);
-  const [detectedStyle, setDetectedStyle] = useState<string | null>(null);
+  const [images, setImages] = useState<{ file: File; previewUrl: string }[]>([]);
   const [imageError, setImageError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState<'idle' | 'analyzing' | 'matching'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   if (!open) return null;
@@ -68,20 +64,20 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
   const trimmedDescription = description.trim();
   const descriptionProvided = trimmedDescription.length > 0;
   const descriptionLengthOk = !descriptionProvided || (trimmedDescription.length >= DESCRIPTION_MIN && trimmedDescription.length <= DESCRIPTION_MAX);
-  const categoryMismatch = detectedCategory && category && detectedCategory !== category;
-  const canSubmit = !!category && descriptionLengthOk && (descriptionProvided || !!imageFile) && imageAnalysis !== 'analyzing' && !isSubmitting;
+  const canSubmit = !!category && descriptionLengthOk && (descriptionProvided || images.length > 0) && !isSubmitting;
+
+  const revokeAllPreviews = (list: { previewUrl: string }[]) => {
+    list.forEach((image) => URL.revokeObjectURL(image.previewUrl));
+  };
 
   const reset = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    revokeAllPreviews(images);
     setCategory('');
     setDescription('');
-    setPreviewUrl(null);
-    setImageFile(null);
-    setImageAnalysis('idle');
-    setDetectedCategory(null);
-    setDetectedStyle(null);
+    setImages([]);
     setImageError(null);
     setIsSubmitting(false);
+    setSubmitStage('idle');
     setError(null);
   };
 
@@ -90,43 +86,35 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
     onClose();
   };
 
-  const removeImage = () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(null);
-    setImageFile(null);
-    setImageAnalysis('idle');
-    setDetectedCategory(null);
-    setDetectedStyle(null);
-    setImageError(null);
+  const removeImage = (index: number) => {
+    setImages((current) => {
+      const target = current[index];
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((_, i) => i !== index);
+    });
   };
 
-  const addFile = (fileList: FileList | File[]) => {
+  const addFiles = (fileList: FileList | File[]) => {
     setImageError(null);
-    const file = Array.from(fileList)[0];
-    if (!file) return;
-    if (!acceptedTypes.includes(file.type)) {
+    const incoming = Array.from(fileList);
+    const invalid = incoming.some((file) => !acceptedTypes.includes(file.type));
+    if (invalid) {
       setImageError('Only JPG, PNG, WebP, and GIF images are supported.');
       return;
     }
 
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(URL.createObjectURL(file));
-    setImageFile(file);
-    setDetectedCategory(null);
-    setDetectedStyle(null);
-    setImageAnalysis('analyzing');
-
-    detectImageStyle(file)
-      .then(({ detections }) => {
-        const top = detections[0];
-        setDetectedCategory(top.category);
-        setDetectedStyle(top.style);
-        setImageAnalysis('done');
-      })
-      .catch((analyzeError) => {
-        setImageAnalysis('error');
-        setImageError(analyzeError instanceof Error ? analyzeError.message : 'Unable to analyze the image.');
-      });
+    setImages((current) => {
+      const room = MAX_IMAGES - current.length;
+      if (room <= 0) {
+        setImageError(`You can add up to ${MAX_IMAGES} images.`);
+        return current;
+      }
+      const accepted = incoming.slice(0, room);
+      if (incoming.length > accepted.length) {
+        setImageError(`Only the first ${accepted.length} image(s) were added — up to ${MAX_IMAGES} images total.`);
+      }
+      return [...current, ...accepted.map((file) => ({ file, previewUrl: URL.createObjectURL(file) }))];
+    });
   };
 
   const handleFindMatches = async () => {
@@ -136,12 +124,32 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
 
     try {
       let effectiveDescription = trimmedDescription;
-      if (detectedStyle) {
-        effectiveDescription = effectiveDescription
-          ? `${effectiveDescription}\n\nReference image context: ${detectedStyle} style.`
-          : `${detectedStyle} style, based on an uploaded reference image.`;
+      let mismatchNote: string | undefined;
+
+      if (images.length > 0) {
+        setSubmitStage('analyzing');
+        try {
+          const { detections } = await detectImageStyle(images.map((image) => image.file));
+          const top = detections[0];
+          if (top?.style) {
+            effectiveDescription = effectiveDescription
+              ? `${effectiveDescription}\n\nReference image context: ${top.style} style.`
+              : `${top.style} style, based on ${images.length > 1 ? 'uploaded reference images' : 'an uploaded reference image'}.`;
+          }
+          if (top?.category && top.category !== category) {
+            mismatchNote = `Your reference ${images.length > 1 ? 'images look' : 'image looks'} more like ${top.category}, but results below are matched within ${category} since that's what you selected — the ${images.length > 1 ? 'images were' : 'image was'} only used as style inspiration.`;
+          }
+        } catch (imageAnalysisError) {
+          // Image analysis is optional context — a slow or failed classification
+          // should never block the search itself, only fall back to text-only.
+          mismatchNote =
+            imageAnalysisError instanceof Error
+              ? `${imageAnalysisError.message} Matching continues using your description only.`
+              : 'Unable to analyze your image(s) — matching continues using your description only.';
+        }
       }
 
+      setSubmitStage('matching');
       const queryText = buildClientQueryText({ category, description: effectiveDescription });
       const embedding = await embedText(queryText);
       const { data, error: matchError } = await DataService.matchFreelancersByStyle(category, embedding);
@@ -150,11 +158,12 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
       }
 
       const results = (data || []).map(mapFreelancerRow);
-      onResults(results);
+      onResults(results, mismatchNote);
       handleClose();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Unable to find matches right now.');
       setIsSubmitting(false);
+      setSubmitStage('idle');
     }
   };
 
@@ -212,57 +221,53 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-bold text-gray-950">3. Add inspiration <span className="font-normal text-gray-400">(optional)</span></label>
+              <label className="mb-1.5 block text-sm font-bold text-gray-950">3. Add inspiration images <span className="font-normal text-gray-400">(optional)</span></label>
               <input
                 ref={inputRef}
                 type="file"
+                multiple
                 accept="image/jpeg,image/png,image/webp,image/gif"
                 className="hidden"
                 onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                  if (event.target.files) addFile(event.target.files);
+                  if (event.target.files) addFiles(event.target.files);
                   event.target.value = '';
                 }}
               />
 
-              {!previewUrl ? (
+              {images.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {images.map((image, index) => (
+                    <div key={image.previewUrl} className="group relative h-16 w-16 flex-shrink-0">
+                      <img src={image.previewUrl} alt={`Inspiration ${index + 1}`} className="h-16 w-16 rounded-lg object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-gray-900 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                        aria-label={`Remove image ${index + 1}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {images.length < MAX_IMAGES && (
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
                   onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
                   onDragLeave={() => setDragging(false)}
-                  onDrop={(event: DragEvent<HTMLButtonElement>) => { event.preventDefault(); setDragging(false); addFile(event.dataTransfer.files); }}
-                  className={`flex min-h-[120px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-6 text-center ${dragging ? 'border-gray-950 bg-gray-50' : 'border-gray-300 bg-white hover:border-gray-500 hover:bg-gray-50'}`}
+                  onDrop={(event: DragEvent<HTMLButtonElement>) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}
+                  className={`flex min-h-[100px] w-full flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-6 text-center ${dragging ? 'border-gray-950 bg-gray-50' : 'border-gray-300 bg-white hover:border-gray-500 hover:bg-gray-50'}`}
                 >
                   <CloudUpload className="mb-2 h-6 w-6 text-gray-500" />
-                  <p className="text-sm font-semibold text-gray-900">Upload a reference image</p>
-                  <p className="mt-1 text-xs text-gray-500">JPG, PNG, WebP, or GIF</p>
+                  <p className="text-sm font-semibold text-gray-900">{images.length > 0 ? 'Add another image' : 'Upload reference images'}</p>
+                  <p className="mt-1 text-xs text-gray-500">JPG, PNG, WebP, or GIF — up to {MAX_IMAGES}</p>
                 </button>
-              ) : (
-                <div className="flex items-center gap-4 rounded-xl border border-gray-200 bg-gray-50 p-3">
-                  <img src={previewUrl} alt="Inspiration upload" className="h-16 w-16 flex-shrink-0 rounded-lg object-cover" />
-                  <div className="min-w-0 flex-1">
-                    {imageAnalysis === 'analyzing' && (
-                      <p className="flex items-center gap-1.5 text-xs font-semibold text-gray-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing image...</p>
-                    )}
-                    {imageAnalysis === 'done' && detectedStyle && (
-                      <p className="text-xs font-semibold text-gray-700">Detected style: {detectedStyle}</p>
-                    )}
-                    {imageAnalysis === 'error' && imageError && (
-                      <p className="text-xs font-semibold text-red-600">{imageError}</p>
-                    )}
-                  </div>
-                  <button type="button" onClick={removeImage} className="flex-shrink-0 text-gray-400 hover:text-gray-900" aria-label="Remove image">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
               )}
 
-              {categoryMismatch && (
-                <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-                  <span>The reference image looks like <strong>{detectedCategory}</strong>, but we'll match within <strong>{category}</strong> since that's what you chose — the image is only used as style inspiration.</span>
-                </div>
-              )}
+              {imageError && <p className="mt-2 text-xs font-semibold text-red-600">{imageError}</p>}
             </div>
 
             <button
@@ -272,7 +277,7 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3.5 text-sm font-bold text-white transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              {isSubmitting ? 'Finding your match...' : 'Find My Creative Match'}
+              {submitStage === 'analyzing' ? 'Analyzing your image...' : submitStage === 'matching' ? 'Finding your match...' : 'Find My Creative Match'}
             </button>
           </div>
         </div>
@@ -281,7 +286,7 @@ export function AIImageMatcher({ open, onClose, onResults }: AIImageMatcherProps
   );
 }
 
-export function AIImageMatcherResults({ results, onReset }: AIImageMatcherResultsProps) {
+export function AIImageMatcherResults({ results, note, onReset }: AIImageMatcherResultsProps) {
   const navigate = useNavigate();
   const sorted = useMemo(() => [...results].sort((a, b) => b.matchPercent - a.matchPercent), [results]);
 
@@ -295,6 +300,12 @@ export function AIImageMatcherResults({ results, onReset }: AIImageMatcherResult
         </div>
         <button onClick={onReset} className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700">Start new match</button>
       </div>
+      {note && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <span>{note}</span>
+        </div>
+      )}
       <p className="mb-5 flex items-start gap-1.5 text-xs text-gray-500">
         <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
         Semantic Match shows how closely each freelancer's profile matches your request — it's a similarity measure, not a guarantee of quality or suitability.
