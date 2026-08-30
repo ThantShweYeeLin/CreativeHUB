@@ -3,6 +3,7 @@ import { Check, MessageCircle, X } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { extractScheduleMeta, formatScheduleMeta } from '../../../lib/requestSchedule';
+import { stripRequestDisplayMeta } from '../../../lib/groupRequest';
 
 interface NegotiationHistoryModalProps {
   request: any;
@@ -152,7 +153,15 @@ export function NegotiationHistoryModal({
                       {offer.price != null && ` — ${formatCurrencyAmount(Number(offer.price), 'THB')}`}
                       {offer.date && ` · ${formatScheduleMeta({ date: offer.date, time: (offer.time || '00:00').slice(0, 5) })}`}
                     </p>
-                    {offer.message && <p className="mt-1 text-sm text-gray-600">"{offer.message}"</p>}
+                    {(() => {
+                      // The very first "request" round's message is the raw
+                      // description, which carries embedded [[..._META:...]]
+                      // tags (budget/schedule/location/group) used elsewhere
+                      // to reconstruct structured data — those must never
+                      // leak into a human-facing message bubble.
+                      const cleanMessage = stripRequestDisplayMeta(offer.message);
+                      return cleanMessage ? <p className="mt-1 text-sm text-gray-600">"{cleanMessage}"</p> : null;
+                    })()}
                   </div>
                 ))}
               </div>

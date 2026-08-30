@@ -7,7 +7,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
-import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { extractLocationMeta } from '../../lib/requestLocation';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
@@ -67,6 +67,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     budgetMax: '',
     description: '',
     recipientIds: [] as string[],
+    scheduleDate: '',
+    scheduleTime: '',
   });
 
   useEffect(() => {
@@ -223,6 +225,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       budgetMax: String(request.budgetMeta?.max || request.budget || ''),
       description: request.notesText || '',
       recipientIds: request.groupMeta?.recipients || [],
+      scheduleDate: request.scheduleMeta?.date || '',
+      scheduleTime: request.scheduleMeta?.time || '',
     });
   };
 
@@ -238,17 +242,27 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       return;
     }
 
+    if (Boolean(editForm.scheduleDate) !== Boolean(editForm.scheduleTime)) {
+      setError('Please set both a date and a time, or leave both empty.');
+      return;
+    }
+
     const descriptionWithBudget = appendBudgetMeta(editForm.description, {
       currency: (editForm.currency || editingRequest.budgetMeta?.currency || 'THB').trim().toUpperCase(),
       min,
       max,
     });
 
+    const descriptionWithSchedule =
+      editForm.scheduleDate && editForm.scheduleTime
+        ? appendScheduleMeta(descriptionWithBudget, { date: editForm.scheduleDate, time: editForm.scheduleTime })
+        : descriptionWithBudget;
+
     const response = await DataService.updatePendingBookingRequest({
       requestId: editingRequest.id,
       clientId: user.id,
       projectName: editForm.projectName,
-      description: descriptionWithBudget,
+      description: descriptionWithSchedule,
       budget: max,
       recipientIds: editingRequest.groupMeta ? editForm.recipientIds : undefined,
     });
@@ -705,6 +719,28 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
                 placeholder="Description"
               />
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
+                  <input
+                    type="date"
+                    min={new Date().toISOString().slice(0, 10)}
+                    value={editForm.scheduleDate}
+                    onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Time</label>
+                  <input
+                    type="time"
+                    value={editForm.scheduleTime}
+                    onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
+                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  />
+                </div>
+              </div>
 
               {editingRequest.groupMeta && (
                 <div>
