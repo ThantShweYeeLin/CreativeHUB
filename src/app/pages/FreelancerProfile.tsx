@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Search, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -75,10 +75,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState<null | { type: 'followers' | 'following' }>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
-  const [bookingMode, setBookingMode] = useState<'individual' | 'group'>('individual');
-  const [availableFreelancers, setAvailableFreelancers] = useState<Array<{ id: string; full_name: string; title: string }>>([]);
-  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
-  const [groupFreelancerSearch, setGroupFreelancerSearch] = useState('');
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showBidTip, setShowBidTip] = useState(false);
@@ -95,37 +91,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   });
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
-
-  useEffect(() => {
-    if (!showBookingForm || profile?.role !== 'freelancer') {
-      return;
-    }
-
-    let isMounted = true;
-
-    async function loadFreelancersForGroupRequest() {
-      const response = await DataService.getAllFreelancers(80);
-      if (!isMounted || response.error) {
-        return;
-      }
-
-      const options = (response.data || [])
-        .map((item: any) => ({
-          id: String(item.user_id || item.users?.id || item.id),
-          full_name: item.users?.full_name || item.title || 'Freelancer',
-          title: item.title || item.skills?.[0] || 'Creative Freelancer',
-        }))
-        .filter((item: any) => item.id && item.id !== user?.id);
-
-      setAvailableFreelancers(options);
-    }
-
-    loadFreelancersForGroupRequest();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [showBookingForm, user?.id, profile?.role]);
 
   useEffect(() => {
     let isMounted = true;
@@ -569,13 +534,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsSubmittingRequest(true);
     setError(null);
 
-    const recipients = bookingMode === 'group'
-      ? Array.from(new Set([targetFreelancerUserId, ...selectedRecipientIds]))
-      : [targetFreelancerUserId];
-
     const { error: requestError } = await DataService.createBookingRequests({
       clientId: user.id,
-      recipientIds: recipients,
+      recipientIds: [targetFreelancerUserId],
       projectName: resolvedPurpose,
       description: requestMessage,
       budget: offerAmount,
@@ -587,15 +548,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    setSuccessMessage(
-      bookingMode === 'group'
-        ? `Group request sent to ${recipients.length} freelancers.`
-        : 'Booking request sent successfully.'
-    );
+    setSuccessMessage('Booking request sent successfully.');
     setShowBookingForm(false);
-    setBookingMode('individual');
-    setSelectedRecipientIds([]);
-    setGroupFreelancerSearch('');
     // Land on the plain requests list, not the edit box — the client just
     // submitted this, they don't need to immediately edit it.
     navigate('/requests');
@@ -1504,78 +1458,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             <form onSubmit={handleSubmitRequest} className="p-4 md:p-8 space-y-6">
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-900">Request Type</label>
-                <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setBookingMode('individual')}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold ${bookingMode === 'individual' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-white'}`}
-                  >
-                    Book only this person
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBookingMode('group')}
-                    className={`rounded-lg px-4 py-2 text-sm font-semibold ${bookingMode === 'group' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-white'}`}
-                  >
-                    Group request
-                  </button>
-                </div>
-              </div>
-
-              {bookingMode === 'group' && (
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-900">Add more freelancers</label>
-                  <div className="relative mb-3">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={groupFreelancerSearch}
-                      onChange={(event) => setGroupFreelancerSearch(event.target.value)}
-                      placeholder="Search freelancer by name..."
-                      className="w-full rounded-xl border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                    />
-                  </div>
-                  <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
-                    {availableFreelancers
-                      .filter((item) => item.id !== targetFreelancerUserId)
-                      .filter((item) => item.full_name.toLowerCase().includes(groupFreelancerSearch.trim().toLowerCase()))
-                      .map((freelancer) => {
-                        const checked = selectedRecipientIds.includes(freelancer.id);
-                        return (
-                          <label key={freelancer.id} className="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-white px-3 py-2">
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900">{freelancer.full_name}</p>
-                              <p className="text-xs text-gray-500">{freelancer.title}</p>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={(event) => {
-                                const isChecked = event.target.checked;
-                                setSelectedRecipientIds((current) =>
-                                  isChecked
-                                    ? Array.from(new Set([...current, freelancer.id]))
-                                    : current.filter((id) => id !== freelancer.id)
-                                );
-                              }}
-                            />
-                          </label>
-                        );
-                      })}
-                    {availableFreelancers
-                      .filter((item) => item.id !== targetFreelancerUserId)
-                      .filter((item) => item.full_name.toLowerCase().includes(groupFreelancerSearch.trim().toLowerCase())).length === 0 && (
-                      <p className="rounded-lg bg-white px-3 py-3 text-sm text-gray-500">No freelancers match that name.</p>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs text-gray-600">
-                    Main freelancer is included automatically. Total recipients: {1 + selectedRecipientIds.length}
-                  </p>
-                </div>
-              )}
-
               <div className="rounded-2xl bg-gray-50 p-5">
                 <div className="flex items-center gap-4">
                   <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-16 w-16 ring-2 ring-gray-200 rounded-full" />

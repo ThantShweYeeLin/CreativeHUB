@@ -12,6 +12,7 @@ import { FreelancerProfile } from './pages/FreelancerProfile';
 import { TeamProfilePage } from './pages/TeamProfilePage';
 import { MapView } from './pages/MapExplorePage';
 import { RequestsPage } from './pages/RequestsPage';
+import { GroupRequestPage } from './pages/GroupRequestPage';
 import { EditProfilePage } from './pages/EditProfilePage';
 import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
 import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
@@ -212,6 +213,14 @@ export default function App() {
                   onViewProfile={() => navigate('/explore')}
                   onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
                 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/group-request"
+            element={
+              <ProtectedRoute>
+                <GroupRequestPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />

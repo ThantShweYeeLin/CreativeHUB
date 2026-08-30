@@ -59,8 +59,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
+      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
 
     return supabase
       .from('freelancer_profiles')
@@ -78,8 +78,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
+      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
 
     let q = supabase
       .from('freelancer_profiles')
@@ -2672,6 +2672,14 @@ export class DataService {
     projectName: string;
     description: string;
     budget: number;
+    // Group Request lets each freelancer have their own purpose/budget/message
+    // (e.g. a per-freelancer budget-meta tag with its own currency figure)
+    // while everyone still shares one location/schedule/group_id — an
+    // override here beats the shared projectName/budget/description above
+    // for that one recipient. Omitted entirely, every recipient just uses
+    // the shared values, same as the plain single-freelancer booking flow
+    // always has.
+    perRecipient?: Record<string, { projectName?: string; budget?: number; description?: string }>;
   }) {
     const recipients = Array.from(new Set(input.recipientIds.filter(Boolean)));
     if (!recipients.length) {
@@ -2705,19 +2713,24 @@ export class DataService {
 
     const isGroup = recipients.length > 1;
     const groupMeta = isGroup ? buildGroupRequestMeta(input.clientId, recipients) : null;
-    const payloadMessage = groupMeta
-      ? appendGroupRequestMeta(input.description, groupMeta)
-      : stripGroupRequestMeta(input.description);
 
     const created: any[] = [];
     for (const recipientId of recipients) {
+      const overrides = input.perRecipient?.[recipientId];
+      const projectName = overrides?.projectName || input.projectName;
+      const budget = overrides?.budget ?? input.budget;
+      const baseDescription = overrides?.description ?? input.description;
+      const payloadMessage = groupMeta
+        ? appendGroupRequestMeta(baseDescription, groupMeta)
+        : stripGroupRequestMeta(baseDescription);
+
       const response = await this.createRequest({
         client_id: input.clientId,
         freelancer_id: recipientId,
-        project_name: input.projectName,
+        project_name: projectName,
         description: payloadMessage,
         message: payloadMessage,
-        budget: input.budget,
+        budget,
         status: 'pending',
       } as any);
 
@@ -2733,7 +2746,7 @@ export class DataService {
           round: 1,
           offered_by: 'client',
           action: 'request',
-          price: input.budget,
+          price: budget,
           message: payloadMessage,
           includes: null,
           date: scheduleMeta?.date || null,

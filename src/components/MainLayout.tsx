@@ -441,11 +441,14 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate(`/profile/${targetUserId}`);
   };
 
-  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings') => {
+  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => {
     setShowUserMenu(false);
     switch (item) {
       case 'requests':
         navigate('/requests');
+        break;
+      case 'groupRequest':
+        navigate('/group-request');
         break;
       case 'favorites':
         navigate('/favorites');
