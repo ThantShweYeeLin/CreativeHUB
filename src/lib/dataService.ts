@@ -153,29 +153,41 @@ export class DataService {
     // This is an Explore-search-box helper, so it should also respect a
     // freelancer's visibility/account_status — unlike DataService.searchUsers
     // (used for @-mentions, a "find someone you already know" feature that
-    // should ignore visibility).
+    // should ignore visibility). Fetching the full row (not just visibility)
+    // also lets a name search surface real title/skills/styles/hourly_rate —
+    // searching for someone by name should find them as a real, filterable
+    // result regardless of their is_available toggle, which only controls
+    // whether they show up in the passive browse carousels.
     const freelancerIds = nameMatched.filter((u) => u.role === 'freelancer').map((u) => u.id);
+    const profileByUserId = new Map<string, any>();
     const hiddenUserIds = new Set<string>();
     if (freelancerIds.length > 0) {
-      const visibilityResp = await supabase
+      const profilesResp = await supabase
         .from('freelancer_profiles')
-        .select('user_id, visibility')
+        .select('*')
         .in('user_id', freelancerIds);
-      for (const row of (visibilityResp.data || []) as Array<any>) {
+      for (const row of (profilesResp.data || []) as Array<any>) {
+        profileByUserId.set(row.user_id, row);
         if (row.visibility === 'limited') hiddenUserIds.add(row.user_id);
       }
     }
 
     const matched = nameMatched.filter((u) => !hiddenUserIds.has(u.id) && u.account_status !== 'paused');
 
-    const results = matched.map((u) => ({
-      id: `user-${u.id}`,
-      user_id: u.id,
-      title: '',
-      description: '',
-      is_available: false,
-      users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, gender: u.gender, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
-    }));
+    const results = matched.map((u) => {
+      const profile = profileByUserId.get(u.id);
+      return {
+        id: profile?.id || `user-${u.id}`,
+        user_id: u.id,
+        title: profile?.title || '',
+        description: profile?.description || '',
+        skills: profile?.skills || [],
+        styles: profile?.styles || [],
+        hourly_rate: profile?.hourly_rate ?? null,
+        is_available: profile?.is_available ?? false,
+        users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, gender: u.gender, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
+      };
+    });
 
     return { data: results, error: null };
   }

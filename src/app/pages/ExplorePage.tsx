@@ -343,6 +343,22 @@ export function ExplorePage() {
           setSuggestions(list);
           setShowSuggestions(list.length > 0);
         }
+
+        // Merge freelancer matches into the searchable pool too, not just the
+        // suggestions dropdown — otherwise someone findable by name here
+        // (e.g. an is_available:false freelancer, excluded from the initial
+        // browse-only fetch) still wouldn't appear in the actual search
+        // results section below.
+        if (mounted && fallbackRes.status === 'fulfilled' && fallbackRes.value?.data) {
+          const newFreelancerMatches = (fallbackRes.value.data as any[]).filter((row) => isFreelancerCategory(row.title));
+          if (newFreelancerMatches.length > 0) {
+            setFreelancers((current) => {
+              const existingIds = new Set(current.map((item) => item.user_id || item.users?.id || item.id));
+              const toAdd = newFreelancerMatches.filter((row) => !existingIds.has(row.user_id));
+              return toAdd.length > 0 ? [...current, ...toAdd] : current;
+            });
+          }
+        }
       } catch (e) {
         if (mounted) {
           setSuggestions([]);
@@ -517,7 +533,7 @@ export function ExplorePage() {
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             onFocus={() => setShowSuggestions(suggestions.length > 0)}
-            placeholder="Search people, email, or works — e.g. Uri, uri@example.com, wedding"
+            placeholder="Search by name, email, or specialty — e.g. photographer, makeup, wedding"
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
           />
           {showSuggestions && suggestions.length > 0 && (
@@ -526,11 +542,16 @@ export function ExplorePage() {
               className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden"
             >
               {suggestions.map((s, idx) => {
+                // DataService.searchUsers returns flat rows (full_name/email
+                // directly on the row); DataService.searchUsersFallback
+                // returns freelancer_profiles-shaped rows (name/email nested
+                // under `.users`) — a suggestion can be either shape, so
+                // every field needs both a flat and a nested fallback.
                 const id = s.user_id || s.users?.id || s.id;
-                const name = s.users?.full_name || s.title || s.users?.email || 'Unknown';
-                const subtitle = s.users?.email || s.users?.username || s.title || '';
-                const avatar = s.users?.avatar_url || DEFAULT_AVATAR_URL;
-                const suggestionGender = s.users?.gender || null;
+                const name = s.users?.full_name || s.full_name || s.title || s.users?.email || s.email || 'Unknown';
+                const subtitle = s.users?.email || s.email || s.users?.username || s.title || '';
+                const avatar = s.users?.avatar_url || s.avatar_url || DEFAULT_AVATAR_URL;
+                const suggestionGender = s.users?.gender || s.gender || null;
                 return (
                   <button
                     key={id || idx}
@@ -656,7 +677,11 @@ export function ExplorePage() {
 
       {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
         <CarouselSection
-          title={selectedCategory !== 'All' ? `Popular ${pluralizeCategory(selectedCategory)} in Thailand` : 'Popular Freelancers in Thailand'}
+          title={
+            searchQuery.trim()
+              ? `Search results for "${searchQuery.trim()}"`
+              : `Popular ${pluralizeCategory(selectedCategory)} in Thailand`
+          }
           profiles={filteredProfiles}
           favoritedIds={favoritedIds}
           onToggleFavorite={handleToggleFavorite}

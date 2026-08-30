@@ -353,14 +353,21 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                 {isLocating ? 'Locating...' : 'Near Me'}
               </button>
 
-              {userLocation && !filters.locations.some((l) => l.toLowerCase() === userLocation.toLowerCase()) && (
-                <button
-                  onClick={() => toggleLocation(userLocation)}
-                  className="flex items-center gap-2 rounded-xl border-2 border-dashed border-gray-300 bg-white px-6 py-3 font-semibold text-gray-700 transition-all hover:border-gray-500 hover:bg-gray-50"
-                >
-                  <MapPin className="h-4 w-4" /> Use my area: {userLocation}
-                </button>
-              )}
+              {userLocation && (() => {
+                const isSelected = filters.locations.some((l) => l.toLowerCase() === userLocation.toLowerCase());
+                return (
+                  <button
+                    onClick={() => toggleLocation(userLocation)}
+                    className={`flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
+                        : 'border-2 border-dashed border-gray-300 bg-white text-gray-700 hover:border-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <MapPin className="h-4 w-4" /> Use my area: {userLocation}
+                  </button>
+                );
+              })()}
             </div>
 
             {filters.nearMe && (
