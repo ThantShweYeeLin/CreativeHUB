@@ -1850,7 +1850,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     <input
                       value={serviceForm.duration}
                       onChange={(event) => setServiceForm((current) => ({ ...current, duration: event.target.value }))}
-                      placeholder="Duration, e.g. 8 hours"
+                      placeholder="How long it takes, e.g. 8 hours (not a price)"
                       className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   </div>

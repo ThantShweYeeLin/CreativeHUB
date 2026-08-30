@@ -840,7 +840,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
                       {isBookableFreelancer && (
                         <button
-                          onClick={() => setShowBookingForm(true)}
+                          onClick={() => {
+                            // Pre-fill with the minimum so the field never
+                            // starts empty behind a placeholder that reads
+                            // like a real value ("Minimum THB 1,510") -
+                            // that misled people into submitting with
+                            // nothing typed, which always failed validation.
+                            setFormData((current) => ({
+                              ...current,
+                              offerAmount: current.offerAmount || (minimumOffer > 0 ? String(minimumOffer) : ''),
+                            }));
+                            setShowBookingForm(true);
+                          }}
                           className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
                         >
                           Request Booking
