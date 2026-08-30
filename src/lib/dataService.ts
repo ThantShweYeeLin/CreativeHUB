@@ -2616,8 +2616,34 @@ export class DataService {
       .from('requests')
       .select('*, client:client_id(id, email, full_name, avatar_url, gender)')
       .eq('freelancer_id', freelancerId)
+      // A cancelled request should disappear from the freelancer's view
+      // entirely, not just sit hidden behind a filter tab — they never
+      // need to see it once the client has withdrawn it.
+      .neq('status', 'cancelled')
       .order('created_at', { ascending: false });
     return { data, error };
+  }
+
+  // Only the client who sent it can cancel, and only while it's still
+  // pending — once countered/accepted, use the existing reject/accept
+  // flow instead, since a counter-offer thread involves the freelancer's
+  // own input too.
+  static async cancelRequest(requestId: string, clientId: string) {
+    const previous = await supabase
+      .from('requests')
+      .select('id, client_id, status')
+      .eq('id', requestId)
+      .eq('client_id', clientId)
+      .maybeSingle();
+
+    if (previous.error || !previous.data) {
+      return { data: null, error: previous.error || new Error('Request not found.') };
+    }
+    if ((previous.data as any).status !== 'pending') {
+      return { data: null, error: new Error('Only pending requests can be cancelled.') };
+    }
+
+    return this.updateRequest(requestId, { status: 'cancelled' } as any);
   }
 
   static async getClientRequests(clientId: string) {
@@ -2626,6 +2652,30 @@ export class DataService {
       .select('*, freelancer:freelancer_id(id, email, full_name, avatar_url, gender, location)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return { data, error };
+    }
+
+    // freelancer_id is a plain FK to users, which has no `title` column —
+    // that lives on freelancer_profiles, so it never came back from the
+    // join above. Fetch it separately and merge it in, same pattern used
+    // elsewhere in this file for enriching a user-shaped row with profile
+    // data (e.g. searchUsersFallback).
+    const freelancerIds = Array.from(new Set(data.map((request: any) => request.freelancer_id).filter(Boolean)));
+    if (freelancerIds.length > 0) {
+      const profilesResponse = await supabase
+        .from('freelancer_profiles')
+        .select('user_id, title')
+        .in('user_id', freelancerIds);
+      const titleByUserId = new Map((profilesResponse.data || []).map((row: any) => [row.user_id, row.title]));
+      for (const request of data as any[]) {
+        if (request.freelancer) {
+          request.freelancer.title = titleByUserId.get(request.freelancer_id) || null;
+        }
+      }
+    }
+
     return { data, error };
   }
 

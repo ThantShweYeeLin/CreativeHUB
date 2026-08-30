@@ -21,7 +21,7 @@ interface RequestsPageProps {
   onOpenMessages?: (recipientId?: string) => void;
 }
 
-type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered';
+type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'cancelled';
 
 const getStatusColor = (status: RequestStatus) => {
   switch (status) {
@@ -33,6 +33,8 @@ const getStatusColor = (status: RequestStatus) => {
       return 'bg-green-100 text-green-700 border-green-200';
     case 'rejected':
       return 'bg-red-100 text-red-700 border-red-200';
+    case 'cancelled':
+      return 'bg-gray-100 text-gray-500 border-gray-200';
   }
 };
 
@@ -59,6 +61,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [cancellingRequest, setCancellingRequest] = useState<any | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
   const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     projectName: '',
@@ -383,6 +387,24 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     await reloadRequests();
   };
 
+  const handleCancelRequest = async () => {
+    if (!user?.id || !cancellingRequest) return;
+    setIsCancelling(true);
+    setError(null);
+
+    const response = await DataService.cancelRequest(cancellingRequest.id, user.id);
+
+    setIsCancelling(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to cancel this request.');
+      return;
+    }
+
+    setCancellingRequest(null);
+    await reloadRequests();
+  };
+
   const handleConfirmedAction = async () => {
     if (!confirmAction) return;
     setIsSubmittingConfirm(true);
@@ -505,13 +527,22 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
                       {request.status === 'pending' && (
-                        <button
-                          onClick={() => openEditRequest(request)}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit Request
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openEditRequest(request)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit Request
+                          </button>
+                          <button
+                            onClick={() => setCancellingRequest(request)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-red-50 hover:text-red-600 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel Request
+                          </button>
+                        </>
                       )}
                       {request.status === 'countered' && request.counterBy === 'freelancer' && (
                         <>
@@ -789,6 +820,36 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => void handleConfirmedAction()}
         />
+      )}
+
+      {cancellingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <X className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">Cancel this request?</h3>
+            <p className="mt-2 text-sm text-gray-600">
+              "{cancellingRequest.projectName}" to {cancellingRequest.freelancer?.name || 'this freelancer'} will be withdrawn and removed from their requests. This can't be undone.
+            </p>
+            <div className="mt-5 flex gap-3">
+              <button
+                onClick={() => setCancellingRequest(null)}
+                disabled={isCancelling}
+                className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+              >
+                Keep Request
+              </button>
+              <button
+                onClick={() => void handleCancelRequest()}
+                disabled={isCancelling}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-2.5 font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                {isCancelling ? 'Cancelling...' : 'Cancel Request'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {historyModalRequestId && (
