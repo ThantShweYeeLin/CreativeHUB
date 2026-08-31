@@ -140,8 +140,13 @@ export function NotificationsPanel({
         onClick={onClose}
       />
 
-      {/* Notifications Dropdown */}
-      <div className="absolute top-16 right-0 md:right-32 z-50 w-screen md:w-96 bg-white md:rounded-2xl shadow-2xl border-t md:border border-gray-200 overflow-hidden animate-fadeIn max-h-[calc(100vh-4rem)] md:max-h-[600px] flex flex-col">
+      {/* Notifications Dropdown. `absolute right-0` anchors to the bell
+          icon's small wrapper near the screen's right edge — combined with
+          a full-viewport `w-screen` on mobile, that pushed the panel's left
+          edge off-screen. `fixed inset-x-0` instead anchors to the actual
+          viewport on mobile, independent of the bell icon's position;
+          desktop keeps the original icon-anchored `absolute` positioning. */}
+      <div className="fixed inset-x-0 top-16 md:absolute md:inset-x-auto md:right-32 z-50 bg-white md:rounded-2xl shadow-2xl border-t md:border border-gray-200 overflow-hidden animate-fadeIn max-h-[calc(100vh-4rem)] md:max-h-[600px] md:w-96 flex flex-col">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
           <div className="flex items-center justify-between">
