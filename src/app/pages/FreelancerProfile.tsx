@@ -841,12 +841,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         )}
 
         <section className="mb-8 overflow-hidden rounded-3xl bg-white shadow-xl">
-          <div className="relative h-44 md:h-64 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900">
+          {/* Desktop header — unchanged from before. Hidden below md; the
+              mobile-only header right after this block replaces it there
+              because this overlay-on-cover layout, when the button row
+              wraps to several lines on a narrow screen, grows taller than
+              the cover's fixed height and gets clipped by this section's
+              overflow-hidden (that's the "can't see my profile picture on
+              phone" bug). */}
+          <div className="relative hidden h-64 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900 md:block">
             {coverUrl ? (
               <ImageWithFallback src={coverUrl} alt={`${displayName} background`} className="h-full w-full object-cover" />
             ) : null}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 p-6 md:p-8">
+            <div className="absolute inset-x-0 bottom-0 p-8">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end">
                   <Avatar
@@ -955,6 +962,119 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     </>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile header — the avatar sits below the cover in normal
+              document flow (pulled up over it with a negative margin)
+              instead of being absolutely positioned inside it, so it can
+              never get clipped no matter how many action buttons wrap
+              below the name. Desktop block above is untouched. */}
+          <div className="md:hidden">
+            <div className="relative h-28 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900">
+              {coverUrl ? (
+                <ImageWithFallback src={coverUrl} alt={`${displayName} background`} className="h-full w-full object-cover" />
+              ) : null}
+            </div>
+            <div className="px-5 pb-5">
+              <div className="-mt-10 mb-3">
+                <Avatar
+                  src={avatarUrl}
+                  alt={displayName}
+                  sizeClassName="h-20 w-20 ring-4 ring-white bg-gray-200 shadow-xl rounded-full"
+                  badgeSize="md"
+                />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">
+                {displayName}
+                {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">{title}</p>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {isOwner ? (
+                  <button
+                    onClick={() => navigate('/edit-profile')}
+                    className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-black"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Profile
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleFavoriteToggle}
+                      className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                    >
+                      <Heart className={`h-5 w-5 ${isFavorited ? 'fill-current' : ''}`} />
+                    </button>
+
+                    <button
+                      onClick={() => void handleBlockUser()}
+                      disabled={isBlockingUser}
+                      className="rounded-full bg-gray-100 p-2.5 text-gray-700 transition-all hover:bg-gray-200 disabled:opacity-60"
+                      title="Block this user"
+                    >
+                      <Ban className="h-5 w-5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setReportSubmitted(false);
+                        setShowReportModal(true);
+                      }}
+                      className="rounded-full bg-gray-100 p-2.5 text-gray-700 transition-all hover:bg-gray-200"
+                      title="Report this user"
+                    >
+                      <Flag className="h-5 w-5" />
+                    </button>
+
+                    {showMessageButton && (
+                      <button
+                        onClick={onOpenChat}
+                        className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-gray-200"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                        Message
+                      </button>
+                    )}
+
+                    {isBookableFreelancer && (
+                      <button
+                        onClick={() => {
+                          setFormData((current) => ({
+                            ...current,
+                            offerAmount: current.offerAmount || (minimumOffer > 0 ? String(minimumOffer) : ''),
+                          }));
+                          setShowBookingForm(true);
+                        }}
+                        className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
+                      >
+                        Request Booking
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => void handleFollowToggle()}
+                      disabled={isFollowLoading}
+                      className={
+                        isFollowing
+                          ? 'rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
+                          : 'rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
+                      }
+                    >
+                      {isFollowLoading
+                        ? 'Updating...'
+                        : isFollowing
+                        ? 'Following'
+                        : isFollowedByTarget
+                        ? 'Follow back'
+                        : 'Follow'
+                      }
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
