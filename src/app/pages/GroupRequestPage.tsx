@@ -44,6 +44,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [perFreelancerForm, setPerFreelancerForm] = useState<Record<string, PerFreelancerForm>>({});
 
+  const [projectName, setProjectName] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
@@ -151,6 +152,10 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       setError('You must be signed in to send a group request.');
       return;
     }
+    if (!projectName.trim()) {
+      setError('Enter a project name.');
+      return;
+    }
     if (selectedFreelancers.length === 0) {
       setError('Select at least one freelancer.');
       return;
@@ -193,7 +198,11 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
         location.trim()
       );
 
-      perRecipient[freelancer.userId] = { projectName: resolvedPurpose, budget: budgetAmount, description };
+      // Each freelancer's own purpose stays visible alongside the overall
+      // project name, since requests.project_name is a single text column —
+      // e.g. "Jane's Wedding — Bridal Makeup" for the makeup artist,
+      // "Jane's Wedding — Wedding Photography" for the photographer.
+      perRecipient[freelancer.userId] = { projectName: `${projectName.trim()} — ${resolvedPurpose}`, budget: budgetAmount, description };
     }
 
     setIsSubmitting(true);
@@ -240,6 +249,18 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
       <form onSubmit={handleSubmit} className="mx-auto max-w-2xl space-y-6 px-4 py-6">
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+        <div>
+          <label htmlFor="projectName" className="mb-2 block text-sm font-semibold text-gray-900">Project Name</label>
+          <input
+            id="projectName"
+            required
+            value={projectName}
+            onChange={(event) => setProjectName(event.target.value)}
+            placeholder="e.g. Jane's Wedding, Company Photoshoot 2026"
+            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+        </div>
 
         <div>
           <label className="mb-2 block text-sm font-semibold text-gray-900">Search freelancers</label>
