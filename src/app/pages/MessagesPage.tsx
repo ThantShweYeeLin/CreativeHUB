@@ -214,6 +214,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         setConversations(directItems);
         setGroupConversations(groupItems);
 
+        // Desktop has room to show the list and an open chat side by side,
+        // so arriving with no specific target (e.g. the hamburger menu's
+        // plain "Messages" link) opens the most recent conversation, like
+        // Instagram's web app. Phone only has room for one panel at a
+        // time, so the same generic entry instead lands on the inbox list
+        // - an explicit target (from a profile/request's Message button)
+        // still opens directly on both, since that's a deliberate action.
+        const isDesktopViewport = typeof window !== 'undefined' && window.innerWidth >= 768;
+
         setSelectedConversationId((current) => {
           const hasDirect = current && directItems.some((item: any) => item.id === current);
           const hasGroup = current && isGroupConversationKey(current) && groupItems.some((item: any) => item.id === fromGroupConversationKey(current));
@@ -222,8 +231,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             return current;
           }
 
-          return preferredConversation?.id
-            ?? directItems[0]?.id
+          if (preferredConversation?.id) {
+            return preferredConversation.id;
+          }
+
+          if (!openConversationWithUserId && !isDesktopViewport) {
+            return null;
+          }
+
+          return directItems[0]?.id
             ?? (groupItems[0]?.id ? toGroupConversationKey(String(groupItems[0].id)) : null);
         });
       }
@@ -973,7 +989,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         )}
 
         <div className="grid gap-6 md:grid-cols-[360px_minmax(0,1fr)] h-[calc(100vh-220px)]">
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+          {/* Phone only has room for one panel at a time - the list stays
+              visible until a conversation is picked, then swaps for the
+              chat panel below (with its own Back button). Desktop shows
+              both side by side regardless, unchanged. */}
+          <div
+            className={`bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex-col ${
+              selectedConversationId ? 'hidden md:flex' : 'flex'
+            }`}
+          >
             <div className="p-4 border-b border-gray-200">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1080,7 +1104,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex flex-col">
+          <div
+            className={`bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex-col ${
+              selectedConversationId ? 'flex' : 'hidden md:flex'
+            }`}
+          >
             {!activeConversation ? (
               <div className="flex-1 flex items-center justify-center p-10 text-center">
                 <div>
@@ -1094,6 +1122,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             ) : (
               <>
                 <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedConversationId(null)}
+                    className="md:hidden text-gray-600 hover:text-gray-900"
+                    aria-label="Back to conversations"
+                  >
+                    <ChevronLeft className="h-6 w-6" />
+                  </button>
                   <button
                     type="button"
                     onClick={() => {

@@ -176,7 +176,11 @@ export default function App() {
             path="/profile/:id"
             element={
               <ProtectedRoute>
-                <FreelancerProfile onBack={() => navigate(-1)} requestStatus={null} onOpenChat={() => navigate('/messages')} />
+                <FreelancerProfile
+                  onBack={() => navigate(-1)}
+                  requestStatus={null}
+                  onOpenChat={(targetUserId) => navigate('/messages', { state: { openConversationWithUserId: targetUserId } })}
+                />
               </ProtectedRoute>
             }
           />

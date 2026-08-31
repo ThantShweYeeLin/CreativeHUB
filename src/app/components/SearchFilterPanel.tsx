@@ -1,4 +1,4 @@
-import { X, Sparkles, MapPin, LocateFixed, Loader2 } from 'lucide-react';
+import { X, Sparkles, MapPin, LocateFixed, Loader2, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
@@ -19,7 +19,11 @@ export interface FilterState {
   currency: string;
   /** Set when "Near Me" is active — filters to freelancers within radiusKm of this point. */
   nearMe: { latitude: number; longitude: number; radiusKm: number } | null;
+  /** Minimum average rating (e.g. 4.5), or null for no rating filter. */
+  minRating: number | null;
 }
+
+export const RATING_FILTER_OPTIONS = [4.5, 4, 3.5, 3];
 
 const serviceOptions = FREELANCER_CATEGORY_LABELS;
 
@@ -63,6 +67,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
     locations: initialFilters?.locations || [],
     currency: normalizeCurrencyCode(initialFilters?.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
     nearMe: initialFilters?.nearMe || null,
+    minRating: initialFilters?.minRating ?? null,
   });
 
   // A location typed into "Other" is just another entry in filters.locations
@@ -82,6 +87,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         locations: initialFilters.locations,
         currency: normalizeCurrencyCode(initialFilters.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
         nearMe: initialFilters.nearMe || null,
+        minRating: initialFilters.minRating ?? null,
       });
       return;
     }
@@ -249,6 +255,40 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     }`}
                   >
                     {service}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Minimum Rating */}
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Minimum Rating</h3>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setFilters((prev) => ({ ...prev, minRating: null }))}
+                className={`px-6 py-3 rounded-xl font-semibold transition-all ${
+                  filters.minRating === null
+                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Any
+              </button>
+              {RATING_FILTER_OPTIONS.map((rating) => {
+                const isSelected = filters.minRating === rating;
+                return (
+                  <button
+                    key={rating}
+                    onClick={() => setFilters((prev) => ({ ...prev, minRating: rating }))}
+                    className={`flex items-center gap-1.5 px-6 py-3 rounded-xl font-semibold transition-all ${
+                      isSelected
+                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <Star className={`h-4 w-4 ${isSelected ? 'fill-current' : 'fill-current text-amber-400'}`} />
+                    {rating}+
                   </button>
                 );
               })}
@@ -458,6 +498,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                 locations: [],
                 currency: normalizedPreferredCurrency,
                 nearMe: null,
+                minRating: null,
               });
               setShowOtherInput(false);
               setOtherLocationDraft('');

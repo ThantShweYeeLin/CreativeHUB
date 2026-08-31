@@ -163,6 +163,7 @@ export function ExplorePage() {
     locations: [],
     currency: normalizedPreferredCurrency,
     nearMe: null,
+    minRating: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -472,7 +473,9 @@ export function ExplorePage() {
           ? hourlyRateInSelectedCurrency >= minPrice && hourlyRateInSelectedCurrency <= maxPrice
           : isDefaultPriceFilter;
 
-        const passes = score > 0 && serviceMatch && locationMatch && priceMatch;
+        const ratingMatch = filters.minRating === null || profile.rating >= filters.minRating;
+
+        const passes = score > 0 && serviceMatch && locationMatch && priceMatch && ratingMatch;
         return { profile, score, passes };
       })
       .filter((item) => item.passes)
@@ -518,7 +521,7 @@ export function ExplorePage() {
   const activeAdvancedFilterCount = useMemo(() => {
     const defaultMaxForCurrency = Math.round(convertAmount(10000, 'THB', filters.currency));
     const isDefaultPrice = filters.priceRange[0] === 0 && filters.priceRange[1] === defaultMaxForCurrency;
-    return filters.services.length + filters.locations.length + (filters.nearMe ? 1 : 0) + (isDefaultPrice ? 0 : 1);
+    return filters.services.length + filters.locations.length + (filters.nearMe ? 1 : 0) + (isDefaultPrice ? 0 : 1) + (filters.minRating !== null ? 1 : 0);
   }, [filters]);
 
   return (
