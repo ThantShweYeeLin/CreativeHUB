@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Bell, Compass, Map as MapIcon, Menu, Sparkles, User } from 'lucide-react';
+import { Bell, Briefcase, Compass, Map as MapIcon, Menu, Shield, Sparkles, User } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { UserMenu } from '../app/components/UserMenu';
@@ -623,14 +623,20 @@ export function MainLayout({ children }: MainLayoutProps) {
           space for it. Desktop is untouched (md:hidden). */}
       <nav className="fixed inset-x-0 bottom-0 z-[1200] flex items-center justify-around border-t border-gray-200 bg-white/95 backdrop-blur-lg py-2 md:hidden">
         {[
-          { label: 'Explore', path: '/explore', icon: Compass },
-          { label: 'Map', path: '/map', icon: MapIcon },
-          { label: 'For You', path: '/for-you', icon: Sparkles },
-          { label: 'Profile', path: user?.id ? `/profile/${user.id}` : '/explore', icon: User },
+          { label: 'Explore', path: '/explore', icon: Compass, activeMatch: (p: string) => p === '/explore' },
+          { label: 'Map', path: '/map', icon: MapIcon, activeMatch: (p: string) => p === '/map' },
+          { label: 'For You', path: '/for-you', icon: Sparkles, activeMatch: (p: string) => p === '/for-you' },
+          user?.role === 'admin'
+            ? { label: 'Admin', path: '/admin', icon: Shield, activeMatch: (p: string) => p.startsWith('/admin') }
+            : {
+                label: canAccessFreelancerDashboard ? 'Dashboard' : 'Freelance',
+                path: canAccessFreelancerDashboard ? '/freelancer-dashboard/requests' : '/become-freelancer',
+                icon: Briefcase,
+                activeMatch: (p: string) => p.startsWith('/freelancer-dashboard') || p === '/become-freelancer',
+              },
+          { label: 'Profile', path: user?.id ? `/profile/${user.id}` : '/explore', icon: User, activeMatch: (p: string) => p.startsWith('/profile/') },
         ].map((tab) => {
-          const isActive = tab.path.startsWith('/profile')
-            ? location.pathname.startsWith('/profile/')
-            : location.pathname === tab.path;
+          const isActive = tab.activeMatch(location.pathname);
           const Icon = tab.icon;
           return (
             <button
