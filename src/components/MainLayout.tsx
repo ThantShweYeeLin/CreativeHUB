@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router';
-import { Bell, Briefcase, Compass, Map as MapIcon, Menu, Shield, Sparkles, User } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { UserMenu } from '../app/components/UserMenu';
@@ -17,7 +17,6 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const { signOut, user } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -616,42 +615,6 @@ export function MainLayout({ children }: MainLayoutProps) {
       <main className="max-w-[1680px] mx-auto px-4 md:px-8 py-4 md:py-8">
         {children}
       </main>
-
-      {/* Mobile bottom navigation — the top nav (Explore/Map/For You) is
-          `hidden md:flex`, so phones have no way to reach these pages
-          without this; pb-20 on the outer wrapper already reserves the
-          space for it. Desktop is untouched (md:hidden). */}
-      <nav className="fixed inset-x-0 bottom-0 z-[1200] flex items-center justify-around border-t border-gray-200 bg-white/95 backdrop-blur-lg py-2 md:hidden">
-        {[
-          { label: 'Explore', path: '/explore', icon: Compass, activeMatch: (p: string) => p === '/explore' },
-          { label: 'Map', path: '/map', icon: MapIcon, activeMatch: (p: string) => p === '/map' },
-          { label: 'For You', path: '/for-you', icon: Sparkles, activeMatch: (p: string) => p === '/for-you' },
-          user?.role === 'admin'
-            ? { label: 'Admin', path: '/admin', icon: Shield, activeMatch: (p: string) => p.startsWith('/admin') }
-            : {
-                label: canAccessFreelancerDashboard ? 'Dashboard' : 'Freelance',
-                path: canAccessFreelancerDashboard ? '/freelancer-dashboard/requests' : '/become-freelancer',
-                icon: Briefcase,
-                activeMatch: (p: string) => p.startsWith('/freelancer-dashboard') || p === '/become-freelancer',
-              },
-          { label: 'Profile', path: user?.id ? `/profile/${user.id}` : '/explore', icon: User, activeMatch: (p: string) => p.startsWith('/profile/') },
-        ].map((tab) => {
-          const isActive = tab.activeMatch(location.pathname);
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.label}
-              onClick={() => navigate(tab.path)}
-              className={`flex flex-col items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-colors ${
-                isActive ? 'text-gray-900' : 'text-gray-400'
-              }`}
-            >
-              <Icon className="h-5 w-5" />
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
     </div>
   );
 }

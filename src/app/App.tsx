@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
+import { MobileBottomNav } from '../components/MobileBottomNav';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
@@ -86,6 +87,7 @@ export default function App() {
   }
 
   return (
+    <>
     <Routes>
       {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -403,5 +405,7 @@ export default function App() {
         </>
       )}
     </Routes>
+    {isAuthenticated && user?.onboardingCompleted && <MobileBottomNav />}
+    </>
   );
 }
