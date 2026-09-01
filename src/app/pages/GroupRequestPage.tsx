@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, Search, Users, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,8 +33,20 @@ interface PerFreelancerForm {
 
 const OTHER_PURPOSE_VALUE = '__other__';
 
+interface GroupRequestPrefillState {
+  prefillFreelancer?: FreelancerOption;
+  prefillPurpose?: string;
+  prefillBudget?: string;
+  prefillLocation?: string;
+  prefillNotes?: string;
+  prefillScheduleDate?: string;
+  prefillScheduleTime?: string;
+  prefillCurrency?: string;
+}
+
 export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   const navigate = useNavigate();
+  const routerLocation = useLocation();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
 
@@ -89,6 +101,9 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
     async function loadClientCurrency() {
       if (!user?.id) return;
+      // Skip — a currency already arrived via the booking-page handoff below,
+      // and this would otherwise clobber it once this async call resolves.
+      if ((routerLocation.state as GroupRequestPrefillState | null)?.prefillCurrency) return;
       const response = await DataService.getUser(user.id);
       if (!isMounted) return;
 
@@ -102,6 +117,39 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       isMounted = false;
     };
   }, [user?.id]);
+
+  // Carries over whatever the client already filled in on a single-freelancer
+  // "Request Booking" form when they click "Add More Freelancer" there — the
+  // freelancer they were already booking, plus any purpose/location/notes/
+  // schedule/budget entered so far. Applied once on arrival only; re-running
+  // this on every state change would clobber the client's own later edits.
+  useEffect(() => {
+    const state = routerLocation.state as GroupRequestPrefillState | null;
+    if (!state) return;
+
+    if (state.prefillLocation) setLocation(state.prefillLocation);
+    if (state.prefillNotes) setNotes(state.prefillNotes);
+    if (state.prefillScheduleDate) setScheduleDate(state.prefillScheduleDate);
+    if (state.prefillScheduleTime) setScheduleTime(state.prefillScheduleTime);
+    if (state.prefillCurrency) setCurrency(state.prefillCurrency);
+
+    const freelancer = state.prefillFreelancer;
+    if (freelancer?.userId) {
+      setAllFreelancers((current) => (current.some((item) => item.userId === freelancer.userId) ? current : [freelancer, ...current]));
+      setSelectedIds((current) => (current.includes(freelancer.userId) ? current : [...current, freelancer.userId]));
+
+      const isKnownSkill = Boolean(state.prefillPurpose && freelancer.skills.includes(state.prefillPurpose));
+      setPerFreelancerForm((current) => ({
+        ...current,
+        [freelancer.userId]: {
+          purpose: state.prefillPurpose ? (isKnownSkill ? state.prefillPurpose : OTHER_PURPOSE_VALUE) : '',
+          customPurpose: state.prefillPurpose && !isKnownSkill ? state.prefillPurpose : '',
+          budget: state.prefillBudget || '',
+        },
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selectedFreelancers = useMemo(
     () => selectedIds.map((freelancerId) => allFreelancers.find((item) => item.userId === freelancerId)).filter((item): item is FreelancerOption => Boolean(item)),

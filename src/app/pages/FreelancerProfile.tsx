@@ -567,6 +567,40 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     setIsSubmittingRequest(false);
   };
 
+  // Carries over whatever the client already filled in here (this
+  // freelancer, plus any purpose/location/notes/schedule/budget entered so
+  // far) into the standalone Group Request page, rather than making them
+  // start over — nothing here is validated/required, Group Request handles
+  // its own validation on submit.
+  const handleAddMoreFreelancer = () => {
+    const resolvedPurpose = formData.projectName === OTHER_PURPOSE_VALUE ? formData.customPurpose.trim() : formData.projectName;
+    const resolvedLocation = formData.location === OTHER_LOCATION_VALUE ? formData.customLocation.trim() : formData.location;
+
+    navigate('/group-request', {
+      state: {
+        prefillFreelancer: targetFreelancerUserId
+          ? {
+              userId: targetFreelancerUserId,
+              fullName: displayName,
+              title,
+              skills,
+              hourlyRate: freelancerProfile?.hourly_rate ? Number(freelancerProfile.hourly_rate) : null,
+              rateCurrency: freelancerRateCurrency,
+              avatarUrl: profile?.avatar_url || null,
+              gender: profile?.gender || null,
+            }
+          : undefined,
+        prefillPurpose: resolvedPurpose || undefined,
+        prefillBudget: formData.offerAmount || undefined,
+        prefillLocation: resolvedLocation || undefined,
+        prefillNotes: formData.notes || undefined,
+        prefillScheduleDate: formData.scheduleDate || undefined,
+        prefillScheduleTime: formData.scheduleTime || undefined,
+        prefillCurrency: formData.currency || undefined,
+      },
+    });
+  };
+
   const openPostFocus = async (postId: string) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
@@ -1638,6 +1672,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   )}
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={handleAddMoreFreelancer}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-gray-200 px-4 py-3 font-semibold text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              >
+                <Users className="h-4 w-4" />
+                Add More Freelancer
+              </button>
 
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowBookingForm(false)} className="flex-1 rounded-xl bg-gray-100 px-4 py-3 font-semibold text-gray-700 hover:bg-gray-200 transition-colors">
