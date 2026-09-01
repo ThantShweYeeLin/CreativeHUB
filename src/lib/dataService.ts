@@ -1101,6 +1101,45 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  static async getResolvedDisputesForAdmin() {
+    // bookings.updated_at isn't auto-touched by admin_resolve_dispute(), so
+    // sort by creation time instead of relying on a column resolution
+    // doesn't actually update.
+    const { data, error } = await (supabase as any)
+      .from('bookings')
+      .select('*, client:client_id(id, full_name, email, avatar_url), freelancer:freelancer_id(id, full_name, email, avatar_url)')
+      .eq('dispute_status', 'resolved')
+      .order('created_at', { ascending: false })
+      .limit(100);
+    return { data: data || [], error };
+  }
+
+  static async getAdminDashboardStats() {
+    const [usersResponse, freelancersResponse, reportsResponse, disputesResponse] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact', head: true }),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'freelancer').eq('account_status', 'active'),
+      (supabase as any).from('user_reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+      (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).in('dispute_status', ['open', 'under_admin_review']),
+    ]);
+
+    return {
+      totalUsers: usersResponse.count || 0,
+      activeFreelancers: freelancersResponse.count || 0,
+      openReports: reportsResponse.count || 0,
+      pendingDisputes: disputesResponse.count || 0,
+      error: usersResponse.error || freelancersResponse.error || reportsResponse.error || disputesResponse.error || null,
+    };
+  }
+
+  static async getAdminActionLog() {
+    const { data, error } = await (supabase as any)
+      .from('admin_actions')
+      .select('*, admin:admin_id(id, full_name, email)')
+      .order('created_at', { ascending: false })
+      .limit(150);
+    return { data: data || [], error };
+  }
+
   static async adminResolveDispute(bookingId: string, decision: 'refund' | 'release', reason?: string) {
     const { data, error } = await (supabase as any).rpc('admin_resolve_dispute', {
       p_booking_id: bookingId,
