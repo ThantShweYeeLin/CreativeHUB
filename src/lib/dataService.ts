@@ -3324,11 +3324,6 @@ export class DataService {
       return message.includes('does not exist') || message.includes('schema cache');
     };
 
-    const rlsDenied = (error: any) => {
-      const message = String(error?.message || '').toLowerCase();
-      return message.includes('row-level security policy') || error?.code === '42501';
-    };
-
     if (currentlySaved) {
       const { error } = await supabase
         .from('client_post_saves')
@@ -3336,7 +3331,10 @@ export class DataService {
         .eq('user_id', userId)
         .eq('post_id', postId);
 
-      if (error && (relationMissing(error) || rlsDenied(error))) {
+      // Only a missing table is safe to swallow silently (nothing the user can
+      // do about it) — an RLS denial is a real failure and must be surfaced,
+      // otherwise the UI shows "unsaved" while the row is still there.
+      if (error && relationMissing(error)) {
         return { saved: false, error: null };
       }
 
@@ -3347,7 +3345,7 @@ export class DataService {
       .from('client_post_saves')
       .insert({ user_id: userId, post_id: postId });
 
-    if (error && error.code !== '23505' && !relationMissing(error) && !rlsDenied(error)) {
+    if (error && error.code !== '23505' && !relationMissing(error)) {
       return { saved: currentlySaved, error };
     }
 
@@ -3360,18 +3358,13 @@ export class DataService {
       return message.includes('does not exist') || message.includes('schema cache');
     };
 
-    const rlsDenied = (error: any) => {
-      const message = String(error?.message || '').toLowerCase();
-      return message.includes('row-level security policy') || error?.code === '42501';
-    };
-
     const { data, error } = await supabase
       .from('client_post_shares')
       .insert({ user_id: userId, post_id: postId })
       .select()
       .single();
 
-    if (error && (relationMissing(error) || rlsDenied(error))) {
+    if (error && relationMissing(error)) {
       return { data: null, error: null };
     }
 

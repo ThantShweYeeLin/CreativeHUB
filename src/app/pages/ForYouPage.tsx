@@ -807,6 +807,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
   const [isSendingShare, setIsSendingShare] = useState(false);
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
+  const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
   const [composerPlaceholder] = useState(() => composerPlaceholders[Math.floor(Math.random() * composerPlaceholders.length)]);
 
@@ -1405,6 +1406,8 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setIsShareSheetOpen(true);
     setIsLoadingMutualUsers(true);
     setSelectedShareRecipientIds([]);
+    setShareStatusMessage(null);
+    setCopyLinkError(null);
 
     const response = await DataService.getMutualUsers(user.id);
     if (response.error) {
@@ -1421,10 +1424,43 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     if (!sharingPost) {
       return;
     }
+
     const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
-    await navigator.clipboard.writeText(`${shareUrl}\n\n${sharingPost.caption}`);
-    setError(null);
-    setShareStatusMessage('Post link copied to clipboard.');
+    const text = `${shareUrl}\n\n${sharingPost.caption}`;
+    setCopyLinkError(null);
+
+    try {
+      if (!navigator.clipboard || !window.isSecureContext) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(text);
+      setShareStatusMessage('Post link copied to clipboard.');
+      return;
+    } catch {
+      // Fall through to the legacy fallback below (older browsers, or a
+      // non-HTTPS/non-localhost origin where the async Clipboard API doesn't exist).
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let fallbackWorked = false;
+    try {
+      fallbackWorked = document.execCommand('copy');
+    } catch {
+      fallbackWorked = false;
+    }
+    document.body.removeChild(textarea);
+
+    if (fallbackWorked) {
+      setShareStatusMessage('Post link copied to clipboard.');
+    } else {
+      setCopyLinkError('Could not copy automatically — select and copy the link below.');
+    }
   };
 
   const sendShareToMutuals = async () => {
@@ -1960,6 +1996,21 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 </p>
               </button>
             </div>
+
+            {shareStatusMessage && (
+              <p className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-700">{shareStatusMessage}</p>
+            )}
+            {copyLinkError && (
+              <div className="mt-3 space-y-2">
+                <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{copyLinkError}</p>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/profile/${sharingPost.authorId}`}
+                  onFocus={(event) => event.target.select()}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700"
+                />
+              </div>
+            )}
 
             <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
               {isLoadingMutualUsers ? (
