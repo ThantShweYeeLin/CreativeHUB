@@ -1,8 +1,8 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, Crown, Package, Users } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, Crown, Package, Users, Bookmark } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
-  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => void;
+  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => void;
   onLogout: () => void;
 }
 
@@ -13,6 +13,7 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
     { id: 'groupRequest' as const, label: 'Group Request', icon: Users },
     { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
     { id: 'favorites' as const, label: 'Favorites', icon: Heart },
+    { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
   ] as const;
 

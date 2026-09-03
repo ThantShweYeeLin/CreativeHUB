@@ -30,6 +30,7 @@ import { BookingTrackingClientPage } from './pages/BookingTrackingClientPage';
 import { BookingTrackingFreelancerPage } from './pages/BookingTrackingFreelancerPage';
 import { MyBookingsPage } from './pages/MyBookingsPage';
 import { FavoritesPage } from './pages/FavoritesPage';
+import { SavedPostsPage } from './pages/SavedPostsPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { ForYouPage } from './pages/ForYouPage';
 import { ExplorePage } from './pages/ExplorePage';
@@ -269,6 +270,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <FavoritesPage onBack={() => navigate('/explore')} onViewProfile={(id) => navigate(`/profile/${id}`)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/saved-posts"
+            element={
+              <ProtectedRoute>
+                <SavedPostsPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />

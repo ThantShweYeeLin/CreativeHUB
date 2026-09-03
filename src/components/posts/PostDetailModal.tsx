@@ -1,0 +1,155 @@
+import { useEffect, useRef } from 'react';
+import { X } from 'lucide-react';
+import { CommentInput } from './CommentInput';
+import { CommentsList, type CommentItem } from './CommentsList';
+
+interface PostDetailModalProps {
+  onClose: () => void;
+
+  commentsCount?: number;
+
+  // Comments
+  comments: CommentItem[];
+  loadingComments: boolean;
+  canComment: boolean;
+  fallbackAvatarUrl: string;
+  renderCommentContent?: (content: string) => React.ReactNode;
+  threadedComments?: boolean;
+  postId?: string;
+  repliesByParent?: Record<string, CommentItem[]>;
+  expandedReplyThreadsByKey?: Record<string, boolean>;
+  onToggleReplyThread?: (threadKey: string) => void;
+  replyTarget?: string | null;
+  onReply?: (rootComment: CommentItem, mentionAuthor?: CommentItem) => void;
+  replyDraft?: (threadKey: string) => string;
+  onReplyDraftChange?: (threadKey: string, value: string) => void;
+  onSubmitReply?: (comment: CommentItem) => void;
+  isSubmittingReply?: (threadKey: string) => boolean;
+  getReplyKey?: (postId: string, commentId: string) => string;
+
+  // Comment input
+  currentUserAvatarUrl: string;
+  commentDraft: string;
+  onCommentDraftChange: (value: string) => void;
+  onSubmitComment: () => void;
+  isSubmittingComment: boolean;
+  commentFocusToken?: number;
+}
+
+export function PostDetailModal({
+  onClose,
+  commentsCount,
+  comments,
+  loadingComments,
+  canComment,
+  fallbackAvatarUrl,
+  renderCommentContent,
+  threadedComments,
+  postId,
+  repliesByParent,
+  expandedReplyThreadsByKey,
+  onToggleReplyThread,
+  replyTarget,
+  onReply,
+  replyDraft,
+  onReplyDraftChange,
+  onSubmitReply,
+  isSubmittingReply,
+  getReplyKey,
+  currentUserAvatarUrl,
+  commentDraft,
+  onCommentDraftChange,
+  onSubmitComment,
+  isSubmittingComment,
+  commentFocusToken,
+}: PostDetailModalProps) {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const commentsListRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (commentFocusToken) {
+      commentsListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [commentFocusToken]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-4"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden border border-gray-800 bg-neutral-900 shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-100">
+            {typeof commentsCount === 'number' ? `${commentsCount} comments` : 'Comments'}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div ref={commentsListRef} className="flex-1 overflow-y-auto p-5">
+          {canComment ? (
+            <CommentsList
+              comments={comments}
+              loading={loadingComments}
+              fallbackAvatarUrl={fallbackAvatarUrl}
+              renderContent={renderCommentContent}
+              threaded={threadedComments}
+              postId={postId}
+              repliesByParent={repliesByParent}
+              expandedReplyThreadsByKey={expandedReplyThreadsByKey}
+              onToggleReplyThread={onToggleReplyThread}
+              replyTarget={replyTarget}
+              onReply={onReply}
+              replyDraft={replyDraft}
+              onReplyDraftChange={onReplyDraftChange}
+              onSubmitReply={onSubmitReply}
+              isSubmittingReply={isSubmittingReply}
+              getReplyKey={getReplyKey}
+            />
+          ) : (
+            <p className="text-sm text-gray-500">Comments are not available for this post yet.</p>
+          )}
+        </div>
+
+        {canComment && (
+          <CommentInput
+            avatarUrl={currentUserAvatarUrl}
+            avatarAlt="You"
+            value={commentDraft}
+            onChange={onCommentDraftChange}
+            onSubmit={onSubmitComment}
+            submitting={isSubmittingComment}
+            focusToken={commentFocusToken}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default PostDetailModal;

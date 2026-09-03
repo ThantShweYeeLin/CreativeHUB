@@ -1,6 +1,6 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Share2, Sparkles, Star, Trash2, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -24,6 +24,9 @@ import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../li
 import { appendLocationMeta } from '../../lib/requestLocation';
 import { isDateBlocked, isFreelancerFreeAt, isTimeSlotTaken } from '../../lib/availability';
 import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
+import { PostDetailModal } from '../../components/posts/PostDetailModal';
+import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
+import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 
 interface FreelancerProfileProps {
@@ -51,11 +54,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
-  const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
-  const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
+  const [replyTargetByPostId, setReplyTargetByPostId] = useState<Record<string, string | null>>({});
+  const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
+  const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
+  const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
+  const [commentFocusToken, setCommentFocusToken] = useState(0);
+  const [viewingPhoto, setViewingPhoto] = useState<{ url: string; alt?: string } | null>(null);
+  const savedScrollYRef = useRef<number | null>(null);
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [activeProjects, setActiveProjects] = useState(0);
   const [completedProjects, setCompletedProjects] = useState(0);
@@ -258,7 +266,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setCompletedProjects(0);
       }
 
-      const postsResponse = await DataService.getClientPostsByClientId(targetId, 12);
+      const postsResponse = await DataService.getClientPostsByClientId(targetId, 12, user?.id);
       if (isMounted && !postsResponse.error) {
         setProfilePosts(postsResponse.data || []);
         const seed: Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }> = {};
@@ -268,8 +276,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             comments: Math.max(0, Number(post.comments_count || 0)),
             shares: Math.max(0, Number(post.shares_count || 0)),
             saves: Math.max(0, Number(post.saves_count || 0)),
-            liked: false,
-            saved: false,
+            liked: !!post.liked_by_me,
+            saved: !!post.saved_by_me,
           };
         });
         setPostEngagement(seed);
@@ -343,6 +351,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   );
 
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);
+
+  const focusedCommentThreads = useMemo(
+    () => buildCommentThreads(focusedPostId ? commentsByPostId[focusedPostId] || [] : []),
+    [commentsByPostId, focusedPostId]
+  );
 
   const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (isFollowing || isFollowedByTarget));
 
@@ -604,7 +617,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const openPostFocus = async (postId: string) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
+    if (savedScrollYRef.current === null) {
+      savedScrollYRef.current = window.scrollY;
+    }
     setFocusedPostId(stateKey);
+    setCommentFocusToken((token) => token + 1);
 
     if (commentsByPostId[stateKey]) {
       return;
@@ -619,29 +636,15 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setCommentsByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
     }
     setLoadingCommentsByPostId((current) => ({ ...current, [stateKey]: false }));
-
-    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
-    if (!likesResponse.error) {
-      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
-    }
-  };
-
-  const loadFreelancerPostLikes = async (postId: string) => {
-    const stateKey = String(postId);
-    const apiPostId = stateKey.replace(/^client-post-/, '');
-    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: true }));
-    const response = await DataService.getClientPostLikeUsers(apiPostId);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to load likes.');
-      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: [] }));
-    } else {
-      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
-    }
-    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: false }));
   };
 
   const closePostFocus = () => {
     setFocusedPostId(null);
+    if (savedScrollYRef.current !== null) {
+      const y = savedScrollYRef.current;
+      savedScrollYRef.current = null;
+      window.scrollTo(0, y);
+    }
   };
 
   const deletePost = async (postId: string) => {
@@ -703,11 +706,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         };
       });
       return;
-    }
-
-    const likesResponse = await DataService.getClientPostLikeUsers(apiPostId);
-    if (!likesResponse.error) {
-      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: likesResponse.data || [] }));
     }
 
     dispatchClientPostUpdated(apiPostId);
@@ -807,6 +805,69 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     });
     setCommentDraftByPostId((current) => ({ ...current, [stateKey]: '' }));
     setIsSubmittingCommentByPostId((current) => ({ ...current, [stateKey]: false }));
+    dispatchClientPostUpdated(apiPostId);
+  };
+
+  const replyToComment = (postId: string, rootComment: any, mentionAuthor?: any) => {
+    const targetCommentId = String(rootComment.id);
+    const threadKey = getReplyKey(postId, targetCommentId);
+    const isRootReplyClick = !mentionAuthor;
+    const alreadyOpenForThisRoot = replyTargetByPostId[postId] === targetCommentId;
+
+    if (isRootReplyClick && alreadyOpenForThisRoot) {
+      setReplyTargetByPostId((current) => ({ ...current, [postId]: null }));
+      return;
+    }
+
+    const mentionSource = mentionAuthor || rootComment;
+    setReplyTargetByPostId((current) => ({ ...current, [postId]: targetCommentId }));
+    setReplyDraftByCommentKey((current) => ({
+      ...current,
+      [threadKey]: buildMentionPrefill(mentionSource.user?.full_name),
+    }));
+  };
+
+  const submitReply = async (postId: string, comment: any) => {
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    if (!user?.id) {
+      return;
+    }
+
+    const commentId = String(comment.id);
+    const threadKey = getReplyKey(stateKey, commentId);
+    const draft = replyDraftByCommentKey[threadKey] || '';
+    if (!hasReplyContent(draft)) {
+      return;
+    }
+
+    const content = draft.trim();
+    setIsSubmittingReplyByCommentKey((current) => ({ ...current, [threadKey]: true }));
+
+    const response = await DataService.addClientPostComment(user.id, apiPostId, content);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add reply.');
+      setIsSubmittingReplyByCommentKey((current) => ({ ...current, [threadKey]: false }));
+      return;
+    }
+
+    setCommentsByPostId((current) => ({
+      ...current,
+      [stateKey]: [...(current[stateKey] || []), response.data],
+    }));
+    setPostEngagement((current) => {
+      const existing = current[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
+      return {
+        ...current,
+        [stateKey]: {
+          ...existing,
+          comments: existing.comments + 1,
+        },
+      };
+    });
+    setReplyDraftByCommentKey((current) => ({ ...current, [threadKey]: '' }));
+    setReplyTargetByPostId((current) => ({ ...current, [stateKey]: null }));
+    setIsSubmittingReplyByCommentKey((current) => ({ ...current, [threadKey]: false }));
     dispatchClientPostUpdated(apiPostId);
   };
 
@@ -1351,7 +1412,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 const engagement = postEngagement[post.id] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
                 return (
                   <article key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <button type="button" onClick={() => void openPostFocus(post.id)} className="aspect-[4/3] w-full bg-white text-left">
+                    <button
+                      type="button"
+                      onClick={() => setViewingPhoto({ url: post.image_url || avatarUrl, alt: post.caption || 'Post image' })}
+                      className="aspect-[4/3] w-full bg-white text-left"
+                    >
                       <ImageWithFallback
                         src={post.image_url || avatarUrl}
                         alt={post.caption || 'Post image'}
@@ -1467,138 +1532,51 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       )}
 
       {focusedPost && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <button
-              type="button"
-              onClick={closePostFocus}
-              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
-            >
-              <X className="h-5 w-5" />
-            </button>
+        <PostDetailModal
+          onClose={closePostFocus}
+          commentsCount={postEngagement[focusedPost.id]?.comments || 0}
+          comments={focusedCommentThreads.roots}
+          loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
+          canComment
+          fallbackAvatarUrl={fallbackProfileImage}
+          threadedComments
+          postId={focusedPost.id}
+          repliesByParent={focusedCommentThreads.repliesByParent}
+          expandedReplyThreadsByKey={expandedReplyThreadsByKey}
+          onToggleReplyThread={(threadKey) =>
+            setExpandedReplyThreadsByKey((current) => ({
+              ...current,
+              [threadKey]: !current[threadKey],
+            }))
+          }
+          replyTarget={replyTargetByPostId[focusedPost.id] || null}
+          onReply={(comment, mentionAuthor) => replyToComment(focusedPost.id, comment, mentionAuthor)}
+          replyDraft={(threadKey) => replyDraftByCommentKey[threadKey] || ''}
+          onReplyDraftChange={(threadKey, value) =>
+            setReplyDraftByCommentKey((current) => ({
+              ...current,
+              [threadKey]: value,
+            }))
+          }
+          onSubmitReply={(comment) => void submitReply(focusedPost.id, comment)}
+          isSubmittingReply={(threadKey) => !!isSubmittingReplyByCommentKey[threadKey]}
+          getReplyKey={getReplyKey}
+          currentUserAvatarUrl={user?.avatar_url || fallbackProfileImage}
+          commentDraft={commentDraftByPostId[focusedPost.id] || ''}
+          onCommentDraftChange={(value) =>
+            setCommentDraftByPostId((current) => ({
+              ...current,
+              [focusedPost.id]: value,
+            }))
+          }
+          onSubmitComment={() => void submitComment(focusedPost.id)}
+          isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
+          commentFocusToken={commentFocusToken}
+        />
+      )}
 
-            <div className="max-h-[60vh] overflow-hidden bg-gray-100">
-              <ImageWithFallback
-                src={focusedPost.image_url || avatarUrl}
-                alt={focusedPost.caption || 'Post image'}
-                className="max-h-[60vh] w-full object-contain"
-              />
-            </div>
-
-            <div className="max-h-[35vh] overflow-y-auto p-5">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3 text-left">
-                  <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full" />
-                  <div>
-                    <p className="font-semibold text-gray-900">{displayName}</p>
-                    <p className="text-xs text-gray-500">{title}</p>
-                  </div>
-                </div>
-                <span className="text-xs text-gray-500">{focusedPost.created_at ? new Date(focusedPost.created_at).toLocaleString() : ''}</span>
-              </div>
-
-              {isOwner && (
-                <div className="mb-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => void deletePost(String(focusedPost.id))}
-                    className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Delete
-                  </button>
-                </div>
-              )}
-
-              <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption || 'No caption'}</p>
-
-              <div className="mt-4 flex flex-wrap items-center gap-4 border-y border-gray-200 py-3">
-                <button onClick={() => void togglePostLike(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Heart className={`h-5 w-5 ${postEngagement[focusedPost.id]?.liked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
-                  {postEngagement[focusedPost.id]?.likes || 0}
-                </button>
-                <button onClick={() => void loadFreelancerPostLikes(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  {loadingLikesByPostId[focusedPost.id] ? 'Loading...' : 'View likes'}
-                </button>
-                <button onClick={() => void openPostFocus(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <MessageCircle className="h-5 w-5 text-gray-700" />
-                  {postEngagement[focusedPost.id]?.comments || 0}
-                </button>
-                <button onClick={() => void sharePost(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Share2 className="h-5 w-5 text-gray-700" />
-                  Share
-                </button>
-                <button onClick={() => void togglePostSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Bookmark className={`h-5 w-5 ${postEngagement[focusedPost.id]?.saved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />
-                  Save
-                </button>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {likedUsersByPostId[focusedPost.id] && likedUsersByPostId[focusedPost.id].length > 0 ? (
-                  <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
-                    <p className="mb-2 font-semibold text-gray-900">Liked by</p>
-                    <div className="flex flex-wrap gap-3">
-                      {likedUsersByPostId[focusedPost.id].map((likedUser: any) => (
-                        <div key={likedUser.id} className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 shadow-sm">
-                          <Avatar
-                            src={likedUser.avatar_url || fallbackProfileImage}
-                            alt={likedUser.full_name || likedUser.email || 'User'}
-                            gender={likedUser.gender}
-                            sizeClassName="h-8 w-8 rounded-full"
-                          />
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
-                            <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                <p className="text-sm font-semibold text-gray-900">Comments</p>
-                {loadingCommentsByPostId[focusedPost.id] ? (
-                  <p className="text-sm text-gray-500">Loading comments...</p>
-                ) : (commentsByPostId[focusedPost.id] || []).length === 0 ? (
-                  <p className="text-sm text-gray-500">No comments yet.</p>
-                ) : (
-                  (commentsByPostId[focusedPost.id] || []).map((comment: any) => (
-                    <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
-                      <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                        <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
-                        <span>•</span>
-                        <span>{new Date(comment.created_at).toLocaleString()}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap">{comment.content}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="mt-4 flex gap-2">
-                <input
-                  value={commentDraftByPostId[focusedPost.id] || ''}
-                  onChange={(event) =>
-                    setCommentDraftByPostId((current) => ({
-                      ...current,
-                      [focusedPost.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="Write a comment..."
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => void submitComment(focusedPost.id)}
-                  disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
-                  className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                >
-                  {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {viewingPhoto && (
+        <PhotoViewerModal url={viewingPhoto.url} alt={viewingPhoto.alt} onClose={() => setViewingPhoto(null)} />
       )}
 
       {showBookingForm && isBookableFreelancer && (

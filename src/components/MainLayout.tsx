@@ -441,7 +441,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate(`/profile/${targetUserId}`);
   };
 
-  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => {
+  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => {
     setShowUserMenu(false);
     switch (item) {
       case 'requests':
@@ -452,6 +452,9 @@ export function MainLayout({ children }: MainLayoutProps) {
         break;
       case 'favorites':
         navigate('/favorites');
+        break;
+      case 'savedPosts':
+        navigate('/saved-posts');
         break;
       case 'messages':
         navigate('/messages');

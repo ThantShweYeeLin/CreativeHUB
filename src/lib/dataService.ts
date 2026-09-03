@@ -3135,7 +3135,7 @@ export class DataService {
     return { data: enriched, error: null };
   }
 
-  static async getClientPostsByClientId(clientId: string, limit = 20) {
+  static async getClientPostsByClientId(clientId: string, limit = 20, viewerUserId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
       .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
@@ -3148,7 +3148,59 @@ export class DataService {
       return { data, error };
     }
 
-    const enriched = await this.enrichClientPostsWithEngagement(data, clientId);
+    const enriched = await this.enrichClientPostsWithEngagement(data, viewerUserId ?? clientId);
+    return { data: enriched, error: null };
+  }
+
+  static async getClientPostsByAuthorIds(authorIds: string[], limit = 30, viewerUserId?: string) {
+    if (authorIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location, role)')
+      .in('client_id', authorIds)
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data || data.length === 0) {
+      return { data, error };
+    }
+
+    const enriched = await this.enrichClientPostsWithEngagement(data, viewerUserId);
+    return { data: enriched, error: null };
+  }
+
+  static async getSavedClientPostsByUserId(userId: string, limit = 30) {
+    const { data: saves, error: savesError } = await supabase
+      .from('client_post_saves')
+      .select('post_id')
+      .eq('user_id', userId)
+      .limit(limit);
+
+    if (savesError) {
+      return { data: null, error: savesError };
+    }
+
+    const postIds = (saves || []).map((row: any) => row.post_id);
+    if (postIds.length === 0) {
+      return { data: [], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
+      .in('id', postIds)
+      .eq('is_published', true)
+      .order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return { data, error };
+    }
+
+    const enriched = await this.enrichClientPostsWithEngagement(data, userId);
     return { data: enriched, error: null };
   }
 

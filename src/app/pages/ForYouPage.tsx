@@ -33,6 +33,10 @@ import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
+import { PostDetailModal } from '../../components/posts/PostDetailModal';
+import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
+import { buildCommentThreads, buildMentionPrefill, extractMentionToken, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
+import type { CommentItem } from '../../components/posts/CommentsList';
 
 interface ForYouPageProps {
   onViewProfile?: (freelancerId: string) => void;
@@ -102,11 +106,6 @@ interface FeedComment {
     full_name: string | null;
     avatar_url: string | null;
   };
-}
-
-interface CommentThreads {
-  roots: FeedComment[];
-  repliesByParent: Record<string, FeedComment[]>;
 }
 
 interface PlaceSuggestion {
@@ -197,57 +196,44 @@ function toTimeAgo(timestamp: string | undefined) {
   return `${days}d ago`;
 }
 
+function mapClientPostRowToFeedPost(post: any): FeedPost {
+  const authorName = post.client?.full_name || 'Client';
+  const username = (post.client?.email || 'client').split('@')[0];
+  // client_posts.client_id can belong to a client OR a freelancer —
+  // the table name is legacy, not a role guarantee — so the actual
+  // poster's role decides the label/behavior, same as a freshly
+  // composed post does further down in this file.
+  const isFromClient = post.client?.role !== 'freelancer';
+
+  return {
+    id: `client-post-${post.id}`,
+    authorId: post.client_id,
+    authorName,
+    authorGender: post.client?.gender || null,
+    username,
+    avatar: post.client?.avatar_url || fallbackProfileImage,
+    specialty: isFromClient ? 'Client Brief' : 'Creative Update',
+    image: post.image_url || null,
+    caption: post.caption,
+    likes: Math.max(0, Number(post.likes_count || 0)),
+    commentsCount: Math.max(0, Number(post.comments_count || 0)),
+    timeAgo: toTimeAgo(post.created_at),
+    createdAtRaw: post.created_at,
+    isLiked: !!post.liked_by_me,
+    isSaved: !!post.saved_by_me,
+    // isClientPost gates whether like/save/share/comment actions have a real
+    // row to persist against — true for every entry here regardless of the
+    // poster's role, since they all come from an actual client_posts row.
+    isClientPost: true,
+  };
+}
+
 function splitList(value: string, prefix = '') {
   return value
     .split(/[\s,]+/)
     .map((item) => item.trim())
     .filter(Boolean)
     .map((item) => `${prefix}${item.replace(/^[@#]/, '')}`);
-}
-
-function normalizeCommentHandle(value: string | undefined | null) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^@+/, '')
-    .replace(/[^a-z0-9_.]/g, '');
-}
-
-function extractMentionToken(content: string) {
-  const match = content.trim().match(/^@([a-zA-Z0-9_.]+)/);
-  return match?.[1] || null;
-}
-
-function buildCommentThreads(comments: FeedComment[]): CommentThreads {
-  const roots: FeedComment[] = [];
-  const repliesByParent: Record<string, FeedComment[]> = {};
-
-  comments.forEach((comment) => {
-    const mention = extractMentionToken(comment.content || '');
-
-    if (mention) {
-      const normalizedMention = normalizeCommentHandle(mention);
-      const parent = [...roots]
-        .reverse()
-        .find((candidate) => {
-          const byName = normalizeCommentHandle(candidate.user?.full_name);
-          return byName && byName === normalizedMention;
-        });
-
-      if (parent) {
-        const parentId = String(parent.id);
-        if (!repliesByParent[parentId]) {
-          repliesByParent[parentId] = [];
-        }
-        repliesByParent[parentId].push(comment);
-        return;
-      }
-    }
-
-    roots.push(comment);
-  });
-
-  return { roots, repliesByParent };
 }
 
 function buildCaption(state: ComposerState) {
@@ -793,7 +779,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
-  const [expandedCommentsForPost, setExpandedCommentsForPost] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
   const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
@@ -807,6 +792,9 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
+  const [commentFocusToken, setCommentFocusToken] = useState(0);
+  const [viewingPhoto, setViewingPhoto] = useState<{ url: string; isVideo?: boolean } | null>(null);
+  const savedScrollYRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
@@ -852,7 +840,41 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     return () => {
       isMounted = false;
     };
-  }, [user?.id]);
+    // Also refetch whenever the user switches to the Following tab, so a follow
+    // made elsewhere (e.g. on a profile page) shows up without a full reload.
+  }, [user?.id, activeFeedTab]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadFollowingPosts() {
+      if (activeFeedTab !== 'following' || !user?.id || followingIds.size === 0) {
+        return;
+      }
+
+      const response = await DataService.getClientPostsByAuthorIds([...followingIds], 60, user.id);
+      if (!isMounted || response.error) {
+        return;
+      }
+
+      const followingPosts = (response.data || []).map(mapClientPostRowToFeedPost);
+      setPosts((current) => {
+        const existingIds = new Set(current.map((post) => post.id));
+        const newPosts = followingPosts.filter((post) => !existingIds.has(post.id));
+        return newPosts.length > 0 ? [...current, ...newPosts] : current;
+      });
+    }
+
+    loadFollowingPosts();
+
+    return () => {
+      isMounted = false;
+    };
+    // Posts authored by people you follow aren't guaranteed to already be in the
+    // general "for you" pool (that pool is capped to the newest 30 posts / top 40
+    // discoverable freelancers), so fetch them directly by author instead of only
+    // filtering whatever happened to load already.
+  }, [activeFeedTab, followingIds, user?.id]);
 
   useEffect(() => {
     const state = location.state as { openPostId?: string } | null;
@@ -950,34 +972,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         }));
       }).slice(0, 30);
 
-      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map((post: any) => {
-        const authorName = post.client?.full_name || 'Client';
-        const username = (post.client?.email || 'client').split('@')[0];
-        // client_posts.client_id can belong to a client OR a freelancer —
-        // the table name is legacy, not a role guarantee — so the actual
-        // poster's role decides the label/behavior, same as a freshly
-        // composed post does further down in this file.
-        const isFromClient = post.client?.role !== 'freelancer';
-
-        return {
-          id: `client-post-${post.id}`,
-          authorId: post.client_id,
-          authorName,
-          authorGender: post.client?.gender || null,
-          username,
-          avatar: post.client?.avatar_url || fallbackProfileImage,
-          specialty: isFromClient ? 'Client Brief' : 'Creative Update',
-          image: post.image_url || null,
-          caption: post.caption,
-          likes: Math.max(0, Number(post.likes_count || 0)),
-          commentsCount: Math.max(0, Number(post.comments_count || 0)),
-          timeAgo: toTimeAgo(post.created_at),
-          createdAtRaw: post.created_at,
-          isLiked: !!post.liked_by_me,
-          isSaved: !!post.saved_by_me,
-          isClientPost: isFromClient,
-        };
-      });
+      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map(mapClientPostRowToFeedPost);
 
       const demoPosts: FeedPost[] = [
         {
@@ -1066,6 +1061,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     [posts, focusedPostId]
   );
 
+  const focusedCommentThreads = useMemo(
+    () => buildCommentThreads(focusedPostId ? commentsByPostId[focusedPostId] || [] : []),
+    [commentsByPostId, focusedPostId]
+  );
+
   const handleLike = async (postId: string) => {
     if (likingByPostId[postId]) {
       return;
@@ -1140,17 +1140,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     }
   };
 
-  const handleCommentToggle = async (postId: string) => {
-    setFocusedPostId(postId);
-
-    const existingComments = commentsByPostId[postId];
-    if (existingComments) {
-      return;
-    }
-
-    await loadCommentsForPost(postId);
-  };
-
   const submitComment = async (postId: string) => {
     const draft = (commentDraftByPostId[postId] || '').trim();
     const post = posts.find((item) => item.id === postId);
@@ -1199,34 +1188,42 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     dispatchClientPostUpdated(postId);
   };
 
-  const getReplyKey = (postId: string, commentId: string) => `${postId}:${commentId}`;
-
   const renderCommentContent = (content: string) => {
     const mention = extractMentionToken(content);
     if (!mention) {
-      return <p className="whitespace-pre-wrap text-sm text-gray-800">{content}</p>;
+      return <span className="whitespace-pre-wrap">{content}</span>;
     }
 
     const mentionText = `@${mention}`;
     const rest = content.trim().slice(mentionText.length).trim();
     return (
-      <p className="whitespace-pre-wrap text-sm text-gray-800">
-        <span className="font-bold text-gray-900">{mentionText}</span>
+      <span className="whitespace-pre-wrap">
+        <span className="font-bold text-gray-300">{mentionText}</span>
         {rest ? ` ${rest}` : ''}
-      </p>
+      </span>
     );
   };
 
-  const replyToComment = (postId: string, comment: FeedComment) => {
-    const targetCommentId = String(comment.id);
-    setExpandedCommentsForPost(postId);
-    setReplyTargetByPostId((current) => ({
+  const replyToComment = (postId: string, rootComment: FeedComment | CommentItem, mentionAuthor?: FeedComment | CommentItem) => {
+    const targetCommentId = String(rootComment.id);
+    const replyKey = getReplyKey(postId, targetCommentId);
+    const isRootReplyClick = !mentionAuthor;
+    const alreadyOpenForThisRoot = replyTargetByPostId[postId] === targetCommentId;
+
+    if (isRootReplyClick && alreadyOpenForThisRoot) {
+      setReplyTargetByPostId((current) => ({ ...current, [postId]: null }));
+      return;
+    }
+
+    const mentionSource = mentionAuthor || rootComment;
+    setReplyTargetByPostId((current) => ({ ...current, [postId]: targetCommentId }));
+    setReplyDraftByCommentKey((current) => ({
       ...current,
-      [postId]: current[postId] === targetCommentId ? null : targetCommentId,
+      [replyKey]: buildMentionPrefill(mentionSource.user?.full_name),
     }));
   };
 
-  const submitReply = async (postId: string, comment: FeedComment) => {
+  const submitReply = async (postId: string, comment: FeedComment | CommentItem) => {
     const post = posts.find((item) => item.id === postId);
     if (!post || !user?.id) {
       return;
@@ -1234,13 +1231,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
     const commentId = String(comment.id);
     const replyKey = getReplyKey(postId, commentId);
-    const replyText = (replyDraftByCommentKey[replyKey] || '').trim();
-    if (!replyText) {
+    const draft = replyDraftByCommentKey[replyKey] || '';
+    if (!hasReplyContent(draft)) {
       return;
     }
 
-    const replyPrefix = `@${comment.user?.full_name || 'User'}`;
-    const content = `${replyPrefix} ${replyText}`;
+    const content = draft.trim();
 
     setIsSubmittingReplyByCommentKey((current) => ({ ...current, [replyKey]: true }));
 
@@ -1283,11 +1279,23 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   };
 
   const openPostFocus = (postId: string) => {
+    if (savedScrollYRef.current === null) {
+      savedScrollYRef.current = window.scrollY;
+    }
     setFocusedPostId(postId);
+    setCommentFocusToken((token) => token + 1);
+    if (!commentsByPostId[postId]) {
+      void loadCommentsForPost(postId);
+    }
   };
 
   const closePostFocus = () => {
     setFocusedPostId(null);
+    if (savedScrollYRef.current !== null) {
+      const y = savedScrollYRef.current;
+      savedScrollYRef.current = null;
+      window.scrollTo(0, y);
+    }
   };
 
   const loadCommentsForPost = async (postId: string) => {
@@ -1706,9 +1714,22 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               )}
 
               {post.image && (
-                <div className="relative block aspect-square w-full bg-gray-100 text-left">
+                <div
+                  onClick={() =>
+                    setViewingPhoto({
+                      url: post.image!,
+                      isVideo: post.image!.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/'),
+                    })
+                  }
+                  className="relative block aspect-square w-full cursor-pointer bg-gray-100 text-left"
+                >
                   {post.image.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/') ? (
-                    <video src={post.image} className="h-full w-full object-cover" controls />
+                    <video
+                      src={post.image}
+                      className="h-full w-full object-cover"
+                      controls
+                      onClick={(event) => event.stopPropagation()}
+                    />
                   ) : (
                     <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
                   )}
@@ -1736,15 +1757,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                       <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Like</span>
                     </div>
                     <button
-                      onClick={() => {
-                        setExpandedCommentsForPost((current) => {
-                          const next = current === post.id ? null : post.id;
-                          if (next === post.id) {
-                            void loadCommentsForPost(post.id);
-                          }
-                          return next;
-                        });
-                      }}
+                      onClick={() => void openPostFocus(post.id)}
                       className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
                     >
                       <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
@@ -1838,128 +1851,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   </div>
                 ) : null}
 
-                {expandedCommentsForPost === post.id && (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-                    {post.isClientPost ? (
-                      <div className="space-y-3">
-                        {loadingCommentsByPostId[post.id] ? (
-                          <p className="text-gray-500">Loading comments...</p>
-                        ) : (commentsByPostId[post.id] || []).length === 0 ? (
-                          <p className="text-gray-500">No comments yet.</p>
-                        ) : (
-                          (() => {
-                            const threaded = buildCommentThreads(commentsByPostId[post.id] || []);
-
-                            return threaded.roots.map((comment) => {
-                              const parentId = String(comment.id);
-                              const threadKey = getReplyKey(post.id, parentId);
-                              const replies = threaded.repliesByParent[parentId] || [];
-                              const expanded = !!expandedReplyThreadsByKey[threadKey];
-                              const visibleReplies = expanded ? replies : replies.slice(0, 1);
-                              const hiddenCount = Math.max(0, replies.length - visibleReplies.length);
-
-                              return (
-                                <div key={comment.id} className="rounded-2xl bg-white px-3 py-2 shadow-sm">
-                                  <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                                    <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
-                                    <span>•</span>
-                                    <span>{new Date(comment.created_at).toLocaleString()}</span>
-                                  </div>
-                                  {renderCommentContent(comment.content)}
-                                  <button
-                                    type="button"
-                                    onClick={() => replyToComment(post.id, comment)}
-                                    className="mt-2 text-xs font-semibold text-gray-500 hover:text-gray-900"
-                                  >
-                                    Reply
-                                  </button>
-
-                                  {replyTargetByPostId[post.id] === parentId ? (
-                                    <div className="mt-2 flex gap-2">
-                                      <input
-                                        value={replyDraftByCommentKey[getReplyKey(post.id, parentId)] || ''}
-                                        onChange={(event) =>
-                                          setReplyDraftByCommentKey((current) => ({
-                                            ...current,
-                                            [getReplyKey(post.id, parentId)]: event.target.value,
-                                          }))
-                                        }
-                                        placeholder={`Reply to ${comment.user?.full_name || 'User'}...`}
-                                        className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => void submitReply(post.id, comment)}
-                                        disabled={!!isSubmittingReplyByCommentKey[getReplyKey(post.id, parentId)]}
-                                        className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                                      >
-                                        {isSubmittingReplyByCommentKey[getReplyKey(post.id, parentId)] ? 'Sending...' : 'Reply'}
-                                      </button>
-                                    </div>
-                                  ) : null}
-
-                                  {visibleReplies.length > 0 ? (
-                                    <div className="mt-3 space-y-2 border-l border-gray-200 pl-4">
-                                      {visibleReplies.map((reply) => (
-                                        <div key={reply.id} className="rounded-xl bg-gray-50 px-3 py-2">
-                                          <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                                            <span className="font-semibold text-gray-900">{reply.user?.full_name || 'User'}</span>
-                                            <span>•</span>
-                                            <span>{new Date(reply.created_at).toLocaleString()}</span>
-                                          </div>
-                                          {renderCommentContent(reply.content)}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  ) : null}
-
-                                  {replies.length > 0 ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setExpandedReplyThreadsByKey((current) => ({
-                                          ...current,
-                                          [threadKey]: !current[threadKey],
-                                        }))
-                                      }
-                                      className="mt-2 text-xs font-semibold text-gray-500 hover:text-gray-900"
-                                    >
-                                      {expanded ? 'Hide replies' : `View ${hiddenCount || replies.length} more repl${(hiddenCount || replies.length) > 1 ? 'ies' : 'y'}`}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              );
-                            });
-                          })()
-                        )}
-
-                        <div className="mt-2 flex gap-2">
-                          <input
-                            value={commentDraftByPostId[post.id] || ''}
-                            onChange={(event) =>
-                              setCommentDraftByPostId((current) => ({
-                                ...current,
-                                [post.id]: event.target.value,
-                              }))
-                            }
-                            placeholder="Write a comment..."
-                            className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void submitComment(post.id)}
-                            disabled={!!isSubmittingCommentByPostId[post.id]}
-                            className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                          >
-                            {isSubmittingCommentByPostId[post.id] ? 'Sending...' : 'Comment'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p>Comments are not available for this post yet.</p>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           ))}
@@ -1967,241 +1858,52 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       </div>
 
       {focusedPost && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-          <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
-            <button
-              type="button"
-              onClick={closePostFocus}
-              className="absolute right-4 top-4 z-10 rounded-full bg-white/90 p-2 text-gray-700 shadow"
-            >
-              <X className="h-5 w-5" />
-            </button>
+        <PostDetailModal
+          onClose={closePostFocus}
+          commentsCount={focusedPost.commentsCount}
+          comments={focusedCommentThreads.roots}
+          loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
+          canComment={!!focusedPost.isClientPost}
+          fallbackAvatarUrl={fallbackProfileImage}
+          renderCommentContent={renderCommentContent}
+          threadedComments
+          postId={focusedPost.id}
+          repliesByParent={focusedCommentThreads.repliesByParent}
+          expandedReplyThreadsByKey={expandedReplyThreadsByKey}
+          onToggleReplyThread={(threadKey) =>
+            setExpandedReplyThreadsByKey((current) => ({
+              ...current,
+              [threadKey]: !current[threadKey],
+            }))
+          }
+          replyTarget={replyTargetByPostId[focusedPost.id] || null}
+          onReply={(comment, mentionAuthor) => replyToComment(focusedPost.id, comment, mentionAuthor)}
+          replyDraft={(threadKey) => replyDraftByCommentKey[threadKey] || ''}
+          onReplyDraftChange={(threadKey, value) =>
+            setReplyDraftByCommentKey((current) => ({
+              ...current,
+              [threadKey]: value,
+            }))
+          }
+          onSubmitReply={(comment) => void submitReply(focusedPost.id, comment)}
+          isSubmittingReply={(threadKey) => !!isSubmittingReplyByCommentKey[threadKey]}
+          getReplyKey={getReplyKey}
+          currentUserAvatarUrl={userAvatar}
+          commentDraft={commentDraftByPostId[focusedPost.id] || ''}
+          onCommentDraftChange={(value) =>
+            setCommentDraftByPostId((current) => ({
+              ...current,
+              [focusedPost.id]: value,
+            }))
+          }
+          onSubmitComment={() => void submitComment(focusedPost.id)}
+          isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
+          commentFocusToken={commentFocusToken}
+        />
+      )}
 
-            <div className="max-h-[60vh] overflow-hidden bg-gray-100">
-              {focusedPost.image && focusedPost.image.startsWith('blob:') && focusedPost.attachments?.find((attachment) => attachment.previewUrl === focusedPost.image)?.type.startsWith('video/') ? (
-                <video src={focusedPost.image} className="max-h-[60vh] w-full object-contain" controls />
-              ) : (
-                <ImageWithFallback src={focusedPost.image || fallbackProfileImage} alt={focusedPost.caption} className="max-h-[60vh] w-full object-contain" />
-              )}
-            </div>
-
-            <div className="max-h-[35vh] overflow-y-auto p-5">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <button
-                  type="button"
-                  onClick={() => onViewProfile?.(focusedPost.authorId)}
-                  className="flex items-center gap-3 text-left transition-opacity hover:opacity-80"
-                >
-                  <Avatar src={focusedPost.avatar} alt={focusedPost.authorName} gender={focusedPost.authorGender} sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full" />
-                  <div>
-                    <p className="font-semibold text-gray-900">{focusedPost.authorName}</p>
-                    <p className="text-xs text-gray-500">@{focusedPost.username} • {focusedPost.specialty}</p>
-                  </div>
-                </button>
-                <span className="text-xs text-gray-500">{focusedPost.timeAgo}</span>
-              </div>
-
-              <p className="whitespace-pre-line text-sm text-gray-800">{focusedPost.caption}</p>
-
-              <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
-                <div
-                  className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-gray-800"
-                  onClick={() => void openLikesForPost(focusedPost.id)}
-                >
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      void handleLike(focusedPost.id);
-                    }}
-                    disabled={!!likingByPostId[focusedPost.id]}
-                  >
-                    <Heart className={`h-5 w-5 ${focusedPost.isLiked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
-                  </button>
-                  <span>{focusedPost.likes}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    void openLikesForPost(focusedPost.id);
-                  }}
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800"
-                >
-                  {loadingLikesByPostId[focusedPost.id] ? 'Loading...' : 'Show likes'}
-                </button>
-                <button onClick={() => void handleCommentToggle(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <MessageCircle className="h-5 w-5 text-gray-700" />
-                  {focusedPost.commentsCount}
-                </button>
-                <button onClick={() => void handleShare(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Share2 className="h-5 w-5 text-gray-700" />
-                  Share
-                </button>
-                <button onClick={() => void handleSave(focusedPost.id)} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                  <Bookmark className={`h-5 w-5 ${focusedPost.isSaved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />
-                  Save
-                </button>
-              </div>
-
-              {focusedPost.location && (
-                <div className="mt-3 rounded-2xl bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                  {focusedPost.location}
-                </div>
-              )}
-
-              {showLikesByPostId[focusedPost.id] ? (
-                <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
-                  <p className="mb-2 font-semibold text-gray-900">Liked by</p>
-                  {loadingLikesByPostId[focusedPost.id] ? (
-                    <p className="text-sm text-gray-500">Loading likes...</p>
-                  ) : (likedUsersByPostId[focusedPost.id] || []).length === 0 ? (
-                    <p className="text-sm text-gray-500">No visible liker accounts for this post yet.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-3">
-                      {(likedUsersByPostId[focusedPost.id] || []).map((user) => (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onClick={() => onViewProfile?.(String(user.id))}
-                          className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
-                        >
-                          <Avatar
-                            src={user.avatar_url || fallbackProfileImage}
-                            alt={user.full_name || user.email || 'User'}
-                            gender={user.gender}
-                            sizeClassName="h-8 w-8 rounded-full"
-                          />
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">{user.full_name || user.email || 'Unknown'}</p>
-                            <p className="text-xs text-gray-500">@{String(user.email || '').split('@')[0]}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : null}
-
-              <div className="mt-5 space-y-3">
-                <p className="text-sm font-semibold text-gray-900">Comments</p>
-                {loadingCommentsByPostId[focusedPost.id] ? (
-                  <p className="text-sm text-gray-500">Loading comments...</p>
-                ) : (commentsByPostId[focusedPost.id] || []).length === 0 ? (
-                  <p className="text-sm text-gray-500">No comments yet.</p>
-                ) : (
-                  (() => {
-                    const threaded = buildCommentThreads(commentsByPostId[focusedPost.id] || []);
-
-                    return threaded.roots.map((comment) => {
-                      const parentId = String(comment.id);
-                      const threadKey = getReplyKey(focusedPost.id, parentId);
-                      const replies = threaded.repliesByParent[parentId] || [];
-                      const expanded = !!expandedReplyThreadsByKey[threadKey];
-                      const visibleReplies = expanded ? replies : replies.slice(0, 1);
-                      const hiddenCount = Math.max(0, replies.length - visibleReplies.length);
-
-                      return (
-                        <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
-                          <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                            <span className="font-semibold text-gray-900">{comment.user?.full_name || 'User'}</span>
-                            <span>•</span>
-                            <span>{new Date(comment.created_at).toLocaleString()}</span>
-                          </div>
-                          {renderCommentContent(comment.content)}
-                          <button
-                            type="button"
-                            onClick={() => replyToComment(focusedPost.id, comment)}
-                            className="mt-2 text-xs font-semibold text-gray-500 hover:text-gray-900"
-                          >
-                            Reply
-                          </button>
-
-                          {replyTargetByPostId[focusedPost.id] === parentId ? (
-                            <div className="mt-2 flex gap-2">
-                              <input
-                                value={replyDraftByCommentKey[getReplyKey(focusedPost.id, parentId)] || ''}
-                                onChange={(event) =>
-                                  setReplyDraftByCommentKey((current) => ({
-                                    ...current,
-                                    [getReplyKey(focusedPost.id, parentId)]: event.target.value,
-                                  }))
-                                }
-                                placeholder={`Reply to ${comment.user?.full_name || 'User'}...`}
-                                className="flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => void submitReply(focusedPost.id, comment)}
-                                disabled={!!isSubmittingReplyByCommentKey[getReplyKey(focusedPost.id, parentId)]}
-                                className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                              >
-                                {isSubmittingReplyByCommentKey[getReplyKey(focusedPost.id, parentId)] ? 'Sending...' : 'Reply'}
-                              </button>
-                            </div>
-                          ) : null}
-
-                          {visibleReplies.length > 0 ? (
-                            <div className="mt-3 space-y-2 border-l border-gray-200 pl-4">
-                              {visibleReplies.map((reply) => (
-                                <div key={reply.id} className="rounded-xl bg-white px-3 py-2">
-                                  <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
-                                    <span className="font-semibold text-gray-900">{reply.user?.full_name || 'User'}</span>
-                                    <span>•</span>
-                                    <span>{new Date(reply.created_at).toLocaleString()}</span>
-                                  </div>
-                                  {renderCommentContent(reply.content)}
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
-
-                          {replies.length > 0 ? (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedReplyThreadsByKey((current) => ({
-                                  ...current,
-                                  [threadKey]: !current[threadKey],
-                                }))
-                              }
-                              className="mt-2 text-xs font-semibold text-gray-500 hover:text-gray-900"
-                            >
-                              {expanded ? 'Hide replies' : `View ${hiddenCount || replies.length} more repl${(hiddenCount || replies.length) > 1 ? 'ies' : 'y'}`}
-                            </button>
-                          ) : null}
-                        </div>
-                      );
-                    });
-                  })()
-                )}
-              </div>
-
-              {focusedPost.isClientPost && (
-                <div className="mt-4 flex gap-2">
-                  <input
-                    value={commentDraftByPostId[focusedPost.id] || ''}
-                    onChange={(event) =>
-                      setCommentDraftByPostId((current) => ({
-                        ...current,
-                        [focusedPost.id]: event.target.value,
-                      }))
-                    }
-                    placeholder="Write a comment..."
-                    className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void submitComment(focusedPost.id)}
-                    disabled={!!isSubmittingCommentByPostId[focusedPost.id]}
-                    className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                  >
-                    {isSubmittingCommentByPostId[focusedPost.id] ? 'Sending...' : 'Comment'}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {viewingPhoto && (
+        <PhotoViewerModal url={viewingPhoto.url} isVideo={viewingPhoto.isVideo} onClose={() => setViewingPhoto(null)} />
       )}
 
       {isShareSheetOpen && sharingPost && (
