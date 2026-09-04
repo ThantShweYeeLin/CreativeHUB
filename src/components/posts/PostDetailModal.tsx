@@ -64,9 +64,35 @@ export function PostDetailModal({
   commentFocusToken,
 }: PostDetailModalProps) {
   useEffect(() => {
-    document.body.style.overflow = 'hidden';
+    // `overflow: hidden` alone doesn't stop touch-scrolling on iOS Safari —
+    // pinning the body in place with position: fixed is what actually works
+    // there, so the feed can't be scrolled behind the sheet.
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+
     return () => {
-      document.body.style.overflow = '';
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.left = previous.left;
+      body.style.right = previous.right;
+      body.style.width = previous.width;
+      body.style.overflow = previous.overflow;
+      window.scrollTo(0, scrollY);
     };
   }, []);
 
@@ -97,7 +123,7 @@ export function PostDetailModal({
         }
       }}
     >
-      <div className="relative flex h-[55vh] w-full flex-col overflow-hidden rounded-t-3xl border border-gray-200 bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+      <div className="relative flex h-[55dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-gray-200 bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-900">
             {typeof commentsCount === 'number' ? `${commentsCount} comments` : 'Comments'}

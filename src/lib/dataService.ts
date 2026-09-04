@@ -3364,7 +3364,10 @@ export class DataService {
       .select()
       .single();
 
-    if (error && relationMissing(error)) {
+    // A duplicate share (already recorded for this user+post) isn't a real
+    // failure — sharing the same post again should be a harmless no-op, not
+    // an error the user sees.
+    if (error && (relationMissing(error) || error.code === '23505')) {
       return { data: null, error: null };
     }
 

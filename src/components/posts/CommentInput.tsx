@@ -47,7 +47,10 @@ export function CommentInput({
           }
         }}
         placeholder={placeholder}
-        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-gray-300"
+        // 16px+ font size — anything smaller makes iOS Safari auto-zoom the
+        // whole page in when this input gets focus, which is what was
+        // breaking the sheet's layout and requiring a manual pinch-zoom out.
+        className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-base text-gray-900 placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-gray-300"
       />
       <button
         type="button"
