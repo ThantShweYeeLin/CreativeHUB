@@ -11,6 +11,7 @@ import {
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
+import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -642,19 +643,81 @@ export class DataService {
     return { data: finalResults, error: null };
   }
 
+  // The fields the AI Match Finder's embedding is actually built from — any
+  // profile write that touches one of these needs a fresh embedding, and
+  // one that doesn't (e.g. just working hours or hourly rate) can skip it.
+  private static readonly AI_RELEVANT_FREELANCER_FIELDS = ['title', 'skills', 'styles', 'description'] as const;
+
+  // Central place every freelancer-profile write in the app funnels
+  // through (create on first onboarding, update on every later edit) so a
+  // style embedding is generated the same way no matter which screen
+  // triggered the save — this is what actually fixes "most freelancers
+  // have no embedding": BecomeFreelancerPage's onboarding save used to
+  // skip embedding generation entirely because that logic used to live
+  // only in EditProfilePage's save handler, not here.
+  private static async withStyleEmbedding(
+    userId: string,
+    payload: Record<string, any>,
+    options: { isCreate?: boolean } = {}
+  ): Promise<Record<string, any>> {
+    const touchesRelevantField = this.AI_RELEVANT_FREELANCER_FIELDS.some((field) => field in payload);
+    if (!options.isCreate && !touchesRelevantField) {
+      return payload;
+    }
+
+    // An update only sends the fields that changed - the embedding needs
+    // the freelancer's *current* full profile, not just this call's diff.
+    let merged: Record<string, any> = payload;
+    if (!options.isCreate) {
+      const current = await supabase
+        .from('freelancer_profiles')
+        .select('title, skills, styles, description')
+        .eq('user_id', userId)
+        .maybeSingle();
+      merged = { ...(current.data || {}), ...payload };
+    }
+
+    try {
+      const profileText = buildFreelancerStyleProfileText({
+        category: String(merged.title || ''),
+        skills: Array.isArray(merged.skills) ? merged.skills : [],
+        styles: Array.isArray(merged.styles) ? merged.styles : [],
+        description: String(merged.description || ''),
+      });
+      const embedding = await embedText(profileText);
+      return {
+        ...payload,
+        style_embedding: embedding,
+        embedding_status: 'ready',
+        embedding_updated_at: new Date().toISOString(),
+      };
+    } catch {
+      // Leave any existing embedding in place (stale is still more useful
+      // than none) - just flag that a retry is needed rather than
+      // blocking the profile save itself over a Gemini hiccup.
+      return {
+        ...payload,
+        embedding_status: 'failed',
+        embedding_updated_at: new Date().toISOString(),
+      };
+    }
+  }
+
   static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
+    const payload = await this.withStyleEmbedding(userId, profile, { isCreate: true });
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .insert({ user_id: userId, ...profile })
+      .insert({ user_id: userId, ...payload })
       .select()
       .single();
     return { data, error };
   }
 
   static async updateFreelancerProfile(userId: string, updates: Partial<FreelancerProfile>) {
+    const payload = await this.withStyleEmbedding(userId, updates as Record<string, any>);
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .update(updates)
+      .update(payload)
       .eq('user_id', userId)
       .select()
       .single();
