@@ -792,7 +792,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
-  const [commentFocusToken, setCommentFocusToken] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; isVideo?: boolean } | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1284,7 +1283,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(postId);
-    setCommentFocusToken((token) => token + 1);
     if (!commentsByPostId[postId]) {
       void loadCommentsForPost(postId);
     }
@@ -1936,7 +1934,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
-          commentFocusToken={commentFocusToken}
         />
       )}
 

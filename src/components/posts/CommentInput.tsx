@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { Send } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 
@@ -10,8 +9,6 @@ interface CommentInputProps {
   onSubmit: () => void;
   submitting?: boolean;
   placeholder?: string;
-  /** Bump this number to force-focus the input, even if it's already mounted/open. */
-  focusToken?: number;
 }
 
 export function CommentInput({
@@ -22,23 +19,13 @@ export function CommentInput({
   onSubmit,
   submitting = false,
   placeholder = 'Add comment...',
-  focusToken,
 }: CommentInputProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (focusToken) {
-      inputRef.current?.focus();
-    }
-  }, [focusToken]);
-
   const canSubmit = !submitting && !!value.trim();
 
   return (
     <div className="flex shrink-0 items-center gap-2 border-t border-gray-200 bg-white p-3 sm:p-4">
       <Avatar src={avatarUrl} alt={avatarAlt} sizeClassName="h-8 w-8 rounded-full" />
       <input
-        ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {

@@ -106,6 +106,10 @@ export function CommentsList({
     return onSubmitReply && replyTarget === parentId ? (
       <div className="mt-2 flex gap-2 pl-11">
         <input
+          // Autofocus is fine here — the input only mounts in direct response
+          // to the user tapping "Reply", unlike opening the comment sheet
+          // itself, which shouldn't summon the keyboard uninvited.
+          ref={(el) => el?.focus()}
           value={replyDraft?.(threadKey) || ''}
           onChange={(event) => onReplyDraftChange?.(threadKey, event.target.value)}
           placeholder="Write a reply..."

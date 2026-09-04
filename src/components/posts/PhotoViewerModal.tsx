@@ -29,7 +29,8 @@ export function PhotoViewerModal({ url, alt, isVideo, onClose }: PhotoViewerModa
 
   return (
     <div
-      className="fixed inset-0 z-[85] flex items-center justify-center bg-black/90 p-4"
+      // Above the global mobile bottom nav (z-[1200], see MobileBottomNav).
+      className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/90 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();

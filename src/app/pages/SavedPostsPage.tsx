@@ -31,7 +31,6 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
-  const [commentFocusToken, setCommentFocusToken] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; alt?: string } | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
 
@@ -97,7 +96,6 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(stateKey);
-    setCommentFocusToken((token) => token + 1);
 
     if (commentsByPostId[stateKey]) {
       return;
@@ -421,7 +419,6 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
-          commentFocusToken={commentFocusToken}
         />
       )}
 

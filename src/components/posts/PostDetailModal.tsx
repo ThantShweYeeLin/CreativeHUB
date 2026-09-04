@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { CommentInput } from './CommentInput';
 import { CommentsList, type CommentItem } from './CommentsList';
@@ -33,7 +33,6 @@ interface PostDetailModalProps {
   onCommentDraftChange: (value: string) => void;
   onSubmitComment: () => void;
   isSubmittingComment: boolean;
-  commentFocusToken?: number;
 }
 
 export function PostDetailModal({
@@ -61,7 +60,6 @@ export function PostDetailModal({
   onCommentDraftChange,
   onSubmitComment,
   isSubmittingComment,
-  commentFocusToken,
 }: PostDetailModalProps) {
   useEffect(() => {
     // `overflow: hidden` alone doesn't stop touch-scrolling on iOS Safari —
@@ -106,17 +104,12 @@ export function PostDetailModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const commentsListRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (commentFocusToken) {
-      commentsListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, [commentFocusToken]);
-
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      // Above the global mobile bottom nav (z-[1200], see MobileBottomNav) —
+      // otherwise its opaque bar sits on top of the sheet's bottom edge,
+      // hiding the comment input behind it on phones.
+      className="fixed inset-0 z-[1300] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -137,7 +130,7 @@ export function PostDetailModal({
           </button>
         </div>
 
-        <div ref={commentsListRef} className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-5">
           {canComment ? (
             <CommentsList
               comments={comments}
@@ -170,7 +163,6 @@ export function PostDetailModal({
             onChange={onCommentDraftChange}
             onSubmit={onSubmitComment}
             submitting={isSubmittingComment}
-            focusToken={commentFocusToken}
           />
         )}
       </div>

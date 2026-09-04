@@ -61,7 +61,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
-  const [commentFocusToken, setCommentFocusToken] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; alt?: string } | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
@@ -627,7 +626,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(stateKey);
-    setCommentFocusToken((token) => token + 1);
 
     if (commentsByPostId[stateKey]) {
       return;
@@ -1577,7 +1575,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
-          commentFocusToken={commentFocusToken}
         />
       )}
 
