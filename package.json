@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite",
+    "dev": "concurrently -n web,api -c blue,green \"vite\" \"pnpm --filter creativehub-server dev\"",
+    "dev:web": "vite",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },
@@ -80,6 +81,7 @@
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "4.7.0",
+    "concurrently": "^10.0.5",
     "tailwindcss": "4.1.12",
     "typescript": "5.5.4",
     "vite": "6.3.5"
