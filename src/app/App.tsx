@@ -1,41 +1,47 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
+// Kept eager — the first thing a signed-out visitor sees, so there's
+// nothing to gain (and a loading flicker to lose) by chunking these.
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 
-// Authenticated page imports
-import { FreelancerProfile } from './pages/FreelancerProfile';
-import { TeamProfilePage } from './pages/TeamProfilePage';
-import { MapView } from './pages/MapExplorePage';
-import { RequestsPage } from './pages/RequestsPage';
-import { GroupRequestPage } from './pages/GroupRequestPage';
-import { EditProfilePage } from './pages/EditProfilePage';
-import { BecomeFreelancerPage } from './pages/BecomeFreelancerPage';
-import { FreelancerDashboardRequestsPage } from './pages/FreelancerDashboardRequestsPage';
-import { FreelancerDashboardBookingsPage } from './pages/FreelancerDashboardBookingsPage';
-import { FreelancerDashboardCalendarPage } from './pages/FreelancerDashboardCalendarPage';
-import { FreelancerDashboardAnalyticsPage } from './pages/FreelancerDashboardAnalyticsPage';
-import { FreelancerDashboardReviewsPage } from './pages/FreelancerDashboardReviewsPage';
-import { FreelancerDashboardEarningsPage } from './pages/FreelancerDashboardEarningsPage';
-import { FreelancerDashboardTeamsPage } from './pages/FreelancerDashboardTeamsPage';
-import { FreelancerDashboardSettingsPage } from './pages/FreelancerDashboardSettingsPage';
-import { PremiumSubscriptionPage } from './pages/PremiumSubscriptionPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { BookingTrackingClientPage } from './pages/BookingTrackingClientPage';
-import { BookingTrackingFreelancerPage } from './pages/BookingTrackingFreelancerPage';
-import { MyBookingsPage } from './pages/MyBookingsPage';
-import { FavoritesPage } from './pages/FavoritesPage';
-import { SavedPostsPage } from './pages/SavedPostsPage';
-import { MessagesPage } from './pages/MessagesPage';
-import { ForYouPage } from './pages/ForYouPage';
-import { ExplorePage } from './pages/ExplorePage';
-import { ClientOnboardingPage } from './pages/ClientOnboardingPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
+// Authenticated page imports — lazy so each route's code downloads only
+// when a signed-in user actually navigates there, instead of one ~8.7MB
+// bundle shipping every page (Explore, both dashboards, Admin, etc.)
+// upfront. Same components, same props, same behavior — just loaded later.
+const FreelancerProfile = lazy(() => import('./pages/FreelancerProfile').then((m) => ({ default: m.FreelancerProfile })));
+const TeamProfilePage = lazy(() => import('./pages/TeamProfilePage').then((m) => ({ default: m.TeamProfilePage })));
+const MapView = lazy(() => import('./pages/MapExplorePage').then((m) => ({ default: m.MapView })));
+const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
+const GroupRequestPage = lazy(() => import('./pages/GroupRequestPage').then((m) => ({ default: m.GroupRequestPage })));
+const EditProfilePage = lazy(() => import('./pages/EditProfilePage').then((m) => ({ default: m.EditProfilePage })));
+const BecomeFreelancerPage = lazy(() => import('./pages/BecomeFreelancerPage').then((m) => ({ default: m.BecomeFreelancerPage })));
+const FreelancerDashboardRequestsPage = lazy(() => import('./pages/FreelancerDashboardRequestsPage').then((m) => ({ default: m.FreelancerDashboardRequestsPage })));
+const FreelancerDashboardBookingsPage = lazy(() => import('./pages/FreelancerDashboardBookingsPage').then((m) => ({ default: m.FreelancerDashboardBookingsPage })));
+const FreelancerDashboardCalendarPage = lazy(() => import('./pages/FreelancerDashboardCalendarPage').then((m) => ({ default: m.FreelancerDashboardCalendarPage })));
+const FreelancerDashboardAnalyticsPage = lazy(() => import('./pages/FreelancerDashboardAnalyticsPage').then((m) => ({ default: m.FreelancerDashboardAnalyticsPage })));
+const FreelancerDashboardReviewsPage = lazy(() => import('./pages/FreelancerDashboardReviewsPage').then((m) => ({ default: m.FreelancerDashboardReviewsPage })));
+const FreelancerDashboardEarningsPage = lazy(() => import('./pages/FreelancerDashboardEarningsPage').then((m) => ({ default: m.FreelancerDashboardEarningsPage })));
+const FreelancerDashboardTeamsPage = lazy(() => import('./pages/FreelancerDashboardTeamsPage').then((m) => ({ default: m.FreelancerDashboardTeamsPage })));
+const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDashboardSettingsPage').then((m) => ({ default: m.FreelancerDashboardSettingsPage })));
+const PremiumSubscriptionPage = lazy(() => import('./pages/PremiumSubscriptionPage').then((m) => ({ default: m.PremiumSubscriptionPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const BookingTrackingClientPage = lazy(() => import('./pages/BookingTrackingClientPage').then((m) => ({ default: m.BookingTrackingClientPage })));
+const BookingTrackingFreelancerPage = lazy(() => import('./pages/BookingTrackingFreelancerPage').then((m) => ({ default: m.BookingTrackingFreelancerPage })));
+const MyBookingsPage = lazy(() => import('./pages/MyBookingsPage').then((m) => ({ default: m.MyBookingsPage })));
+const FavoritesPage = lazy(() => import('./pages/FavoritesPage').then((m) => ({ default: m.FavoritesPage })));
+const SavedPostsPage = lazy(() => import('./pages/SavedPostsPage').then((m) => ({ default: m.SavedPostsPage })));
+const MessagesPage = lazy(() => import('./pages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
+const ForYouPage = lazy(() => import('./pages/ForYouPage').then((m) => ({ default: m.ForYouPage })));
+const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
+const ClientOnboardingPage = lazy(() => import('./pages/ClientOnboardingPage').then((m) => ({ default: m.ClientOnboardingPage })));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
 
 // Loading component
 function LoadingScreen() {
@@ -89,6 +95,7 @@ export default function App() {
 
   return (
     <>
+    <Suspense fallback={<LoadingScreen />}>
     <Routes>
       {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -418,6 +425,7 @@ export default function App() {
         </>
       )}
     </Routes>
+    </Suspense>
     {isAuthenticated && user?.onboardingCompleted && <MobileBottomNav />}
     </>
   );
