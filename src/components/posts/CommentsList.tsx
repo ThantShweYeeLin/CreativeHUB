@@ -59,12 +59,12 @@ function CommentRow({
         sizeClassName={avatarSizeClassName}
       />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-gray-400">{comment.user?.full_name || 'User'}</p>
-        <div className="mt-0.5 text-sm text-gray-100">{renderContent(comment.content)}</div>
+        <p className="text-xs font-medium text-gray-500">{comment.user?.full_name || 'User'}</p>
+        <div className="mt-0.5 text-sm text-gray-800">{renderContent(comment.content)}</div>
         <div className="mt-1.5 flex items-center gap-4 text-xs text-gray-500">
           <span>{formatCommentTimeAgo(comment.created_at)}</span>
           {onReplyClick && (
-            <button type="button" onClick={onReplyClick} className="hover:text-gray-300">
+            <button type="button" onClick={onReplyClick} className="hover:text-gray-900">
               Reply
             </button>
           )}
@@ -94,11 +94,11 @@ export function CommentsList({
   getReplyKey = (p, c) => `${p}:${c}`,
 }: CommentsListProps) {
   if (loading) {
-    return <p className="text-sm text-gray-400">Loading comments...</p>;
+    return <p className="text-sm text-gray-500">Loading comments...</p>;
   }
 
   if (comments.length === 0) {
-    return <p className="text-sm text-gray-400">{emptyLabel}</p>;
+    return <p className="text-sm text-gray-500">{emptyLabel}</p>;
   }
 
   const replyBox = (parentId: string, comment: CommentItem) => {
@@ -109,13 +109,13 @@ export function CommentsList({
           value={replyDraft?.(threadKey) || ''}
           onChange={(event) => onReplyDraftChange?.(threadKey, event.target.value)}
           placeholder="Write a reply..."
-          className="flex-1 rounded-full border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100 outline-none focus:ring-2 focus:ring-gray-600"
+          className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
         />
         <button
           type="button"
           onClick={() => onSubmitReply(comment)}
           disabled={!!isSubmittingReply?.(threadKey)}
-          className="rounded-full bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-900 disabled:opacity-60"
+          className="rounded-full bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
         >
           {isSubmittingReply?.(threadKey) ? 'Sending...' : 'Reply'}
         </button>
@@ -182,9 +182,9 @@ export function CommentsList({
               <button
                 type="button"
                 onClick={() => onToggleReplyThread?.(threadKey)}
-                className="mt-2 ml-11 flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-300"
+                className="mt-2 ml-11 flex items-center gap-2 text-xs font-semibold text-gray-500 hover:text-gray-900"
               >
-                <span className="h-px w-6 bg-gray-700" />
+                <span className="h-px w-6 bg-gray-300" />
                 {expanded ? 'Hide replies' : `View ${replies.length} replies`}
                 <ChevronDown className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
               </button>

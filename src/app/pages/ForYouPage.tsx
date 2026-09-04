@@ -1199,7 +1199,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     const rest = content.trim().slice(mentionText.length).trim();
     return (
       <span className="whitespace-pre-wrap">
-        <span className="font-bold text-gray-300">{mentionText}</span>
+        <span className="font-bold text-gray-900">{mentionText}</span>
         {rest ? ` ${rest}` : ''}
       </span>
     );
@@ -1425,8 +1425,10 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       return;
     }
 
-    const shareUrl = `${window.location.origin}/profile/${sharingPost.authorId}`;
-    const text = `${shareUrl}\n\n${sharingPost.caption}`;
+    // Copy just the URL, not the caption too — appending the caption after a
+    // newline meant pasting it anywhere that collapses whitespace (an address
+    // bar, a single-line field) turned it into one garbled, non-URL string.
+    const text = `${window.location.origin}/profile/${sharingPost.authorId}`;
     setCopyLinkError(null);
 
     try {
@@ -1977,7 +1979,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
               >
                 <p className="text-sm font-semibold text-gray-900">Copy link</p>
-                <p className="mt-1 text-xs text-gray-500">Copies the post link and caption so you can paste it anywhere.</p>
+                <p className="mt-1 text-xs text-gray-500">Copies the post link so you can paste it anywhere.</p>
               </button>
 
               <button

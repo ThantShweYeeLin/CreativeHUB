@@ -169,7 +169,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       }
 
       if (userResponse.error || !userResponse.data) {
-        setError((userResponse.error as any)?.message || 'Unable to load this freelancer.');
+        if (userResponse.error) {
+          // Log the raw error (e.g. a malformed id producing a Postgres
+          // "invalid input syntax for type uuid" message) for debugging —
+          // showing that verbatim to the user would be a confusing leak.
+          console.error('Failed to load freelancer profile:', userResponse.error);
+        }
+        setError('This profile could not be found.');
         setProfile(null);
         setFreelancerProfile(null);
         setIsLoading(false);

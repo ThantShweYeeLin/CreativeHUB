@@ -90,22 +90,22 @@ export function PostDetailModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-0 backdrop-blur-sm sm:p-4"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
         }
       }}
     >
-      <div className="relative flex h-[100dvh] w-full flex-col overflow-hidden border border-gray-800 bg-neutral-900 shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
-        <div className="flex shrink-0 items-center justify-between border-b border-gray-800 px-5 py-4">
-          <h2 className="text-sm font-semibold text-gray-100">
+      <div className="relative flex h-[55vh] w-full flex-col overflow-hidden rounded-t-3xl border border-gray-200 bg-white shadow-2xl sm:h-auto sm:max-h-[80vh] sm:w-full sm:max-w-lg sm:rounded-3xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-900">
             {typeof commentsCount === 'number' ? `${commentsCount} comments` : 'Comments'}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full p-1.5 text-gray-400 hover:bg-white/10 hover:text-white"
+            className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
           >
             <X className="h-5 w-5" />
           </button>
