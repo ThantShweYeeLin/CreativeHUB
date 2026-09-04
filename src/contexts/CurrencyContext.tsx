@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { DataService } from '../lib/dataService';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode } from '../lib/currency';
+import { findSupportedCurrencyForCountry } from '../lib/geoData';
 
 interface CurrencyContextValue {
   currency: string;
@@ -39,7 +40,17 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const fromProfile = normalizeCurrencyCode((response.data as any)?.preferred_currency, localCurrency);
+      const explicitPreference = (response.data as any)?.preferred_currency;
+      // Accounts created before currency-from-country existed (or that
+      // predate this fallback) have no explicit preference — derive one
+      // from their stored country rather than defaulting straight to THB,
+      // so e.g. a client who filled in "US" isn't shown Baht-denominated
+      // pricing everywhere just because they never touched a currency
+      // setting themselves.
+      const derivedFromCountry = explicitPreference
+        ? null
+        : await findSupportedCurrencyForCountry((response.data as any)?.country_code).catch(() => null);
+      const fromProfile = normalizeCurrencyCode(explicitPreference || derivedFromCountry, localCurrency);
       setCurrencyState(fromProfile);
       localStorage.setItem(CURRENCY_STORAGE_KEY, fromProfile);
       setLoading(false);

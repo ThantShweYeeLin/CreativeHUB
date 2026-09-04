@@ -2,6 +2,7 @@ import { hasSupabaseConfig, supabase } from './supabase';
 import type { AuthChangeEvent, Session, User } from '@supabase/supabase-js';
 import type { Gender } from './database.types';
 import { geocodeAddress } from './osmGeocoding';
+import { findSupportedCurrencyForCountry } from './geoData';
 
 export interface SignUpData {
   email: string;
@@ -172,6 +173,15 @@ class AuthService {
         }
       }
 
+      // Currency preference defaults to THB everywhere it's read (see
+      // CurrencyContext) unless the account has one set — derive it from
+      // the country picked on this same form so a client filling in "US"
+      // isn't shown Thai-Baht-denominated budget options moments later in
+      // onboarding. Only set when that country's real currency is one this
+      // app actually supports; otherwise leave it unset and let the
+      // existing THB fallback apply.
+      const preferredCurrency = await findSupportedCurrencyForCountry(data.countryCode).catch(() => null);
+
       // Create (or, if a database trigger already created a row for this
       // auth user, overwrite) the user profile with the details chosen on
       // the sign-up form. country/country_code/city are the structured
@@ -187,6 +197,7 @@ class AuthService {
         ...(data.country ? { country: data.country } : {}),
         ...(data.countryCode ? { country_code: data.countryCode } : {}),
         ...(data.city ? { city: data.city } : {}),
+        ...(preferredCurrency ? { preferred_currency: preferredCurrency } : {}),
         ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
         ...(locationText
           ? {

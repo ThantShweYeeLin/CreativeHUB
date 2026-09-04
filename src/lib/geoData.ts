@@ -14,6 +14,11 @@ export interface CountryOption {
   name: string;
   isoCode: string;
   flag: string;
+  /** ISO 4217 currency code from the underlying dataset — not guaranteed
+   * to be one of this app's SUPPORTED_CURRENCIES; callers should validate
+   * before using it as a preference (see lib/currency.ts's
+   * isSupportedCurrency). */
+  currency: string | null;
 }
 
 type CountryStateCityModule = typeof import('country-state-city');
@@ -31,7 +36,7 @@ let countriesPromise: Promise<CountryOption[]> | null = null;
 export function loadCountries(): Promise<CountryOption[]> {
   if (!countriesPromise) {
     countriesPromise = loadModule().then(({ Country }) =>
-      Country.getAllCountries().map((c) => ({ name: c.name, isoCode: c.isoCode, flag: c.flag }))
+      Country.getAllCountries().map((c) => ({ name: c.name, isoCode: c.isoCode, flag: c.flag, currency: c.currency || null }))
     );
   }
   return countriesPromise;
@@ -41,6 +46,17 @@ export async function findCountryByCode(isoCode: string | null | undefined): Pro
   if (!isoCode) return undefined;
   const countries = await loadCountries();
   return countries.find((c) => c.isoCode === isoCode);
+}
+
+/** The country's real-world currency, but only if this app actually
+ * supports it (see lib/currency.ts) — null otherwise so callers fall back
+ * to their own default instead of setting an unsupported code. */
+export async function findSupportedCurrencyForCountry(isoCode: string | null | undefined): Promise<string | null> {
+  const country = await findCountryByCode(isoCode);
+  if (!country?.currency) return null;
+  const { isSupportedCurrency, normalizeCurrencyCode } = await import('./currency');
+  const code = normalizeCurrencyCode(country.currency, '');
+  return code && isSupportedCurrency(code) ? code : null;
 }
 
 /** Ranks matches with the query as a name-prefix first (e.g. "My" -> Myanmar before Germany). */
