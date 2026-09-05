@@ -8,6 +8,7 @@ import { DataService } from '../../lib/dataService';
 import { formatCountdown } from '../../lib/bookingEscrow';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
+import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 
 interface BookingTrackingFreelancerPageProps {
   onBack: () => void;
@@ -420,6 +421,15 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </div>
             </div>
           </div>
+        )}
+
+        {(escrowState === 'released' || escrowState === 'refunded') && user?.id && (
+          <BookingReviewPrompt
+            bookingId={booking.id}
+            viewerId={user.id}
+            revieweeId={booking.client_id}
+            revieweeName={bookingData.client.name}
+          />
         )}
 
         {/* Booking Fee Summary */}

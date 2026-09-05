@@ -1055,7 +1055,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             onClick={() => setConfirmAction({ type: 'accept', request })}
                             className="flex items-center gap-1 rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700"
                           >
-                            <Check className="h-4 w-4" /> Accept {formatCurrencyAmount(Number(request.counter_price || 0), 'THB')}
+                            <Check className="h-4 w-4" /> Accept {formatCurrencyAmount(Number(request.counter_price || 0), budgetMeta.currency)}
                           </button>
                           {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button

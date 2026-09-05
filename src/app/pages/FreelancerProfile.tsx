@@ -318,7 +318,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
   const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
   const studioLocationOptions = studioLocations.map((loc) => (studioName ? `${studioName} — ${loc.formattedAddress}` : loc.formattedAddress));
-  const bookingLocations = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress)];
+  // Most freelancers only ever fill their basic city/area during onboarding
+  // and never touch the optional "pin on map" studio/preferred-location
+  // pickers, which left this dropdown showing nothing but "Other" for the
+  // common case — forcing clients to hand-type a location on every booking
+  // even though the freelancer already told the app where they are.
+  const bookingLocationOptions = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress)];
+  if (profile?.location && !bookingLocationOptions.includes(profile.location)) {
+    bookingLocationOptions.unshift(profile.location);
+  }
+  const bookingLocations = bookingLocationOptions;
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const todayDateString = new Date().toISOString().slice(0, 10);

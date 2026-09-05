@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Search, ChevronLeft, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
+import { Search, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { DataService } from '../../lib/dataService';
@@ -102,14 +102,6 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
     <div className="mb-12 md:mb-16">
       <div className="flex items-center justify-between mb-4 md:mb-6">
         <h2 className="text-xl md:text-3xl font-bold text-gray-900">{title}</h2>
-        <div className="hidden md:flex gap-2">
-          <button className="p-2 rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors">
-            <ChevronLeft className="w-5 h-5 text-gray-700" />
-          </button>
-          <button className="p-2 rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors">
-            <ChevronRight className="w-5 h-5 text-gray-700" />
-          </button>
-        </div>
       </div>
       <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide">
         {profiles.map((profile, index) => (
@@ -157,6 +149,18 @@ export function ExplorePage() {
   const [clientInterests, setClientInterests] = useState<string[]>([]);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [userLocation, setUserLocation] = useState<string | null>(null);
+  // "Popular X in Thailand" used to be hardcoded regardless of who was
+  // looking, even for viewers whose own country (from signup/onboarding) is
+  // known and available right here. `userLocation` is a geocoded
+  // "City, Country" string, so the country is its last comma-separated
+  // segment; when it's not known yet, drop the suffix rather than guessing
+  // a country for someone who may not be anywhere near Thailand.
+  const popularSectionSuffix = useMemo(() => {
+    if (!userLocation) return '';
+    const segments = userLocation.split(',').map((segment) => segment.trim()).filter(Boolean);
+    const country = segments[segments.length - 1];
+    return country ? ` in ${country}` : '';
+  }, [userLocation]);
   const [filters, setFilters] = useState<FilterState>({
     services: [],
     priceRange: [0, 10000],
@@ -512,9 +516,9 @@ export function ExplorePage() {
     ];
 
     return orderedLabels
-      .map((label) => ({ title: `Popular ${pluralizeCategory(label)} in Thailand`, profiles: grouped.get(label) || [] }))
+      .map((label) => ({ title: `Popular ${pluralizeCategory(label)}${popularSectionSuffix}`, profiles: grouped.get(label) || [] }))
       .filter((section) => section.profiles.length > 0);
-  }, [filteredProfiles, freelancers, clientInterests]);
+  }, [filteredProfiles, freelancers, clientInterests, popularSectionSuffix]);
 
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
@@ -683,7 +687,7 @@ export function ExplorePage() {
           title={
             searchQuery.trim()
               ? `Search results for "${searchQuery.trim()}"`
-              : `Popular ${pluralizeCategory(selectedCategory)} in Thailand`
+              : `Popular ${pluralizeCategory(selectedCategory)}${popularSectionSuffix}`
           }
           profiles={filteredProfiles}
           favoritedIds={favoritedIds}

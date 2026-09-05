@@ -44,6 +44,17 @@ export interface AuthUser {
 }
 
 class AuthService {
+  // While true, onAuthStateChange's fallback profile creation defers
+  // instead of racing signUp()'s own profile upsert below. Without this,
+  // Supabase fires SIGNED_IN (and this listener) the instant the session is
+  // created - before signUp() has uploaded the avatar, geocoded the
+  // location, or written the real profile row - so ensureUserProfile can
+  // win the race and insert a bare fallback row (email-prefix name, no
+  // country/phone/gender), which the app then treats as the signed-in
+  // user's profile, silently discarding everything the signup form
+  // collected.
+  private signUpInFlight = false;
+
   private toFriendlyAuthError(error: any, fallback: string) {
     const raw = String(error?.message || fallback);
     const lower = raw.toLowerCase();
@@ -110,6 +121,7 @@ class AuthService {
   }
 
   async signUp(data: SignUpData): Promise<{ user: AuthUser | null; error: Error | null }> {
+    this.signUpInFlight = true;
     try {
       if (!hasSupabaseConfig) {
         return { user: null, error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
@@ -229,6 +241,8 @@ class AuthService {
       };
     } catch (error) {
       return { user: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    } finally {
+      this.signUpInFlight = false;
     }
   }
 
@@ -434,6 +448,15 @@ class AuthService {
     }
 
     return supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
+      // Defer to signUp()'s own profile upsert instead of racing it with a
+      // bare fallback insert - see the signUpInFlight comment above.
+      // signUp() (via AuthContext) sets the app's user state itself once
+      // its real upsert completes, so skipping this callback during that
+      // window doesn't lose the update.
+      if (this.signUpInFlight) {
+        return;
+      }
+
       if (session?.user) {
         const { data: userProfile } = await this.ensureUserProfile(session.user);
 

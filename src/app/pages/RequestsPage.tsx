@@ -651,7 +651,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-green-700 transition-colors"
                           >
                             <Check className="w-4 h-4" />
-                            Accept {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
+                            Accept {formatCurrencyAmount(request.counterPrice || 0, request.budgetMeta?.currency || 'THB')}
                           </button>
                           {Number(request.counterRound || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button

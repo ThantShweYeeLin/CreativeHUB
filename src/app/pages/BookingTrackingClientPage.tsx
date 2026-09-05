@@ -10,6 +10,7 @@ import { formatCardLabel } from '../../lib/paymentCard';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
+import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 
 interface BookingTrackingClientPageProps {
   onBack: () => void;
@@ -512,6 +513,15 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
             </div>
           </div>
+        )}
+
+        {(escrowState === 'released' || escrowState === 'refunded') && user?.id && (
+          <BookingReviewPrompt
+            bookingId={booking.id}
+            viewerId={user.id}
+            revieweeId={booking.freelancer_id}
+            revieweeName={bookingData.freelancer.name}
+          />
         )}
 
         {/* Booking Fee Summary */}

@@ -1351,7 +1351,11 @@ export class DataService {
     const previous = await supabase.from('bookings').select('dispute_status').eq('id', bookingId).maybeSingle();
     const wasDisputed = (previous.data as any)?.dispute_status === 'open';
 
-    const response = await this.updateBooking(bookingId, { payment_status: 'paid' } as any);
+    // status: 'completed' (distinct from payment_status) is what the review
+    // system and MyBookingsPage's "Completed" badge key off of — leaving it
+    // at 'confirmed' forever made reviews permanently unreachable through
+    // this flow even though the deposit had correctly released.
+    const response = await this.updateBooking(bookingId, { payment_status: 'paid', status: 'completed' } as any);
     if (response.error) {
       return response;
     }

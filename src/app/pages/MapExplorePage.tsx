@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Circle, MapContainer, Marker, Popup, TileLayer } from 'react-leaflet';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import { LatLngExpression, divIcon } from 'leaflet';
 import { Filter, Layers, Navigation, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router';
@@ -50,6 +50,26 @@ function translateMapText(language: 'en' | 'th', english: string, thai: string) 
 }
 
 const distanceFilters = [5, 10, 25, 50] as const;
+const DEFAULT_DISTANCE_LIMIT_KM = 25;
+
+// react-leaflet's MapContainer only applies `center`/`zoom` on the initial
+// mount - they aren't reactive afterward. Geolocation resolves
+// asynchronously, so `center` almost always changes shortly after the map
+// first renders (from the Bangkok/first-freelancer fallback to the user's
+// real position), and without this the map just never moves there. This
+// imperatively re-centers the underlying Leaflet map whenever `center`
+// changes, most importantly the very first time it becomes the user's own
+// location.
+function RecenterMapView({ center, zoom }: { center: LatLngExpression; zoom: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.setView(center, zoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Array.isArray(center) ? center[0] : undefined, Array.isArray(center) ? center[1] : undefined]);
+
+  return null;
+}
 
 // freelancer.profession comes from freelancer_profiles.title, which is
 // always exactly one of the five FREELANCER_CATEGORY_LABELS for a valid
@@ -175,6 +195,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
   const [budgetBand, setBudgetBand] = useState<BudgetBand>('all');
   const [distanceLimitKm, setDistanceLimitKm] = useState<number | null>(null);
   const [clientLocation, setClientLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
+  const hasAppliedDefaultDistance = useRef(false);
   const [locationSource, setLocationSource] = useState<'profile' | 'device' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -340,6 +361,22 @@ export function MapView({ onViewProfile }: MapViewProps) {
     };
   }, [user?.id]);
 
+  // distanceLimitKm defaults to null ("Any distance"), which showed every
+  // matching freelancer regardless of how far away they actually were under
+  // a "Freelancers Near You" heading. Once we know where the user actually
+  // is (profile location or device geolocation, whichever resolves first),
+  // apply a sensible default radius so "near you" means something - but
+  // only the first time, so it never overrides an explicit later choice
+  // (including deliberately picking "Any distance").
+  useEffect(() => {
+    if (clientLocation && !hasAppliedDefaultDistance.current) {
+      hasAppliedDefaultDistance.current = true;
+      // Functional form so an explicit "Any distance" click that happened
+      // to land before geolocation resolved isn't clobbered.
+      setDistanceLimitKm((current) => (current === null ? DEFAULT_DISTANCE_LIMIT_KM : current));
+    }
+  }, [clientLocation]);
+
   const distanceByFreelancerId = useMemo(() => {
     const map = new Map<string, number>();
 
@@ -364,7 +401,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
     return map;
   }, [freelancers, clientLocation]);
 
-  const filteredFreelancers = useMemo(() => {
+  // Profession/availability/budget filters apply everywhere. The distance
+  // filter, though, only ever narrows the "Freelancers Near You" list below
+  // - the map itself always plots everyone matching the other filters, same
+  // as before the distance-default change, so you can still see where
+  // everyone is even once the list has narrowed to a nearby few.
+  const mapFreelancers = useMemo(() => {
     const allProfessionsSelected = selectedProfessions.length === professionFilters.length;
 
     return freelancers.filter((freelancer) => {
@@ -387,21 +429,22 @@ export function MapView({ onViewProfile }: MapViewProps) {
         return false;
       }
 
-      if (distanceLimitKm && clientLocation) {
-        const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
-        if (freelancerDistance === undefined || !Number.isFinite(freelancerDistance)) {
-          return false;
-        }
-        if (freelancerDistance > distanceLimitKm) {
-          return false;
-        }
-      }
-
       return true;
     });
-  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand, distanceLimitKm, clientLocation, distanceByFreelancerId]);
+  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand]);
 
-  const selectedFreelancer = filteredFreelancers.find((freelancer) => freelancer.id === selectedId) || null;
+  const filteredFreelancers = useMemo(() => {
+    if (!distanceLimitKm || !clientLocation) {
+      return mapFreelancers;
+    }
+
+    return mapFreelancers.filter((freelancer) => {
+      const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
+      return freelancerDistance !== undefined && Number.isFinite(freelancerDistance) && freelancerDistance <= distanceLimitKm;
+    });
+  }, [mapFreelancers, distanceLimitKm, clientLocation, distanceByFreelancerId]);
+
+  const selectedFreelancer = mapFreelancers.find((freelancer) => freelancer.id === selectedId) || null;
   const mapText = {
     filters: translateMapText(mapLanguage, 'Map Filters', 'ตัวกรองแผนที่'),
     hideFilters: translateMapText(mapLanguage, 'Hide Filters', 'ซ่อนตัวกรอง'),
@@ -434,7 +477,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
       return [clientLocation.lat, clientLocation.lng];
     }
 
-    const first = filteredFreelancers[0];
+    const first = mapFreelancers[0];
     if (
       first &&
       Number.isFinite(first.latitude) &&
@@ -444,7 +487,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
     }
 
     return [13.7563, 100.5018];
-  }, [clientLocation, filteredFreelancers]);
+  }, [clientLocation, mapFreelancers]);
 
   const toggleProfession = (profession: string) => {
     setSelectedProfessions((current) =>
@@ -614,6 +657,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       <div className="relative z-0 h-[460px] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl md:h-[calc(100vh-240px)]">
         <MapContainer center={center} zoom={12} className="h-full w-full">
+          <RecenterMapView center={center} zoom={clientLocation ? 13 : 12} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -639,7 +683,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
             </>
           )}
 
-          {filteredFreelancers.map((freelancer) => (
+          {mapFreelancers.map((freelancer) => (
             <Marker
               key={freelancer.id}
               position={[freelancer.latitude as number, freelancer.longitude as number]}
@@ -688,7 +732,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
             <Navigation className="h-4 w-4" />
             {mapText.openStreetMap}
           </div>
-          <p className="mt-1 text-xs text-gray-600">{mapText.matchingFreelancers(filteredFreelancers.length)}</p>
+          <p className="mt-1 text-xs text-gray-600">{mapText.matchingFreelancers(mapFreelancers.length)}</p>
           {clientLocation ? (
             <p className="mt-0.5 text-xs text-gray-500">
               {translateMapText(mapLanguage, 'Location source: ', 'แหล่งที่มาของตำแหน่ง: ')}{locationSource === 'device' ? mapText.locationSourceDevice : mapText.locationSourceProfile}
@@ -696,7 +740,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           ) : null}
         </div>
 
-        {(isLoading || errorMessage || (!isLoading && !errorMessage && filteredFreelancers.length === 0)) && (
+        {(isLoading || errorMessage || (!isLoading && !errorMessage && mapFreelancers.length === 0)) && (
           <div className="absolute inset-0 z-[600] flex items-center justify-center bg-white/70 backdrop-blur-sm">
             <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-xl">
               {isLoading ? (
