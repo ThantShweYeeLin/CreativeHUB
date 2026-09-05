@@ -176,7 +176,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
         const names = meta.recipients
           .map((recipientId: string) => profilesById.get(String(recipientId))?.full_name)
-          .filter((name): name is string => Boolean(name && name.trim()));
+          .filter((name: string | null | undefined): name is string => Boolean(name && name.trim()));
 
         if (names.length) {
           nextMap[String(request.id)] = names;

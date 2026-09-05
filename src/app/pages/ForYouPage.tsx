@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import {
   Bookmark,
-  BriefcaseBusiness,
   Check,
   ChevronDown,
   FileText,
@@ -108,22 +107,6 @@ interface PlaceSuggestion {
 
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 const MAX_POST_LENGTH = 1200;
-
-const composerPlaceholders = [
-  'Share an update with the community...',
-  'What would you like to share today?',
-  'Post a project, idea, or achievement...',
-  'Looking to hire or showcase your work?',
-  'Start a conversation...',
-  'Showcase your latest work...',
-  'Looking for a freelancer?',
-  'Hiring for a new project?',
-  'Share your creative journey...',
-  'Celebrate your achievement...',
-  'Need help with your next project?',
-  'Ask the community...',
-  'Share tips or inspiration...',
-];
 
 const categoryOptions = [
   'Photography',
@@ -243,48 +226,23 @@ function isMissingClientPostsTable(error: unknown) {
   return message.includes('client_posts') && (message.includes('schema cache') || message.includes('does not exist'));
 }
 
-function ComposerLauncher({
-  avatar,
-  name,
-  gender,
-  placeholder,
-  onOpen,
-}: {
-  avatar: string;
-  name: string;
-  gender?: Gender | null;
-  placeholder: string;
-  onOpen: () => void;
-}) {
+function ComposerLauncher({ onOpen }: { onOpen: () => void }) {
   return (
-    <button
-      onClick={onOpen}
-      className="mx-4 mb-5 w-[calc(100%-2rem)] rounded-3xl border border-gray-200 bg-white p-4 text-left shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-xl md:mb-6 md:p-5"
-    >
-      <div className="flex items-center gap-3">
-        <Avatar src={avatar} alt={name} gender={gender} sizeClassName="h-12 w-12 ring-2 ring-gray-100 rounded-full" />
-        <div className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 transition-colors group-hover:bg-white md:text-base">
-          {placeholder}
-        </div>
-        <div className="hidden h-11 w-11 items-center justify-center rounded-2xl bg-gray-900 text-white shadow-md md:flex">
-          <Plus className="h-5 w-5" />
-        </div>
-      </div>
-      <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-semibold text-gray-600 md:text-sm">
-        <span className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-2">
-          <ImagePlus className="h-4 w-4" />
-          Media
-        </span>
-        <span className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-2">
-          <BriefcaseBusiness className="h-4 w-4" />
-          Opportunity
-        </span>
-        <span className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-2">
-          <Hash className="h-4 w-4" />
-          Tags
-        </span>
-      </div>
-    </button>
+    <div className="mx-4 mb-5 flex items-center gap-3 md:mb-6">
+      <button
+        onClick={onOpen}
+        className="flex-1 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-xl md:text-base"
+      >
+        Write A Post
+      </button>
+      <button
+        onClick={onOpen}
+        aria-label="Create post"
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gray-900 text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+      >
+        <Plus className="h-5 w-5" />
+      </button>
+    </div>
   );
 }
 
@@ -985,7 +943,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [sharingPost, setSharingPost] = useState<FeedPost | null>(null);
-  const [mutualUsers, setMutualUsers] = useState<Array<{ id: string; full_name: string | null; email: string; avatar_url: string | null }>>([]);
+  const [mutualUsers, setMutualUsers] = useState<Array<{ id: string; full_name: string | null; email: string; avatar_url: string | null; gender: Gender | null }>>([]);
   const [selectedShareRecipientIds, setSelectedShareRecipientIds] = useState<string[]>([]);
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
   const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
@@ -993,7 +951,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
-  const [composerPlaceholder] = useState(() => composerPlaceholders[Math.floor(Math.random() * composerPlaceholders.length)]);
 
   const userName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'Creative member');
   const userAvatar = user?.avatar_url || fallbackProfileImage;
@@ -1872,13 +1829,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           </div>
         </div>
 
-        <ComposerLauncher
-          avatar={userAvatar}
-          name={userName}
-          gender={user?.gender}
-          placeholder={composerPlaceholder}
-          onOpen={() => setIsComposerOpen(true)}
-        />
+        <ComposerLauncher onOpen={() => setIsComposerOpen(true)} />
 
         {error && (
           <div className="mb-6 mx-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

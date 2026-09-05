@@ -1,5 +1,6 @@
 import { hasSupabaseConfig, supabase } from './supabase';
 import type { Database } from './supabase';
+import type { Gender, Json } from './database.types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   appendGroupRequestMeta,
@@ -43,6 +44,7 @@ export interface MutualUserResult {
   full_name: string | null;
   email: string;
   avatar_url: string | null;
+  gender: Gender | null;
 }
 
 export class DataService {
@@ -2173,7 +2175,7 @@ export class DataService {
   }
 
   static async createNotification(notification: Omit<Database['public']['Tables']['notifications']['Row'], 'id' | 'created_at'>) {
-    let metadata = { ...(notification.metadata || {}) };
+    let metadata: Record<string, Json> = { ...((notification.metadata as Record<string, Json> | null) || {}) };
     if (notification.actor_id && !metadata.actor_name && !metadata.requester_name) {
       const actorResponse = await this.getUser(String(notification.actor_id));
       const actorName = actorResponse.data?.full_name || 'User';

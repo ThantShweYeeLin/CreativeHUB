@@ -1,5 +1,5 @@
 import { Sparkles, MapPin as MapPinIcon, Layers, Navigation, Users, Camera, Palette, User, X, Filter } from 'lucide-react';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import { DataService } from '../../lib/dataService';

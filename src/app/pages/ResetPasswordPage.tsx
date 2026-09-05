@@ -16,47 +16,31 @@ export function ResetPasswordPage() {
 
   useEffect(() => {
     let mounted = true;
+
+    // Supabase v2 parses the recovery token out of the URL automatically on
+    // client init and fires a PASSWORD_RECOVERY auth event once the session is
+    // established — that can land after this effect's initial getSession()
+    // check runs, so we listen for it rather than trying to consume the URL
+    // ourselves (the v1 getSessionFromUrl API this used to call was removed).
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        setRecoverySessionReady(true);
+      }
+    });
+
     (async () => {
       try {
-        // Attempt to extract and establish the recovery session from the URL
-        const tryConsume = async () => await supabase.auth.getSessionFromUrl();
-        let { data, error } = await tryConsume();
+        const { data, error } = await supabase.auth.getSession();
         if (!mounted) return;
 
-        // If there's an error but the URL looks like a recovery link and we already have a session,
-        // sign out and try consuming the recovery token again.
-        const href = typeof window !== 'undefined' ? window.location.href : '';
-        const looksLikeRecovery = /type=recovery|access_token=|#access_token/.test(href);
-
-        if (error && looksLikeRecovery) {
-          const sessionResp = await supabase.auth.getSession();
-          if (sessionResp?.data?.session) {
-            // Sign out current session to avoid conflicts, then retry
-            await supabase.auth.signOut();
-            const retry = await tryConsume();
-            data = retry.data;
-            error = retry.error;
-          }
-        }
-
-        if (error) {
-          // No recovery token found in URL — check if a normal session exists
-          const sessionResp = await supabase.auth.getSession();
-          if (sessionResp?.data?.session) {
-            setRecoverySessionReady(true);
-          } else {
-            setRecoverySessionReady(false);
-            setError('No password recovery session found. Please open the link from the password reset email in this browser.');
-          }
+        if (error || !data?.session) {
+          setRecoverySessionReady(false);
+          setError('No password recovery session found. Please open the link from the password reset email in this browser.');
           return;
         }
 
-        if (data?.session) {
-          setRecoverySessionReady(true);
-        } else {
-          setRecoverySessionReady(false);
-          setError('Unable to establish recovery session from the URL.');
-        }
+        setRecoverySessionReady(true);
       } catch (err) {
         setRecoverySessionReady(false);
       }
@@ -64,6 +48,7 @@ export function ResetPasswordPage() {
 
     return () => {
       mounted = false;
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
