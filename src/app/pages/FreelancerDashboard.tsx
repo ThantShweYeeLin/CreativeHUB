@@ -297,7 +297,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       .filter((booking) => booking.payment_status === 'paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
     const pendingInEscrow = bookings
-      .filter((booking) => booking.payment_status !== 'paid' && booking.status !== 'cancelled')
+      .filter((booking) => booking.payment_status === 'deposit_paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
 
     return { totalEarned, pendingInEscrow, bookingCount: bookings.length };
@@ -679,52 +679,52 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
   const bookingCards = useMemo(() => {
     const ESCROW_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-      awaiting_deposit: { label: 'Awaiting deposit', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+      awaiting_deposit: { label: 'Pending Deposit', color: 'bg-amber-100 text-amber-700 border-amber-200' },
       deposit_secured: { label: 'Deposit secured', color: 'bg-blue-100 text-blue-700 border-blue-200' },
       awaiting_client_confirmation: { label: 'Awaiting client confirmation', color: 'bg-blue-100 text-blue-700 border-blue-200' },
       disputed: { label: 'Disputed — action needed', color: 'bg-amber-100 text-amber-700 border-amber-200' },
       released: { label: 'Paid in full', color: 'bg-green-100 text-green-700 border-green-200' },
       refunded: { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' },
+      annulled: { label: 'Booking Deleted', color: 'bg-red-100 text-red-700 border-red-200' },
     };
 
-    return bookings
-      .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
-      .map((booking) => {
-        const escrowState = getBookingEscrowState(booking);
-        const status = ESCROW_STATUS_LABEL[escrowState] || { label: booking.status, color: 'bg-gray-100 text-gray-700 border-gray-200' };
-        const scheduleMeta = booking.start_date
-          ? { date: booking.start_date, time: booking.start_time || '00:00' }
-          : extractScheduleMeta(booking.description);
-        const locationMeta = extractLocationMeta(booking.description);
-        const deadline =
-          escrowState === 'awaiting_deposit'
-            ? booking.deposit_deadline
-            : escrowState === 'awaiting_client_confirmation'
-            ? booking.client_response_deadline
-            : escrowState === 'disputed'
-            ? booking.dispute_response_deadline
-            : null;
+    return bookings.map((booking) => {
+      const escrowState = getBookingEscrowState(booking);
+      const status = ESCROW_STATUS_LABEL[escrowState] || { label: booking.status, color: 'bg-gray-100 text-gray-700 border-gray-200' };
+      const scheduleMeta = booking.start_date
+        ? { date: booking.start_date, time: booking.start_time || '00:00' }
+        : extractScheduleMeta(booking.description);
+      const locationMeta = extractLocationMeta(booking.description);
+      const deadline =
+        escrowState === 'awaiting_deposit'
+          ? booking.deposit_deadline
+          : escrowState === 'awaiting_client_confirmation'
+          ? booking.client_response_deadline
+          : escrowState === 'disputed'
+          ? booking.dispute_response_deadline
+          : null;
 
-        return {
-          id: booking.id,
-          bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
-          clientName: booking.client?.full_name || 'CreativeHUB User',
-          clientImage: booking.client?.avatar_url || DEFAULT_AVATAR_URL,
-          clientGender: booking.client?.gender || null,
-          projectName: booking.project_name,
-          date: scheduleMeta
-            ? booking.start_date && !booking.start_time
-              ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
-              : formatScheduleMeta(scheduleMeta)
-            : 'Schedule pending',
-          location: locationMeta || 'Location to be confirmed',
-          statusLabel: status.label,
-          statusColor: status.color,
-          countdown: deadline ? formatCountdown(deadline) : null,
-          totalAmount: Number(booking.budget || 0),
-          deposit: Math.round(Number(booking.budget || 0) * 0.3),
-        };
-      });
+      return {
+        id: booking.id,
+        bookingId: `#${booking.id.slice(0, 8).toUpperCase()}`,
+        clientName: booking.client?.full_name || 'CreativeHUB User',
+        clientImage: booking.client?.avatar_url || DEFAULT_AVATAR_URL,
+        clientGender: booking.client?.gender || null,
+        projectName: booking.project_name,
+        date: scheduleMeta
+          ? booking.start_date && !booking.start_time
+            ? new Date(`${scheduleMeta.date}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+            : formatScheduleMeta(scheduleMeta)
+          : 'Schedule pending',
+        location: locationMeta || 'Location to be confirmed',
+        statusLabel: status.label,
+        statusColor: status.color,
+        countdown: deadline ? formatCountdown(deadline) : null,
+        deletedNote: escrowState === 'annulled' ? 'Unpaid — deposit was not sent within 24 hours' : null,
+        totalAmount: Number(booking.budget || 0),
+        deposit: Math.round(Number(booking.budget || 0) * 0.3),
+      };
+    });
   }, [bookings]);
 
   return (
@@ -1177,12 +1177,17 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       </div>
                     </div>
 
-                    {booking.countdown && (
+                    {booking.deletedNote ? (
+                      <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 text-xs font-semibold text-red-700">
+                        <X className="h-3 w-3" />
+                        <span>{booking.deletedNote}</span>
+                      </div>
+                    ) : booking.countdown ? (
                       <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 text-xs font-semibold text-amber-700">
                         <Clock className="h-3 w-3" />
                         <span>{booking.countdown}</span>
                       </div>
-                    )}
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -1328,19 +1333,21 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               ))}
             </div>
 
-            {bookings.length === 0 ? (
+            {bookings.filter((booking) => booking.payment_status !== 'unpaid').length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
-                <p className="text-sm text-gray-500">No bookings yet.</p>
+                <p className="text-sm text-gray-500">No earnings yet — this fills in once a client pays their booking deposit.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {bookings.map((booking) => {
+                {bookings
+                  .filter((booking) => booking.payment_status !== 'unpaid')
+                  .map((booking) => {
                   const isDisputed = booking.dispute_status === 'open';
                   const isRefunded = booking.payment_status === 'refunded';
                   // unpaid -> deposit_paid is a client-only action (paying money in) —
                   // a freelancer can only advance deposit_paid -> paid from here.
                   const nextStatus =
-                    isDisputed || isRefunded || booking.payment_status === 'unpaid'
+                    isDisputed || isRefunded
                       ? null
                       : PAYMENT_STATUS_SEQUENCE[PAYMENT_STATUS_SEQUENCE.indexOf(booking.payment_status) + 1];
                   return (
@@ -1383,10 +1390,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           >
                             {isUpdatingPaymentForId === booking.id ? 'Updating...' : `Mark as ${PAYMENT_STATUS_LABEL[nextStatus]}`}
                           </button>
-                        ) : !isDisputed && !isRefunded && booking.payment_status === 'unpaid' ? (
-                          <span className="flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700">
-                            Awaiting client deposit
-                          </span>
                         ) : null}
                       </div>
                     </div>

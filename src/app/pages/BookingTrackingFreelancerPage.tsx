@@ -210,10 +210,10 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-5 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Ban className="w-5 h-5 text-red-600" />
-              <h2 className="font-bold text-red-900">Booking Cancelled</h2>
+              <h2 className="font-bold text-red-900">Booking Deleted</h2>
             </div>
             <p className="text-sm text-red-700">
-              The client didn't pay the deposit within 24 hours of acceptance, so this booking was automatically cancelled.
+              The client didn't pay the deposit within 24 hours of acceptance, so this booking was automatically deleted.
             </p>
           </div>
         )}

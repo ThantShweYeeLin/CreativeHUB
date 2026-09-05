@@ -87,12 +87,15 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
 
   const normalizedBookings = useMemo(() => {
     return bookings
-      .filter((booking) => getBookingEscrowState(booking) !== 'annulled')
       .map((booking) => {
         const counterparty = booking.freelancer;
         const escrowState = getBookingEscrowState(booking);
         const status =
-          escrowState === 'disputed'
+          escrowState === 'annulled'
+            ? { label: 'Booking Deleted', color: 'bg-red-100 text-red-700 border-red-200' }
+            : escrowState === 'awaiting_deposit'
+            ? { label: 'Pending Deposit', color: 'bg-amber-100 text-amber-700 border-amber-200' }
+            : escrowState === 'disputed'
             ? { label: 'Disputed', color: 'bg-amber-100 text-amber-700 border-amber-200' }
             : escrowState === 'refunded'
             ? { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' }

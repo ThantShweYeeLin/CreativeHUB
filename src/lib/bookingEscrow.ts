@@ -20,6 +20,12 @@ export function getBookingEscrowState(booking: any): EscrowState {
   if (booking?.dispute_status === 'open') return 'disputed';
   if (booking?.payment_status === 'deposit_paid' && booking?.completed_at) return 'awaiting_client_confirmation';
   if (booking?.payment_status === 'deposit_paid') return 'deposit_secured';
+  // The DB only flips status to 'cancelled' once someone opens the booking's tracking
+  // page (reconcileBookingEscrow runs there) - treat a lapsed, still-unpaid deposit as
+  // annulled client-side too so it doesn't linger as "pending" elsewhere in the UI.
+  if (booking?.deposit_deadline && new Date(booking.deposit_deadline).getTime() < Date.now()) {
+    return 'annulled';
+  }
   return 'awaiting_deposit';
 }
 
