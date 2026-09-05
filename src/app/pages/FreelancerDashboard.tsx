@@ -292,16 +292,45 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     };
   }, [freelancerProfile, requests]);
 
+  const [earningsMonthFilter, setEarningsMonthFilter] = useState('all');
+
+  const earningsMonthOptions = useMemo(() => {
+    const months = new Set<string>();
+    bookings.forEach((booking) => {
+      if (booking.created_at) {
+        months.add(String(booking.created_at).slice(0, 7));
+      }
+    });
+    return Array.from(months)
+      .sort((a, b) => b.localeCompare(a))
+      .map((month) => ({
+        value: month,
+        label: new Date(`${month}-01T00:00:00`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }),
+      }));
+  }, [bookings]);
+
+  const monthFilteredBookings = useMemo(() => {
+    if (earningsMonthFilter === 'all') {
+      return bookings;
+    }
+    return bookings.filter((booking) => String(booking.created_at || '').slice(0, 7) === earningsMonthFilter);
+  }, [bookings, earningsMonthFilter]);
+
   const earningsStats = useMemo(() => {
-    const totalEarned = bookings
+    const totalEarned = monthFilteredBookings
       .filter((booking) => booking.payment_status === 'paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
-    const pendingInEscrow = bookings
+    const pendingInEscrow = monthFilteredBookings
       .filter((booking) => booking.payment_status === 'deposit_paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
 
-    return { totalEarned, pendingInEscrow, bookingCount: bookings.length };
-  }, [bookings]);
+    const bookingCount = monthFilteredBookings.filter(
+      (booking) => getBookingEscrowState(booking) !== 'annulled' && booking.payment_status !== 'paid'
+    ).length;
+    const completedProjectCount = monthFilteredBookings.filter((booking) => booking.payment_status === 'paid').length;
+
+    return { totalEarned, pendingInEscrow, bookingCount, completedProjectCount };
+  }, [monthFilteredBookings]);
 
   const handleRequestDecision = async (requestId: string, status: 'accepted' | 'rejected') => {
     setError(null);
@@ -1298,12 +1327,28 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           </div>
         ) : section === 'earnings' ? (
           <div className="space-y-6 md:space-y-8">
-            <div>
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Earnings</h2>
-              <p className="text-sm text-gray-600 md:text-base">Simulated earnings and payment status — no real payments are processed</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Earnings</h2>
+                <p className="text-sm text-gray-600 md:text-base">Simulated earnings and payment status — no real payments are processed</p>
+              </div>
+              {earningsMonthOptions.length > 0 && (
+                <select
+                  value={earningsMonthFilter}
+                  onChange={(event) => setEarningsMonthFilter(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-auto"
+                >
+                  <option value="all">All time</option>
+                  {earningsMonthOptions.map((month) => (
+                    <option key={month.value} value={month.value}>
+                      {month.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 md:gap-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
               {[
                 {
                   label: 'Total earned',
@@ -1322,6 +1367,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   icon: Clock,
                 },
                 { label: 'Total bookings', value: earningsStats.bookingCount, icon: Layers },
+                { label: 'Total completed projects', value: earningsStats.completedProjectCount, icon: Check },
               ].map((stat) => (
                 <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
                   <div className="mb-3 inline-flex rounded-xl bg-gray-100 p-3">
@@ -1333,13 +1379,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               ))}
             </div>
 
-            {bookings.filter((booking) => booking.payment_status !== 'unpaid').length === 0 ? (
+            {monthFilteredBookings.filter((booking) => booking.payment_status !== 'unpaid').length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
                 <p className="text-sm text-gray-500">No earnings yet — this fills in once a client pays their booking deposit.</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {bookings
+                {monthFilteredBookings
                   .filter((booking) => booking.payment_status !== 'unpaid')
                   .map((booking) => {
                   const isDisputed = booking.dispute_status === 'open';
