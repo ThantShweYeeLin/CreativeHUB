@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import {
-  AtSign,
   Bookmark,
   BriefcaseBusiness,
   Check,
+  ChevronDown,
   FileText,
-  Gift,
   Globe2,
   Hash,
   Heart,
   ImagePlus,
+  Loader2,
   LocateFixed,
   MapPin,
   MessageCircle,
@@ -19,8 +19,6 @@ import {
   Search,
   Send,
   Share2,
-  Smile,
-  Sparkles,
   Tag,
   Users,
   X,
@@ -56,14 +54,9 @@ interface ComposerState {
   text: string;
   location: string;
   hashtags: string;
-  mentions: string;
   taggedPeople: string;
   category: string;
   visibility: Visibility;
-  labels: string[];
-  pollQuestion: string;
-  pollOptions: string;
-  gifUrl: string;
   attachments: ComposerAttachment[];
 }
 
@@ -145,15 +138,6 @@ const categoryOptions = [
 
 const visibilityOptions: Visibility[] = ['Public', 'Followers', 'Connections'];
 
-const labelOptions = [
-  'Job Opportunity',
-  'Service Promotion',
-  'Looking for Freelancer',
-  'Looking for Client',
-];
-
-const emojiOptions = ['✨', '👏', '🔥', '💡', '🎉', '📸', '🎨', '🤝'];
-
 const suggestedLocations: PlaceSuggestion[] = [
   { name: 'Bangkok, Thailand', detail: 'Popular city · Thailand' },
   { name: 'Siam Paragon', detail: 'Shopping center · Pathum Wan, Bangkok' },
@@ -170,14 +154,9 @@ const emptyComposerState: ComposerState = {
   text: '',
   location: '',
   hashtags: '',
-  mentions: '',
   taggedPeople: '',
   category: '',
   visibility: 'Public',
-  labels: [],
-  pollQuestion: '',
-  pollOptions: '',
-  gifUrl: '',
   attachments: [],
 };
 
@@ -236,16 +215,24 @@ function splitList(value: string, prefix = '') {
     .map((item) => `${prefix}${item.replace(/^[@#]/, '')}`);
 }
 
+/** Finds the "@word" the caret is currently inside of while typing, or null if none. */
+function findActiveMentionToken(text: string, cursor: number): { start: number; query: string } | null {
+  const upToCursor = text.slice(0, cursor);
+  const match = upToCursor.match(/(?:^|\s)@([a-zA-Z0-9_.]*)$/);
+  if (!match) {
+    return null;
+  }
+  const query = match[1];
+  return { start: cursor - query.length - 1, query };
+}
+
 function buildCaption(state: ComposerState) {
   const details = [
     state.location ? `Location: ${state.location}` : '',
     state.category ? `Category: ${state.category}` : '',
     state.visibility ? `Visibility: ${state.visibility}` : '',
-    state.labels.length ? `Tags: ${state.labels.join(', ')}` : '',
     state.taggedPeople ? `With: ${state.taggedPeople}` : '',
     state.hashtags ? `Hashtags: ${splitList(state.hashtags, '#').join(' ')}` : '',
-    state.mentions ? `Mentions: ${splitList(state.mentions, '@').join(' ')}` : '',
-    state.pollQuestion ? `Poll: ${state.pollQuestion} (${splitList(state.pollOptions).join(' / ')})` : '',
   ].filter(Boolean);
 
   return [state.text.trim(), ...details].filter(Boolean).join('\n\n');
@@ -301,11 +288,14 @@ function ComposerLauncher({
   );
 }
 
+type ComposerPanel = 'tag' | 'visibility' | 'category' | 'hashtags' | null;
+
 function CreatePostSheet({
   isOpen,
   userName,
   userAvatar,
   userGender,
+  currentUserId,
   composer,
   isPublishing,
   onClose,
@@ -319,6 +309,7 @@ function CreatePostSheet({
   userName: string;
   userAvatar: string;
   userGender?: Gender | null;
+  currentUserId?: string;
   composer: ComposerState;
   isPublishing: boolean;
   onClose: () => void;
@@ -330,22 +321,125 @@ function CreatePostSheet({
 }) {
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canPost = composer.text.trim().length > 0 || composer.attachments.length > 0 || composer.gifUrl.trim().length > 0;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const canPost = composer.text.trim().length > 0 || composer.attachments.length > 0;
+
+  const [activePanel, setActivePanel] = useState<ComposerPanel>(null);
+  const [tagQuery, setTagQuery] = useState('');
+  const [tagResults, setTagResults] = useState<any[]>([]);
+  const [isTagSearching, setIsTagSearching] = useState(false);
+  const [mention, setMention] = useState<{ start: number; query: string } | null>(null);
+  const [mentionResults, setMentionResults] = useState<any[]>([]);
+  const [isMentionSearching, setIsMentionSearching] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setActivePanel(null);
+      setTagQuery('');
+      setTagResults([]);
+      setMention(null);
+      setMentionResults([]);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const query = tagQuery.trim();
+    if (query.length < 2) {
+      setTagResults([]);
+      setIsTagSearching(false);
+      return;
+    }
+    setIsTagSearching(true);
+    const timeoutId = window.setTimeout(async () => {
+      const response = await DataService.searchUsers(query, { excludeUserId: currentUserId, limit: 6 });
+      if (!isMounted) return;
+      setTagResults(response.error ? [] : response.data || []);
+      setIsTagSearching(false);
+    }, 250);
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [tagQuery, currentUserId]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const query = mention?.query.trim() || '';
+    if (!mention || query.length < 2) {
+      setMentionResults([]);
+      setIsMentionSearching(false);
+      return;
+    }
+    setIsMentionSearching(true);
+    const timeoutId = window.setTimeout(async () => {
+      const response = await DataService.searchUsers(query, { excludeUserId: currentUserId, limit: 6 });
+      if (!isMounted) return;
+      setMentionResults(response.error ? [] : response.data || []);
+      setIsMentionSearching(false);
+    }, 250);
+    return () => {
+      isMounted = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [mention?.query, currentUserId]);
 
   if (!isOpen) {
     return null;
   }
 
-  const toggleLabel = (label: string) => {
-    const labels = composer.labels.includes(label)
-      ? composer.labels.filter((item) => item !== label)
-      : [...composer.labels, label];
-    onChange({ labels });
+  const taggedList = composer.taggedPeople
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const toggleTaggedPerson = (name: string) => {
+    const next = taggedList.includes(name)
+      ? taggedList.filter((item) => item !== name)
+      : [...taggedList, name];
+    onChange({ taggedPeople: next.join(', ') });
   };
+
+  const handleTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = event.target.value;
+    onChange({ text: value });
+    const cursor = event.target.selectionStart ?? value.length;
+    setMention(findActiveMentionToken(value, cursor));
+  };
+
+  const handleTextSelect = (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = event.target as HTMLTextAreaElement;
+    setMention(findActiveMentionToken(target.value, target.selectionStart ?? target.value.length));
+  };
+
+  const applyMention = (result: any) => {
+    if (!mention) return;
+    const name = String(result.full_name || result.email || 'user').trim();
+    const handle = name.replace(/\s+/g, '');
+    const cursor = textareaRef.current?.selectionStart ?? composer.text.length;
+    const before = composer.text.slice(0, mention.start);
+    const after = composer.text.slice(cursor);
+    const inserted = `@${handle} `;
+    onChange({ text: `${before}${inserted}${after}` });
+    setMention(null);
+    setMentionResults([]);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      const pos = before.length + inserted.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  const pillButtonClass = (active: boolean) =>
+    `flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
+      active ? 'border-gray-900 bg-gray-900 text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+    }`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-in fade-in-0">
-      <div className="fixed inset-x-0 bottom-0 max-h-[96vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl animate-in slide-in-from-bottom-8 md:inset-y-6 md:left-1/2 md:w-[760px] md:-translate-x-1/2 md:rounded-3xl">
+      <div className="fixed inset-x-0 bottom-0 max-h-[96vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl animate-in slide-in-from-bottom-8 md:bottom-auto md:left-1/2 md:top-1/2 md:w-[760px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl">
         <div className="flex h-full max-h-[96vh] flex-col">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
             <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
@@ -373,30 +467,207 @@ function CreatePostSheet({
               </div>
             </div>
 
-            <textarea
-              value={composer.text}
-              maxLength={MAX_POST_LENGTH}
-              onChange={(event) => onChange({ text: event.target.value })}
-              placeholder="What’s happening in your work today?"
-              className="min-h-40 w-full resize-none rounded-3xl border border-gray-200 bg-gray-50 px-5 py-4 text-base text-gray-950 outline-none transition-all placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-4 focus:ring-gray-100"
-            />
+            <div className="mb-3 flex flex-wrap gap-2">
+              <button type="button" onClick={onOpenLocationPicker} className={pillButtonClass(!!composer.location)}>
+                <MapPin className="h-4 w-4" />
+                <span className="max-w-[10rem] truncate">{composer.location || 'Location'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel(activePanel === 'tag' ? null : 'tag')}
+                className={pillButtonClass(taggedList.length > 0 || activePanel === 'tag')}
+              >
+                <Users className="h-4 w-4" />
+                {taggedList.length > 0 ? `Tagged (${taggedList.length})` : 'Tag People'}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel(activePanel === 'visibility' ? null : 'visibility')}
+                className={pillButtonClass(activePanel === 'visibility')}
+              >
+                <Globe2 className="h-4 w-4" />
+                {composer.visibility}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel(activePanel === 'category' ? null : 'category')}
+                className={pillButtonClass(!!composer.category || activePanel === 'category')}
+              >
+                <Tag className="h-4 w-4" />
+                {composer.category || 'Category'}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePanel(activePanel === 'hashtags' ? null : 'hashtags')}
+                className={pillButtonClass(!!composer.hashtags.trim() || activePanel === 'hashtags')}
+              >
+                <Hash className="h-4 w-4" />
+                {composer.hashtags.trim() ? 'Hashtags added' : 'Hashtags'}
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {activePanel && (
+              <div className="mb-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                {activePanel === 'tag' && (
+                  <div className="space-y-3">
+                    {taggedList.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {taggedList.map((name) => (
+                          <span key={name} className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm">
+                            {name}
+                            <button type="button" onClick={() => toggleTaggedPerson(name)} className="text-gray-400 hover:text-gray-700">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <input
+                      value={tagQuery}
+                      onChange={(event) => setTagQuery(event.target.value)}
+                      placeholder="Search people to tag"
+                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-gray-100"
+                    />
+                    {tagQuery.trim().length >= 2 && (
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                        {isTagSearching ? (
+                          <p className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Searching...</p>
+                        ) : tagResults.length === 0 ? (
+                          <p className="px-3 py-3 text-sm text-gray-500">No users found.</p>
+                        ) : (
+                          tagResults.map((result: any) => {
+                            const name = result.full_name || result.email;
+                            const isTagged = taggedList.includes(name);
+                            return (
+                              <button
+                                key={String(result.id)}
+                                type="button"
+                                onClick={() => toggleTaggedPerson(name)}
+                                className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                              >
+                                <Avatar src={result.avatar_url || fallbackProfileImage} alt={name} gender={result.gender} sizeClassName="h-8 w-8 rounded-full" />
+                                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{name}</span>
+                                {isTagged && <Check className="h-4 w-4 flex-shrink-0 text-gray-900" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activePanel === 'visibility' && (
+                  <div className="grid gap-2">
+                    {visibilityOptions.map((visibility) => (
+                      <button
+                        key={visibility}
+                        type="button"
+                        onClick={() => {
+                          onChange({ visibility });
+                          setActivePanel(null);
+                        }}
+                        className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
+                          composer.visibility === visibility ? 'border-gray-900 bg-white text-gray-950' : 'border-transparent bg-white/60 text-gray-600 hover:bg-white'
+                        }`}
+                      >
+                        {visibility}
+                        {composer.visibility === visibility && <Check className="h-4 w-4" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {activePanel === 'category' && (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onChange({ category: '' });
+                        setActivePanel(null);
+                      }}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${!composer.category ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                    >
+                      None
+                    </button>
+                    {categoryOptions.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => {
+                          onChange({ category });
+                          setActivePanel(null);
+                        }}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${composer.category === category ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {activePanel === 'hashtags' && (
+                  <input
+                    autoFocus
+                    value={composer.hashtags}
+                    onChange={(event) => onChange({ hashtags: event.target.value })}
+                    placeholder="#branding #photoshoot"
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-gray-100"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="relative">
+              <textarea
+                ref={textareaRef}
+                value={composer.text}
+                maxLength={MAX_POST_LENGTH}
+                onChange={handleTextChange}
+                onSelect={handleTextSelect}
+                placeholder="What’s happening in your work today? Type @ to mention someone"
+                className="min-h-40 w-full resize-none rounded-3xl border border-gray-200 bg-gray-50 px-5 py-4 text-base text-gray-950 outline-none transition-all placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-4 focus:ring-gray-100"
+              />
+              {mention && (
+                <div className="absolute left-4 right-4 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-lg">
+                  {mention.query.trim().length < 2 ? (
+                    <p className="px-3 py-3 text-sm text-gray-500">Keep typing to search people...</p>
+                  ) : isMentionSearching ? (
+                    <p className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Searching...</p>
+                  ) : mentionResults.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-gray-500">No users found.</p>
+                  ) : (
+                    mentionResults.map((result: any) => (
+                      <button
+                        key={String(result.id)}
+                        type="button"
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          applyMention(result);
+                        }}
+                        className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                      >
+                        <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-8 w-8 rounded-full" />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
+                          <p className="truncate text-xs text-gray-500">{result.email}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             <div className="mt-2 text-right text-xs font-medium text-gray-500">
               {composer.text.length}/{MAX_POST_LENGTH}
             </div>
 
-            {(composer.attachments.length > 0 || composer.gifUrl.trim()) && (
+            {composer.attachments.length > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-3">
-                {composer.gifUrl.trim() && (
-                  <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-100">
-                    <ImageWithFallback src={composer.gifUrl.trim()} alt="GIF preview" className="h-44 w-full object-cover" />
-                    <button
-                      onClick={() => onChange({ gifUrl: '' })}
-                      className="absolute right-2 top-2 rounded-full bg-white/90 p-1.5 text-gray-700 shadow"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                )}
                 {composer.attachments.map((attachment) => (
                   <div key={attachment.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
                     {attachment.previewUrl ? (
@@ -422,101 +693,15 @@ function CreatePostSheet({
               </div>
             )}
 
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><MapPin className="h-4 w-4" /> Add Location</span>
-                <button
-                  onClick={onOpenLocationPicker}
-                  className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 outline-none transition-all hover:bg-white hover:shadow-sm focus:ring-4 focus:ring-gray-100"
-                >
-                  <span className={composer.location ? 'text-gray-900' : 'text-gray-400'}>
-                    {composer.location || 'Search or choose a location'}
-                  </span>
-                  <MapPin className="h-4 w-4 text-gray-500" />
-                </button>
-              </div>
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Users className="h-4 w-4" /> Tag People</span>
-                <input value={composer.taggedPeople} onChange={(event) => onChange({ taggedPeople: event.target.value })} placeholder="Names or collaborators" className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100" />
-              </label>
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Hash className="h-4 w-4" /> Add Hashtags</span>
-                <input value={composer.hashtags} onChange={(event) => onChange({ hashtags: event.target.value })} placeholder="#branding #photoshoot" className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100" />
-              </label>
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><AtSign className="h-4 w-4" /> Mention Users</span>
-                <input value={composer.mentions} onChange={(event) => onChange({ mentions: event.target.value })} placeholder="@creativehub @studio" className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100" />
-              </label>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Tag className="h-4 w-4" /> Project Category</span>
-                <select value={composer.category} onChange={(event) => onChange({ category: event.target.value })} className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100">
-                  <option value="">Choose a category</option>
-                  {categoryOptions.map((category) => <option key={category}>{category}</option>)}
-                </select>
-              </label>
-              <label className="space-y-2">
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-700"><Globe2 className="h-4 w-4" /> Visibility</span>
-                <select value={composer.visibility} onChange={(event) => onChange({ visibility: event.target.value as Visibility })} className="w-full rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100">
-                  {visibilityOptions.map((visibility) => <option key={visibility}>{visibility}</option>)}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-              <p className="mb-3 text-sm font-bold text-gray-800">Post tools</p>
-              <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                <button onClick={() => mediaInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100">
-                  <ImagePlus className="h-4 w-4" /> Photos/Videos
-                </button>
-                <button onClick={() => fileInputRef.current?.click()} className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100">
-                  <Paperclip className="h-4 w-4" /> Files
-                </button>
-                <button onClick={() => onChange({ pollQuestion: composer.pollQuestion ? '' : 'Which direction should I choose?' })} className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100">
-                  <MessageCircle className="h-4 w-4" /> Poll
-                </button>
-                <button onClick={() => onChange({ gifUrl: composer.gifUrl || 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM3FvdHRoYm51M3ZodXVtc2k4NGF0b3hhbDYwb2dzOHkxN2JmNDRmayZlcD12MV9naWZzX3NlYXJjaCZjdD1n/l0MYt5jPR6QX5pnqM/giphy.gif' })} className="flex items-center justify-center gap-2 rounded-2xl bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100">
-                  <Gift className="h-4 w-4" /> GIF
-                </button>
-              </div>
+            <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+              <button type="button" onClick={() => mediaInputRef.current?.click()} title="Photos/Videos" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100">
+                <ImagePlus className="h-5 w-5" />
+              </button>
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Files" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100">
+                <Paperclip className="h-5 w-5" />
+              </button>
               <input ref={mediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files)} />
               <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.zip" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files)} />
-            </div>
-
-            {composer.pollQuestion && (
-              <div className="mt-4 grid gap-3 rounded-3xl border border-gray-200 bg-gray-50 p-4">
-                <input value={composer.pollQuestion} onChange={(event) => onChange({ pollQuestion: event.target.value })} placeholder="Poll question" className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100" />
-                <input value={composer.pollOptions} onChange={(event) => onChange({ pollOptions: event.target.value })} placeholder="Options separated by commas" className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:ring-4 focus:ring-gray-100" />
-              </div>
-            )}
-
-            <div className="mt-5 space-y-4">
-              <div>
-                <p className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-700"><Smile className="h-4 w-4" /> Emoji picker</p>
-                <div className="flex flex-wrap gap-2">
-                  {emojiOptions.map((emoji) => (
-                    <button key={emoji} onClick={() => onChange({ text: `${composer.text}${emoji}` })} className="h-10 w-10 rounded-2xl bg-gray-50 text-lg transition-transform hover:scale-110">
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-700"><Sparkles className="h-4 w-4" /> Intent tags</p>
-                <div className="flex flex-wrap gap-2">
-                  {labelOptions.map((label) => (
-                    <button
-                      key={label}
-                      onClick={() => toggleLabel(label)}
-                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all ${composer.labels.includes(label) ? 'border-gray-900 bg-gray-900 text-white shadow-md' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
 
@@ -1552,7 +1737,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     }
 
     const caption = buildCaption(composer);
-    if (!caption && composer.attachments.length === 0 && !composer.gifUrl.trim()) {
+    if (!caption && composer.attachments.length === 0) {
       setError('Please add text, media, or a file before posting.');
       return;
     }
@@ -1560,7 +1745,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setIsPublishing(true);
     setError(null);
 
-    const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || composer.gifUrl.trim() || null;
+    const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || null;
     let createdId = `local-post-${Date.now()}`;
     let createdAt = 'Just now';
     let createdAtRaw = new Date().toISOString();
@@ -1586,8 +1771,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     }
 
     const hashtags = splitList(composer.hashtags, '#');
-    const mentions = splitList(composer.mentions, '@');
-    const pollOptions = splitList(composer.pollOptions);
+    const mentions = Array.from(new Set((composer.text.match(/@[a-zA-Z0-9_.]+/g) || []).map((token) => token.slice(1))));
     const newFeedPost: FeedPost = {
       id: createdId,
       authorId: user.id,
@@ -1610,9 +1794,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       mentions,
       category: composer.category || undefined,
       visibility: composer.visibility,
-      labels: composer.labels,
       attachments: composer.attachments,
-      poll: composer.pollQuestion.trim() ? { question: composer.pollQuestion.trim(), options: pollOptions } : null,
     };
 
     setPosts((current) => [newFeedPost, ...current]);
@@ -2087,6 +2269,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         userName={userName}
         userAvatar={userAvatar}
         userGender={user?.gender}
+        currentUserId={user?.id}
         composer={composer}
         isPublishing={isPublishing}
         onClose={() => {
