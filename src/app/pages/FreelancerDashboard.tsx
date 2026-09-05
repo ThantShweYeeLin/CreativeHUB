@@ -17,7 +17,6 @@ import {
   Trash2,
   TrendingUp,
   Users,
-  UsersRound,
   X,
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -38,7 +37,7 @@ import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
-type DashboardSection = 'requests' | 'bookings' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'teams' | 'settings';
+type DashboardSection = 'requests' | 'bookings' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'settings';
 
 const PAYMENT_STATUS_SEQUENCE = ['unpaid', 'deposit_paid', 'paid'] as const;
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -86,6 +85,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [highlightRequestId, setHighlightRequestId] = useState<string | null>(null);
   const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected' | 'countered'>('all');
@@ -115,21 +115,11 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [replyDraftByReviewId, setReplyDraftByReviewId] = useState<Record<string, string>>({});
   const [isSubmittingReplyForId, setIsSubmittingReplyForId] = useState<string | null>(null);
   const [isUpdatingPaymentForId, setIsUpdatingPaymentForId] = useState<string | null>(null);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [teamInvitations, setTeamInvitations] = useState<any[]>([]);
-  const [teamBookingConfirmations, setTeamBookingConfirmations] = useState<any[]>([]);
-  const [teamMembersByTeamId, setTeamMembersByTeamId] = useState<Record<string, any[]>>({});
+  // Team membership/invitations management moved out with the dedicated
+  // Teams tab — teamEarnings survives because the Earnings tab's "Team
+  // Earnings" section still needs it for whatever team bookings a
+  // freelancer already has, independent of that management UI.
   const [teamEarnings, setTeamEarnings] = useState<Array<{ id: string; teamName: string; projectName: string; share: number }>>([]);
-  const [isCreateTeamFormOpen, setIsCreateTeamFormOpen] = useState(false);
-  const [newTeamName, setNewTeamName] = useState('');
-  const [newTeamDescription, setNewTeamDescription] = useState('');
-  const [isSavingTeam, setIsSavingTeam] = useState(false);
-  const [inviteFormOpenForTeamId, setInviteFormOpenForTeamId] = useState<string | null>(null);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRevenueShare, setInviteRevenueShare] = useState('');
-  const [isSendingInvite, setIsSendingInvite] = useState(false);
-  const [isRespondingToInvitationId, setIsRespondingToInvitationId] = useState<string | null>(null);
-  const [isRespondingToConfirmationId, setIsRespondingToConfirmationId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -244,24 +234,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   }, [requests]);
 
   const loadTeamsData = async (userId: string) => {
-    const [teamsResponse, invitationsResponse, confirmationsResponse] = await Promise.all([
-      DataService.getUserTeams(userId),
-      DataService.getMyTeamInvitations(userId),
-      DataService.getFreelancerTeamBookingConfirmations(userId),
-    ]);
-
+    const teamsResponse = await DataService.getUserTeams(userId);
     const myTeams = teamsResponse.data || [];
-    setTeams(myTeams);
-    setTeamInvitations(invitationsResponse.data || []);
-    setTeamBookingConfirmations(confirmationsResponse.data || []);
-
-    const memberLists = await Promise.all(myTeams.map((entry: any) => DataService.getTeamMembers(entry.team_id || entry.team?.id)));
-    const nextMembersByTeamId: Record<string, any[]> = {};
-    myTeams.forEach((entry: any, index: number) => {
-      const teamId = entry.team_id || entry.team?.id;
-      if (teamId) nextMembersByTeamId[teamId] = memberLists[index]?.data || [];
-    });
-    setTeamMembersByTeamId(nextMembersByTeamId);
 
     const teamBookingLists = await Promise.all(myTeams.map((entry: any) => DataService.getTeamBookingsForTeam(entry.team_id || entry.team?.id)));
     const earnings: Array<{ id: string; teamName: string; projectName: string; share: number }> = [];
@@ -278,6 +252,27 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       }
     });
     setTeamEarnings(earnings);
+  };
+
+  // is_available is the same field FreelancerProfile.tsx, ExplorePage.tsx,
+  // and MapExplorePage.tsx all read to show "Available"/"Unavailable" (or
+  // to filter search results) - this was previously just a static label
+  // with no click handler, so there was no way to actually change it here.
+  const handleToggleAvailability = async () => {
+    if (!user?.id || !freelancerProfile) return;
+    const nextValue = !(freelancerProfile.is_available !== false);
+
+    setIsTogglingAvailability(true);
+    setError(null);
+    const response = await DataService.updateFreelancerProfile(user.id, { is_available: nextValue } as any);
+    setIsTogglingAvailability(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to update availability.');
+      return;
+    }
+
+    setFreelancerProfile((current: any) => ({ ...current, is_available: nextValue }));
   };
 
   const stats = useMemo(() => {
@@ -654,92 +649,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setSuccess(`Marked as ${PAYMENT_STATUS_LABEL[nextStatus].toLowerCase()}.`);
   };
 
-  const handleCreateTeam = async () => {
-    if (!user?.id || !newTeamName.trim()) {
-      setError('Give your team a name.');
-      return;
-    }
-
-    setError(null);
-    setIsSavingTeam(true);
-    const response = await DataService.createTeam(user.id, newTeamName.trim(), newTeamDescription.trim() || null);
-    setIsSavingTeam(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to create team.');
-      return;
-    }
-
-    setIsCreateTeamFormOpen(false);
-    setNewTeamName('');
-    setNewTeamDescription('');
-    setSuccess('Team created.');
-    await loadTeamsData(user.id);
-  };
-
-  const handleSendTeamInvite = async (teamId: string) => {
-    if (!user?.id || !inviteEmail.trim()) {
-      setError('Enter the email of the freelancer you want to invite.');
-      return;
-    }
-
-    setError(null);
-    setIsSendingInvite(true);
-
-    const userResponse = await DataService.getUserByEmail(inviteEmail.trim());
-    if (userResponse.error || !userResponse.data) {
-      setIsSendingInvite(false);
-      setError('No account found with that email.');
-      return;
-    }
-
-    const share = inviteRevenueShare.trim() ? Number(inviteRevenueShare) : null;
-    const response = await DataService.inviteToTeam(teamId, user.id, userResponse.data.id, share);
-    setIsSendingInvite(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to send invitation.');
-      return;
-    }
-
-    setInviteFormOpenForTeamId(null);
-    setInviteEmail('');
-    setInviteRevenueShare('');
-    setSuccess('Invitation sent.');
-  };
-
-  const handleRespondToTeamInvitation = async (invitationId: string, accept: boolean) => {
-    if (!user?.id) return;
-    setError(null);
-    setIsRespondingToInvitationId(invitationId);
-    const response = await DataService.respondToTeamInvitation(invitationId, accept);
-    setIsRespondingToInvitationId(null);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to respond to invitation.');
-      return;
-    }
-
-    setSuccess(accept ? 'You joined the team.' : 'Invitation declined.');
-    await loadTeamsData(user.id);
-  };
-
-  const handleRespondToTeamBookingConfirmation = async (confirmationId: string, decision: 'confirmed' | 'declined') => {
-    if (!user?.id) return;
-    setError(null);
-    setIsRespondingToConfirmationId(confirmationId);
-    const response = await DataService.respondToTeamBookingConfirmation(confirmationId, decision);
-    setIsRespondingToConfirmationId(null);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to respond to team booking.');
-      return;
-    }
-
-    setSuccess(decision === 'confirmed' ? 'Confirmed.' : 'Declined.');
-    await loadTeamsData(user.id);
-  };
-
   const tabs: { id: DashboardSection; label: string; icon: any; path: string }[] = [
     { id: 'requests', label: 'Requests', icon: Users, path: '/freelancer-dashboard/requests' },
     { id: 'bookings', label: 'Bookings', icon: ClipboardList, path: '/freelancer-dashboard/bookings' },
@@ -747,7 +656,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     { id: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/freelancer-dashboard/analytics' },
     { id: 'reviews', label: 'Reviews', icon: Star, path: '/freelancer-dashboard/reviews' },
     { id: 'earnings', label: 'Earnings', icon: DollarSign, path: '/freelancer-dashboard/earnings' },
-    { id: 'teams', label: 'Teams', icon: UsersRound, path: '/freelancer-dashboard/teams' },
     { id: 'settings', label: 'Services', icon: Settings, path: '/freelancer-dashboard/settings' },
   ];
 
@@ -836,9 +744,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               <p className="text-sm text-gray-600 md:text-base">Manage requests, calendar, services, and bookings</p>
             </div>
             {freelancerProfile && (
-              <div className="rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
-                Status: {freelancerProfile.is_available === false ? 'Unavailable' : 'Available'}
-              </div>
+              <button
+                type="button"
+                onClick={() => void handleToggleAvailability()}
+                disabled={isTogglingAvailability}
+                title="Click to toggle your availability"
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                  freelancerProfile.is_available === false
+                    ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full ${freelancerProfile.is_available === false ? 'bg-gray-400' : 'bg-green-500'}`} />
+                Status: {isTogglingAvailability ? 'Updating...' : freelancerProfile.is_available === false ? 'Unavailable' : 'Available'}
+              </button>
             )}
           </div>
         </div>
@@ -1499,215 +1418,83 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </div>
             )}
           </div>
-        ) : section === 'teams' ? (
-          <div className="space-y-6 md:space-y-8">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Teams</h2>
-                <p className="text-sm text-gray-600 md:text-base">Create a team, invite members, and take on jobs together</p>
-              </div>
-              <button
-                onClick={() => setIsCreateTeamFormOpen((current) => !current)}
-                className="flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black"
-              >
-                <Plus className="h-4 w-4" />
-                Create Team
-              </button>
-            </div>
-
-            {isCreateTeamFormOpen && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
-                <p className="mb-3 text-sm font-semibold text-gray-900">New team</p>
-                <div className="space-y-3">
-                  <input
-                    value={newTeamName}
-                    onChange={(event) => setNewTeamName(event.target.value)}
-                    placeholder="Team name"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <textarea
-                    value={newTeamDescription}
-                    onChange={(event) => setNewTeamDescription(event.target.value)}
-                    placeholder="What does this team do?"
-                    rows={2}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <button
-                    onClick={() => void handleCreateTeam()}
-                    disabled={isSavingTeam}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
-                  >
-                    {isSavingTeam ? 'Creating...' : 'Create Team'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {teamInvitations.length > 0 && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
-                <h3 className="mb-3 text-lg font-bold text-gray-900">Team Invitations</h3>
-                <div className="space-y-2">
-                  {teamInvitations.map((invitation) => (
-                    <div key={invitation.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{invitation.team?.name}</p>
-                        <p className="text-xs text-gray-600">Invited by {invitation.inviter?.full_name || 'a team owner'}</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => void handleRespondToTeamInvitation(invitation.id, true)}
-                          disabled={isRespondingToInvitationId === invitation.id}
-                          className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => void handleRespondToTeamInvitation(invitation.id, false)}
-                          disabled={isRespondingToInvitationId === invitation.id}
-                          className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-60"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {teamBookingConfirmations.filter((confirmation) => confirmation.status === 'pending').length > 0 && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
-                <h3 className="mb-3 text-lg font-bold text-gray-900">Team Booking Requests</h3>
-                <div className="space-y-2">
-                  {teamBookingConfirmations
-                    .filter((confirmation) => confirmation.status === 'pending')
-                    .map((confirmation) => (
-                      <div key={confirmation.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{confirmation.team_booking?.project_name}</p>
-                          <p className="text-xs text-gray-600">
-                            {confirmation.team_booking?.team?.name} · {confirmation.team_booking?.client?.full_name || 'Client'} ·{' '}
-                            {formatCurrencyAmount(Number(confirmation.team_booking?.budget || 0), 'THB')}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => void handleRespondToTeamBookingConfirmation(confirmation.id, 'confirmed')}
-                            disabled={isRespondingToConfirmationId === confirmation.id}
-                            className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 disabled:opacity-60"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => void handleRespondToTeamBookingConfirmation(confirmation.id, 'declined')}
-                            disabled={isRespondingToConfirmationId === confirmation.id}
-                            className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-60"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-
-            {teams.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
-                <p className="text-sm text-gray-500">You're not part of a team yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {teams.map((entry) => {
-                  const team = entry.team;
-                  const isOwner = entry.role === 'owner';
-                  const members = teamMembersByTeamId[team?.id] || [];
-
-                  return (
-                    <div key={team?.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-lg font-bold text-gray-900">{team?.name}</p>
-                          {team?.description && <p className="mt-1 text-sm text-gray-600">{team.description}</p>}
-                        </div>
-                        <div className="flex flex-shrink-0 gap-2">
-                          <button
-                            onClick={() => navigate(`/team/${team.id}`)}
-                            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                          >
-                            View Public Page
-                          </button>
-                          {isOwner && (
-                            <button
-                              onClick={() => setInviteFormOpenForTeamId((current) => (current === team.id ? null : team.id))}
-                              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                              Invite Member
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {inviteFormOpenForTeamId === team?.id && (
-                        <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <input
-                              value={inviteEmail}
-                              onChange={(event) => setInviteEmail(event.target.value)}
-                              placeholder="e.g. name@example.com"
-                              className="sm:col-span-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
-                            />
-                            <input
-                              type="number"
-                              min={0}
-                              max={100}
-                              value={inviteRevenueShare}
-                              onChange={(event) => setInviteRevenueShare(event.target.value)}
-                              placeholder="e.g. 30"
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
-                            />
-                          </div>
-                          <button
-                            onClick={() => void handleSendTeamInvite(team.id)}
-                            disabled={isSendingInvite}
-                            className="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
-                          >
-                            {isSendingInvite ? 'Sending...' : 'Send Invite'}
-                          </button>
-                        </div>
-                      )}
-
-                      <div className="mt-4 space-y-2">
-                        {members.map((member) => (
-                          <div key={member.id} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-2.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar
-                                src={member.user?.avatar_url || DEFAULT_AVATAR_URL}
-                                alt={member.user?.full_name || 'Member'}
-                                gender={member.user?.gender}
-                                sizeClassName="w-8 h-8"
-                              />
-                              <span className="text-sm font-semibold text-gray-900">{member.user?.full_name || 'Member'}</span>
-                              <span className="rounded-full border border-gray-200 px-2 py-0.5 text-xs font-semibold capitalize text-gray-600">
-                                {member.role}
-                              </span>
-                            </div>
-                            <span className="text-xs font-semibold text-gray-600">{Number(member.revenue_share_percent || 0)}% share</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         ) : (
           <div className="space-y-6 md:space-y-8">
             <div>
               <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Services</h2>
-              <p className="text-sm text-gray-600 md:text-base">Manage your bookable services and blocked availability. Public profile details (title, rate, skills, styles, working hours, and more) are edited from Edit Profile.</p>
+              <p className="text-sm text-gray-600 md:text-base">Manage your bookable services and blocked availability. Category, skills, styles, rate, and working hours are edited from Edit Profile — see your current choices below.</p>
             </div>
+
+            {freelancerProfile && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-bold text-gray-900">Your Profile Settings</h3>
+                  <button
+                    onClick={() => navigate('/edit-profile')}
+                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Profile
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Category</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{freelancerProfile.title || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Rate</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {freelancerProfile.hourly_rate
+                        ? `${formatCurrencyAmount(convertAmount(Number(freelancerProfile.hourly_rate), 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')), normalizeCurrencyCode(preferredCurrency, 'THB'))}/hr`
+                        : 'Not set'}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Skills</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {(freelancerProfile.skills || []).length > 0 ? (
+                        freelancerProfile.skills.map((skill: string) => (
+                          <span key={skill} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                            {skill}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">Not set</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Styles</p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {(freelancerProfile.styles || []).length > 0 ? (
+                        freelancerProfile.styles.map((style: string) => (
+                          <span key={style} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                            {style}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-gray-500">Not set</p>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Working Hours</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {freelancerProfile.working_hours_start && freelancerProfile.working_hours_end
+                        ? `${freelancerProfile.working_hours_start} – ${freelancerProfile.working_hours_end}`
+                        : 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Working Days</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">
+                      {(freelancerProfile.working_days || []).length > 0 ? freelancerProfile.working_days.join(', ') : 'Not set'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
               <h3 className="mb-1 text-lg font-bold text-gray-900">Blocked Dates</h3>

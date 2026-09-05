@@ -28,7 +28,6 @@ const FreelancerDashboardCalendarPage = lazy(() => import('./pages/FreelancerDas
 const FreelancerDashboardAnalyticsPage = lazy(() => import('./pages/FreelancerDashboardAnalyticsPage').then((m) => ({ default: m.FreelancerDashboardAnalyticsPage })));
 const FreelancerDashboardReviewsPage = lazy(() => import('./pages/FreelancerDashboardReviewsPage').then((m) => ({ default: m.FreelancerDashboardReviewsPage })));
 const FreelancerDashboardEarningsPage = lazy(() => import('./pages/FreelancerDashboardEarningsPage').then((m) => ({ default: m.FreelancerDashboardEarningsPage })));
-const FreelancerDashboardTeamsPage = lazy(() => import('./pages/FreelancerDashboardTeamsPage').then((m) => ({ default: m.FreelancerDashboardTeamsPage })));
 const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDashboardSettingsPage').then((m) => ({ default: m.FreelancerDashboardSettingsPage })));
 const PremiumSubscriptionPage = lazy(() => import('./pages/PremiumSubscriptionPage').then((m) => ({ default: m.PremiumSubscriptionPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -349,14 +348,6 @@ export default function App() {
             element={
               <ProtectedRoute>
                 {user?.role === 'freelancer' ? <FreelancerDashboardEarningsPage /> : <Navigate to="/become-freelancer" replace />}
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/freelancer-dashboard/teams"
-            element={
-              <ProtectedRoute>
-                {user?.role === 'freelancer' ? <FreelancerDashboardTeamsPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />
