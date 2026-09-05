@@ -1,5 +1,6 @@
 import { hasSupabaseConfig, supabase } from './supabase';
 import type { Database } from './supabase';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   appendGroupRequestMeta,
   buildGroupRequestMeta,
@@ -1870,6 +1871,20 @@ export class DataService {
     return { data, error };
   }
 
+  static subscribeToMessages(conversationId: string, onChange: () => void): RealtimeChannel {
+    return supabase
+      .channel(`messages-${conversationId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, onChange)
+      .subscribe();
+  }
+
+  static subscribeToGroupMessages(conversationId: string, onChange: () => void): RealtimeChannel {
+    return supabase
+      .channel(`group-messages-${conversationId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_messages', filter: `conversation_id=eq.${conversationId}` }, onChange)
+      .subscribe();
+  }
+
   static async getClientPostPreviews(postIds: string[]) {
     if (!postIds.length) {
       return { data: [], error: null };
@@ -1896,91 +1911,6 @@ export class DataService {
       .limit(200);
 
     return { data: data || [], error };
-  }
-
-  static async getMessageReactions(messageIds: string[]) {
-    if (!messageIds.length) {
-      return { data: [], error: null };
-    }
-
-    const { data, error } = await supabase
-      .from('message_reactions')
-      .select('message_id, user_id, reaction')
-      .in('message_id', messageIds);
-
-    const relationMissing = (err: any) => {
-      const message = String(err?.message || '').toLowerCase();
-      return message.includes('does not exist') || message.includes('schema cache');
-    };
-
-    if (error && relationMissing(error)) {
-      return { data: [], error: null };
-    }
-
-    return { data: data || [], error };
-  }
-
-  static async setMessageReaction(userId: string, messageId: string, reaction: string) {
-    const relationMissing = (err: any) => {
-      const message = String(err?.message || '').toLowerCase();
-      return message.includes('does not exist') || message.includes('schema cache');
-    };
-
-    const rlsDenied = (err: any) => {
-      const message = String(err?.message || '').toLowerCase();
-      return message.includes('row-level security policy') || err?.code === '42501';
-    };
-
-    const { data: existing, error: existingError } = await supabase
-      .from('message_reactions')
-      .select('id, reaction')
-      .eq('message_id', messageId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (existingError && !relationMissing(existingError) && !rlsDenied(existingError)) {
-      return { data: null, error: existingError };
-    }
-
-    if (existing && existing.reaction === reaction) {
-      const { error } = await supabase
-        .from('message_reactions')
-        .delete()
-        .eq('id', existing.id);
-
-      if (error && !relationMissing(error) && !rlsDenied(error)) {
-        return { data: null, error };
-      }
-
-      return { data: { removed: true }, error: null };
-    }
-
-    if (existing) {
-      const { data, error } = await supabase
-        .from('message_reactions')
-        .update({ reaction })
-        .eq('id', existing.id)
-        .select('message_id, user_id, reaction')
-        .single();
-
-      if (error && !relationMissing(error) && !rlsDenied(error)) {
-        return { data: null, error };
-      }
-
-      return { data, error: null };
-    }
-
-    const { data, error } = await supabase
-      .from('message_reactions')
-      .insert({ message_id: messageId, user_id: userId, reaction })
-      .select('message_id, user_id, reaction')
-      .single();
-
-    if (error && !relationMissing(error) && !rlsDenied(error)) {
-      return { data: null, error };
-    }
-
-    return { data, error: null };
   }
 
   static async sendMessage(

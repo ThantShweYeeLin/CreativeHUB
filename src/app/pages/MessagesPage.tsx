@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import { ChevronLeft, MessageCircle, Search, Send, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -92,6 +92,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
@@ -106,7 +107,6 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [isHandlingRequest, setIsHandlingRequest] = useState(false);
   const [isBlockingContact, setIsBlockingContact] = useState(false);
-  const [messageReactionsById, setMessageReactionsById] = useState<Record<string, { counts: Record<string, number>; mine: string | null }>>({});
   const [sharedPostPreviewById, setSharedPostPreviewById] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
   const [sharedPostFallbackByMessageId, setSharedPostFallbackByMessageId] = useState<Record<string, { image_url: string | null; caption: string | null; avatar_url: string | null; author_name: string | null; author_gender?: Gender | null }>>({});
   const [zoomedSharedPost, setZoomedSharedPost] = useState<{
@@ -324,29 +324,6 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         setMessages(items);
         if (!isGroupConversation) {
           await DataService.markMessagesAsRead(rawConversationId, user.id);
-
-          const messageIds = items.map((item: any) => String(item.id));
-          const reactionsResponse = await DataService.getMessageReactions(messageIds);
-          if (!reactionsResponse.error) {
-            const next: Record<string, { counts: Record<string, number>; mine: string | null }> = {};
-            (reactionsResponse.data || []).forEach((row: any) => {
-              const messageId = String(row.message_id);
-              const emoji = String(row.reaction || '');
-              if (!emoji) return;
-
-              if (!next[messageId]) {
-                next[messageId] = { counts: {}, mine: null };
-              }
-
-              next[messageId].counts[emoji] = (next[messageId].counts[emoji] || 0) + 1;
-              if (String(row.user_id) === String(user.id)) {
-                next[messageId].mine = emoji;
-              }
-            });
-            setMessageReactionsById(next);
-          }
-        } else {
-          setMessageReactionsById({});
         }
 
         const postIds = items
@@ -421,10 +398,33 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
     loadMessages();
 
+    if (!selectedConversationId || !user?.id) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    // Live-refresh the open conversation so a reply shows up immediately
+    // instead of requiring a page reload.
+    const isGroupConversation = isGroupConversationKey(selectedConversationId);
+    const rawConversationId = isGroupConversation
+      ? fromGroupConversationKey(selectedConversationId)
+      : selectedConversationId;
+    const channel = isGroupConversation
+      ? DataService.subscribeToGroupMessages(rawConversationId, () => loadMessages())
+      : DataService.subscribeToMessages(rawConversationId, () => loadMessages());
+
     return () => {
       isMounted = false;
+      channel.unsubscribe();
     };
   }, [selectedConversationId, user?.id]);
+
+  // Land on the latest message whenever a conversation is opened or a new
+  // message arrives, instead of leaving the view at the top (oldest first).
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages, selectedConversationId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -807,7 +807,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       return;
     }
 
-    setMessages((current) => [...current, response.data]);
+    setMessages((current) => (current.some((item) => item.id === response.data.id) ? current : [...current, response.data]));
 
     if (isGroupConversation) {
       setGroupConversations((current) =>
@@ -833,45 +833,6 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
     setMessageInput('');
     setIsSending(false);
-  };
-
-  const reactionChoices = ['👍', '❤️', '😂', '😮', '😢'];
-
-  const handleReactToMessage = async (messageId: string, emoji: string) => {
-    if (!user?.id) {
-      return;
-    }
-
-    const previous = messageReactionsById[messageId] || { counts: {}, mine: null };
-    const nextCounts = { ...previous.counts };
-
-    if (previous.mine) {
-      nextCounts[previous.mine] = Math.max(0, (nextCounts[previous.mine] || 0) - 1);
-      if (nextCounts[previous.mine] === 0) {
-        delete nextCounts[previous.mine];
-      }
-    }
-
-    const sameEmoji = previous.mine === emoji;
-    if (!sameEmoji) {
-      nextCounts[emoji] = (nextCounts[emoji] || 0) + 1;
-    }
-
-    setMessageReactionsById((current) => ({
-      ...current,
-      [messageId]: {
-        counts: nextCounts,
-        mine: sameEmoji ? null : emoji,
-      },
-    }));
-
-    const response = await DataService.setMessageReaction(user.id, messageId, emoji);
-    if (response.error) {
-      setMessageReactionsById((current) => ({
-        ...current,
-        [messageId]: previous,
-      }));
-    }
   };
 
   const openMutualConversation = async (mutualUserId: string) => {
@@ -1304,24 +1265,25 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       || fallbackProfileImage;
                     const resolvedAuthorGender = previewFromDb?.author_gender ?? fallbackFromAuthorCaption?.author_gender ?? senderGender ?? null;
                     const resolvedAuthorName = sharedPost?.authorName || previewFromDb?.author_name || fallbackFromAuthorCaption?.author_name || 'Shared post';
-                    const reactions = messageReactionsById[String(message.id)] || { counts: {}, mine: null };
                     return (
                       <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                         <div
                           className={`max-w-xl px-4 py-3 rounded-2xl ${
+                            // Both "white", but a shade apart so sent vs received bubbles
+                            // are still distinguishable next to each other.
                             isMine
-                              ? 'bg-gradient-to-r from-gray-900 to-black text-white rounded-tr-none'
+                              ? 'bg-gray-100 text-gray-900 rounded-tr-none shadow-sm'
                               : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none shadow-sm'
                           }`}
                         >
                           {sharedPost && (
-                            <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-slate-700 bg-slate-950 text-white' : 'border-gray-200 bg-white text-gray-900'}`}>
+                            <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-gray-300 bg-white text-gray-900' : 'border-gray-200 bg-white text-gray-900'}`}>
                               <div className="flex items-start justify-between gap-3 px-4 py-3">
                                 <div className="flex items-center gap-3 min-w-0">
                                   <button
                                     type="button"
                                     onClick={() => sharedPost.authorId && onViewProfile?.(sharedPost.authorId as string)}
-                                    className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${isMine ? 'bg-slate-700 text-white' : 'bg-gray-100 text-gray-700'} transition-opacity hover:opacity-80`}
+                                    className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-100 text-gray-700 transition-opacity hover:opacity-80"
                                   >
                                     <Avatar
                                       src={resolvedAuthorAvatar}
@@ -1332,13 +1294,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   </button>
                                   <div className="min-w-0">
                                     <div className="truncate text-sm font-semibold">{resolvedAuthorName}</div>
-                                    <div className={`truncate text-xs ${isMine ? 'text-slate-400' : 'text-gray-500'}`}>Shared post</div>
+                                    <div className="truncate text-xs text-gray-500">Shared post</div>
                                   </div>
                                 </div>
                               </div>
 
                               <div className="px-4 pb-4">
-                                <p className={`text-sm ${isMine ? 'text-white/90' : 'text-gray-800'} whitespace-pre-wrap`}>{resolvedCaption}</p>
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{resolvedCaption}</p>
                               </div>
 
                               {resolvedPreview ? (
@@ -1374,7 +1336,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                       caption: resolvedCaption,
                                     });
                                   }}
-                                  className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-900 text-white hover:bg-gray-800'}`}
+                                  className="rounded-full px-4 py-2 text-xs font-semibold transition bg-gray-900 text-white hover:bg-gray-800"
                                 >
                                   Open post
                                 </button>
@@ -1382,7 +1344,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   <button
                                     type="button"
                                     onClick={() => onViewProfile(sharedPost.authorId as string)}
-                                    className={`rounded-full px-4 py-2 text-xs font-semibold transition ${isMine ? 'bg-white/10 text-white hover:bg-white/20' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}
+                                    className="rounded-full px-4 py-2 text-xs font-semibold transition bg-gray-100 text-gray-900 hover:bg-gray-200"
                                   >
                                     View profile
                                   </button>
@@ -1393,7 +1355,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           {!sharedPost ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           ) : null}
-                          <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
+                          <p className="mt-2 text-xs text-gray-500">
                             {message.created_at
                               ? new Date(message.created_at).toLocaleTimeString([], {
                                   hour: 'numeric',
@@ -1401,36 +1363,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                 })
                               : ''}
                           </p>
-
-                          {!activeConversation?.isGroup && (
-                            <div className="mt-2 flex flex-wrap items-center gap-2">
-                              {Object.entries(reactions.counts).map(([emoji, count]) => (
-                                <button
-                                  key={`${message.id}-${emoji}`}
-                                  type="button"
-                                  onClick={() => void handleReactToMessage(String(message.id), emoji)}
-                                  className={`rounded-full border px-2 py-1 text-xs ${reactions.mine === emoji ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700'}`}
-                                >
-                                  {emoji} {count}
-                                </button>
-                              ))}
-
-                              {reactionChoices.map((emoji) => (
-                                <button
-                                  key={`${message.id}-add-${emoji}`}
-                                  type="button"
-                                  onClick={() => void handleReactToMessage(String(message.id), emoji)}
-                                  className="rounded-full border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
                   })}
+                  <div ref={messagesEndRef} />
                 </div>
 
                 <div className="p-4 border-t border-gray-200 bg-white">
