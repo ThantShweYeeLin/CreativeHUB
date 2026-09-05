@@ -6,6 +6,10 @@ interface ConfirmOfferDialogProps {
   freelancerName?: string;
   projectName: string;
   price: number;
+  // This dialog is shared by two different moments: accepting/rejecting a
+  // plain first-time request, and accepting/rejecting a counter-offer mid
+  // negotiation — the copy below used to always assume the latter.
+  isCounterOffer?: boolean;
   isSubmitting?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
@@ -16,6 +20,7 @@ export function ConfirmOfferDialog({
   freelancerName,
   projectName,
   price,
+  isCounterOffer,
   isSubmitting,
   onCancel,
   onConfirm,
@@ -30,7 +35,9 @@ export function ConfirmOfferDialog({
         </div>
 
         <h3 className="text-lg font-bold text-gray-900">
-          {isAccept ? 'Accept Counter Offer?' : 'Reject this counter offer?'}
+          {isAccept
+            ? isCounterOffer ? 'Accept Counter Offer?' : 'Accept this request?'
+            : isCounterOffer ? 'Reject this counter offer?' : 'Reject this request?'}
         </h3>
 
         {isAccept ? (
@@ -55,7 +62,11 @@ export function ConfirmOfferDialog({
             <p className="mt-3 text-xs text-gray-500">By accepting, this offer will become the agreed project proposal.</p>
           </>
         ) : (
-          <p className="mt-2 text-sm text-gray-600">This will end the current negotiation for "{projectName}".</p>
+          <p className="mt-2 text-sm text-gray-600">
+            {isCounterOffer
+              ? `This will end the current negotiation for "${projectName}".`
+              : `This will decline the request for "${projectName}".`}
+          </p>
         )}
 
         <div className="mt-5 flex gap-3">

@@ -1027,6 +1027,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           type={confirmAction.type}
           projectName={confirmAction.request.projectName}
           price={confirmAction.request.status === 'countered' ? Number(confirmAction.request.counterPrice || 0) : Number(confirmAction.request.budget || 0)}
+          isCounterOffer={confirmAction.request.status === 'countered'}
           isSubmitting={isSubmittingConfirm}
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => void handleConfirmedAction()}

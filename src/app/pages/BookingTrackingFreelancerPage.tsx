@@ -1,6 +1,7 @@
 import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -16,8 +17,22 @@ interface BookingTrackingFreelancerPageProps {
 
 export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelancerPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
   const { booking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+
+  // Symmetric to BookingTrackingClientPage's redirect — a client landing on
+  // this freelancer-facing route directly would otherwise see a confusing
+  // freelancer-oriented view of their own booking. RLS already scopes data
+  // access; this is purely a UX redirect to the right page.
+  useEffect(() => {
+    if (!booking || !user?.id || booking.freelancer_id === user.id) {
+      return;
+    }
+    if (booking.client_id === user.id) {
+      navigate(`/booking/${booking.id}`, { replace: true });
+    }
+  }, [booking, user?.id, navigate]);
 
   const [completionText, setCompletionText] = useState('');
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);

@@ -1906,6 +1906,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               ? Number(confirmAction.request.counter_price || 0)
               : Number(confirmAction.request.budget || 0)
           }
+          isCounterOffer={confirmAction.request.status === 'countered'}
           isSubmitting={isSubmittingConfirm}
           onCancel={() => setConfirmAction(null)}
           onConfirm={() => void handleConfirmedAction()}

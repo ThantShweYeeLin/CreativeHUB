@@ -1,6 +1,7 @@
 import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Clock, FileText, Shield, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -19,8 +20,24 @@ interface BookingTrackingClientPageProps {
 
 export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, setBooking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+
+  // This is the CLIENT-facing tracking page — a freelancer landing here
+  // directly (e.g. an old link, a manually edited URL) would otherwise see
+  // a confusing client-oriented view of their own booking, including
+  // themselves rendered as if they were someone else's freelancer. RLS
+  // already prevents anyone unrelated from reading the booking at all, so
+  // this is purely a UX redirect to the right page, not an access check.
+  useEffect(() => {
+    if (!booking || !user?.id || booking.client_id === user.id) {
+      return;
+    }
+    if (booking.freelancer_id === user.id) {
+      navigate(`/freelancer-booking/${booking.id}`, { replace: true });
+    }
+  }, [booking, user?.id, navigate]);
 
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [isPayingDeposit, setIsPayingDeposit] = useState(false);
@@ -54,7 +71,13 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
       return;
     }
 
-    setBooking(response.data);
+    // refresh() re-fetches via getBooking(), which includes the
+    // freelancer/client joins — payBookingDeposit's own response is a plain
+    // row update with no joined relations, so setting state from it
+    // directly briefly showed the freelancer's name as the generic
+    // "CreativeHUB Freelancer" fallback until something else happened to
+    // reload the page.
+    await refresh();
 
     if (user?.id) {
       await checkGroupDepositsAndCreateChat(response.data, user.id);
