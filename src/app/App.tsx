@@ -223,8 +223,8 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <RequestsPage
-                  onBack={() => navigate(-1)}
-                  onViewProfile={() => navigate('/explore')}
+                  onBack={() => navigate('/explore')}
+                  onViewProfile={(freelancerId) => navigate(`/profile/${freelancerId}`)}
                   onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
                 />
               </ProtectedRoute>
