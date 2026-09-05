@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { ChevronLeft, MessageCircle, Search, Send, X } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
@@ -90,6 +90,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [groupConversations, setGroupConversations] = useState<any[]>([]);
   const [groupMembersByConversationId, setGroupMembersByConversationId] = useState<Record<string, any[]>>({});
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
+  const [showNewGroupModal, setShowNewGroupModal] = useState(false);
+  const [newGroupTitle, setNewGroupTitle] = useState('');
+  const [newGroupMemberIds, setNewGroupMemberIds] = useState<string[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [newGroupError, setNewGroupError] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -858,6 +863,49 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     setSelectedConversationId(response.data.id);
   };
 
+  const toggleNewGroupMember = (mutualId: string) => {
+    setNewGroupMemberIds((current) =>
+      current.includes(mutualId) ? current.filter((id) => id !== mutualId) : [...current, mutualId]
+    );
+  };
+
+  const handleCreateGroupChat = async () => {
+    if (!user?.id) {
+      return;
+    }
+    if (newGroupMemberIds.length < 2) {
+      setNewGroupError('Pick at least 2 mutuals to start a group chat.');
+      return;
+    }
+
+    setIsCreatingGroup(true);
+    setNewGroupError(null);
+
+    const memberNames = mutualUsers
+      .filter((mutual) => newGroupMemberIds.includes(mutual.id))
+      .map((mutual) => mutual.full_name || mutual.email);
+    const title = newGroupTitle.trim() || memberNames.slice(0, 3).join(', ') || 'Group chat';
+
+    const response = await DataService.createGroupConversation({
+      title,
+      createdBy: user.id,
+      memberIds: newGroupMemberIds,
+    });
+
+    setIsCreatingGroup(false);
+
+    if (response.error || !response.data) {
+      setNewGroupError((response.error as any)?.message || 'Unable to create group chat.');
+      return;
+    }
+
+    setGroupConversations((current) => [response.data, ...current]);
+    setSelectedConversationId(toGroupConversationKey(String(response.data!.id)));
+    setShowNewGroupModal(false);
+    setNewGroupTitle('');
+    setNewGroupMemberIds([]);
+  };
+
   const removeActiveConversationFromList = () => {
     if (!selectedConversationId) {
       return;
@@ -960,15 +1008,29 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             }`}
           >
             <div className="p-4 border-b border-gray-200">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search conversations..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-lg border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
-                />
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search conversations..."
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-lg border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewGroupError(null);
+                    setShowNewGroupModal(true);
+                  }}
+                  title="New group chat"
+                  aria-label="New group chat"
+                  className="flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-700 hover:bg-gray-100"
+                >
+                  <Users className="h-5 w-5" />
+                </button>
               </div>
             </div>
 
@@ -1545,6 +1607,75 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           </div>
         </div>
       </div>
+
+      {showNewGroupModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">New Group Chat</h3>
+              <button
+                type="button"
+                onClick={() => setShowNewGroupModal(false)}
+                className="text-gray-400 hover:text-gray-900"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <label className="mb-1 block text-xs font-semibold text-gray-600">Group name (optional)</label>
+            <input
+              value={newGroupTitle}
+              onChange={(event) => setNewGroupTitle(event.target.value)}
+              placeholder="e.g. Wedding shoot team"
+              className="mb-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+            />
+
+            <label className="mb-2 block text-xs font-semibold text-gray-600">
+              Add mutuals ({newGroupMemberIds.length} selected — pick at least 2)
+            </label>
+            <div className="mb-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-gray-200 p-2">
+              {mutualUsers.length === 0 && (
+                <p className="px-2 py-4 text-center text-sm text-gray-500">You don't have any mutuals yet.</p>
+              )}
+              {mutualUsers.map((mutual) => {
+                const isSelected = newGroupMemberIds.includes(mutual.id);
+                return (
+                  <button
+                    key={mutual.id}
+                    type="button"
+                    onClick={() => toggleNewGroupMember(mutual.id)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
+                      isSelected ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <Avatar
+                      src={mutual.avatar_url || fallbackProfileImage}
+                      alt={mutual.full_name || mutual.email}
+                      gender={mutual.gender}
+                      sizeClassName="h-9 w-9 rounded-full"
+                    />
+                    <span className={`truncate text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                      {mutual.full_name || mutual.email}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {newGroupError && <p className="mb-3 text-sm text-red-600">{newGroupError}</p>}
+
+            <button
+              type="button"
+              onClick={() => void handleCreateGroupChat()}
+              disabled={isCreatingGroup}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+            >
+              <Plus className="h-4 w-4" />
+              {isCreatingGroup ? 'Creating...' : 'Create Group Chat'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

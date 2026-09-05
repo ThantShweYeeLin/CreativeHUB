@@ -2794,6 +2794,25 @@ export class DataService {
     return { data: created, error: null };
   }
 
+  // Bypasses per-row RLS via a security-definer RPC — see
+  // group_request_progress_fix.sql for why this is necessary: a plain
+  // `.from('requests')` query only ever shows the caller their own rows,
+  // which breaks "has everyone in this group accepted" the moment a
+  // freelancer (not the client) is the one checking.
+  static async getGroupRequestMembers(groupId: string) {
+    const { data, error } = await (supabase as any).rpc('get_group_request_members', { p_group_id: groupId });
+    return { data: (data || []) as Array<{ freelancer_id: string; status: string }>, error };
+  }
+
+  // Same rationale as getGroupRequestMembers, one layer later: bookings RLS
+  // only shows a caller their own bookings, but checking "has everyone in
+  // this group paid their deposit" needs every sibling booking's
+  // payment_status regardless of whose booking it is.
+  static async getGroupBookingMembers(groupId: string) {
+    const { data, error } = await (supabase as any).rpc('get_group_booking_members', { p_group_id: groupId });
+    return { data: (data || []) as Array<{ booking_id: string; freelancer_id: string; payment_status: string; status: string }>, error };
+  }
+
   static getRequestGroupMeta(request: any) {
     return parseGroupRequestMeta(request?.message, request?.description);
   }

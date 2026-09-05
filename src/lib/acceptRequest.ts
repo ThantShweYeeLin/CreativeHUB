@@ -16,6 +16,8 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   const startDate = request.status === 'countered' && request.counter_date ? request.counter_date : scheduleMeta?.date || null;
   const startTime = request.status === 'countered' && request.counter_time ? request.counter_time : scheduleMeta?.time || null;
 
+  const groupMeta = DataService.getRequestGroupMeta(request);
+
   const bookingResponse = await DataService.createBooking({
     client_id: request.client_id,
     freelancer_id: request.freelancer_id,
@@ -31,6 +33,11 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     start_date: startDate,
     start_time: startTime,
     deposit_deadline: new Date(Date.now() + DEPOSIT_DEADLINE_HOURS * 60 * 60 * 1000).toISOString(),
+    // Lets checkGroupDepositsAndCreateChat (src/lib/groupDepositChat.ts)
+    // find every sibling booking from this same group request once each
+    // one's deposit gets paid — the group chat is created then, not at
+    // acceptance time (see that file for why).
+    group_id: groupMeta?.group_id || null,
   } as any);
 
   if (bookingResponse.error) {
@@ -39,10 +46,16 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
 
   await DataService.ensureConversation(request.client_id, request.freelancer_id, { forceAccepted: true });
 
-  const groupMeta = DataService.getRequestGroupMeta(request);
   if (groupMeta?.group_id) {
-    const progressResponse = await DataService.getClientRequestsWithProgress(request.client_id);
-    const groupRows = (progressResponse.data || []).filter((row: any) => row.group_meta?.group_id === groupMeta.group_id);
+    // Not getClientRequestsWithProgress(request.client_id) — that queries
+    // `requests` under the current user's own RLS, which is almost always
+    // the freelancer accepting, not the client. RLS only lets them see
+    // rows where they themselves are a participant, so it could never see
+    // a sibling freelancer's row in the same group. getGroupRequestMembers
+    // bypasses that via a security-definer RPC, so this sees every
+    // member's real status regardless of who's asking.
+    const progressResponse = await DataService.getGroupRequestMembers(groupMeta.group_id);
+    const groupRows = progressResponse.data || [];
     // A rejection is terminal for that one member only — it must never block
     // the rest of the group from completing, so rejected rows are dropped
     // from both the "still needs to respond" pool and the completion check
@@ -63,25 +76,10 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
       metadata: { group_id: groupMeta.group_id, accepted, total },
       read: false,
     } as any);
-
-    if (accepted === total && total > 1) {
-      const recipients = Array.from(new Set(activeGroupRows.map((row: any) => String(row.freelancer_id))));
-      const members = Array.from(new Set([request.client_id, ...recipients]));
-      const groupConversation = await DataService.ensureGroupConversationForRequest({
-        groupRequestId: groupMeta.group_id,
-        title: `${request.project_name || 'Group project'} team`,
-        createdBy: request.client_id,
-        memberIds: members,
-      });
-
-      if (groupConversation.data?.id) {
-        await DataService.sendGroupMessage({
-          conversationId: groupConversation.data.id,
-          senderId: request.client_id,
-          content: `All ${total} members accepted. This group chat is now ready for collaboration on ${request.project_name || 'your project'}.`,
-        });
-      }
-    }
+    // The group chat itself is created once every member's deposit is
+    // paid, not here at acceptance — see checkGroupDepositsAndCreateChat
+    // in src/lib/groupDepositChat.ts, called from
+    // BookingTrackingClientPage's deposit-transfer handler.
   }
 
   return { error: null };

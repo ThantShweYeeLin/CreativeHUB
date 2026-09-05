@@ -11,6 +11,7 @@ import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
+import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
 
 interface BookingTrackingClientPageProps {
   onBack: () => void;
@@ -54,6 +55,10 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     }
 
     setBooking(response.data);
+
+    if (user?.id) {
+      await checkGroupDepositsAndCreateChat(response.data, user.id);
+    }
   };
 
   const handleConfirmCompletion = async () => {
