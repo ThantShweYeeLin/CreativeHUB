@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Bookmark, Briefcase, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Sparkles, Star, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -24,6 +24,7 @@ import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../li
 import { appendLocationMeta } from '../../lib/requestLocation';
 import { isDateBlocked, isFreelancerFreeAt, isTimeSlotTaken } from '../../lib/availability';
 import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
+import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
@@ -54,6 +55,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
+  const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
+  const [showLikedUsersByPostId, setShowLikedUsersByPostId] = useState<Record<string, boolean>>({});
+  const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
@@ -61,7 +65,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
+  const [commentFocusToken, setCommentFocusToken] = useState(0);
+  const [showPostContentOnOpen, setShowPostContentOnOpen] = useState(true);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; alt?: string } | null>(null);
+  const [sharingPost, setSharingPost] = useState<any | null>(null);
+  const [mutualUsers, setMutualUsers] = useState<Array<{ id: string; full_name: string | null; email: string; avatar_url: string | null }>>([]);
+  const [selectedShareRecipientIds, setSelectedShareRecipientIds] = useState<string[]>([]);
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
+  const [isSendingShare, setIsSendingShare] = useState(false);
+  const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
+  const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [activeProjects, setActiveProjects] = useState(0);
@@ -628,13 +642,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     });
   };
 
-  const openPostFocus = async (postId: string) => {
+  const openPostFocus = async (postId: string, options?: { focusComment?: boolean }) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
     if (savedScrollYRef.current === null) {
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(stateKey);
+    // Clicking the post opens the full detail; clicking Comment opens the
+    // same lightweight comments-only overlay the For You feed uses.
+    setShowPostContentOnOpen(!options?.focusComment);
+    if (options?.focusComment) {
+      setCommentFocusToken((token) => token + 1);
+    }
 
     if (commentsByPostId[stateKey]) {
       return;
@@ -649,6 +669,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setCommentsByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
     }
     setLoadingCommentsByPostId((current) => ({ ...current, [stateKey]: false }));
+  };
+
+  const loadFreelancerPostLikes = async (postId: string) => {
+    const stateKey = String(postId);
+    const apiPostId = stateKey.replace(/^client-post-/, '');
+    setShowLikedUsersByPostId((current) => ({ ...current, [stateKey]: true }));
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: true }));
+    const response = await DataService.getClientPostLikeUsers(apiPostId);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load likes.');
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: [] }));
+    } else {
+      setLikedUsersByPostId((current) => ({ ...current, [stateKey]: response.data || [] }));
+    }
+    setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: false }));
   };
 
   const closePostFocus = () => {
@@ -761,9 +796,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
   };
 
-  const sharePost = async (postId: string) => {
+  const handleShare = async (postId: string) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
+    const post = profilePosts.find((item: any) => String(item.id) === stateKey);
+    if (!post) {
+      return;
+    }
+
     setPostEngagement((current) => {
       const existing = current[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
       return {
@@ -779,11 +819,115 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       await DataService.recordClientPostShare(user.id, apiPostId);
     }
 
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/profile/${id}`);
-    } catch {
-      // ignore clipboard failures
+    setSharingPost(post);
+    setIsShareSheetOpen(true);
+    setIsLoadingMutualUsers(true);
+    setSelectedShareRecipientIds([]);
+    setShareStatusMessage(null);
+    setCopyLinkError(null);
+
+    if (user?.id) {
+      const response = await DataService.getMutualUsers(user.id);
+      if (response.error) {
+        setMutualUsers([]);
+        setError((response.error as any).message || 'Unable to load mutuals for sharing.');
+      } else {
+        setMutualUsers(response.data || []);
+      }
     }
+
+    setIsLoadingMutualUsers(false);
+  };
+
+  const copyShareLink = async () => {
+    if (!sharingPost) {
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/profile/${targetFreelancerUserId || id}`;
+    setCopyLinkError(null);
+
+    try {
+      if (!navigator.clipboard || !window.isSecureContext) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      setShareStatusMessage('Post link copied to clipboard.');
+      return;
+    } catch {
+      // Fall through to the legacy fallback below (older browsers, or a
+      // non-HTTPS/non-localhost origin where the async Clipboard API doesn't exist).
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = shareUrl;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let fallbackWorked = false;
+    try {
+      fallbackWorked = document.execCommand('copy');
+    } catch {
+      fallbackWorked = false;
+    }
+    document.body.removeChild(textarea);
+
+    if (fallbackWorked) {
+      setShareStatusMessage('Post link copied to clipboard.');
+    } else {
+      setCopyLinkError('Could not copy automatically — select and copy the link below.');
+    }
+  };
+
+  const sendShareToMutuals = async () => {
+    if (!user?.id || !sharingPost || selectedShareRecipientIds.length === 0) {
+      return;
+    }
+
+    setIsSendingShare(true);
+    setError(null);
+
+    const authorId = targetFreelancerUserId || id;
+    const shareUrl = `${window.location.origin}/profile/${authorId}`;
+    const sharedPostPayload = {
+      postId: sharingPost.id,
+      authorName: displayName,
+      authorId,
+      shareUrl,
+      caption: sharingPost.caption,
+      imageUrl: sharingPost.image_url || null,
+    };
+    const message = `SHARED_POST::${JSON.stringify(sharedPostPayload)}`;
+
+    const recipients = mutualUsers.filter((mutual) => selectedShareRecipientIds.includes(mutual.id));
+
+    for (const mutual of recipients) {
+      const conversationResponse = await DataService.ensureConversation(user.id, mutual.id);
+      if (conversationResponse.error || !conversationResponse.data) {
+        continue;
+      }
+
+      await DataService.sendMessage({
+        conversation_id: conversationResponse.data.id,
+        sender_id: user.id,
+        recipient_id: mutual.id,
+        content: message,
+        read: false,
+      } as any);
+    }
+
+    setIsSendingShare(false);
+    setIsShareSheetOpen(false);
+    setSharingPost(null);
+    setMutualUsers([]);
+    setSelectedShareRecipientIds([]);
+    setShareStatusMessage(
+      recipients.length === 1
+        ? `Shared with ${recipients[0].full_name || recipients[0].email}.`
+        : `Shared with ${recipients.length} mutuals.`
+    );
   };
 
   const submitComment = async (postId: string) => {
@@ -1424,48 +1568,24 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               {profilePosts.map((post) => {
                 const engagement = postEngagement[post.id] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
                 return (
-                  <article key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
-                    <button
-                      type="button"
-                      onClick={() => setViewingPhoto({ url: post.image_url || avatarUrl, alt: post.caption || 'Post image' })}
-                      className="aspect-[4/3] w-full bg-white text-left"
-                    >
-                      <ImageWithFallback
-                        src={post.image_url || avatarUrl}
-                        alt={post.caption || 'Post image'}
-                        className="h-full w-full object-cover"
-                      />
-                    </button>
-                    <div className="p-4">
-                      <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-700">
-                        <button
-                          type="button"
-                          onClick={() => void togglePostLike(post.id)}
-                          className="inline-flex items-center gap-1"
-                        >
-                          <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
-                          {engagement.likes}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void openPostFocus(post.id)}
-                          className="inline-flex items-center gap-1"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                          {engagement.comments}
-                        </button>
-                        <button type="button" onClick={() => void sharePost(post.id)} className="inline-flex items-center gap-1">
-                          <Share2 className="h-4 w-4" />
-                          Share
-                        </button>
-                        <button type="button" onClick={() => void togglePostSave(post.id)} className="inline-flex items-center gap-1">
-                          <Bookmark className={`h-4 w-4 ${engagement.saved ? 'fill-gray-900 text-gray-900' : ''}`} />
-                          Save
-                        </button>
-                      </div>
-                    </div>
-                  </article>
+                  <PostCard
+                    key={post.id}
+                    authorName={displayName}
+                    authorAvatarUrl={avatarUrl}
+                    authorSubtitle={title}
+                    createdAtLabel={post.created_at ? new Date(post.created_at).toLocaleDateString() : undefined}
+                    imageUrl={post.image_url || undefined}
+                    onOpenPost={() => void openPostFocus(post.id)}
+                    caption={post.caption || undefined}
+                    likesCount={engagement.likes}
+                    liked={engagement.liked}
+                    onToggleLike={() => void togglePostLike(post.id)}
+                    commentsCount={engagement.comments}
+                    onOpenComment={() => void openPostFocus(post.id, { focusComment: true })}
+                    onShare={() => void handleShare(post.id)}
+                    saved={engagement.saved}
+                    onToggleSave={() => void togglePostSave(post.id)}
+                  />
                 );
               })}
             </div>
@@ -1547,6 +1667,27 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       {focusedPost && (
         <PostDetailModal
           onClose={closePostFocus}
+          showPostContent={showPostContentOnOpen}
+          onOpenComments={() => void openPostFocus(focusedPost.id, { focusComment: true })}
+          authorName={displayName}
+          authorAvatarUrl={avatarUrl}
+          authorSubtitle={title}
+          createdAtLabel={focusedPost.created_at ? new Date(focusedPost.created_at).toLocaleString() : undefined}
+          caption={focusedPost.caption || undefined}
+          imageUrl={focusedPost.image_url || undefined}
+          onOpenPhoto={() => setViewingPhoto({ url: focusedPost.image_url || avatarUrl, alt: focusedPost.caption || 'Post image' })}
+          likesCount={postEngagement[focusedPost.id]?.likes || 0}
+          liked={!!postEngagement[focusedPost.id]?.liked}
+          onToggleLike={() => void togglePostLike(focusedPost.id)}
+          saved={!!postEngagement[focusedPost.id]?.saved}
+          onToggleSave={() => void togglePostSave(focusedPost.id)}
+          onShare={() => void handleShare(focusedPost.id)}
+          likedUsers={likedUsersByPostId[focusedPost.id] || []}
+          loadingLikedUsers={!!loadingLikesByPostId[focusedPost.id]}
+          showLikedUsers={!!showLikedUsersByPostId[focusedPost.id]}
+          onToggleShowLikedUsers={() => void loadFreelancerPostLikes(focusedPost.id)}
+          canDelete={isOwner}
+          onDelete={() => void deletePost(String(focusedPost.id))}
           commentsCount={postEngagement[focusedPost.id]?.comments || 0}
           comments={focusedCommentThreads.roots}
           loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
@@ -1584,11 +1725,153 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
+          commentFocusToken={commentFocusToken}
         />
       )}
 
       {viewingPhoto && (
         <PhotoViewerModal url={viewingPhoto.url} alt={viewingPhoto.alt} onClose={() => setViewingPhoto(null)} />
+      )}
+
+      {isShareSheetOpen && sharingPost && (
+        <div className="fixed inset-0 z-[1400] animate-in fade-in-0 bg-black/50 backdrop-blur-sm">
+          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl md:top-24 md:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share post</p>
+                <h3 className="mt-1 text-xl font-bold text-gray-950">Send this post</h3>
+                <p className="mt-1 text-sm text-gray-600">Choose specific mutuals, copy a link, or send to selected users in messages.</p>
+              </div>
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="flex items-center gap-3">
+                <div className="relative h-12 w-12 flex-shrink-0">
+                  <div className="h-full w-full overflow-hidden rounded-xl">
+                    <ImageWithFallback src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                  </div>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900">{displayName}</p>
+                  <p className="line-clamp-2 text-xs text-gray-600">{sharingPost.caption}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void copyShareLink()}
+                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
+              >
+                <p className="text-sm font-semibold text-gray-900">Copy link</p>
+                <p className="mt-1 text-xs text-gray-500">Copies the post link so you can paste it anywhere.</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void sendShareToMutuals()}
+                disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
+                className="rounded-2xl bg-gray-900 px-4 py-3 text-left text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <p className="text-sm font-semibold">Send in messages</p>
+                <p className="mt-1 text-xs text-white/75">
+                  {isLoadingMutualUsers
+                    ? 'Loading mutuals...'
+                    : selectedShareRecipientIds.length > 0
+                      ? `Send to ${selectedShareRecipientIds.length} selected user${selectedShareRecipientIds.length === 1 ? '' : 's'}.`
+                      : 'Pick recipients first.'}
+                </p>
+              </button>
+            </div>
+
+            {shareStatusMessage && (
+              <p className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-700">{shareStatusMessage}</p>
+            )}
+            {copyLinkError && (
+              <div className="mt-3 space-y-2">
+                <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{copyLinkError}</p>
+                <input
+                  readOnly
+                  value={`${window.location.origin}/profile/${targetFreelancerUserId || id}`}
+                  onFocus={(event) => event.target.select()}
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700"
+                />
+              </div>
+            )}
+
+            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+              {isLoadingMutualUsers ? (
+                <p className="px-4 py-3 text-sm text-gray-500">Finding mutual connections...</p>
+              ) : mutualUsers.length === 0 ? (
+                <p className="px-4 py-3 text-sm text-gray-500">You do not have any mutual connections yet.</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedShareRecipientIds(mutualUsers.map((mutual) => mutual.id))}
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedShareRecipientIds([])}
+                      className="text-xs font-semibold text-gray-700 hover:text-gray-900"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  {mutualUsers.map((mutual) => {
+                    const isSelected = selectedShareRecipientIds.includes(mutual.id);
+                    return (
+                      <button
+                        key={mutual.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedShareRecipientIds((current) =>
+                            current.includes(mutual.id)
+                              ? current.filter((mid) => mid !== mutual.id)
+                              : [...current, mutual.id]
+                          )
+                        }
+                        className={`flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                      >
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-transparent'}`}>
+                          <Check className="h-3 w-3" />
+                        </div>
+                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-gray-900">{mutual.full_name || mutual.email}</p>
+                          <p className="truncate text-xs text-gray-500">{mutual.email}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => void sendShareToMutuals()}
+                disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
+                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSendingShare ? 'Sending...' : 'Send to selected users'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showBookingForm && isBookableFreelancer && (

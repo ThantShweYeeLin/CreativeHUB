@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
 import {
-  Bookmark,
   Check,
   ChevronDown,
   FileText,
   Globe2,
   Hash,
-  Heart,
   ImagePlus,
   Loader2,
   LocateFixed,
@@ -17,7 +15,6 @@ import {
   Plus,
   Search,
   Send,
-  Share2,
   Tag,
   Users,
   X,
@@ -30,6 +27,7 @@ import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
+import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { buildCommentThreads, buildMentionPrefill, extractMentionToken, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
@@ -935,6 +933,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
+  const [commentFocusToken, setCommentFocusToken] = useState(0);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; isVideo?: boolean } | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1420,11 +1419,14 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     dispatchClientPostUpdated(postId);
   };
 
-  const openPostFocus = (postId: string) => {
+  const openPostFocus = (postId: string, options?: { focusComment?: boolean }) => {
     if (savedScrollYRef.current === null) {
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(postId);
+    if (options?.focusComment) {
+      setCommentFocusToken((token) => token + 1);
+    }
     if (!commentsByPostId[postId]) {
       void loadCommentsForPost(postId);
     }
@@ -1855,180 +1857,147 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         )}
 
         <div className="space-y-4 md:space-y-6">
-          {sortedPosts.map((post) => (
-            <div key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg md:rounded-3xl">
-              <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
-                <button
-                  onClick={() => {
-                    onViewProfile?.(post.authorId);
-                  }}
-                  className="flex min-w-0 items-center gap-3 text-left transition-opacity hover:opacity-80"
-                >
-                  <Avatar src={post.avatar} alt={post.authorName} gender={post.authorGender} sizeClassName="h-12 w-12 flex-shrink-0 shadow-md ring-2 ring-white rounded-full" />
-                  <div className="min-w-0">
-                    <h3 className="truncate font-bold text-gray-900">{post.authorName}</h3>
-                    <p className="truncate text-sm text-gray-600">@{post.username} • {post.specialty}</p>
-                  </div>
-                </button>
-                <span className="ml-3 flex-shrink-0 text-sm text-gray-500">{post.timeAgo}</span>
-              </div>
+          {sortedPosts.map((post) => {
+            const isVideoPost = !!(post.image?.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/'));
+            const hasBadges = post.location || post.category || post.visibility || (post.labels?.length ?? 0) > 0;
+            const hasExtras =
+              (post.hashtags?.length ?? 0) > 0 ||
+              (post.mentions?.length ?? 0) > 0 ||
+              !!post.poll ||
+              (post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0 ||
+              !!showLikesByPostId[post.id];
 
-              {(post.location || post.category || post.visibility || (post.labels?.length ?? 0) > 0) && (
-                <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-6">
-                  {post.location && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.location}</span>}
-                  {post.category && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.category}</span>}
-                  {post.visibility && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
-                  {post.labels?.map((label) => <span key={label} className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
-                </div>
-              )}
-
-              {post.image && (
-                <div
-                  onClick={() =>
-                    setViewingPhoto({
-                      url: post.image!,
-                      isVideo: post.image!.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/'),
-                    })
-                  }
-                  className="relative block aspect-square w-full cursor-pointer bg-gray-100 text-left"
-                >
-                  {post.image.startsWith('blob:') && post.attachments?.find((attachment) => attachment.previewUrl === post.image)?.type.startsWith('video/') ? (
-                    <video
-                      src={post.image}
-                      className="h-full w-full object-cover"
-                      controls
-                      onClick={(event) => event.stopPropagation()}
-                    />
-                  ) : (
-                    <ImageWithFallback src={post.image} alt={post.caption} className="h-full w-full object-cover" />
-                  )}
-                </div>
-              )}
-
-              <div className="px-4 py-3 md:px-6 md:py-4">
-                <div className="mb-3 flex items-center justify-between md:mb-4">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="group flex cursor-pointer items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
-                      onClick={() => void openLikesForPost(post.id)}
-                    >
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleLike(post.id);
-                        }}
-                        disabled={!!likingByPostId[post.id]}
-                      >
-                        <Heart className={`h-7 w-7 transition-all ${post.isLiked ? 'fill-red-500 text-red-500 scale-110' : 'text-gray-700 group-hover:scale-110'}`} />
-                      </button>
-                      <span className="font-semibold text-gray-900">{post.likes}</span>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Like</span>
-                    </div>
-                    <button
-                      onClick={() => void openPostFocus(post.id)}
-                      className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
-                    >
-                      <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
-                      <span className="font-semibold text-gray-900">{post.commentsCount}</span>
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Comment</span>
-                    </button>
-                    <button onClick={() => void handleShare(post.id)} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
-                      <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
-                    </button>
-                  </div>
-                  <button onClick={() => void handleSave(post.id)} className="transition-all">
-                    <Bookmark className={`h-6 w-6 transition-all ${post.isSaved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
-                  </button>
-                </div>
-
-                <div className="mb-4 space-y-3">
-                  <div className="whitespace-pre-line text-gray-900">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewProfile?.(post.authorId);
-                      }}
-                      className="font-bold transition-colors hover:text-gray-900"
-                    >
-                      @{post.username}
-                    </button>{' '}
-                    <span>{post.caption}</span>
-                  </div>
-                  {((post.hashtags?.length ?? 0) > 0 || (post.mentions?.length ?? 0) > 0) && (
-                    <div className="flex flex-wrap gap-2 text-sm font-semibold">
-                      {post.hashtags?.map((tag) => <span key={tag} className="text-gray-900">{tag}</span>)}
-                      {post.mentions?.map((mention) => <span key={mention} className="text-gray-500">{mention}</span>)}
-                    </div>
-                  )}
-                  {post.poll && (
-                    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                      <p className="mb-3 font-bold text-gray-900">{post.poll.question}</p>
-                      <div className="space-y-2">
-                        {post.poll.options.map((option) => (
-                          <div key={option} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
-                            {option}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {(post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0 && (
-                    <div className="space-y-2">
-                      {post.attachments?.filter((attachment) => !attachment.previewUrl).map((attachment) => (
-                        <div key={attachment.id} className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
-                          <FileText className="h-4 w-4" />
-                          {attachment.name}
+            return (
+              <PostCard
+                key={post.id}
+                authorName={post.authorName}
+                authorAvatarUrl={post.avatar}
+                authorSubtitle={`@${post.username} • ${post.specialty}`}
+                onViewAuthor={() => onViewProfile?.(post.authorId)}
+                createdAtLabel={post.timeAgo}
+                badges={
+                  hasBadges ? (
+                    <>
+                      {post.location && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.location}</span>}
+                      {post.category && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.category}</span>}
+                      {post.visibility && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
+                      {post.labels?.map((label) => <span key={label} className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
+                    </>
+                  ) : undefined
+                }
+                imageUrl={post.image}
+                isVideo={isVideoPost}
+                onOpenPost={() => post.image && setViewingPhoto({ url: post.image, isVideo: isVideoPost })}
+                caption={post.caption}
+                afterCaption={
+                  hasExtras ? (
+                    <>
+                      {((post.hashtags?.length ?? 0) > 0 || (post.mentions?.length ?? 0) > 0) && (
+                        <div className="flex flex-wrap gap-2 text-sm font-semibold">
+                          {post.hashtags?.map((tag) => <span key={tag} className="text-gray-900">{tag}</span>)}
+                          {post.mentions?.map((mention) => <span key={mention} className="text-gray-500">{mention}</span>)}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {showLikesByPostId[post.id] ? (
-                  <div className="mb-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
-                    <p className="mb-2 font-semibold text-gray-900">Liked by</p>
-                    {loadingLikesByPostId[post.id] ? (
-                      <p className="text-sm text-gray-500">Loading likes...</p>
-                    ) : (likedUsersByPostId[post.id] || []).length === 0 ? (
-                      <p className="text-sm text-gray-500">No visible liker accounts for this post yet.</p>
-                    ) : (
-                      <div className="flex flex-wrap gap-3">
-                        {(likedUsersByPostId[post.id] || []).map((likedUser) => (
-                          <button
-                            key={likedUser.id}
-                            type="button"
-                            onClick={() => onViewProfile?.(String(likedUser.id))}
-                            className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
-                          >
-                            <Avatar
-                              src={likedUser.avatar_url || fallbackProfileImage}
-                              alt={likedUser.full_name || likedUser.email || 'User'}
-                              gender={likedUser.gender}
-                              sizeClassName="h-8 w-8 rounded-full"
-                            />
-                            <div>
-                              <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
-                              <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
+                      )}
+                      {post.poll && (
+                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                          <p className="mb-3 font-bold text-gray-900">{post.poll.question}</p>
+                          <div className="space-y-2">
+                            {post.poll.options.map((option) => (
+                              <div key={option} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+                                {option}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {(post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0 && (
+                        <div className="space-y-2">
+                          {post.attachments?.filter((attachment) => !attachment.previewUrl).map((attachment) => (
+                            <div key={attachment.id} className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
+                              <FileText className="h-4 w-4" />
+                              {attachment.name}
                             </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : null}
-
-              </div>
-            </div>
-          ))}
+                          ))}
+                        </div>
+                      )}
+                      {showLikesByPostId[post.id] ? (
+                        <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                          <p className="mb-2 font-semibold text-gray-900">Liked by</p>
+                          {loadingLikesByPostId[post.id] ? (
+                            <p className="text-sm text-gray-500">Loading likes...</p>
+                          ) : (likedUsersByPostId[post.id] || []).length === 0 ? (
+                            <p className="text-sm text-gray-500">No visible liker accounts for this post yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-3">
+                              {(likedUsersByPostId[post.id] || []).map((likedUser) => (
+                                <button
+                                  key={likedUser.id}
+                                  type="button"
+                                  onClick={() => onViewProfile?.(String(likedUser.id))}
+                                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
+                                >
+                                  <Avatar
+                                    src={likedUser.avatar_url || fallbackProfileImage}
+                                    alt={likedUser.full_name || likedUser.email || 'User'}
+                                    gender={likedUser.gender}
+                                    sizeClassName="h-8 w-8 rounded-full"
+                                  />
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
+                                    <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : undefined
+                }
+                likesCount={post.likes}
+                liked={post.isLiked}
+                onToggleLike={() => void handleLike(post.id)}
+                onShowLikes={() => void openLikesForPost(post.id)}
+                commentsCount={post.commentsCount}
+                onOpenComment={() => openPostFocus(post.id, { focusComment: true })}
+                onShare={() => void handleShare(post.id)}
+                saved={post.isSaved}
+                onToggleSave={() => void handleSave(post.id)}
+              />
+            );
+          })}
         </div>
       </div>
 
       {focusedPost && (
         <PostDetailModal
           onClose={closePostFocus}
+          showPostContent={false}
+          authorName={focusedPost.authorName}
+          authorAvatarUrl={focusedPost.avatar}
+          authorSubtitle={`@${focusedPost.username} • ${focusedPost.specialty}`}
+          onViewAuthor={() => onViewProfile?.(focusedPost.authorId)}
+          createdAtLabel={focusedPost.timeAgo}
+          caption={focusedPost.caption}
+          imageUrl={focusedPost.image || undefined}
+          isVideo={!!(focusedPost.image?.startsWith('blob:') && focusedPost.attachments?.find((attachment) => attachment.previewUrl === focusedPost.image)?.type.startsWith('video/'))}
+          afterCaption={
+            focusedPost.location ? (
+              <div className="rounded-2xl bg-gray-50 px-3 py-2 text-sm text-gray-700">{focusedPost.location}</div>
+            ) : undefined
+          }
+          likesCount={focusedPost.likes}
+          liked={focusedPost.isLiked}
+          onToggleLike={() => void handleLike(focusedPost.id)}
+          saved={focusedPost.isSaved}
+          onToggleSave={() => void handleSave(focusedPost.id)}
+          onShare={() => void handleShare(focusedPost.id)}
+          likedUsers={likedUsersByPostId[focusedPost.id] || []}
+          loadingLikedUsers={!!loadingLikesByPostId[focusedPost.id]}
+          showLikedUsers={!!showLikesByPostId[focusedPost.id]}
+          onToggleShowLikedUsers={() => void openLikesForPost(focusedPost.id)}
+          onViewLikedUser={(userId) => onViewProfile?.(userId)}
           commentsCount={focusedPost.commentsCount}
           comments={focusedCommentThreads.roots}
           loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
@@ -2067,6 +2036,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
+          commentFocusToken={commentFocusToken}
         />
       )}
 

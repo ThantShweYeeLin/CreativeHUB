@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, Bookmark, Heart, MessageCircle, Share2 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { ChevronLeft, Bookmark } from 'lucide-react';
+import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,6 +20,7 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saved: boolean; liked: boolean }>>({});
 
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
@@ -31,6 +32,8 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
   const [replyDraftByCommentKey, setReplyDraftByCommentKey] = useState<Record<string, string>>({});
   const [isSubmittingReplyByCommentKey, setIsSubmittingReplyByCommentKey] = useState<Record<string, boolean>>({});
   const [expandedReplyThreadsByKey, setExpandedReplyThreadsByKey] = useState<Record<string, boolean>>({});
+  const [commentFocusToken, setCommentFocusToken] = useState(0);
+  const [showPostContentOnOpen, setShowPostContentOnOpen] = useState(true);
   const [viewingPhoto, setViewingPhoto] = useState<{ url: string; alt?: string } | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
 
@@ -90,12 +93,18 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
     [commentsByPostId, focusedPostId]
   );
 
-  const openPostFocus = async (postId: string) => {
+  const openPostFocus = async (postId: string, options?: { focusComment?: boolean }) => {
     const stateKey = String(postId);
     if (savedScrollYRef.current === null) {
       savedScrollYRef.current = window.scrollY;
     }
     setFocusedPostId(stateKey);
+    // Clicking the post opens the full detail; clicking Comment opens the
+    // same lightweight comments-only overlay the For You feed uses.
+    setShowPostContentOnOpen(!options?.focusComment);
+    if (options?.focusComment) {
+      setCommentFocusToken((token) => token + 1);
+    }
 
     if (commentsByPostId[stateKey]) {
       return;
@@ -193,10 +202,39 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
       await DataService.recordClientPostShare(user.id, stateKey);
     }
 
+    const shareUrl = `${window.location.origin}/for-you`;
+
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/for-you`);
+      if (!navigator.clipboard || !window.isSecureContext) {
+        throw new Error('Clipboard API unavailable');
+      }
+      await navigator.clipboard.writeText(shareUrl);
+      setSuccessMessage('Post link copied to clipboard.');
+      return;
     } catch {
-      // ignore clipboard failures
+      // Fall through to the legacy fallback below (older browsers, or a
+      // non-HTTPS/non-localhost origin where the async Clipboard API doesn't exist).
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = shareUrl;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let fallbackWorked = false;
+    try {
+      fallbackWorked = document.execCommand('copy');
+    } catch {
+      fallbackWorked = false;
+    }
+    document.body.removeChild(textarea);
+
+    if (fallbackWorked) {
+      setSuccessMessage('Post link copied to clipboard.');
+    } else {
+      setError('Could not copy the link automatically. Copy it manually: ' + shareUrl);
     }
   };
 
@@ -314,6 +352,12 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
           </div>
         )}
 
+        {successMessage && (
+          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            {successMessage}
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex justify-center py-16">
             <div className="h-10 w-10 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
@@ -329,50 +373,22 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
             {posts.map((post) => {
               const engagement = postEngagement[post.id] || { likes: 0, comments: 0, shares: 0, liked: false, saved: true };
               return (
-                <article key={post.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <ImageWithFallback
-                      src={post.client?.avatar_url || fallbackProfileImage}
-                      alt={post.client?.full_name || 'User'}
-                      className="h-9 w-9 rounded-full object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">{post.client?.full_name || 'User'}</p>
-                    </div>
-                  </div>
-
-                  {post.image_url && (
-                    <button
-                      type="button"
-                      onClick={() => setViewingPhoto({ url: post.image_url, alt: post.caption || 'Post image' })}
-                      className="aspect-[4/3] w-full bg-gray-100 text-left"
-                    >
-                      <ImageWithFallback src={post.image_url} alt={post.caption || 'Post image'} className="h-full w-full object-cover" />
-                    </button>
-                  )}
-
-                  <div className="p-4">
-                    <p className="text-sm text-gray-700">{post.caption || 'No caption'}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-700">
-                      <button type="button" onClick={() => void togglePostLike(post.id)} className="inline-flex items-center gap-1">
-                        <Heart className={`h-4 w-4 ${engagement.liked ? 'fill-red-500 text-red-500' : ''}`} />
-                        {engagement.likes}
-                      </button>
-                      <button type="button" onClick={() => void openPostFocus(post.id)} className="inline-flex items-center gap-1">
-                        <MessageCircle className="h-4 w-4" />
-                        {engagement.comments}
-                      </button>
-                      <button type="button" onClick={() => void sharePost(post.id)} className="inline-flex items-center gap-1">
-                        <Share2 className="h-4 w-4" />
-                        Share
-                      </button>
-                      <button type="button" onClick={() => void togglePostSave(post.id)} className="ml-auto inline-flex items-center gap-1">
-                        <Bookmark className="h-4 w-4 fill-gray-900 text-gray-900" />
-                        Unsave
-                      </button>
-                    </div>
-                  </div>
-                </article>
+                <PostCard
+                  key={post.id}
+                  authorName={post.client?.full_name || 'User'}
+                  authorAvatarUrl={post.client?.avatar_url || fallbackProfileImage}
+                  imageUrl={post.image_url || undefined}
+                  onOpenPost={() => void openPostFocus(post.id)}
+                  caption={post.caption || undefined}
+                  likesCount={engagement.likes}
+                  liked={engagement.liked}
+                  onToggleLike={() => void togglePostLike(post.id)}
+                  commentsCount={engagement.comments}
+                  onOpenComment={() => void openPostFocus(post.id, { focusComment: true })}
+                  onShare={() => void sharePost(post.id)}
+                  saved
+                  onToggleSave={() => void togglePostSave(post.id)}
+                />
               );
             })}
           </div>
@@ -382,6 +398,20 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
       {focusedPost && (
         <PostDetailModal
           onClose={closePostFocus}
+          showPostContent={showPostContentOnOpen}
+          onOpenComments={() => void openPostFocus(focusedPost.id, { focusComment: true })}
+          authorName={focusedPost.client?.full_name || 'User'}
+          authorAvatarUrl={focusedPost.client?.avatar_url || fallbackProfileImage}
+          createdAtLabel={focusedPost.created_at ? new Date(focusedPost.created_at).toLocaleString() : undefined}
+          caption={focusedPost.caption || undefined}
+          imageUrl={focusedPost.image_url || undefined}
+          onOpenPhoto={() => setViewingPhoto({ url: focusedPost.image_url, alt: focusedPost.caption || 'Post image' })}
+          likesCount={postEngagement[focusedPost.id]?.likes || 0}
+          liked={!!postEngagement[focusedPost.id]?.liked}
+          onToggleLike={() => void togglePostLike(focusedPost.id)}
+          saved
+          onToggleSave={() => void togglePostSave(focusedPost.id)}
+          onShare={() => void sharePost(focusedPost.id)}
           commentsCount={postEngagement[focusedPost.id]?.comments || 0}
           comments={focusedCommentThreads.roots}
           loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
@@ -419,6 +449,7 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
           }
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
+          commentFocusToken={commentFocusToken}
         />
       )}
 
