@@ -1,10 +1,10 @@
 import { ChangeEvent, DragEvent, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { CloudUpload, ExternalLink, Info, Loader2, Sparkles, Star, X } from 'lucide-react';
-import { Avatar } from '../../components/common/Avatar';
-import { SocialLinksRow } from '../../components/common/SocialLinksRow';
+import { CloudUpload, Info, Loader2, Sparkles, Star, X } from 'lucide-react';
+import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import type { Gender } from '../../lib/database.types';
 import { DataService } from '../../lib/dataService';
+import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { SocialLink } from '../../lib/socialPlatforms';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 import { buildClientQueryText, detectImageStyle, embedText } from '../../lib/aiMatching';
@@ -291,72 +291,76 @@ export function AIImageMatcherResults({ results, note, onReset }: AIImageMatcher
   const sorted = useMemo(() => [...results].sort((a, b) => b.matchPercent - a.matchPercent), [results]);
 
   return (
-    <section className="mb-12 rounded-2xl border border-gray-200 bg-white p-4 shadow-lg md:p-6">
-      <div className="mb-2 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <section className="mb-12 md:mb-16">
+      <div className="mb-4 flex flex-col gap-3 md:mb-6 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-sm font-semibold text-gray-500">AI Match Finder</p>
-          <h2 className="mt-1 text-2xl font-bold text-gray-950 md:text-3xl">✨ Best Semantic Matches</h2>
+          <h2 className="text-xl font-bold text-gray-900 md:text-3xl">✨ Best Semantic Matches</h2>
           <p className="mt-1 text-sm text-gray-600">{sorted.length} freelancer{sorted.length === 1 ? '' : 's'} found.</p>
         </div>
-        <button onClick={onReset} className="rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-bold text-gray-700">Start new match</button>
+        <button onClick={onReset} className="rounded-full border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm hover:bg-gray-50 self-start">Start new match</button>
       </div>
+
       {note && (
-        <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
           <span>{note}</span>
         </div>
       )}
-      <p className="mb-5 flex items-start gap-1.5 text-xs text-gray-500">
-        <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-        Semantic Match shows how closely each freelancer's profile matches your request — it's a similarity measure, not a guarantee of quality or suitability.
-      </p>
 
       {sorted.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-8 text-center text-sm text-gray-600">
-          No freelancers matched that category yet. Try a broader description or check back later.
+        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <h3 className="mb-2 text-xl font-bold text-gray-900">No freelancers matched yet</h3>
+          <p className="text-gray-600">Try a broader description or check back later.</p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {sorted.map((result) => (
-            <article key={result.id} className="overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                <Avatar src={result.profileImage || ''} alt={result.fullName} gender={result.profileGender} sizeClassName="h-14 w-14" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-bold text-gray-950">{result.fullName}</p>
-                  <p className="truncate text-sm text-gray-600">{result.category}</p>
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:gap-6 lg:grid-cols-4">
+            {sorted.map((result) => (
+              <div key={result.id} className="group cursor-pointer" onClick={() => navigate(`/profile/${result.id}`)}>
+                <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
+                  <div className="relative h-[180px] overflow-hidden sm:h-[220px]">
+                    <ImageWithFallback
+                      src={result.profileImage || DEFAULT_AVATAR_URL}
+                      alt={result.fullName}
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                    <div className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-xs font-bold text-gray-900 shadow-sm backdrop-blur-sm">
+                      <Sparkles className="h-3 w-3" /> {result.matchPercent}%
+                    </div>
+                    <div className="absolute bottom-3 left-3 right-3 translate-y-4 transform opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                      <button className="w-full rounded-lg bg-white py-2 text-sm font-semibold text-gray-900 hover:bg-gray-100">View Profile</button>
+                    </div>
+                  </div>
+                  <div className="p-3 sm:p-4">
+                    <h3 className="truncate font-bold text-gray-900">{result.fullName}</h3>
+                    <p className="truncate text-sm text-gray-600">{result.category}</p>
+                    {result.styles.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {result.styles.slice(0, 3).map((style) => (
+                          <span key={style} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+                            {style}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {result.rating > 0 && (
+                      <div className="mt-2 flex items-center gap-1">
+                        <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                        <span className="text-sm font-semibold text-gray-900">{result.rating.toFixed(1)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {result.rating > 0 && (
-                  <span className="flex flex-shrink-0 items-center gap-1 text-xs font-bold">
-                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />{result.rating.toFixed(1)}
-                  </span>
-                )}
               </div>
-
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gray-950 px-3 py-1 text-xs font-bold text-white">
-                <Sparkles className="h-3 w-3" /> {result.matchPercent}% Semantic Match
-              </div>
-
-              {result.styles.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {result.styles.map((style) => (
-                    <span key={style} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
-                      {style}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <SocialLinksRow links={result.socialLinks} className="mt-4 flex flex-wrap gap-2" />
-
-              <button
-                onClick={() => navigate(`/profile/${result.id}`)}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-950 px-4 py-2.5 text-sm font-bold text-white"
-              >
-                View Profile <ExternalLink className="h-4 w-4" />
-              </button>
-            </article>
-          ))}
-        </div>
+            ))}
+          </div>
+          <p className="mt-4 flex items-start gap-1.5 text-xs text-gray-500">
+            <Info className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+            The % badge shows semantic similarity to your request — not a guarantee of quality or suitability.
+          </p>
+        </>
       )}
     </section>
   );

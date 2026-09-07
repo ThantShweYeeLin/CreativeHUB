@@ -111,6 +111,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       actorId: actor?.id || row.actor_id || null,
       requesterId: row.metadata?.requester_id || row.actor_id || null,
       relatedId: row.related_id || null,
+      counterBy: row.metadata?.counter_by || null,
       createdAt: String(row.created_at || new Date().toISOString()),
       read: Boolean(row.read),
     };
@@ -261,6 +262,32 @@ export function MainLayout({ children }: MainLayoutProps) {
                   const otherParticipantId = participantIds.find((id) => id && id !== currentUserId);
                   if (otherParticipantId) {
                     resolvedActorId = otherParticipantId;
+                  }
+                }
+              }
+
+              if (!resolvedActorId && row.related_id && [
+                'payment_update',
+                'payment_released',
+                'booking_deposit_paid',
+                'booking_cancelled',
+                'booking_completed',
+              ].includes(String(row.type || ''))) {
+                const bookingResponse = await supabase
+                  .from('bookings')
+                  .select('id, client_id, freelancer_id')
+                  .eq('id', row.related_id)
+                  .maybeSingle();
+
+                if (!bookingResponse.error && bookingResponse.data) {
+                  const bookingRow = bookingResponse.data as any;
+                  const currentUserId = user?.id ? String(user.id) : '';
+                  const otherPartyId = [bookingRow.client_id, bookingRow.freelancer_id]
+                    .filter(Boolean)
+                    .map(String)
+                    .find((id) => id && id !== currentUserId);
+                  if (otherPartyId) {
+                    resolvedActorId = otherPartyId;
                   }
                 }
               }
@@ -553,27 +580,69 @@ export function MainLayout({ children }: MainLayoutProps) {
                     isLoading={isNotificationsLoading}
                     onMarkAsRead={handleMarkNotificationAsRead}
                     onMarkAllAsRead={handleMarkAllNotificationsAsRead}
-                    onOpenRequests={(notification) => {
+                    onOpenRequests={async (notification) => {
                       setShowNotifications(false);
                       const requestId = notification?.relatedId || notification?.id;
+                      const openFreelancerRequests = () => {
+                        navigate('/freelancer-dashboard/requests', requestId ? { state: { openRequestId: requestId } } : undefined);
+                      };
+                      const openClientRequests = () => {
+                        navigate('/requests', requestId ? { state: { openRequestId: requestId } } : undefined);
+                      };
+
+                      // A counter offer always needs the *other* party to respond, regardless
+                      // of the viewer's own account role: a client's counter offer is decided
+                      // on the freelancer's Requests tab, a freelancer's counter offer is
+                      // decided on the client's My Requests page.
+                      if (notification?.type === 'request_countered') {
+                        // Prefer resolving against the request's client_id/freelancer_id -
+                        // those are fixed for the life of the request, unlike counter_by
+                        // (or the request's *current* counter_by), which changes with every
+                        // further round and would misroute an older notification once the
+                        // negotiation has moved on since it was sent.
+                        if (notification.relatedId && user?.id) {
+                          const requestResponse = await supabase
+                            .from('requests')
+                            .select('client_id, freelancer_id')
+                            .eq('id', notification.relatedId)
+                            .maybeSingle();
+                          const requestRow = requestResponse.data as any;
+                          if (requestRow) {
+                            if (String(requestRow.freelancer_id) === String(user.id)) {
+                              openFreelancerRequests();
+                              return;
+                            }
+                            if (String(requestRow.client_id) === String(user.id)) {
+                              openClientRequests();
+                              return;
+                            }
+                          }
+                        }
+
+                        // Fall back to who sent this specific counter - a fixed snapshot
+                        // taken when the notification was created - for notifications whose
+                        // related request can't be looked up (e.g. missing related_id on
+                        // rows created before that started being tracked).
+                        if (notification.counterBy === 'client') {
+                          openFreelancerRequests();
+                          return;
+                        }
+                        if (notification.counterBy === 'freelancer') {
+                          openClientRequests();
+                          return;
+                        }
+                      }
+
                       // Only a new incoming request belongs in the freelancer inbox.
                       // A freelancer can also send requests; acceptance/rejection updates for
                       // those requests belong to their own My Requests page.
                       if (notification?.type === 'request' && user?.role === 'freelancer') {
-                        if (requestId) {
-                          navigate('/freelancer-dashboard/requests', { state: { openRequestId: requestId } });
-                        } else {
-                          navigate('/freelancer-dashboard/requests');
-                        }
+                        openFreelancerRequests();
                         return;
                       }
 
                       // Default: open client-side 'My Requests' page
-                      if (requestId) {
-                        navigate('/requests', { state: { openRequestId: requestId } });
-                      } else {
-                        navigate('/requests');
-                      }
+                      openClientRequests();
                     }}
                     onOpenMessages={() => {
                       setShowNotifications(false);

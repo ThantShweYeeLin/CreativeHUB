@@ -14,6 +14,7 @@ export interface NotificationPanelItem {
   actorId: string | null;
   requesterId: string | null;
   relatedId?: string | null;
+  counterBy?: 'client' | 'freelancer' | null;
   createdAt: string;
   read: boolean;
 }
