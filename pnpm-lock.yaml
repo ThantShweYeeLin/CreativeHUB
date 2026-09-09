@@ -225,6 +225,9 @@ importers:
       tailwindcss:
         specifier: 4.1.12
         version: 4.1.12
+      tsx:
+        specifier: 4.23.12
+        version: 4.23.12
       typescript:
         specifier: 5.5.4
         version: 5.5.4

@@ -12,6 +12,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
+import { haversineDistanceKm } from '../../lib/geo';
 
 interface ProfileCardProps {
   id: string;
@@ -123,17 +124,6 @@ function normalizeText(value: string | null | undefined) {
 /** "Photographer" -> "Photographers", "Makeup Artist" -> "Makeup Artists", etc. — a plain "s" suffix works for all five canonical labels. */
 function pluralizeCategory(label: string) {
   return `${label}s`;
-}
-
-/** Great-circle distance between two lat/lng points, in kilometers. */
-function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export function ExplorePage() {
