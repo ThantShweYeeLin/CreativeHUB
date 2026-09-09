@@ -2241,11 +2241,27 @@ export class DataService {
       notification_post_id: notification.post_id || null,
       notification_comment_id: notification.comment_id || null,
       notification_metadata: metadata,
+      notification_related_id: notification.related_id || null,
     };
 
-    const rpcResult = await supabase.rpc('create_social_notification', rpcPayload);
+    let rpcResult = await supabase.rpc('create_social_notification', rpcPayload);
     if (!rpcResult.error) {
       return { data: null, error: null };
+    }
+
+    // Older deployments of create_social_notification() don't have the
+    // notification_related_id parameter yet (see fix_notifications_related_id.sql) -
+    // PostgREST reports that as "could not find the function" rather than a
+    // normal SQL error. Retry without it so actor_id/metadata keep working on
+    // that RPC even before the migration lands, instead of dropping straight
+    // to the legacy fallback below (which has neither).
+    const missingRelatedIdParam = String((rpcResult.error as any)?.message || '').toLowerCase().includes('could not find the function');
+    if (missingRelatedIdParam) {
+      const { notification_related_id, ...legacyPayload } = rpcPayload;
+      rpcResult = await supabase.rpc('create_social_notification', legacyPayload);
+      if (!rpcResult.error) {
+        return { data: null, error: null };
+      }
     }
 
     const legacyRpc = await supabase.rpc('create_app_notification', {
@@ -3730,7 +3746,7 @@ export class DataService {
               ? `${actorName} sent a counter offer of ${counterPrice} for ${projectName}.`
               : `${actorName} sent a counter offer for ${projectName}.`,
             relatedId: requestId,
-            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
+            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName, counter_by: nextCounterBy },
           });
         }
 

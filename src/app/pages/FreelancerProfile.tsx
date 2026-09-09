@@ -1414,14 +1414,34 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         </section>
 
         {isBookableFreelancer && (
-        <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl bg-white p-6 md:p-8 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900">Social Links</h2>
-            {socialLinks.length === 0 ? (
-              <p className="mt-4 text-gray-600">No social links added yet.</p>
-            ) : (
-              <SocialLinksRow links={socialLinks} className="mt-4 flex flex-wrap gap-3" />
-            )}
+        <section className="grid items-start gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-6">
+            <div className="rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+              <h2 className="text-2xl font-bold text-gray-900">Social Links</h2>
+              {socialLinks.length === 0 ? (
+                <p className="mt-4 text-gray-600">No social links added yet.</p>
+              ) : (
+                <SocialLinksRow links={socialLinks} className="mt-4 flex flex-wrap gap-3" />
+              )}
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-xl">
+              <h2 className="text-xl font-bold text-gray-900">Working Details</h2>
+              <div className="mt-4 space-y-3 text-sm text-gray-700">
+                <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
+                <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
+                <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
+                {studioName && (
+                  <p>
+                    <span className="font-semibold text-gray-900">Studio:</span> {studioName}
+                    {studioLocations.length > 0 ? ` — ${studioLocations.map((loc) => loc.formattedAddress).join(', ')}` : ''}
+                  </p>
+                )}
+                {bookingLocations.length > 0 && (
+                  <p><span className="font-semibold text-gray-900">Shoot locations:</span> {bookingLocations.join(', ')}</p>
+                )}
+              </div>
+            </div>
           </div>
 
           <aside className="space-y-6">
@@ -1444,24 +1464,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     {style}
                   </span>
                 )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
-              </div>
-            </div>
-
-            <div className="rounded-3xl bg-white p-6 shadow-xl">
-              <h2 className="text-xl font-bold text-gray-900">Working Details</h2>
-              <div className="mt-4 space-y-3 text-sm text-gray-700">
-                <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
-                <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
-                <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
-                {studioName && (
-                  <p>
-                    <span className="font-semibold text-gray-900">Studio:</span> {studioName}
-                    {studioLocations.length > 0 ? ` — ${studioLocations.map((loc) => loc.formattedAddress).join(', ')}` : ''}
-                  </p>
-                )}
-                {bookingLocations.length > 0 && (
-                  <p><span className="font-semibold text-gray-900">Shoot locations:</span> {bookingLocations.join(', ')}</p>
-                )}
               </div>
             </div>
           </aside>
