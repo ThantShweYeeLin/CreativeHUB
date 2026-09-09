@@ -14,6 +14,7 @@ import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
+import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -45,6 +46,55 @@ export interface MutualUserResult {
   email: string;
   avatar_url: string | null;
   gender: Gender | null;
+}
+
+export interface FreelancerSkillRef {
+  id: string;
+  name: string;
+}
+
+export interface FreelancerSkillWithLevel extends FreelancerSkillRef {
+  experienceLevel: string | null;
+}
+
+export interface FreelancerSkillsSummary {
+  major: FreelancerSkillWithLevel | null;
+  minor: FreelancerSkillWithLevel[];
+}
+
+export interface AuthShowcaseAvatar {
+  name: string;
+  avatarUrl: string;
+}
+
+export interface AuthShowcaseTestimonial {
+  id: string;
+  comment: string;
+  rating: number;
+  reviewerName: string;
+  reviewerAvatar: string | null;
+  revieweeName: string | null;
+}
+
+export interface AuthShowcaseSpotlight {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  title: string | null;
+  skills: string[];
+  rating: number;
+  totalReviews: number;
+  location: string | null;
+}
+
+export interface AuthShowcaseData {
+  freelancerCount: number;
+  memberCount: number;
+  totalReviews: number;
+  avgRating: number;
+  avatars: AuthShowcaseAvatar[];
+  testimonials: AuthShowcaseTestimonial[];
+  spotlights: AuthShowcaseSpotlight[];
 }
 
 export class DataService {
@@ -513,6 +563,106 @@ export class DataService {
     return { data: firstAttempt.data, error: firstAttempt.error };
   }
 
+  // Public, unauthenticated snapshot of real platform activity used to power
+  // the rotating showcase on the login/sign-up screens — every table read
+  // here has a "viewable by everyone" RLS policy, so this works pre-login.
+  static async getAuthShowcaseData(): Promise<{ data: AuthShowcaseData | null; error: unknown }> {
+    if (!hasSupabaseConfig) {
+      return { data: null, error: new Error('Supabase is not configured.') };
+    }
+
+    const [
+      freelancerCountResp,
+      memberCountResp,
+      reviewStatsResp,
+      avatarRowsResp,
+      testimonialRowsResp,
+      spotlightRowsResp,
+    ] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact', head: true })
+        .eq('role', 'freelancer').eq('account_status', 'active'),
+      supabase.from('users').select('id', { count: 'exact', head: true })
+        .eq('account_status', 'active'),
+      // Read straight from the reviews table rather than the per-user
+      // users.rating/total_reviews aggregate — that aggregate was seeded
+      // with placeholder counts for demo profiles that have no matching
+      // rows in `reviews`, so it wildly overstates real review volume.
+      (supabase as any).from('reviews').select('rating', { count: 'exact' }).limit(1000),
+      supabase.from('users').select('full_name, avatar_url')
+        .eq('role', 'freelancer').eq('account_status', 'active')
+        .not('avatar_url', 'is', null)
+        .order('total_reviews', { ascending: false })
+        .limit(6),
+      (supabase as any).from('reviews')
+        .select('id, rating, comment, created_at, reviewer:reviewer_id(full_name, avatar_url), reviewee:reviewee_id(full_name)')
+        .not('comment', 'is', null)
+        .gte('rating', 4)
+        .order('created_at', { ascending: false })
+        .limit(15),
+      // Freelancer spotlight — the old file-upload "portfolio" feature was
+      // removed from the product (onboarding now only collects social
+      // links), so the rotating showcase highlights real, currently-active
+      // freelancer profiles instead of stale/orphaned portfolio rows.
+      (supabase as any).from('freelancer_profiles')
+        .select('user_id, title, skills, users:user_id!inner(full_name, avatar_url, rating, total_reviews, location, account_status)')
+        .neq('visibility', 'limited')
+        .eq('is_available', true)
+        .eq('users.account_status', 'active')
+        .not('users.avatar_url', 'is', null)
+        .order('total_reviews', { foreignTable: 'users', ascending: false })
+        .limit(8),
+    ]);
+
+    const reviewRows = (reviewStatsResp.data || []) as Array<{ rating: number | null }>;
+    const totalReviews = reviewStatsResp.count ?? reviewRows.length;
+    const avgRating = reviewRows.length > 0
+      ? reviewRows.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewRows.length
+      : 0;
+
+    const avatars: AuthShowcaseAvatar[] = ((avatarRowsResp.data || []) as Array<{ full_name: string | null; avatar_url: string | null }>)
+      .filter((r) => !!r.avatar_url)
+      .map((r) => ({ name: r.full_name || 'Creative', avatarUrl: r.avatar_url as string }));
+
+    const testimonials: AuthShowcaseTestimonial[] = ((testimonialRowsResp.data || []) as Array<any>)
+      .filter((r) => typeof r.comment === 'string' && r.comment.trim().length >= 12 && r.reviewer)
+      .slice(0, 6)
+      .map((r) => ({
+        id: r.id,
+        comment: (r.comment as string).trim(),
+        rating: Number(r.rating) || 5,
+        reviewerName: r.reviewer?.full_name || 'CreativeHUB member',
+        reviewerAvatar: r.reviewer?.avatar_url || null,
+        revieweeName: r.reviewee?.full_name || null,
+      }));
+
+    const spotlights: AuthShowcaseSpotlight[] = ((spotlightRowsResp.data || []) as Array<any>)
+      .filter((r) => r.users?.avatar_url)
+      .slice(0, 8)
+      .map((r) => ({
+        id: r.user_id,
+        name: r.users?.full_name || 'Freelancer',
+        avatarUrl: r.users?.avatar_url || null,
+        title: r.title || null,
+        skills: Array.isArray(r.skills) ? r.skills.slice(0, 3) : [],
+        rating: Number(r.users?.rating) || 0,
+        totalReviews: Number(r.users?.total_reviews) || 0,
+        location: r.users?.location || null,
+      }));
+
+    return {
+      data: {
+        freelancerCount: freelancerCountResp.count || 0,
+        memberCount: memberCountResp.count || 0,
+        totalReviews,
+        avgRating,
+        avatars,
+        testimonials,
+        spotlights,
+      },
+      error: freelancerCountResp.error || memberCountResp.error || reviewStatsResp.error || null,
+    };
+  }
+
   // Semantic style matching — ranks category-filtered freelancers by cosine
   // similarity between queryEmbedding and each freelancer's style_embedding
   // (see supabase/ai_style_matching.sql's match_freelancer_styles function).
@@ -651,6 +801,30 @@ export class DataService {
   // one that doesn't (e.g. just working hours or hourly rate) can skip it.
   private static readonly AI_RELEVANT_FREELANCER_FIELDS = ['title', 'skills', 'styles', 'description'] as const;
 
+  // Minor skills live in freelancer_skills, not on freelancer_profiles
+  // itself, so anything that builds the AI embedding text has to fetch
+  // them separately. Returns [] for a freelancer with no profile row yet
+  // (mid-onboarding, before the initial create) or no minor skills.
+  private static async getMinorSkillNames(userId: string): Promise<string[]> {
+    const profile = await supabase
+      .from('freelancer_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const freelancerId = (profile.data as { id?: string } | null)?.id;
+    if (!freelancerId) return [];
+
+    const rows = await (supabase as any)
+      .from('freelancer_skills')
+      .select('skills(name)')
+      .eq('freelancer_id', freelancerId)
+      .eq('skill_type', 'minor');
+
+    return ((rows.data || []) as Array<{ skills: { name: string } | null }>)
+      .map((row) => row.skills?.name)
+      .filter((name): name is string => !!name);
+  }
+
   // Central place every freelancer-profile write in the app funnels
   // through (create on first onboarding, update on every later edit) so a
   // style embedding is generated the same way no matter which screen
@@ -661,10 +835,10 @@ export class DataService {
   private static async withStyleEmbedding(
     userId: string,
     payload: Record<string, any>,
-    options: { isCreate?: boolean } = {}
+    options: { isCreate?: boolean; force?: boolean } = {}
   ): Promise<Record<string, any>> {
     const touchesRelevantField = this.AI_RELEVANT_FREELANCER_FIELDS.some((field) => field in payload);
-    if (!options.isCreate && !touchesRelevantField) {
+    if (!options.isCreate && !options.force && !touchesRelevantField) {
       return payload;
     }
 
@@ -681,11 +855,13 @@ export class DataService {
     }
 
     try {
+      const minorSkills = await this.getMinorSkillNames(userId);
       const profileText = buildFreelancerStyleProfileText({
         category: String(merged.title || ''),
         skills: Array.isArray(merged.skills) ? merged.skills : [],
         styles: Array.isArray(merged.styles) ? merged.styles : [],
         description: String(merged.description || ''),
+        minorSkills,
       });
       const embedding = await embedText(profileText);
       return {
@@ -706,17 +882,59 @@ export class DataService {
     }
   }
 
-  static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
+  // Keeps freelancer_skills' one 'major' row in sync with
+  // freelancer_profiles.title, which stays the source of truth every other
+  // part of the app already reads. No-ops silently if the title isn't a
+  // recognized skill row (shouldn't happen — title only ever comes from
+  // the controlled category list — but this is best-effort bookkeeping,
+  // not something that should block a profile save). experienceLevel is
+  // optional: omit it (undefined) to carry forward whatever level was
+  // already set — only pass a value when the caller actually means to
+  // set/change it, so an unrelated profile update (e.g. changing the
+  // hourly rate) can never accidentally wipe a previously-set level.
+  private static async syncMajorSkill(freelancerId: string, title: string | null | undefined, experienceLevel?: string | null) {
+    if (!title) return;
+    const skillResp = await (supabase as any).from('skills').select('id').eq('name', title).maybeSingle();
+    const skillId = (skillResp.data as { id?: string } | null)?.id;
+    if (!skillId) return;
+
+    let levelToSet = experienceLevel;
+    if (levelToSet === undefined) {
+      const existing = await (supabase as any)
+        .from('freelancer_skills')
+        .select('experience_level')
+        .eq('freelancer_id', freelancerId)
+        .eq('skill_type', 'major')
+        .maybeSingle();
+      levelToSet = (existing.data as { experience_level?: string | null } | null)?.experience_level ?? null;
+    }
+
+    await (supabase as any).from('freelancer_skills').delete().eq('freelancer_id', freelancerId).eq('skill_type', 'major');
+    await (supabase as any)
+      .from('freelancer_skills')
+      .insert({ freelancer_id: freelancerId, skill_id: skillId, skill_type: 'major', experience_level: levelToSet ?? null });
+  }
+
+  static async createFreelancerProfile(
+    userId: string,
+    profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>,
+    options: { majorSkillExperienceLevel?: string | null } = {}
+  ) {
     const payload = await this.withStyleEmbedding(userId, profile, { isCreate: true });
     const { data, error } = await supabase
       .from('freelancer_profiles')
       .insert({ user_id: userId, ...payload })
       .select()
       .single();
+    if (data?.id) await this.syncMajorSkill(data.id, (data as any).title, options.majorSkillExperienceLevel);
     return { data, error };
   }
 
-  static async updateFreelancerProfile(userId: string, updates: Partial<FreelancerProfile>) {
+  static async updateFreelancerProfile(
+    userId: string,
+    updates: Partial<FreelancerProfile>,
+    options: { majorSkillExperienceLevel?: string | null } = {}
+  ) {
     const payload = await this.withStyleEmbedding(userId, updates as Record<string, any>);
     const { data, error } = await supabase
       .from('freelancer_profiles')
@@ -724,7 +942,144 @@ export class DataService {
       .eq('user_id', userId)
       .select()
       .single();
+    if (data?.id && ('title' in updates || options.majorSkillExperienceLevel !== undefined)) {
+      await this.syncMajorSkill(data.id, (data as any).title, options.majorSkillExperienceLevel);
+    }
     return { data, error };
+  }
+
+  // MAJOR/MINOR SKILLS
+  // The major skill is freelancer_profiles.title itself (unchanged — every
+  // existing consumer keeps reading it exactly as before). This surfaces
+  // it alongside the freelancer's minor skills from freelancer_skills, both
+  // normalized against the `skills` table (see supabase/freelancer_skills.sql).
+  static async getFreelancerSkills(freelancerProfileId: string): Promise<{ data: FreelancerSkillsSummary | null; error: unknown }> {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_skills')
+      .select('skill_type, experience_level, skills(id, name)')
+      .eq('freelancer_id', freelancerProfileId);
+
+    if (error) return { data: null, error };
+
+    type SkillRow = { skill_type: 'major' | 'minor'; experience_level: string | null; skills: FreelancerSkillRef | null };
+    const rows = (data || []) as SkillRow[];
+    const toWithLevel = (row: SkillRow | undefined): FreelancerSkillWithLevel | null =>
+      row?.skills ? { ...row.skills, experienceLevel: row.experience_level } : null;
+
+    const major = toWithLevel(rows.find((row) => row.skill_type === 'major'));
+    const minor = rows
+      .filter((row) => row.skill_type === 'minor')
+      .map(toWithLevel)
+      .filter((skill): skill is FreelancerSkillWithLevel => !!skill);
+
+    return { data: { major, minor }, error: null };
+  }
+
+  // Batched minor-skill lookup for list/card views (e.g. Explore) that
+  // already loaded a page of freelancer_profiles and just need each one's
+  // minor skill names — one query for the whole page instead of N.
+  static async getMinorSkillsForFreelancers(freelancerProfileIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    if (freelancerProfileIds.length === 0) return map;
+
+    const { data } = await (supabase as any)
+      .from('freelancer_skills')
+      .select('freelancer_id, skills(name)')
+      .in('freelancer_id', freelancerProfileIds)
+      .eq('skill_type', 'minor');
+
+    for (const row of (data || []) as Array<{ freelancer_id: string; skills: { name: string } | null }>) {
+      if (!row.skills?.name) continue;
+      const existing = map.get(row.freelancer_id) || [];
+      existing.push(row.skills.name);
+      map.set(row.freelancer_id, existing);
+    }
+    return map;
+  }
+
+  // The only mutating entry point for minor skills — the major skill keeps
+  // changing through the existing category/title flow. Takes skill NAMES
+  // (matching how skills/styles tags already work everywhere else in this
+  // app — no other part of the app plumbs skill ids through the UI) plus
+  // each one's optional experience level, and re-validates everything
+  // server-side (max count, no duplicates, not equal to the current major
+  // skill, must be real active skill rows, level must be a recognized
+  // value) rather than trusting whatever the picker UI already enforced
+  // client-side.
+  static async updateFreelancerSkills(
+    userId: string,
+    { minorSkills }: { minorSkills: Array<{ name: string; experienceLevel?: string | null }> }
+  ): Promise<{ data: FreelancerSkillsSummary | null; error: unknown }> {
+    const dedupedByName = new Map(minorSkills.map((entry) => [entry.name, entry.experienceLevel ?? null]));
+    const dedupedNames = Array.from(dedupedByName.keys());
+    if (dedupedNames.length > MAX_MINOR_SKILLS) {
+      return { data: null, error: new Error(`You can select up to ${MAX_MINOR_SKILLS} minor skills.`) };
+    }
+    for (const level of dedupedByName.values()) {
+      if (level !== null && !isSkillExperienceLevel(level)) {
+        return { data: null, error: new Error('Invalid experience level.') };
+      }
+    }
+
+    const profileResp = await supabase
+      .from('freelancer_profiles')
+      .select('id, title')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const freelancerId = (profileResp.data as { id?: string; title?: string } | null)?.id;
+    const majorTitle = (profileResp.data as { id?: string; title?: string } | null)?.title || null;
+    if (!freelancerId) {
+      return { data: null, error: new Error('Complete your freelancer profile before adding skills.') };
+    }
+
+    if (majorTitle && dedupedNames.includes(majorTitle)) {
+      return { data: null, error: new Error('Your major skill cannot also be a minor skill.') };
+    }
+
+    let validSkills: FreelancerSkillRef[] = [];
+    if (dedupedNames.length > 0) {
+      const skillsResp = await (supabase as any)
+        .from('skills')
+        .select('id, name')
+        .in('name', dedupedNames)
+        .eq('is_active', true);
+      validSkills = (skillsResp.data || []) as FreelancerSkillRef[];
+      if (validSkills.length !== dedupedNames.length) {
+        return { data: null, error: new Error('One or more selected skills are no longer available.') };
+      }
+    }
+
+    const deleteResp = await (supabase as any)
+      .from('freelancer_skills')
+      .delete()
+      .eq('freelancer_id', freelancerId)
+      .eq('skill_type', 'minor');
+    if (deleteResp.error) return { data: null, error: deleteResp.error };
+
+    if (validSkills.length > 0) {
+      const insertResp = await (supabase as any)
+        .from('freelancer_skills')
+        .insert(
+          validSkills.map((skill) => ({
+            freelancer_id: freelancerId,
+            skill_id: skill.id,
+            skill_type: 'minor',
+            experience_level: dedupedByName.get(skill.name) ?? null,
+          }))
+        );
+      if (insertResp.error) return { data: null, error: insertResp.error };
+    }
+
+    // Minor skills live outside freelancer_profiles, so the usual
+    // "did the payload touch an AI-relevant field" check can't see this
+    // change — force a fresh embedding using the freelancer's current
+    // full profile plus the minor skills that were just saved.
+    const embeddingPayload = await this.withStyleEmbedding(userId, {}, { force: true });
+    if (Object.keys(embeddingPayload).length > 0) {
+      await supabase.from('freelancer_profiles').update(embeddingPayload).eq('user_id', userId);
+    }
+
+    return this.getFreelancerSkills(freelancerId);
   }
 
   static async updateUser(userId: string, updates: Partial<User>) {

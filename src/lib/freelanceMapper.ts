@@ -28,6 +28,8 @@ export interface FreelancerMapProfile {
   totalReviews: number;
   location: string;
   skills: string[];
+  /** Secondary capabilities beyond `profession` — see freelancer_skills. */
+  minorSkills: string[];
   portfolio: FreelancerPortfolioItem[];
   availability: string[];
   email: string;
@@ -183,6 +185,7 @@ export function normalizeFreelancer(row: unknown): FreelancerMapProfile {
     totalReviews,
     location: stringValue(source.location, user.location),
     skills: stringArray(source.skills),
+    minorSkills: stringArray(source.minorSkills ?? source.minor_skills),
     portfolio,
     availability: availability.length > 0 ? availability : isAvailable ? ['Available'] : ['Unavailable'],
     email,

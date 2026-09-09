@@ -5,14 +5,19 @@ export interface FreelancerStyleProfileInput {
   skills: string[];
   styles: string[];
   description: string;
+  /** Other capabilities beyond the primary category — see freelancer_skills. */
+  minorSkills?: string[];
 }
 
 // One shared, explicitly-structured template so freelancer and client
 // embeddings stay comparable — the model is effectively reading a small
 // structured document, not a bare sentence.
-export function buildFreelancerStyleProfileText({ category, skills, styles, description }: FreelancerStyleProfileInput): string {
+export function buildFreelancerStyleProfileText({ category, skills, styles, description, minorSkills = [] }: FreelancerStyleProfileInput): string {
   return `
 Profession: ${category}
+
+Additional skills:
+${minorSkills.join(', ') || 'None'}
 
 Skills:
 ${skills.join(', ') || 'Not specified'}

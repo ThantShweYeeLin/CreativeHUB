@@ -110,7 +110,6 @@ const categoryOptions = [
   'Photography',
   'Makeup',
   'Fashion',
-  'Modeling',
   'Design',
   'Video',
   'Branding',

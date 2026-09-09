@@ -11,9 +11,10 @@ import { LeafletLocationPicker, type LocationPoint } from '../../components/comm
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
 import { StepProfessionalInfo } from './freelancer-onboarding/StepProfessionalInfo';
 import { StepCategory } from './freelancer-onboarding/StepCategory';
+import { StepAdditionalSkills } from './freelancer-onboarding/StepAdditionalSkills';
+import type { MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
 import { StepSkills } from './freelancer-onboarding/StepSkills';
 import { StepStyles } from './freelancer-onboarding/StepStyles';
-import { StepExperience } from './freelancer-onboarding/StepExperience';
 import { StepPortfolio } from './freelancer-onboarding/StepPortfolio';
 import { StepAvailability } from './freelancer-onboarding/StepAvailability';
 import { StepServiceLocations } from './freelancer-onboarding/StepServiceLocations';
@@ -21,7 +22,6 @@ import { StepPricing } from './freelancer-onboarding/StepPricing';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
 import { StepVerification } from './freelancer-onboarding/StepVerification';
-import { parseExperienceYears } from './freelancer-onboarding/types';
 import { isValidSocialUrl, type SocialPlatform } from '../../lib/socialPlatforms';
 
 interface BecomeFreelancerPageProps {
@@ -42,10 +42,10 @@ const TOTAL_STEPS = 12;
 const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Profile', description: 'Tell clients who you are.' },
   { title: 'Freelancer category', description: 'What service do you provide?' },
+  { title: 'Additional skills', description: 'What else can you provide? (optional)' },
   { title: 'Skills', description: 'What you can do.' },
   { title: 'Styles', description: 'What your work looks like.' },
-  { title: 'Experience', description: 'How long have you been working professionally?' },
-  { title: 'Social links', description: 'Show off your best work (optional — add more later).' },
+  { title: 'Portfolio links', description: 'Show off your best work (optional — add more later).' },
   { title: 'Availability', description: 'When can clients book you?' },
   { title: 'Service information', description: 'Where and how you provide services.' },
   { title: 'Pricing', description: 'Give clients a sense of your rates.' },
@@ -54,7 +54,7 @@ const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Verification', description: 'Build trust with a verified badge.' },
 ];
 
-const REQUIRED_STEPS = new Set([1, 2, 3, 4, 5]);
+const REQUIRED_STEPS = new Set([1, 2, 4, 5]);
 const TRAVEL_ANYWHERE = 'Open to travel anywhere';
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
@@ -73,15 +73,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [coverPhotoUpload, setCoverPhotoUpload] = useState<ImageUpload | null>(null);
   const [isDraggingCoverPhoto, setIsDraggingCoverPhoto] = useState(false);
 
-  // (b) Category, (c) Skills, (d) Styles
+  // (b) Category, (b2) Additional (minor) skills, (c) Skills, (d) Styles
   const [category, setCategory] = useState<string | null>(null);
+  const [categoryExperienceLevel, setCategoryExperienceLevel] = useState<string | null>(null);
+  const [minorSkills, setMinorSkills] = useState<MinorSkillSelection[]>([]);
   const [skills, setSkills] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
-
-  // (e) Experience
-  const [experienceYears, setExperienceYears] = useState('');
-  const [experienceLevel, setExperienceLevel] = useState('');
 
   // (f) Social links — one URL per platform (matches the social_links
   // table's unique(freelancer_id, platform) constraint).
@@ -172,6 +170,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   // certainly don't apply to the new one, so this asks first, then clears
   // both and lets the next two steps' suggestions repopulate from scratch.
   const applyCategoryChange = (nextCategory: string) => {
+    setMinorSkills((current) => current.filter((entry) => entry.name !== nextCategory));
     if (category && category !== nextCategory && (skills.length > 0 || styles.length > 0)) {
       setPendingCategoryChange(nextCategory);
       return;
@@ -190,12 +189,16 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const validateStep = (current: number): string | null => {
     if (current === 1) {
       if (!displayName.trim()) return 'Professional display name is required.';
-      if (!bio.trim()) return 'Add a short professional bio.';
     }
     if (current === 2 && !isFreelancerCategory(category)) return 'Select a freelancer category.';
-    if (current === 3 && skills.length === 0) return 'Select or add at least one skill.';
-    if (current === 4 && styles.length === 0) return 'Select or add at least one style.';
-    if (current === 5 && !experienceYears) return 'Select your years of experience.';
+    // Step 3 (additional/minor skills) is intentionally never validated — optional.
+    if (current === 4 && skills.length === 0) return 'Select or add at least one skill.';
+    if (current === 5 && styles.length === 0) return 'Select or add at least one style.';
+    // Studio name is optional, but a named studio needs a real location —
+    // can't have one without the other.
+    if (current === 8 && studioName.trim() && studioLocations.length === 0) {
+      return `Add at least one location for ${studioName.trim()}, or clear the studio name.`;
+    }
     return null;
   };
 
@@ -209,7 +212,16 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setStep((current) => Math.min(current + 1, TOTAL_STEPS));
   };
 
+  // Runs the same per-step validation as Continue — every other skippable
+  // step has no validator (so this is a no-op for them), but the studio
+  // name/location pairing above must hold even if the freelancer tries to
+  // skip past it with a dangling studio name.
   const handleSkip = () => {
+    const validationError = validateStep(step);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setError(null);
     setStep((current) => Math.min(current + 1, TOTAL_STEPS));
   };
@@ -271,6 +283,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     }
     if (styles.length === 0) {
       setError('Select or add at least one style before finishing.');
+      return;
+    }
+    if (studioName.trim() && studioLocations.length === 0) {
+      setError(`Add at least one location for ${studioName.trim()}, or clear the studio name.`);
       return;
     }
 
@@ -345,8 +361,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       hourly_rate: startingPrice ? Number(startingPrice) : null,
       skills,
       styles,
-      experience_years: parseExperienceYears(experienceYears),
-      experience_level: experienceLevel ? experienceLevel.toLowerCase() : null,
+      // Experience is now captured per-skill (see categoryExperienceLevel /
+      // minorSkills, synced into freelancer_skills) instead of this one
+      // freelancer-wide field, so onboarding no longer collects or sends it.
       is_available: availability === 'Available',
       working_days: workingDays,
       working_hours_start: workingHoursStart || null,
@@ -371,7 +388,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     let freelancerProfileId: string | undefined = existingProfile.data?.id;
 
     if (existingProfile.data) {
-      const updateProfile = await DataService.updateFreelancerProfile(user.id, freelancerProfilePayload as any);
+      const updateProfile = await DataService.updateFreelancerProfile(user.id, freelancerProfilePayload as any, {
+        majorSkillExperienceLevel: categoryExperienceLevel,
+      });
       if (updateProfile.error || !updateProfile.data) {
         setError((updateProfile.error as any)?.message || 'Unable to update freelancer profile.');
         setIsSaving(false);
@@ -379,7 +398,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       }
       freelancerProfileId = updateProfile.data.id;
     } else {
-      const createProfile = await DataService.createFreelancerProfile(user.id, freelancerProfilePayload as any);
+      const createProfile = await DataService.createFreelancerProfile(user.id, freelancerProfilePayload as any, {
+        majorSkillExperienceLevel: categoryExperienceLevel,
+      });
       if (createProfile.error || !createProfile.data) {
         setError((createProfile.error as any)?.message || 'Unable to create freelancer profile.');
         setIsSaving(false);
@@ -392,6 +413,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       for (const [platform, url] of Object.entries(portfolioLinks) as Array<[SocialPlatform, string | undefined]>) {
         if (!url || !isValidSocialUrl(url)) continue;
         await DataService.addSocialLink(freelancerProfileId, platform, url.trim());
+      }
+      // Optional and skipped by most freelancers — only worth the extra
+      // embedding regeneration call when they actually picked something.
+      // Never blocks finishing onboarding even if it fails.
+      if (minorSkills.length > 0) {
+        await DataService.updateFreelancerSkills(user.id, { minorSkills });
       }
     }
 
@@ -432,7 +459,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       onSkip={isSkippable ? handleSkip : undefined}
       onContinue={isLastStep ? () => void handleFinish() : handleContinue}
       isContinueLoading={isLastStep && isSaving}
-      continueLabel={isLastStep ? 'Finish' : 'Continue'}
+      continueLabel={isLastStep ? 'Finish' : 'Next'}
     >
       {step === 1 && (
         <StepProfessionalInfo
@@ -460,7 +487,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
       {step === 2 && (
         <div>
-          <StepCategory selectedCategory={category} onSelectCategory={applyCategoryChange} />
+          <StepCategory
+            selectedCategory={category}
+            onSelectCategory={applyCategoryChange}
+            experienceLevel={categoryExperienceLevel}
+            onExperienceLevelChange={setCategoryExperienceLevel}
+          />
           {pendingCategoryChange && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm font-semibold text-amber-900">
@@ -490,18 +522,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         </div>
       )}
 
-      {step === 3 && <StepSkills category={category} skills={skills} onSkillsChange={setSkills} />}
-
-      {step === 4 && <StepStyles category={category} styles={styles} onStylesChange={setStyles} />}
-
-      {step === 5 && (
-        <StepExperience
-          experienceYears={experienceYears}
-          onExperienceYearsChange={setExperienceYears}
-          experienceLevel={experienceLevel}
-          onExperienceLevelChange={setExperienceLevel}
-        />
+      {step === 3 && (
+        <StepAdditionalSkills majorSkill={category} minorSkills={minorSkills} onMinorSkillsChange={setMinorSkills} />
       )}
+
+      {step === 4 && <StepSkills category={category} skills={skills} onSkillsChange={setSkills} />}
+
+      {step === 5 && <StepStyles category={category} styles={styles} onStylesChange={setStyles} />}
 
       {step === 6 && <StepPortfolio links={portfolioLinks} onLinksChange={setPortfolioLinks} />}
 

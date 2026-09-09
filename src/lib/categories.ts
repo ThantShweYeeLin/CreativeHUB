@@ -2,7 +2,7 @@
 // source of truth for every category picker, filter, and matcher in the
 // app (onboarding, Edit Profile, Explore, Advanced Filter, AI Matcher,
 // search). freelancer_profiles.title must always be set to exactly one of
-// these five labels — no free text, no other values.
+// these labels — no free text, no other values.
 //
 // server/src/routes/aiMatcher.ts is a separately-built TS project
 // (server/tsconfig.json has its own rootDir) and can't import this file
@@ -42,10 +42,28 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
     styles: ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
   },
   {
-    id: 'model',
-    label: 'Model',
-    skills: ['Fashion Modeling', 'Commercial Modeling', 'Product Modeling', 'Editorial Modeling', 'Runway Modeling', 'Event Modeling', 'Beauty Modeling', 'Photoshoot Modeling'],
-    styles: ['Editorial', 'Streetwear', 'Elegant', 'High Fashion', 'Commercial', 'Minimalist', 'Luxury', 'Casual', 'Beauty'],
+    id: 'videographer',
+    label: 'Videographer',
+    skills: ['Wedding Videography', 'Event Videography', 'Highlight Reels', 'Drone Videography', 'Video Editing', 'Same-Day Edit', 'Live Streaming'],
+    styles: ['Cinematic', 'Documentary', 'Romantic', 'Moody', 'Bright & Airy', 'Vintage', 'Minimalist', 'Editorial'],
+  },
+  {
+    id: 'decorator-florist',
+    label: 'Decorator / Florist',
+    skills: ['Event Styling', 'Floral Arrangements', 'Bridal Bouquets', 'Backdrop Design', 'Table Centerpieces', 'Balloon Decor', 'Venue Styling'],
+    styles: ['Romantic', 'Rustic', 'Minimalist', 'Luxury', 'Bohemian', 'Classic', 'Modern', 'Garden'],
+  },
+  {
+    id: 'cake-dessert',
+    label: 'Cake / Dessert',
+    skills: ['Wedding Cakes', 'Custom Cake Design', 'Cupcakes', 'Dessert Tables', 'Cake Tasting', 'Sugar Flowers', 'Cake Delivery & Setup'],
+    styles: ['Elegant', 'Rustic', 'Minimalist', 'Whimsical', 'Classic', 'Modern', 'Luxury'],
+  },
+  {
+    id: 'dj-musician',
+    label: 'DJ / Musician',
+    skills: ['Wedding DJ', 'Live Band', 'MC Hosting', 'Sound Equipment', 'Lighting Setup', 'Acoustic Performance', 'Song Requests'],
+    styles: ['Upbeat', 'Romantic', 'Classic', 'Modern', 'Acoustic', 'Elegant', 'High Energy'],
   },
 ];
 

@@ -47,6 +47,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
+  const [minorSkills, setMinorSkills] = useState<Array<{ name: string; experienceLevel: string | null }>>([]);
+  const [majorSkillExperienceLevel, setMajorSkillExperienceLevel] = useState<string | null>(null);
   const [services, setServices] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
@@ -215,13 +217,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setFreelancerProfile(freelancerResponse.data || null);
 
       if (freelancerResponse.data?.id) {
-        const [servicesResponse, blockedDatesResponse] = await Promise.all([
+        const [servicesResponse, blockedDatesResponse, skillsResponse] = await Promise.all([
           DataService.getFreelancerServices(freelancerResponse.data.id),
           DataService.getFreelancerBlockedDates(freelancerResponse.data.id),
+          DataService.getFreelancerSkills(freelancerResponse.data.id),
         ]);
         if (isMounted) {
           setServices(servicesResponse.data || []);
           setFreelancerBlockedDates(blockedDatesResponse.data || []);
+          setMinorSkills((skillsResponse.data?.minor || []).map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
+          setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
         }
       }
 
@@ -1381,9 +1386,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{freelancerProfile?.experience_years || 0} yrs</span>
+                  <span className="font-semibold text-gray-900">{majorSkillExperienceLevel || 'New'}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">experience</p>
+                <p className="mt-1 text-sm text-gray-500">experience level</p>
               </div>
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
@@ -1430,7 +1435,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="mt-4 space-y-3 text-sm text-gray-700">
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
                 <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
-                <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
+                {majorSkillExperienceLevel && (
+                  <p><span className="font-semibold text-gray-900">Experience level:</span> {majorSkillExperienceLevel}</p>
+                )}
                 {studioName && (
                   <p>
                     <span className="font-semibold text-gray-900">Studio:</span> {studioName}
@@ -1466,6 +1473,29 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
               </div>
             </div>
+
+            {(minorSkills.length > 0 || majorSkillExperienceLevel) && (
+              <div className="rounded-3xl bg-white p-6 shadow-xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
+                <p className="mt-1 text-base font-bold text-gray-900">
+                  {title}
+                  {majorSkillExperienceLevel && <span className="ml-2 text-sm font-semibold text-gray-500">· {majorSkillExperienceLevel}</span>}
+                </p>
+                {minorSkills.length > 0 && (
+                  <>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {minorSkills.map((skill) => (
+                        <span key={skill.name} className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600">
+                          {skill.name}
+                          {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </aside>
         </section>
         )}

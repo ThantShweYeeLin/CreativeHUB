@@ -111,7 +111,7 @@ export function StepProfessionalInfo({
       />
 
       <div className="md:col-span-2">
-        <label className="mb-2 block text-sm font-semibold text-gray-700">Short Bio</label>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">Short Bio (optional)</label>
         <textarea
           value={bio}
           onChange={(event) => onBioChange(event.target.value)}

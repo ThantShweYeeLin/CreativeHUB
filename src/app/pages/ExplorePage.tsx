@@ -18,6 +18,7 @@ interface ProfileCardProps {
   id: string;
   name: string;
   specialty: string;
+  minorSkills?: string[];
   rating: number;
   reviews: number;
   image: string;
@@ -27,7 +28,7 @@ interface ProfileCardProps {
   onToggleFavorite?: (id: string) => void;
 }
 
-function ProfileCard({ id, name, specialty, rating, reviews, image, location, isFavorited, onToggleFavorite }: ProfileCardProps) {
+function ProfileCard({ id, name, specialty, minorSkills, rating, reviews, image, location, isFavorited, onToggleFavorite }: ProfileCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
 
@@ -69,7 +70,13 @@ function ProfileCard({ id, name, specialty, rating, reviews, image, location, is
         </div>
         <div className="p-4 sm:p-5">
           <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-1">{name}</h3>
-          <p className="text-sm text-gray-600 mb-3">{specialty}</p>
+          <p className={`text-sm text-gray-600 ${minorSkills && minorSkills.length > 0 ? '' : 'mb-3'}`}>{specialty}</p>
+          {minorSkills && minorSkills.length > 0 && (
+            <p className="mb-3 mt-0.5 truncate text-xs text-gray-500">
+              Also: {minorSkills.slice(0, 2).join(' • ')}
+              {minorSkills.length > 2 ? ` +${minorSkills.length - 2} more` : ''}
+            </p>
+          )}
           {location && <p className="text-xs text-gray-500 mb-3">{location}</p>}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
@@ -121,9 +128,9 @@ function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-/** "Photographer" -> "Photographers", "Makeup Artist" -> "Makeup Artists", etc. — a plain "s" suffix works for all five canonical labels. */
+/** "Photographer" -> "Photographers", "Decorator / Florist" -> "Decorators / Florists" — pluralizes each "/"-joined part on its own. */
 function pluralizeCategory(label: string) {
-  return `${label}s`;
+  return label.split(' / ').map((part) => `${part}s`).join(' / ');
 }
 
 /** Great-circle distance between two lat/lng points, in kilometers. */
@@ -144,6 +151,7 @@ export function ExplorePage() {
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
+  const [minorSkillsByFreelancerId, setMinorSkillsByFreelancerId] = useState<Map<string, string[]>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [clientInterests, setClientInterests] = useState<string[]>([]);
@@ -236,6 +244,23 @@ export function ExplorePage() {
       isMounted = false;
     };
   }, []);
+
+  // One batched lookup for the whole loaded page's minor skills, rather
+  // than a query per card.
+  useEffect(() => {
+    let isMounted = true;
+    const ids = freelancers.map((f) => f.id).filter(Boolean);
+    if (ids.length === 0) {
+      setMinorSkillsByFreelancerId(new Map());
+      return;
+    }
+    DataService.getMinorSkillsForFreelancers(ids).then((map) => {
+      if (isMounted) setMinorSkillsByFreelancerId(map);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [freelancers]);
 
   // Personalization: the categories this client said they're interested in
   // during onboarding, used to nudge default ordering (not filter). Also
@@ -407,13 +432,14 @@ export function ExplorePage() {
         id: profile.user_id || profile.users?.id || profile.id,
         name: profile.users?.full_name || profile.title || 'Creative Freelancer',
         specialty: profile.title || profile.skills?.[0] || 'Creative Professional',
+        minorSkills: minorSkillsByFreelancerId.get(profile.id) || [],
         rating: Number(profile.users?.rating || 0),
         reviews: Number(profile.users?.total_reviews || 0),
         image: profile.users?.avatar_url || DEFAULT_AVATAR_URL,
         gender: profile.users?.gender || null,
         location: profile.users?.location || undefined,
       }));
-  }, [freelancers]);
+  }, [freelancers, minorSkillsByFreelancerId]);
 
   // Unifies the category pill (a hard category filter) with whatever the
   // free-text search implies (service/style/location) into one query the
@@ -437,6 +463,7 @@ export function ExplorePage() {
             title: source?.title || null,
             skills: source?.skills || [],
             styles: source?.styles || [],
+            minorSkills: profile.minorSkills || [],
             description: source?.description || null,
             location: profile.location || null,
             fullName: profile.name || null,

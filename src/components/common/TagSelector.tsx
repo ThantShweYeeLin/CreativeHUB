@@ -9,6 +9,10 @@ interface TagSelectorProps {
   onChange: (next: string[]) => void;
   otherPlaceholder?: string;
   emptyHint?: string;
+  /** Hide the "+ Other" free-text option — for taxonomies that must stay controlled (e.g. minor skills). Defaults to true. */
+  allowCustom?: boolean;
+  /** Once this many are selected, remaining unselected suggestions are disabled rather than toggleable. */
+  maxSelected?: number;
 }
 
 /**
@@ -21,7 +25,7 @@ interface TagSelectorProps {
  * no separate "is this custom" flag is stored anywhere; it's derived here
  * and in lib/categories.ts's isStandardSkill/isStandardStyle.
  */
-export function TagSelector({ suggestions, selected, onChange, otherPlaceholder = 'Type your own', emptyHint }: TagSelectorProps) {
+export function TagSelector({ suggestions, selected, onChange, otherPlaceholder = 'Type your own', emptyHint, allowCustom = true, maxSelected }: TagSelectorProps) {
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [otherDraft, setOtherDraft] = useState('');
 
@@ -53,13 +57,19 @@ export function TagSelector({ suggestions, selected, onChange, otherPlaceholder 
       <div className="flex flex-wrap gap-2">
         {suggestions.map((suggestion) => {
           const isSelected = selected.includes(suggestion);
+          const isDisabled = !isSelected && maxSelected !== undefined && selected.length >= maxSelected;
           return (
             <button
               key={suggestion}
               type="button"
+              disabled={isDisabled}
               onClick={() => toggleSuggestion(suggestion)}
               className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
-                isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                isSelected
+                  ? 'border-gray-900 bg-gray-900 text-white'
+                  : isDisabled
+                    ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
               }`}
             >
               {suggestion}
@@ -79,18 +89,20 @@ export function TagSelector({ suggestions, selected, onChange, otherPlaceholder 
           </span>
         ))}
 
-        <button
-          type="button"
-          onClick={() => setShowOtherInput((current) => !current)}
-          className={`inline-flex items-center gap-1 rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
-            showOtherInput ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
-          }`}
-        >
-          <Plus className="h-3.5 w-3.5" /> Other
-        </button>
+        {allowCustom && (
+          <button
+            type="button"
+            onClick={() => setShowOtherInput((current) => !current)}
+            className={`inline-flex items-center gap-1 rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
+              showOtherInput ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+            }`}
+          >
+            <Plus className="h-3.5 w-3.5" /> Other
+          </button>
+        )}
       </div>
 
-      {showOtherInput && (
+      {allowCustom && showOtherInput && (
         <div className="mt-3 flex gap-2">
           <input
             value={otherDraft}

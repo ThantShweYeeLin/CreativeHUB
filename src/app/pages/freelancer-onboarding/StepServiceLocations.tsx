@@ -86,7 +86,7 @@ export function StepServiceLocations({
       </div>
 
       <div>
-        <label className="mb-2 block text-sm font-semibold text-gray-700">Studio name (if applicable)</label>
+        <label className="mb-2 block text-sm font-semibold text-gray-700">Studio name (optional)</label>
         <input
           value={studioName}
           onChange={(event) => onStudioNameChange(event.target.value)}
@@ -97,8 +97,13 @@ export function StepServiceLocations({
 
       {studioName.trim() && (
         <div>
-          <label className="mb-2 block text-sm font-semibold text-gray-700">Studio location</label>
+          <label className="mb-2 block text-sm font-semibold text-gray-700">
+            Studio location <span className="text-red-600">*</span>
+          </label>
           <LocationChipList locations={studioLocations} onRemove={onRemoveStudioLocation} onAddFromMap={onOpenStudioLocationPicker} />
+          {studioLocations.length === 0 && (
+            <p className="mt-1.5 text-xs font-semibold text-red-600">Add at least one location for {studioName.trim()}.</p>
+          )}
         </div>
       )}
     </div>

@@ -18,7 +18,10 @@ const TAXONOMY: Record<string, string[]> = {
   'Makeup Artist': ['Douyin Makeup', 'Soft Glam', 'Natural Glam', 'Bridal Glam', 'Korean-Inspired', 'Chinese-Inspired', 'Glitter Makeup', 'Bold Glam', 'Minimal Makeup'],
   'Hair Stylist': ['Korean-Inspired', 'Elegant', 'Romantic', 'Y2K', 'Natural', 'Glamorous', 'Vintage', 'Modern', 'Bridal'],
   'Fashion Designer': ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
-  'Model': ['Editorial', 'Streetwear', 'Elegant', 'High Fashion', 'Commercial', 'Minimalist', 'Luxury', 'Casual', 'Beauty'],
+  'Videographer': ['Cinematic', 'Documentary', 'Romantic', 'Moody', 'Bright & Airy', 'Vintage', 'Minimalist', 'Editorial'],
+  'Decorator / Florist': ['Romantic', 'Rustic', 'Minimalist', 'Luxury', 'Bohemian', 'Classic', 'Modern', 'Garden'],
+  'Cake / Dessert': ['Elegant', 'Rustic', 'Minimalist', 'Whimsical', 'Classic', 'Modern', 'Luxury'],
+  'DJ / Musician': ['Upbeat', 'Romantic', 'Classic', 'Modern', 'Acoustic', 'Elegant', 'High Energy'],
 };
 
 const allowedImageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
