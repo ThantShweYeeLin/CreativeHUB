@@ -11,7 +11,7 @@ export function StepStyles({ category, styles, onStylesChange }: StepStylesProps
   return (
     <div>
       <p className="mb-1 text-sm font-semibold text-gray-700">Styles</p>
-      <p className="mb-4 text-xs text-gray-500">What your work looks like. The AI Matcher uses these to find you from an inspiration photo.</p>
+      <p className="mb-4 text-xs text-gray-500">What your work looks like. Clients search and filter by these styles.</p>
       <TagSelector
         suggestions={suggestedStylesForCategory(category)}
         selected={styles}

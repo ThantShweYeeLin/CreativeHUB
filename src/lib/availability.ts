@@ -41,3 +41,21 @@ export function isFreelancerFreeAt(
 ) {
   return !isDateBlocked(blockedDates, date) && !isTimeSlotTaken(bookings, date, time);
 }
+
+// Whole-day check for flows (like the Event Matcher) that only collect a
+// date, not a specific time — any active booking that day is treated as a
+// full-day commitment rather than checking for a free slot around it.
+export function hasActiveBookingOnDate(bookings: Array<any>, date: string) {
+  return bookings.some((booking) => {
+    if (!booking.start_date || booking.start_date.slice(0, 10) !== date) return false;
+    return !INACTIVE_BOOKING_STATUSES.has(booking.status);
+  });
+}
+
+export function isFreelancerFreeOnDate(
+  bookings: Array<any>,
+  blockedDates: Array<{ blocked_date: string }>,
+  date: string
+) {
+  return !isDateBlocked(blockedDates, date) && !hasActiveBookingOnDate(bookings, date);
+}
