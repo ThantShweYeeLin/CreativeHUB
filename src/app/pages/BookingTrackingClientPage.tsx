@@ -10,6 +10,8 @@ import { formatCountdown } from '../../lib/bookingEscrow';
 import { formatCardLabel } from '../../lib/paymentCard';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
+import { BookingCheckIn } from './bookingTracking/BookingCheckIn';
+import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
@@ -22,7 +24,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, checkIns, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -168,6 +170,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   };
 
   const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'client';
+  const reportedDisputeCategory = events.find((e: any) => e.round === 1 && e.actor === 'client' && e.action === 'complain')?.category || null;
   // No known schedule data at all shouldn't permanently block a client from
   // ever reporting a problem - default to allowing it in that case.
   const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
@@ -293,6 +296,17 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             </div>
           </div>
         </div>
+
+        {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
+          <BookingCheckIn
+            booking={booking}
+            bookingId={booking.id}
+            scheduledAt={bookingData.scheduledAt}
+            role="client"
+            checkIns={checkIns}
+            onRefresh={refresh}
+          />
+        )}
 
         {/* Annulled */}
         {escrowState === 'annulled' && (
@@ -444,6 +458,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </p>
             )}
 
+            <AttendanceEvidence checkIns={checkIns} disputeCategory={reportedDisputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
 
             {canRespondToDispute && !showRespondForm && (
@@ -509,6 +524,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             <p className="text-sm text-gray-600">
               Your dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
             </p>
+            <AttendanceEvidence checkIns={checkIns} disputeCategory={reportedDisputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
           </div>
         )}

@@ -5,6 +5,7 @@ import { getBookingEscrowState, type EscrowState } from '../../../lib/bookingEsc
 import { extractScheduleMeta, formatTimeLabel } from '../../../lib/requestSchedule';
 import { extractLocationMeta } from '../../../lib/requestLocation';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
+import type { BookingCheckIn } from '../../../lib/bookingCheckIn';
 
 export const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
@@ -12,6 +13,7 @@ export function useBookingTracking() {
   const { id } = useParams();
   const [booking, setBooking] = useState<any | null>(null);
   const [events, setEvents] = useState<any[]>([]);
+  const [checkIns, setCheckIns] = useState<BookingCheckIn[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,11 @@ export function useBookingTracking() {
         setEvents(eventsResponse.data || []);
       }
 
+      const checkInsResponse = await DataService.getBookingCheckIns(id);
+      if (isMounted) {
+        setCheckIns(checkInsResponse.data || []);
+      }
+
       setIsLoading(false);
     }
 
@@ -95,9 +102,14 @@ export function useBookingTracking() {
 
   const refresh = async () => {
     if (!id) return;
-    const [bookingResponse, eventsResponse] = await Promise.all([DataService.getBooking(id), DataService.getBookingEvents(id)]);
+    const [bookingResponse, eventsResponse, checkInsResponse] = await Promise.all([
+      DataService.getBooking(id),
+      DataService.getBookingEvents(id),
+      DataService.getBookingCheckIns(id),
+    ]);
     if (bookingResponse.data) setBooking(bookingResponse.data);
     setEvents(eventsResponse.data || []);
+    setCheckIns(checkInsResponse.data || []);
   };
 
   const escrowState: EscrowState = useMemo(() => getBookingEscrowState(booking), [booking]);
@@ -155,7 +167,7 @@ export function useBookingTracking() {
         title: booking.project_name,
         date: scheduleDateLabel,
         time: scheduleTimeLabel,
-        location: locationMeta || booking.freelancer?.location || booking.client?.location || 'Location to be confirmed',
+        location: booking.location_address || locationMeta || booking.freelancer?.location || booking.client?.location || 'Location to be confirmed',
       },
       pricing: {
         servicePrice,
@@ -166,5 +178,5 @@ export function useBookingTracking() {
     };
   }, [booking]);
 
-  return { id, booking, setBooking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
+  return { id, booking, setBooking, events, checkIns, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
 }

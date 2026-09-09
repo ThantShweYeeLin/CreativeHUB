@@ -8,6 +8,8 @@ import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../.
 import { DataService } from '../../lib/dataService';
 import { formatCountdown } from '../../lib/bookingEscrow';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
+import { BookingCheckIn } from './bookingTracking/BookingCheckIn';
+import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 
@@ -19,7 +21,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, checkIns, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // Symmetric to BookingTrackingClientPage's redirect — a client landing on
   // this freelancer-facing route directly would otherwise see a confusing
@@ -133,6 +135,15 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   };
 
   const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'freelancer';
+  const disputeCategory = events.find((e: any) => e.round === 1 && e.actor === 'client' && e.action === 'complain')?.category || null;
+  const isNoShowDispute = disputeCategory === 'no_show';
+
+  const quickReplyOptions = [
+    { label: 'I attended the booking', text: 'I attended the booking as scheduled.' },
+    { label: 'I did not attend', text: 'I was unable to attend this booking.' },
+    { label: 'The booking was changed/cancelled', text: 'The booking time or location was changed or cancelled.' },
+    { label: 'There was an unexpected issue', text: 'There was an unexpected issue that affected this booking.' },
+  ];
 
   if (isLoading) {
     return (
@@ -204,6 +215,17 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
             </div>
           </div>
         </div>
+
+        {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
+          <BookingCheckIn
+            booking={booking}
+            bookingId={booking.id}
+            scheduledAt={bookingData.scheduledAt}
+            role="freelancer"
+            checkIns={checkIns}
+            onRefresh={refresh}
+          />
+        )}
 
         {/* Annulled */}
         {escrowState === 'annulled' && (
@@ -332,6 +354,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </p>
             )}
 
+            <AttendanceEvidence checkIns={checkIns} disputeCategory={disputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
 
             {canRespondToDispute && !showRespondForm && (
@@ -360,6 +383,20 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
                     <X className="h-4 w-4" />
                   </button>
                 </div>
+                {isNoShowDispute && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {quickReplyOptions.map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => setRespondReason(option.text)}
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <textarea
                   value={respondReason}
                   onChange={(e) => setRespondReason(e.target.value)}
@@ -404,6 +441,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
             <p className="text-sm text-gray-600">
               This dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
             </p>
+            <AttendanceEvidence checkIns={checkIns} disputeCategory={disputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
           </div>
         )}

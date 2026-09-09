@@ -13,6 +13,8 @@ import {
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
+import type { BookingCheckIn } from './bookingCheckIn';
+import type { LocationPoint } from '../components/common/LeafletLocationPicker';
 import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -988,6 +990,44 @@ export class DataService {
     return { data, error };
   }
 
+  // BOOKING CHECK-IN
+  static async setBookingLocation(bookingId: string, point: LocationPoint) {
+    const { data, error } = await (supabase as any).rpc('set_booking_location', {
+      p_booking_id: bookingId,
+      p_lat: point.latitude,
+      p_lng: point.longitude,
+      p_address: point.formattedAddress,
+      p_place_id: point.placeId,
+      p_city: point.city || null,
+      p_district: point.district || null,
+    });
+    return { data, error };
+  }
+
+  static async checkInToBooking(
+    bookingId: string,
+    input: { lat?: number | null; lng?: number | null; permissionDenied?: boolean; locationUnavailable?: boolean }
+  ) {
+    const { data, error } = await (supabase as any).rpc('checkin_to_booking', {
+      p_booking_id: bookingId,
+      p_lat: input.lat ?? null,
+      p_lng: input.lng ?? null,
+      p_permission_denied: input.permissionDenied ?? false,
+      p_location_unavailable: input.locationUnavailable ?? false,
+    });
+    // The RPC returns a table (array); callers want the single row.
+    const row = Array.isArray(data) ? data[0] : data;
+    return { data: row as (BookingCheckIn & { already_checked_in: boolean }) | null, error };
+  }
+
+  static async getBookingCheckIns(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('booking_check_ins')
+      .select('*')
+      .eq('booking_id', bookingId);
+    return { data: (data || []) as BookingCheckIn[], error };
+  }
+
   static async getBookingEvents(bookingId: string) {
     const { data, error } = await (supabase as any)
       .from('booking_events')
@@ -1416,12 +1456,18 @@ export class DataService {
       evidence_photos: input.evidencePhotoPaths || [],
     });
 
+    // A no_show report stays neutral — CreativeHUB flags an attendance
+    // issue for review rather than relaying the client's complaint
+    // verbatim, to avoid putting the two parties in direct confrontation.
+    const isNoShow = input.category === 'no_show';
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: 'Client reported a problem',
-      message: `The client disputed this booking: ${input.reason}`,
+      title: isNoShow ? 'Attendance issue flagged' : 'Client reported a problem',
+      message: isNoShow
+        ? 'Your recent booking has been flagged for an attendance issue. Please review the booking and confirm what happened.'
+        : `The client disputed this booking: ${input.reason}`,
       relatedId: bookingId,
     });
 
