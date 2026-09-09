@@ -2,7 +2,9 @@
 // block submission on a conflict) and could be reused anywhere else that
 // needs to answer "is this freelancer free at this date/time."
 
-const INACTIVE_BOOKING_STATUSES = new Set(['cancelled', 'rejected']);
+// 'annulled' (a lapsed 24h deposit deadline) releases the slot exactly like
+// an intentional cancellation does — see supabase/booking_overlap_protection.sql.
+const INACTIVE_BOOKING_STATUSES = new Set(['cancelled', 'rejected', 'annulled']);
 
 // Most bookings only ever get a start_time (the request form collects a
 // single point in time, not a duration) — assume a reasonable default
@@ -40,6 +42,36 @@ export function isFreelancerFreeAt(
   time: string
 ) {
   return !isDateBlocked(blockedDates, date) && !isTimeSlotTaken(bookings, date, time);
+}
+
+// Real interval-overlap check (not just "is the start point taken") — used
+// once a request has an actual end time, not just a single point. This is
+// a client-side pre-check for instant form feedback only; the database's
+// bookings_no_overlap exclusion constraint (see
+// supabase/booking_overlap_protection.sql) is the real, race-safe
+// enforcement, since two clients could submit at nearly the same instant.
+export function isRangeAvailable(
+  bookings: Array<any>,
+  blockedDates: Array<{ blocked_date: string }>,
+  date: string,
+  startTime: string,
+  endTime: string
+) {
+  if (isDateBlocked(blockedDates, date)) return false;
+
+  const newStart = toMinutes(startTime);
+  const newEnd = toMinutes(endTime);
+
+  return !bookings.some((booking) => {
+    if (!booking.start_date || booking.start_date.slice(0, 10) !== date) return false;
+    if (!booking.start_time) return false;
+    if (INACTIVE_BOOKING_STATUSES.has(booking.status)) return false;
+
+    const existingStart = toMinutes(booking.start_time);
+    const existingEnd = booking.end_time ? toMinutes(booking.end_time) : existingStart + DEFAULT_BOOKING_DURATION_MINUTES;
+
+    return newStart < existingEnd && existingStart < newEnd;
+  });
 }
 
 // Whole-day check for flows (like the Event Matcher) that only collect a

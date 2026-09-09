@@ -1225,6 +1225,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         ) : section === 'calendar' ? (
           <CalendarView
             bookings={bookings}
+            pendingRequests={requests.filter((request) => request.status === 'pending' || request.status === 'countered')}
             blockedDates={blockedDates}
             onBlockDate={handleCalendarBlockDate}
             onUnblockDate={handleRemoveBlockedDate}

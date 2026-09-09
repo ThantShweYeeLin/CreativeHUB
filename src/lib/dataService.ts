@@ -1193,13 +1193,262 @@ export class DataService {
   }
 
   // BOOKINGS
+  // Postgres exclusion-constraint violation (bookings_no_overlap, see
+  // supabase/booking_overlap_protection.sql) — the actual race-safe
+  // enforcement, since two clients/freelancers could act at nearly the
+  // same instant and a client-side "check then write" can't close that
+  // gap. Translated into copy a user can act on instead of a raw DB error.
+  private static readonly BOOKING_OVERLAP_ERROR_CODE = '23P01';
+
+  private static isBookingOverlapError(error: unknown): boolean {
+    return (error as { code?: string } | null)?.code === this.BOOKING_OVERLAP_ERROR_CODE;
+  }
+
+  static readonly BOOKING_SLOT_TAKEN_MESSAGE = 'This time slot is no longer available — it was just booked by someone else.';
+
   static async createBooking(booking: Omit<Booking, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await supabase
       .from('bookings')
       .insert(booking)
       .select()
       .single();
+    if (error && this.isBookingOverlapError(error)) {
+      return { data: null, error: new Error(this.BOOKING_SLOT_TAKEN_MESSAGE) };
+    }
     return { data, error };
+  }
+
+  // Instant client-side pre-check for form UX only — NOT the safety
+  // mechanism (the bookings_no_overlap exclusion constraint is, enforced
+  // atomically by Postgres on the actual write). Only ever needs to look
+  // at 'pending'/'confirmed' bookings, matching the constraint's own scope
+  // — a freelancer can have any number of overlapping pending *requests*.
+  static async checkBookingSlotAvailable(freelancerId: string, startAt: string, endAt: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('freelancer_id', freelancerId)
+      .in('status', ['pending', 'confirmed'])
+      .lt('start_at', endAt)
+      .gt('end_at', startAt)
+      .limit(1);
+    if (error) return true; // fail open — the DB constraint is the real gate
+    return (data || []).length === 0;
+  }
+
+  // Reschedules an existing booking to a new time range. Relies on the
+  // same exclusion constraint to reject a conflicting new time — a plain
+  // UPDATE changing start_at/end_at is re-validated against every *other*
+  // row by Postgres automatically, so there's no separate "release the old
+  // slot, then reserve the new one" step needed.
+  static async rescheduleBooking(bookingId: string, newStartAt: Date, newEndAt: Date) {
+    // start_date/start_time/end_time are kept as a mirror for existing
+    // readers (e.g. src/lib/availability.ts's client-side pre-check) — the
+    // canonical instant is start_at/end_at. Formatted in Asia/Bangkok
+    // wall-clock terms regardless of the caller's own timezone, matching
+    // supabase/booking_checkin.sql's existing interpretation.
+    const bangkokParts = (date: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+      const parts = Object.fromEntries(formatter.formatToParts(date).map((p) => [p.type, p.value]));
+      return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+    };
+    const startParts = bangkokParts(newStartAt);
+    const endParts = bangkokParts(newEndAt);
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        start_at: newStartAt.toISOString(),
+        end_at: newEndAt.toISOString(),
+        start_date: startParts.date,
+        start_time: startParts.time,
+        end_time: endParts.time,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error && this.isBookingOverlapError(error)) {
+      return { data: null, error: new Error(this.BOOKING_SLOT_TAKEN_MESSAGE) };
+    }
+    return { data, error };
+  }
+
+  // RESCHEDULE HANDSHAKE — propose/accept/decline, so neither participant
+  // can unilaterally move an already-accepted booking (see
+  // supabase/booking_reschedule.sql for the full rationale). The actual
+  // move only ever happens inside acceptBookingReschedule, via
+  // rescheduleBooking() above — so it's re-checked against
+  // bookings_no_overlap at accept time, not just at propose time, and a
+  // proposal that's gone stale by then is safely rejected.
+  static async proposeBookingReschedule(
+    bookingId: string,
+    input: { proposerId: string; proposerRole: 'client' | 'freelancer'; newStartAt: Date; newEndAt: Date; reason?: string }
+  ) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: input.newStartAt.toISOString(),
+        reschedule_proposed_end_at: input.newEndAt.toISOString(),
+        reschedule_proposed_by: input.proposerId,
+        reschedule_proposed_reason: input.reason?.trim() || null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: input.proposerRole,
+      action: 'reschedule_proposed',
+      reason: input.reason?.trim() || null,
+    });
+
+    const otherUserId = input.proposerRole === 'client' ? (data as any).freelancer_id : (data as any).client_id;
+    await this.notifyEvent({
+      userId: otherUserId,
+      actorId: input.proposerId,
+      type: 'booking_reschedule_proposed',
+      title: 'New time proposed',
+      message: 'A new time was proposed for your booking — review and respond.',
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
+  }
+
+  static async acceptBookingReschedule(bookingId: string, accepterId: string, accepterRole: 'client' | 'freelancer') {
+    const { data: current, error: fetchError } = await supabase
+      .from('bookings')
+      .select('reschedule_proposed_start_at, reschedule_proposed_end_at, reschedule_proposed_by')
+      .eq('id', bookingId)
+      .single();
+
+    if (fetchError || !current) {
+      return { data: null, error: fetchError || new Error('Booking not found.') };
+    }
+    const proposedStart = (current as any).reschedule_proposed_start_at;
+    const proposedEnd = (current as any).reschedule_proposed_end_at;
+    if (!proposedStart || !proposedEnd) {
+      return { data: null, error: new Error('There is no pending reschedule proposal to accept.') };
+    }
+
+    const moveResponse = await this.rescheduleBooking(bookingId, new Date(proposedStart), new Date(proposedEnd));
+    if (moveResponse.error) {
+      return moveResponse;
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: accepterRole,
+      action: 'reschedule_accepted',
+    });
+
+    const proposerId = (current as any).reschedule_proposed_by;
+    if (proposerId) {
+      await this.notifyEvent({
+        userId: proposerId,
+        actorId: accepterId,
+        type: 'booking_reschedule_accepted',
+        title: 'Reschedule accepted',
+        message: 'Your proposed new time was accepted.',
+        relatedId: bookingId,
+      });
+    }
+
+    return { data, error: null };
+  }
+
+  static async declineBookingReschedule(bookingId: string, declinerId: string, declinerRole: 'client' | 'freelancer') {
+    const { data: current } = await supabase
+      .from('bookings')
+      .select('reschedule_proposed_by')
+      .eq('id', bookingId)
+      .single();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: declinerRole,
+      action: 'reschedule_declined',
+    });
+
+    const proposerId = (current as any)?.reschedule_proposed_by;
+    if (proposerId) {
+      await this.notifyEvent({
+        userId: proposerId,
+        actorId: declinerId,
+        type: 'booking_reschedule_declined',
+        title: 'Reschedule declined',
+        message: 'Your proposed new time was declined.',
+        relatedId: bookingId,
+      });
+    }
+
+    return { data, error: null };
+  }
+
+  static async withdrawBookingRescheduleProposal(bookingId: string, withdrawerRole: 'client' | 'freelancer') {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: withdrawerRole,
+      action: 'reschedule_withdrawn',
+    });
+
+    return { data, error: null };
   }
 
   // acceptRequestAndCreateBooking() stamps this exact deliverables string
@@ -3076,6 +3325,16 @@ export class DataService {
         ? appendGroupRequestMeta(baseDescription, groupMeta)
         : stripGroupRequestMeta(baseDescription);
 
+      // Structured columns alongside the existing free-text
+      // [[SCHEDULE_META:...]] tag (kept for backward-compatible display) —
+      // this is what lets a still-pending request's slot be queried at all
+      // (e.g. to show "N pending requests" on a freelancer's calendar)
+      // without full-text parsing, while staying a non-exclusive soft hold:
+      // nothing scopes the bookings_no_overlap constraint to this table, so
+      // any number of requests can share an overlapping slot until one is
+      // actually accepted.
+      const scheduleMeta = extractScheduleMeta(payloadMessage);
+
       const response = await this.createRequest({
         client_id: input.clientId,
         freelancer_id: recipientId,
@@ -3084,6 +3343,9 @@ export class DataService {
         message: payloadMessage,
         budget,
         status: 'pending',
+        start_date: scheduleMeta?.date || null,
+        start_time: scheduleMeta?.time || null,
+        end_time: scheduleMeta?.endTime || null,
       } as any);
 
       if (response.error) {
@@ -3092,7 +3354,6 @@ export class DataService {
 
       created.push(response.data);
       if (response.data?.id) {
-        const scheduleMeta = extractScheduleMeta(payloadMessage);
         await this.logRequestOffer({
           request_id: response.data.id,
           round: 1,
@@ -3222,11 +3483,15 @@ export class DataService {
 
     if (!meta?.group_id) {
       const nextMessage = stripGroupRequestMeta(input.description);
+      const scheduleMeta = extractScheduleMeta(nextMessage);
       return this.updateRequest(input.requestId, {
         project_name: input.projectName,
         description: nextMessage,
         message: nextMessage,
         budget: input.budget,
+        start_date: scheduleMeta?.date || null,
+        start_time: scheduleMeta?.time || null,
+        end_time: scheduleMeta?.endTime || null,
       } as any);
     }
 
@@ -3252,6 +3517,7 @@ export class DataService {
       recipients: Array.from(desiredRecipients),
     };
     const nextMessage = appendGroupRequestMeta(input.description, mergedMeta as any);
+    const groupScheduleMeta = extractScheduleMeta(nextMessage);
 
     for (const request of groupRequests) {
       await this.updateRequest(request.id, {
@@ -3259,6 +3525,9 @@ export class DataService {
         description: nextMessage,
         message: nextMessage,
         budget: input.budget,
+        start_date: groupScheduleMeta?.date || null,
+        start_time: groupScheduleMeta?.time || null,
+        end_time: groupScheduleMeta?.endTime || null,
       } as any);
     }
 
@@ -3275,6 +3544,9 @@ export class DataService {
         message: nextMessage,
         budget: input.budget,
         status: 'pending',
+        start_date: groupScheduleMeta?.date || null,
+        start_time: groupScheduleMeta?.time || null,
+        end_time: groupScheduleMeta?.endTime || null,
       } as any);
     }
 

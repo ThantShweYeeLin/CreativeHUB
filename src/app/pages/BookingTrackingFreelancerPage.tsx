@@ -12,6 +12,7 @@ import { BookingCheckIn } from './bookingTracking/BookingCheckIn';
 import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
+import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
 
 interface BookingTrackingFreelancerPageProps {
   onBack: () => void;
@@ -227,15 +228,20 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           />
         )}
 
+        {user?.id && isBookingRescheduleEligible(escrowState) && (
+          <RescheduleCard booking={booking} role="freelancer" userId={user.id} onRefresh={refresh} />
+        )}
+
         {/* Annulled */}
         {escrowState === 'annulled' && (
           <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-5 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Ban className="w-5 h-5 text-red-600" />
-              <h2 className="font-bold text-red-900">Booking Deleted</h2>
+              <h2 className="font-bold text-red-900">Booking Annulled</h2>
             </div>
             <p className="text-sm text-red-700">
-              The client didn't pay the deposit within 24 hours of acceptance, so this booking was automatically deleted.
+              The client didn't pay the deposit within 24 hours of acceptance, so this booking was automatically annulled
+              and your availability for that time was released — you're free to accept other bookings for it now.
             </p>
           </div>
         )}
@@ -248,7 +254,9 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               <h2 className="font-bold text-lg text-white">Waiting for Deposit</h2>
             </div>
             <p className="text-gray-300 text-sm mb-4">
-              The client has 24 hours to transfer the deposit. If they don't, this booking is cancelled automatically.
+              This time is held exclusively for this booking while the client's 24-hour deposit window is open — you
+              won't be able to accept another request that overlaps it. If they don't pay in time, it's annulled
+              automatically and the slot is released back to you.
             </p>
             {formatCountdown(booking.deposit_deadline) && (
               <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">

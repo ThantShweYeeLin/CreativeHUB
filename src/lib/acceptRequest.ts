@@ -1,7 +1,13 @@
 import { DataService } from './dataService';
 import { extractBudgetMeta, stripBudgetMeta } from './requestBudget';
-import { extractScheduleMeta } from './requestSchedule';
+import { extractScheduleMeta, addMinutesToTime, minutesBetween, combineBangkokDateTime } from './requestSchedule';
 import { DEPOSIT_DEADLINE_HOURS } from './bookingEscrow';
+
+const DEFAULT_BOOKING_DURATION_MINUTES = 120;
+// Matches the deposit percentage src/app/pages/bookingTracking/useBookingTracking.ts
+// has always computed client-side — persisted here now instead of only
+// ever derived on the fly, so it's a stable, auditable figure.
+const DEPOSIT_PERCENTAGE = 0.3;
 
 // Shared by both sides of a request/counter-offer negotiation
 // (FreelancerDashboard accepting a request or a client's counter, and
@@ -11,10 +17,28 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   const budgetMeta = extractBudgetMeta(request.message, request.description);
   const budget = overrideBudget ?? Number(budgetMeta?.max ?? request.budget ?? 0);
   const scheduleMeta = extractScheduleMeta(request.message, request.description);
+  const isAcceptedCounter = request.status === 'countered' && request.counter_date && request.counter_time;
   // A counter offer may have proposed a different date/time — if the offer
   // being accepted is a counter, that takes precedence over the original ask.
-  const startDate = request.status === 'countered' && request.counter_date ? request.counter_date : scheduleMeta?.date || null;
-  const startTime = request.status === 'countered' && request.counter_time ? request.counter_time : scheduleMeta?.time || null;
+  const startDate = isAcceptedCounter ? request.counter_date : scheduleMeta?.date || null;
+  const startTime = isAcceptedCounter ? request.counter_time : scheduleMeta?.time || null;
+
+  // The original ask's duration (end - start) is what a counter offer's
+  // start_time carries forward — a counter only proposes a new *start*
+  // (see supabase/counter_schedule.sql), not its own end time. Falls back
+  // to the same default session length src/lib/availability.ts assumes
+  // when nothing else is known.
+  const originalDurationMinutes =
+    scheduleMeta?.time && scheduleMeta?.endTime
+      ? minutesBetween(scheduleMeta.time, scheduleMeta.endTime)
+      : DEFAULT_BOOKING_DURATION_MINUTES;
+  const endTime = isAcceptedCounter
+    ? addMinutesToTime(startTime, originalDurationMinutes)
+    : scheduleMeta?.endTime || (startTime ? addMinutesToTime(startTime, DEFAULT_BOOKING_DURATION_MINUTES) : null);
+
+  const startAt = startDate && startTime ? combineBangkokDateTime(startDate, startTime) : null;
+  const endAt = startDate && endTime ? combineBangkokDateTime(startDate, endTime) : null;
+  const depositAmount = Math.round(budget * DEPOSIT_PERCENTAGE);
 
   const groupMeta = DataService.getRequestGroupMeta(request);
 
@@ -27,11 +51,20 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     // Stays 'pending' until the client pays the deposit (BookingTrackingClientPage's
     // Transfer Deposit flips it to 'confirmed') — this is the first state of
     // the deposit escrow lifecycle, not a bug. See src/lib/bookingEscrow.ts.
+    // From this point on, supabase's bookings_no_overlap exclusion
+    // constraint holds this exact time range exclusively for this
+    // freelancer — a second accept that would overlap it is rejected by
+    // the database itself (DataService.createBooking translates that into
+    // DataService.BOOKING_SLOT_TAKEN_MESSAGE).
     status: 'pending',
     payment_status: 'unpaid',
     deliverables: `Auto-created from request ${request.id}`,
     start_date: startDate,
     start_time: startTime,
+    end_time: endTime,
+    start_at: startAt?.toISOString() || null,
+    end_at: endAt?.toISOString() || null,
+    deposit_amount: depositAmount,
     deposit_deadline: new Date(Date.now() + DEPOSIT_DEADLINE_HOURS * 60 * 60 * 1000).toISOString(),
     // Lets checkGroupDepositsAndCreateChat (src/lib/groupDepositChat.ts)
     // find every sibling booking from this same group request once each

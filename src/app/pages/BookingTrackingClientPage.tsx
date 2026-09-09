@@ -14,6 +14,7 @@ import { BookingCheckIn } from './bookingTracking/BookingCheckIn';
 import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
+import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
 import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
 
 interface BookingTrackingClientPageProps {
@@ -308,15 +309,20 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
           />
         )}
 
+        {user?.id && isBookingRescheduleEligible(escrowState) && (
+          <RescheduleCard booking={booking} role="client" userId={user.id} onRefresh={refresh} />
+        )}
+
         {/* Annulled */}
         {escrowState === 'annulled' && (
           <div className="rounded-2xl border-2 border-red-200 bg-red-50 p-5 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Ban className="w-5 h-5 text-red-600" />
-              <h2 className="font-bold text-red-900">Booking Deleted</h2>
+              <h2 className="font-bold text-red-900">Booking Annulled</h2>
             </div>
             <p className="text-sm text-red-700">
-              The deposit wasn't paid within 24 hours of acceptance, so this booking was automatically deleted.
+              The deposit wasn't paid within 24 hours of acceptance, so this booking was automatically annulled and the
+              freelancer's availability for that time was released.
             </p>
           </div>
         )}
@@ -329,14 +335,15 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               <h2 className="font-bold text-lg text-white">Deposit Transfer Required</h2>
             </div>
             <p className="text-gray-300 text-sm mb-4">
-              Transfer the booking deposit to secure your booking. The deposit will be held safely and released to the
-              freelancer after service completion.
+              This time slot is reserved for your booking until the deadline below. Transfer the deposit to confirm it —
+              the deposit will be held safely and released to the freelancer after service completion.
             </p>
             {formatCountdown(booking.deposit_deadline) && (
               <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
                 <Clock className="h-4 w-4 flex-shrink-0 text-amber-300" />
                 <p className="text-sm font-bold text-amber-300">
-                  {formatCountdown(booking.deposit_deadline)} left to pay — the request will be cancelled automatically after that.
+                  {formatCountdown(booking.deposit_deadline)} left to pay — if it isn't paid in time, the booking will be
+                  automatically annulled and this time slot released.
                 </p>
               </div>
             )}

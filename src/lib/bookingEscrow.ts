@@ -13,6 +13,10 @@ export type EscrowState =
   | 'annulled';
 
 export function getBookingEscrowState(booking: any): EscrowState {
+  if (booking?.status === 'annulled') return 'annulled';
+  // Legacy fallback for rows written before the distinct 'annulled' status
+  // existed (see supabase/booking_annulled_reconcile.sql) — status was
+  // 'cancelled' with this reason instead.
   if (booking?.status === 'cancelled' && booking?.cancellation_reason === 'deposit_not_paid') return 'annulled';
   if (booking?.payment_status === 'refunded') return 'refunded';
   if (booking?.payment_status === 'paid') return 'released';

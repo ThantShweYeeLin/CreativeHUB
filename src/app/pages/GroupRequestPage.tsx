@@ -41,6 +41,7 @@ interface GroupRequestPrefillState {
   prefillNotes?: string;
   prefillScheduleDate?: string;
   prefillScheduleTime?: string;
+  prefillScheduleEndTime?: string;
   prefillCurrency?: string;
 }
 
@@ -61,6 +62,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   const [notes, setNotes] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleEndTime, setScheduleEndTime] = useState('');
   const [currency, setCurrency] = useState(normalizeCurrencyCode(preferredCurrency, 'THB'));
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -131,6 +133,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     if (state.prefillNotes) setNotes(state.prefillNotes);
     if (state.prefillScheduleDate) setScheduleDate(state.prefillScheduleDate);
     if (state.prefillScheduleTime) setScheduleTime(state.prefillScheduleTime);
+    if (state.prefillScheduleEndTime) setScheduleEndTime(state.prefillScheduleEndTime);
     if (state.prefillCurrency) setCurrency(state.prefillCurrency);
 
     const freelancer = state.prefillFreelancer;
@@ -165,6 +168,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   }, [allFreelancers, selectedIds, searchQuery]);
 
   const timeSlots = useMemo(() => generateTimeSlots('06:00', '22:00'), []);
+  const endTimeSlots = useMemo(() => timeSlots.filter((slot) => slot > scheduleTime), [timeSlots, scheduleTime]);
   const todayDateString = new Date().toISOString().slice(0, 10);
 
   const minimumFor = (freelancer: FreelancerOption) =>
@@ -212,8 +216,12 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       setError('Enter a location for this booking.');
       return;
     }
-    if (!scheduleDate || !scheduleTime) {
-      setError('Choose a date and time for this booking.');
+    if (!scheduleDate || !scheduleTime || !scheduleEndTime) {
+      setError('Choose a start and end time for this booking.');
+      return;
+    }
+    if (scheduleEndTime <= scheduleTime) {
+      setError('End time must be after the start time.');
       return;
     }
 
@@ -242,7 +250,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
       const budgetMeta: BudgetMeta = { currency, min: minimum, max: budgetAmount };
       const description = appendLocationMeta(
-        appendScheduleMeta(appendBudgetMeta(notes, budgetMeta), { date: scheduleDate, time: scheduleTime }),
+        appendScheduleMeta(appendBudgetMeta(notes, budgetMeta), { date: scheduleDate, time: scheduleTime, endTime: scheduleEndTime }),
         location.trim()
       );
 
@@ -455,23 +463,35 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-900">Schedule</label>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <input
                 type="date"
                 required
                 min={todayDateString}
                 value={scheduleDate}
-                onChange={(event) => setScheduleDate(event.target.value)}
+                onChange={(event) => { setScheduleDate(event.target.value); setScheduleTime(''); setScheduleEndTime(''); }}
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
               />
               <select
                 required
                 value={scheduleTime}
-                onChange={(event) => setScheduleTime(event.target.value)}
+                onChange={(event) => { setScheduleTime(event.target.value); setScheduleEndTime(''); }}
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
               >
-                <option value="" disabled>Select a time</option>
+                <option value="" disabled>Start time</option>
                 {timeSlots.map((slot) => (
+                  <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                ))}
+              </select>
+              <select
+                required
+                disabled={!scheduleTime}
+                value={scheduleEndTime}
+                onChange={(event) => setScheduleEndTime(event.target.value)}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+              >
+                <option value="" disabled>{!scheduleTime ? 'Choose a start time first' : 'End time'}</option>
+                {endTimeSlots.map((slot) => (
                   <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
                 ))}
               </select>
