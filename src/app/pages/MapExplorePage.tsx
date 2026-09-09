@@ -10,6 +10,7 @@ import { DataService } from '../../lib/dataService';
 import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMapper';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { FREELANCER_CATEGORY_LABELS, isFreelancerCategory } from '../../lib/categories';
+import { haversineDistanceKm } from '../../lib/geo';
 
 type Availability = 'available' | 'busy' | 'unavailable';
 type BudgetBand = 'all' | 'under-100' | '100-300' | '300-500' | '500-plus';
@@ -99,11 +100,11 @@ function professionVisual(freelancer: FreelancerMapProfile) {
       return { accent: '#7c3aed', glyph: 'FD' };
     case 'Videographer':
       return { accent: '#2563eb', glyph: 'VD' };
-    case 'Decorator / Florist':
+    case 'Decorator/Florist':
       return { accent: '#ec4899', glyph: 'DF' };
-    case 'Cake / Dessert':
+    case 'Cake/Dessert Maker':
       return { accent: '#f97316', glyph: 'CK' };
-    case 'DJ / Musician':
+    case 'Musician/Live Entertainment':
       return { accent: '#8b5cf6', glyph: 'DJ' };
     default:
       return { accent: '#475569', glyph: 'CR' };
@@ -146,19 +147,7 @@ const clientMarkerIcon = divIcon({
   iconAnchor: [17, 17],
 });
 
-function distanceKm(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const toRad = (value: number) => (value * Math.PI) / 180;
-  const earthRadiusKm = 6371;
-  const dLat = toRad(bLat - aLat);
-  const dLng = toRad(bLng - aLng);
-  const lat1 = toRad(aLat);
-  const lat2 = toRad(bLat);
-  const sinLat = Math.sin(dLat / 2);
-  const sinLng = Math.sin(dLng / 2);
-  const a = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return earthRadiusKm * c;
-}
+const distanceKm = haversineDistanceKm;
 
 function formatDistanceAway(distance: number, language: 'en' | 'th') {
   if (!Number.isFinite(distance)) {

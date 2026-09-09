@@ -6,6 +6,8 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from './bookingTracking/DisputeTimeline';
+import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
+import type { BookingCheckIn } from '../../lib/bookingCheckIn';
 
 type Tab = 'overview' | 'users' | 'reports' | 'disputes' | 'activity';
 
@@ -567,6 +569,7 @@ function DisputesTab() {
   const [activeBookings, setActiveBookings] = useState<any[]>([]);
   const [resolvedBookings, setResolvedBookings] = useState<any[]>([]);
   const [events, setEvents] = useState<Record<string, any[]>>({});
+  const [checkIns, setCheckIns] = useState<Record<string, BookingCheckIn[]>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -583,6 +586,14 @@ function DisputesTab() {
     );
     const eventsMap = Object.fromEntries(eventEntries);
     setEvents((current) => ({ ...current, ...eventsMap }));
+
+    const checkInEntries = await Promise.all(
+      bookings.map(async (b: any) => {
+        const res = await DataService.getBookingCheckIns(b.id);
+        return [b.id, res.data || []] as const;
+      })
+    );
+    setCheckIns((current) => ({ ...current, ...Object.fromEntries(checkInEntries) }));
 
     const paths = Object.values(eventsMap)
       .flat()
@@ -707,6 +718,8 @@ function DisputesTab() {
               </div>
             </div>
 
+            <AttendanceEvidence checkIns={checkIns[b.id] || []} disputeCategory={clientClaim?.category} detailed />
+
             <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Full Timeline</p>
             <DisputeTimeline events={bookingEvents} signedUrls={signedUrls} />
 
@@ -750,6 +763,7 @@ function DisputesTab() {
 
   const renderResolvedCard = (b: any) => {
     const bookingEvents = events[b.id] || [];
+    const clientClaim = bookingEvents.find((e) => e.actor === 'client' && e.action === 'complain');
     const decisionEvent = [...bookingEvents].reverse().find((e) => e.actor === 'admin' && (e.action === 'refunded' || e.action === 'released'));
     const deposit = Math.round(Number(b.budget || 0) * 0.3);
     const isExpanded = expandedId === b.id;
@@ -783,6 +797,7 @@ function DisputesTab() {
                 <p className="text-sm text-gray-700">{decisionEvent.reason}</p>
               </div>
             )}
+            <AttendanceEvidence checkIns={checkIns[b.id] || []} disputeCategory={clientClaim?.category} detailed />
             <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Full Timeline</p>
             <DisputeTimeline events={bookingEvents} signedUrls={signedUrls} />
           </div>

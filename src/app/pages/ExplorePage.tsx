@@ -6,13 +6,13 @@ import { Avatar } from '../../components/common/Avatar';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
-import { AIImageMatcher, AIImageMatcherResults, type AIMatcherResult } from '../components/AIImageMatcher';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
+import { haversineDistanceKm } from '../../lib/geo';
 
 interface ProfileCardProps {
   id: string;
@@ -128,20 +128,16 @@ function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-/** "Photographer" -> "Photographers", "Decorator / Florist" -> "Decorators / Florists" — pluralizes each "/"-joined part on its own. */
+/** "Photographer" -> "Photographers", "Decorator/Florist" -> "Decorators/Florists", "Cake/Dessert Maker" -> "Cakes/Dessert Makers" — pluralizes the last word of each "/"-joined segment. */
 function pluralizeCategory(label: string) {
-  return label.split(' / ').map((part) => `${part}s`).join(' / ');
-}
-
-/** Great-circle distance between two lat/lng points, in kilometers. */
-function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return label
+    .split('/')
+    .map((segment) => {
+      const words = segment.trim().split(' ');
+      words[words.length - 1] = `${words[words.length - 1]}s`;
+      return words.join(' ');
+    })
+    .join('/');
 }
 
 export function ExplorePage() {
@@ -179,9 +175,6 @@ export function ExplorePage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showAIMatcher, setShowAIMatcher] = useState(false);
-  const [aiMatcherResults, setAIMatcherResults] = useState<AIMatcherResult[] | null>(null);
-  const [aiMatcherNote, setAIMatcherNote] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -626,15 +619,15 @@ export function ExplorePage() {
           </button>
           <button
             type="button"
-            onClick={() => setShowAIMatcher(true)}
+            onClick={() => navigate('/event-matcher')}
             className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
-              <div className="font-semibold text-sm md:text-base text-gray-900">AI Match Finder</div>
-              <div className="text-xs text-gray-500 hidden md:block">Describe or upload to match</div>
+              <div className="font-semibold text-sm md:text-base text-gray-900">Event Matcher</div>
+              <div className="text-xs text-gray-500 hidden md:block">Plan your event, get matched</div>
             </div>
           </button>
         </div>
@@ -684,19 +677,7 @@ export function ExplorePage() {
         </div>
       )}
 
-      {!isLoading && aiMatcherResults && (
-        <AIImageMatcherResults
-          results={aiMatcherResults}
-          note={aiMatcherNote}
-          onReset={() => {
-            setAIMatcherResults(null);
-            setAIMatcherNote(null);
-            setShowAIMatcher(true);
-          }}
-        />
-      )}
-
-      {!isLoading && !aiMatcherResults && profiles.length > 0 && filteredProfiles.length === 0 && (
+      {!isLoading && profiles.length > 0 && filteredProfiles.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
           <h2 className="mb-2 text-xl font-bold text-gray-900">
             {hasActiveSearch ? 'No matching freelancers' : 'No freelancers match these filters'}
@@ -709,7 +690,7 @@ export function ExplorePage() {
         </div>
       )}
 
-      {!isLoading && !aiMatcherResults && hasActiveSearch && filteredProfiles.length > 0 && (
+      {!isLoading && hasActiveSearch && filteredProfiles.length > 0 && (
         <CarouselSection
           title={
             searchQuery.trim()
@@ -741,14 +722,6 @@ export function ExplorePage() {
           onSearch={(nextFilters) => setFilters(nextFilters)}
         />
       )}
-      <AIImageMatcher
-        open={showAIMatcher}
-        onClose={() => setShowAIMatcher(false)}
-        onResults={(results, note) => {
-          setAIMatcherResults(results);
-          setAIMatcherNote(note ?? null);
-        }}
-      />
     </>
   );
 }

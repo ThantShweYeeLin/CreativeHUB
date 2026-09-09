@@ -457,12 +457,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     }
 
     if (isFreelancer) {
-      // Style embedding regeneration now lives centrally in
-      // DataService.updateFreelancerProfile/createFreelancerProfile - it
-      // fires automatically whenever title/skills/styles/description are
-      // part of the payload below, the same way for every save path in the
-      // app (not just this page), and records embedding_status instead of
-      // silently failing.
       const freelancerPayload = {
         title: freelancerForm.title,
         description: basicForm.bio,

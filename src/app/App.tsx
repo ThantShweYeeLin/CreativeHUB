@@ -20,6 +20,7 @@ const TeamProfilePage = lazy(() => import('./pages/TeamProfilePage').then((m) =>
 const MapView = lazy(() => import('./pages/MapExplorePage').then((m) => ({ default: m.MapView })));
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
 const GroupRequestPage = lazy(() => import('./pages/GroupRequestPage').then((m) => ({ default: m.GroupRequestPage })));
+const EventMatcherPage = lazy(() => import('./pages/EventMatcherPage').then((m) => ({ default: m.EventMatcherPage })));
 const EditProfilePage = lazy(() => import('./pages/EditProfilePage').then((m) => ({ default: m.EditProfilePage })));
 const BecomeFreelancerPage = lazy(() => import('./pages/BecomeFreelancerPage').then((m) => ({ default: m.BecomeFreelancerPage })));
 const FreelancerDashboardRequestsPage = lazy(() => import('./pages/FreelancerDashboardRequestsPage').then((m) => ({ default: m.FreelancerDashboardRequestsPage })));
@@ -234,6 +235,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <GroupRequestPage onBack={() => navigate(-1)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/event-matcher"
+            element={
+              <ProtectedRoute>
+                <EventMatcherPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />

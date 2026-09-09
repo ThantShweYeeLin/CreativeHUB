@@ -1,18 +1,19 @@
 // Canonical taxonomy of CreativeHUB's freelancer categories — the ONE
 // source of truth for every category picker, filter, and matcher in the
-// app (onboarding, Edit Profile, Explore, Advanced Filter, AI Matcher,
+// app (onboarding, Edit Profile, Explore, Advanced Filter, Event Matcher,
 // search). freelancer_profiles.title must always be set to exactly one of
 // these labels — no free text, no other values.
-//
-// server/src/routes/aiMatcher.ts is a separately-built TS project
-// (server/tsconfig.json has its own rootDir) and can't import this file
-// directly, so it keeps its own copy of this same taxonomy in sync by hand.
 export interface FreelancerCategoryDef {
   id: string;
   label: string;
   /** Suggested skill tags shown as quick-add chips for this category. */
   skills: string[];
-  /** Suggested style tags — what the AI Matcher searches by within this category. */
+  /**
+   * Suggested style tags — what search/matching filters by within this
+   * category. For Musician/Live Entertainment these are performer
+   * subtypes (Solo Artist, Band, DJ, ...) rather than visual styles, reusing
+   * the same field since the UI/matching treatment is identical.
+   */
   styles: string[];
 }
 
@@ -22,6 +23,12 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
     label: 'Photographer',
     skills: ['Portrait Photography', 'Wedding Photography', 'Event Photography', 'Product Photography', 'Fashion Photography', 'Lifestyle Photography', 'Photo Editing'],
     styles: ['Cinematic', 'Bright & Airy', 'Moody', 'Vintage', 'Editorial', 'Minimalist', 'Natural', 'Luxury', 'Documentary'],
+  },
+  {
+    id: 'videographer',
+    label: 'Videographer',
+    skills: ['Wedding Videography', 'Event Videography', 'Highlight Reels', 'Drone Videography', 'Cinematography', 'Video Editing', 'Live Streaming'],
+    styles: ['Cinematic', 'Documentary', 'Vintage', 'Moody', 'Bright & Airy', 'Editorial', 'Minimalist'],
   },
   {
     id: 'makeup-artist',
@@ -42,32 +49,33 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
     styles: ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
   },
   {
-    id: 'videographer',
-    label: 'Videographer',
-    skills: ['Wedding Videography', 'Event Videography', 'Highlight Reels', 'Drone Videography', 'Video Editing', 'Same-Day Edit', 'Live Streaming'],
-    styles: ['Cinematic', 'Documentary', 'Romantic', 'Moody', 'Bright & Airy', 'Vintage', 'Minimalist', 'Editorial'],
-  },
-  {
     id: 'decorator-florist',
-    label: 'Decorator / Florist',
-    skills: ['Event Styling', 'Floral Arrangements', 'Bridal Bouquets', 'Backdrop Design', 'Table Centerpieces', 'Balloon Decor', 'Venue Styling'],
-    styles: ['Romantic', 'Rustic', 'Minimalist', 'Luxury', 'Bohemian', 'Classic', 'Modern', 'Garden'],
+    label: 'Decorator/Florist',
+    skills: ['Event Decoration', 'Floral Arrangements', 'Bridal Bouquets', 'Backdrop Design', 'Balloon Styling', 'Table Centerpieces', 'Venue Styling'],
+    styles: ['Minimalist', 'Elegant', 'Luxury', 'Rustic', 'Romantic', 'Modern', 'Bohemian', 'Traditional', 'Garden'],
   },
   {
-    id: 'cake-dessert',
-    label: 'Cake / Dessert',
-    skills: ['Wedding Cakes', 'Custom Cake Design', 'Cupcakes', 'Dessert Tables', 'Cake Tasting', 'Sugar Flowers', 'Cake Delivery & Setup'],
-    styles: ['Elegant', 'Rustic', 'Minimalist', 'Whimsical', 'Classic', 'Modern', 'Luxury'],
+    id: 'cake-dessert-maker',
+    label: 'Cake/Dessert Maker',
+    skills: ['Custom Cakes', 'Wedding Cakes', 'Cupcakes', 'Dessert Tables', 'Cake Decorating', 'Sugar Flowers', 'Cake Tasting'],
+    styles: ['Elegant', 'Minimalist', 'Rustic', 'Modern', 'Whimsical', 'Luxury', 'Traditional'],
   },
   {
-    id: 'dj-musician',
-    label: 'DJ / Musician',
-    skills: ['Wedding DJ', 'Live Band', 'MC Hosting', 'Sound Equipment', 'Lighting Setup', 'Acoustic Performance', 'Song Requests'],
-    styles: ['Upbeat', 'Romantic', 'Classic', 'Modern', 'Acoustic', 'Elegant', 'High Energy'],
+    id: 'musician-live-entertainment',
+    label: 'Musician/Live Entertainment',
+    skills: ['Live Performance', 'Wedding Ceremony Music', 'Reception Entertainment', 'MC Hosting', 'Sound Equipment', 'Song Requests', 'Custom Setlists'],
+    styles: ['Solo Artist', 'Band', 'Singer/Vocalist', 'Acoustic Duo', 'Instrumentalist', 'DJ'],
   },
 ];
 
 export const FREELANCER_CATEGORY_LABELS = FREELANCER_CATEGORIES.map((category) => category.label);
+
+// Historically excluded Model from the Event Matcher while Model was still
+// a valid category; Model has since been removed from FREELANCER_CATEGORIES
+// entirely (see supabase/remove_model_category.sql), so this is now simply
+// every category — kept as its own export since Event Matcher call sites
+// already depend on this name.
+export const EVENT_MATCHER_CATEGORY_LABELS = FREELANCER_CATEGORY_LABELS as readonly string[];
 
 export type FreelancerCategory = (typeof FREELANCER_CATEGORY_LABELS)[number];
 
@@ -95,11 +103,8 @@ export function suggestedStylesForCategory(categoryLabel: string | null | undefi
 
 // Custom (user-typed, via "+ Other") skills/styles are never written to any
 // separate column — a value simply IS custom if it doesn't appear in its
-// category's standardized list. This is what keeps the AI Matcher's fixed
-// taxonomy (server/src/routes/aiMatcher.ts's TAXONOMY) safe from arbitrary
-// user text: the matcher only ever offers standardized styles as an output
-// enum, so a custom style can never surface there, while still living on
-// the freelancer's profile and being reachable through normal text search.
+// category's standardized list, while still living on the freelancer's
+// profile and being reachable through normal text search.
 export function isStandardSkill(categoryLabel: string | null | undefined, skill: string): boolean {
   return suggestedSkillsForCategory(categoryLabel).includes(skill);
 }

@@ -13,8 +13,9 @@ import {
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
-import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
 import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
+import type { BookingCheckIn } from './bookingCheckIn';
+import type { LocationPoint } from '../components/common/LeafletLocationPicker';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -663,45 +664,51 @@ export class DataService {
     };
   }
 
-  // Semantic style matching — ranks category-filtered freelancers by cosine
-  // similarity between queryEmbedding and each freelancer's style_embedding
-  // (see supabase/ai_style_matching.sql's match_freelancer_styles function).
-  static async matchFreelancersByStyle(category: string, queryEmbedding: number[], limit = 10) {
-    if (!hasSupabaseConfig) {
-      return { data: [], error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
-    }
-
-    const rpcResponse = await (supabase as any).rpc('match_freelancer_styles', {
-      query_embedding: queryEmbedding,
-      match_category: category,
-      match_count: limit,
-    });
-
-    if (rpcResponse.error || !rpcResponse.data) {
-      return { data: [], error: rpcResponse.error };
-    }
-
-    const ranked: Array<{ user_id: string; similarity: number }> = rpcResponse.data;
-    const userIds = ranked.map((row) => row.user_id);
-    if (userIds.length === 0) {
-      return { data: [], error: null };
-    }
-
-    const { data, error } = await supabase
+  // EVENT MATCHER
+  // Fetches everything the pure ranking/filtering logic in lib/eventMatcher.ts
+  // needs for one category on one event date: candidate profiles, their
+  // blocked dates for that date, any existing booking that day, and their
+  // service packages. Filtering (availability, location coverage) and
+  // ranking happen entirely in application code afterward — this method is
+  // just the query, same split as freelancerSearch.ts's interpretSearchQuery
+  // / scoreFreelancerMatch versus this file's searchFreelancers.
+  static async getEventMatcherCandidates(category: string, eventDate: string) {
+    const { data: profiles, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), social_links(*)')
-      .in('user_id', userIds);
+      .select(
+        'id, user_id, title, styles, experience_years, hourly_rate, locations, studio_locations, users:user_id!inner(id, full_name, avatar_url, gender, rating, total_reviews, account_status, preferred_currency)' as any
+      )
+      .eq('title', category)
+      .eq('is_available', true)
+      .neq('visibility', 'limited')
+      .eq('users.account_status', 'active');
 
-    if (error || !data) {
-      return { data: [], error };
+    if (error || !profiles || profiles.length === 0) {
+      return { data: { profiles: [], blockedDates: [], bookings: [], services: [] }, error };
     }
 
-    const similarityByUserId = new Map(ranked.map((row) => [row.user_id, row.similarity]));
-    const merged = (data as any[])
-      .map((row) => ({ ...row, similarity: similarityByUserId.get(row.user_id) ?? 0 }))
-      .sort((a, b) => b.similarity - a.similarity);
+    const profileIds = (profiles as any[]).map((profile) => profile.id);
+    const userIds = (profiles as any[]).map((profile) => profile.user_id);
 
-    return { data: merged, error: null };
+    const [blockedDatesResponse, bookingsResponse, servicesResponse] = await Promise.all([
+      (supabase as any)
+        .from('freelancer_blocked_dates')
+        .select('freelancer_id, blocked_date')
+        .in('freelancer_id', profileIds)
+        .eq('blocked_date', eventDate),
+      supabase.from('bookings').select('freelancer_id, start_date, status').in('freelancer_id', userIds).eq('start_date', eventDate),
+      (supabase as any).from('freelancer_services').select('*').in('freelancer_id', profileIds),
+    ]);
+
+    return {
+      data: {
+        profiles: profiles as any[],
+        blockedDates: (blockedDatesResponse.data || []) as any[],
+        bookings: (bookingsResponse.data || []) as any[],
+        services: (servicesResponse.data || []) as any[],
+      },
+      error: null,
+    };
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {
@@ -796,92 +803,6 @@ export class DataService {
     return { data: finalResults, error: null };
   }
 
-  // The fields the AI Match Finder's embedding is actually built from — any
-  // profile write that touches one of these needs a fresh embedding, and
-  // one that doesn't (e.g. just working hours or hourly rate) can skip it.
-  private static readonly AI_RELEVANT_FREELANCER_FIELDS = ['title', 'skills', 'styles', 'description'] as const;
-
-  // Minor skills live in freelancer_skills, not on freelancer_profiles
-  // itself, so anything that builds the AI embedding text has to fetch
-  // them separately. Returns [] for a freelancer with no profile row yet
-  // (mid-onboarding, before the initial create) or no minor skills.
-  private static async getMinorSkillNames(userId: string): Promise<string[]> {
-    const profile = await supabase
-      .from('freelancer_profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle();
-    const freelancerId = (profile.data as { id?: string } | null)?.id;
-    if (!freelancerId) return [];
-
-    const rows = await (supabase as any)
-      .from('freelancer_skills')
-      .select('skills(name)')
-      .eq('freelancer_id', freelancerId)
-      .eq('skill_type', 'minor');
-
-    return ((rows.data || []) as Array<{ skills: { name: string } | null }>)
-      .map((row) => row.skills?.name)
-      .filter((name): name is string => !!name);
-  }
-
-  // Central place every freelancer-profile write in the app funnels
-  // through (create on first onboarding, update on every later edit) so a
-  // style embedding is generated the same way no matter which screen
-  // triggered the save — this is what actually fixes "most freelancers
-  // have no embedding": BecomeFreelancerPage's onboarding save used to
-  // skip embedding generation entirely because that logic used to live
-  // only in EditProfilePage's save handler, not here.
-  private static async withStyleEmbedding(
-    userId: string,
-    payload: Record<string, any>,
-    options: { isCreate?: boolean; force?: boolean } = {}
-  ): Promise<Record<string, any>> {
-    const touchesRelevantField = this.AI_RELEVANT_FREELANCER_FIELDS.some((field) => field in payload);
-    if (!options.isCreate && !options.force && !touchesRelevantField) {
-      return payload;
-    }
-
-    // An update only sends the fields that changed - the embedding needs
-    // the freelancer's *current* full profile, not just this call's diff.
-    let merged: Record<string, any> = payload;
-    if (!options.isCreate) {
-      const current = await supabase
-        .from('freelancer_profiles')
-        .select('title, skills, styles, description')
-        .eq('user_id', userId)
-        .maybeSingle();
-      merged = { ...(current.data || {}), ...payload };
-    }
-
-    try {
-      const minorSkills = await this.getMinorSkillNames(userId);
-      const profileText = buildFreelancerStyleProfileText({
-        category: String(merged.title || ''),
-        skills: Array.isArray(merged.skills) ? merged.skills : [],
-        styles: Array.isArray(merged.styles) ? merged.styles : [],
-        description: String(merged.description || ''),
-        minorSkills,
-      });
-      const embedding = await embedText(profileText);
-      return {
-        ...payload,
-        style_embedding: embedding,
-        embedding_status: 'ready',
-        embedding_updated_at: new Date().toISOString(),
-      };
-    } catch {
-      // Leave any existing embedding in place (stale is still more useful
-      // than none) - just flag that a retry is needed rather than
-      // blocking the profile save itself over a Gemini hiccup.
-      return {
-        ...payload,
-        embedding_status: 'failed',
-        embedding_updated_at: new Date().toISOString(),
-      };
-    }
-  }
-
   // Keeps freelancer_skills' one 'major' row in sync with
   // freelancer_profiles.title, which stays the source of truth every other
   // part of the app already reads. No-ops silently if the title isn't a
@@ -920,10 +841,9 @@ export class DataService {
     profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>,
     options: { majorSkillExperienceLevel?: string | null } = {}
   ) {
-    const payload = await this.withStyleEmbedding(userId, profile, { isCreate: true });
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .insert({ user_id: userId, ...payload })
+      .insert({ user_id: userId, ...profile })
       .select()
       .single();
     if (data?.id) await this.syncMajorSkill(data.id, (data as any).title, options.majorSkillExperienceLevel);
@@ -935,10 +855,9 @@ export class DataService {
     updates: Partial<FreelancerProfile>,
     options: { majorSkillExperienceLevel?: string | null } = {}
   ) {
-    const payload = await this.withStyleEmbedding(userId, updates as Record<string, any>);
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .update(payload)
+      .update(updates)
       .eq('user_id', userId)
       .select()
       .single();
@@ -1068,15 +987,6 @@ export class DataService {
           }))
         );
       if (insertResp.error) return { data: null, error: insertResp.error };
-    }
-
-    // Minor skills live outside freelancer_profiles, so the usual
-    // "did the payload touch an AI-relevant field" check can't see this
-    // change — force a fresh embedding using the freelancer's current
-    // full profile plus the minor skills that were just saved.
-    const embeddingPayload = await this.withStyleEmbedding(userId, {}, { force: true });
-    if (Object.keys(embeddingPayload).length > 0) {
-      await supabase.from('freelancer_profiles').update(embeddingPayload).eq('user_id', userId);
     }
 
     return this.getFreelancerSkills(freelancerId);
@@ -1341,6 +1251,44 @@ export class DataService {
   static async arbitrateBookingDispute(bookingId: string) {
     const { data, error } = await (supabase as any).rpc('arbitrate_booking_dispute', { p_booking_id: bookingId });
     return { data, error };
+  }
+
+  // BOOKING CHECK-IN
+  static async setBookingLocation(bookingId: string, point: LocationPoint) {
+    const { data, error } = await (supabase as any).rpc('set_booking_location', {
+      p_booking_id: bookingId,
+      p_lat: point.latitude,
+      p_lng: point.longitude,
+      p_address: point.formattedAddress,
+      p_place_id: point.placeId,
+      p_city: point.city || null,
+      p_district: point.district || null,
+    });
+    return { data, error };
+  }
+
+  static async checkInToBooking(
+    bookingId: string,
+    input: { lat?: number | null; lng?: number | null; permissionDenied?: boolean; locationUnavailable?: boolean }
+  ) {
+    const { data, error } = await (supabase as any).rpc('checkin_to_booking', {
+      p_booking_id: bookingId,
+      p_lat: input.lat ?? null,
+      p_lng: input.lng ?? null,
+      p_permission_denied: input.permissionDenied ?? false,
+      p_location_unavailable: input.locationUnavailable ?? false,
+    });
+    // The RPC returns a table (array); callers want the single row.
+    const row = Array.isArray(data) ? data[0] : data;
+    return { data: row as (BookingCheckIn & { already_checked_in: boolean }) | null, error };
+  }
+
+  static async getBookingCheckIns(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('booking_check_ins')
+      .select('*')
+      .eq('booking_id', bookingId);
+    return { data: (data || []) as BookingCheckIn[], error };
   }
 
   static async getBookingEvents(bookingId: string) {
@@ -1771,12 +1719,18 @@ export class DataService {
       evidence_photos: input.evidencePhotoPaths || [],
     });
 
+    // A no_show report stays neutral — CreativeHUB flags an attendance
+    // issue for review rather than relaying the client's complaint
+    // verbatim, to avoid putting the two parties in direct confrontation.
+    const isNoShow = input.category === 'no_show';
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: 'Client reported a problem',
-      message: `The client disputed this booking: ${input.reason}`,
+      title: isNoShow ? 'Attendance issue flagged' : 'Client reported a problem',
+      message: isNoShow
+        ? 'Your recent booking has been flagged for an attendance issue. Please review the booking and confirm what happened.'
+        : `The client disputed this booking: ${input.reason}`,
       relatedId: bookingId,
     });
 
@@ -2986,24 +2940,13 @@ export class DataService {
     });
   }
 
-  static async notifyAiMatchResults(userId: string, resultCount: number) {
+  static async notifyEventMatcherPlanSent(userId: string, recipientCount: number) {
     return this.notifyEvent({
       userId,
-      type: 'ai_match_results',
-      title: 'AI match results',
-      message: `Your AI matcher found ${resultCount} freelancer${resultCount === 1 ? '' : 's'}.`,
-      metadata: { results_count: resultCount },
-    });
-  }
-
-  static async notifyPortfolioMatchedByAI(freelancerUserId: string, actorUserId: string | null) {
-    return this.notifyEvent({
-      userId: freelancerUserId,
-      actorId: actorUserId,
-      type: 'portfolio_matched_ai',
-      title: 'Portfolio matched by AI',
-      message: 'Your portfolio appeared in AI match results.',
-      metadata: {},
+      type: 'event_matcher_plan_sent',
+      title: 'Event team requests sent',
+      message: `Your Event Matcher plan sent ${recipientCount} request${recipientCount === 1 ? '' : 's'}.`,
+      metadata: { recipient_count: recipientCount },
     });
   }
 
