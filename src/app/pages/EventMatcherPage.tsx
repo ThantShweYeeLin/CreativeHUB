@@ -8,9 +8,10 @@ import {
   Heart,
   Home,
   Landmark,
+  List,
   MapPin,
+  PackageX,
   PartyPopper,
-  RefreshCw,
   Sparkles,
   Sun,
   TreePine,
@@ -74,11 +75,7 @@ interface PlanLineItem extends BudgetLineItem {
 }
 
 const TIER_LABEL: Record<ServiceTier, string> = { essential: 'Essential', recommended: 'Recommended', optional: 'Optional' };
-const TIER_BADGE_CLASS: Record<ServiceTier, string> = {
-  essential: 'bg-gray-900 text-white',
-  recommended: 'bg-gray-200 text-gray-800',
-  optional: 'bg-gray-100 text-gray-500',
-};
+const TIER_ORDER: ServiceTier[] = ['essential', 'recommended', 'optional'];
 
 const EVENT_TYPE_ICONS: Record<EventType, LucideIcon> = {
   Wedding: Heart,
@@ -113,6 +110,12 @@ function toDateInputValue(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+function formatEventDate(value: string): string {
+  const parsed = parseDateInputValue(value);
+  if (!parsed) return '';
+  return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -140,6 +143,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   const [isMatching, setIsMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
   const [categoryMatches, setCategoryMatches] = useState<CategoryMatch[]>([]);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -201,6 +205,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
     setIsMatching(true);
     setMatchError(null);
+    setExpandedCategory(null);
     setStep('plan');
 
     const eventLocation: LocationPointLike = {
@@ -296,15 +301,17 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     setIsMatching(false);
   };
 
-  const replaceCandidate = (category: string) => {
+  const selectCandidate = (category: string, index: number) => {
     setCategoryMatches((current) =>
-      current.map((match) =>
-        match.category === category && match.candidates.length > 0
-          ? { ...match, selectedIndex: (match.selectedIndex + 1) % match.candidates.length }
-          : match
-      )
+      current.map((match) => (match.category === category ? { ...match, selectedIndex: index } : match))
     );
+    setExpandedCategory(null);
   };
+
+  const sortedCategoryMatches = useMemo(
+    () => [...categoryMatches].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier)),
+    [categoryMatches]
+  );
 
   const budgetFit = useMemo(() => {
     const items: PlanLineItem[] = categoryMatches
@@ -620,6 +627,15 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
             {!isMatching && (
               <>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Your {eventType} Plan</h2>
+                  <p className="mt-1 truncate text-sm text-gray-600">
+                    {[formatEventDate(date), location?.city || location?.formattedAddress, styles.length > 0 ? styles.join(', ') : null]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                </div>
+
                 <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-600">Total budget</span>
@@ -646,43 +662,81 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
                 {submitError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</div>}
 
-                <div className="space-y-3">
-                  {categoryMatches.map((match) => {
+                <div className="space-y-4">
+                  {sortedCategoryMatches.map((match) => {
                     const candidate = match.candidates[match.selectedIndex];
                     const dropped = isDropped(match.category);
+                    const isExpanded = expandedCategory === match.category;
 
                     return (
-                      <div
-                        key={match.category}
-                        className={`rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-gray-200'}`}
-                      >
-                        <div className="mb-2 flex items-center justify-between">
-                          <span className="font-bold text-gray-900">{match.category}</span>
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TIER_BADGE_CLASS[match.tier]}`}>{TIER_LABEL[match.tier]}</span>
-                        </div>
+                      <div key={match.category}>
+                        <p className="mb-1.5 px-1 text-xs font-semibold text-gray-500">
+                          {match.category} · {TIER_LABEL[match.tier]}
+                        </p>
 
                         {!candidate ? (
-                          <p className="text-sm text-gray-500">No providers available for this service yet.</p>
+                          <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white/60 p-6 text-center">
+                            <PackageX className="h-6 w-6 text-gray-400" />
+                            <p className="text-sm text-gray-500">No providers available for this service yet.</p>
+                          </div>
                         ) : (
-                          <div className="flex items-center gap-3">
-                            <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-semibold text-gray-900">{candidate.fullName}</p>
-                              <p className="text-xs text-gray-500">
-                                {candidate.serviceName} · {formatCurrencyAmount(candidate.packagePrice || 0, currency)}
-                                {candidate.rating > 0 && ` · ★ ${candidate.rating.toFixed(1)}`}
-                              </p>
-                              {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
-                            </div>
+                          <div className={`relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-gray-200'}`}>
                             {match.candidates.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() => replaceCandidate(match.category)}
-                                title="Show another provider"
-                                className="flex-shrink-0 rounded-full border border-gray-200 p-2 text-gray-600 hover:border-gray-400 hover:text-gray-900"
+                                onClick={() => setExpandedCategory((current) => (current === match.category ? null : match.category))}
+                                title="See all options"
+                                aria-label="See all options"
+                                aria-expanded={isExpanded}
+                                className="absolute right-3 top-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900"
                               >
-                                <RefreshCw className="h-4 w-4" />
+                                <List className="h-4 w-4" />
                               </button>
+                            )}
+
+                            <div className="flex items-center gap-3 pr-9">
+                              <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold text-gray-900">{candidate.fullName}</p>
+                                <p className="text-xs text-gray-500">
+                                  {candidate.serviceName} · {formatCurrencyAmount(candidate.packagePrice || 0, currency)}
+                                  {candidate.rating > 0 && ` · ★ ${candidate.rating.toFixed(1)}`}
+                                </p>
+                                {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
+                              </div>
+                            </div>
+
+                            {isExpanded && (
+                              <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
+                                {match.candidates.map((option, index) => {
+                                  const isSelected = index === match.selectedIndex;
+                                  return (
+                                    <div key={option.userId} className="flex items-center gap-3">
+                                      <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-semibold text-gray-900">{option.fullName}</p>
+                                        <p className="text-xs text-gray-500">
+                                          {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
+                                          {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
+                                        </p>
+                                      </div>
+                                      {isSelected ? (
+                                        <span className="flex-shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                          Selected
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => selectCandidate(match.category, index)}
+                                          className="flex-shrink-0 rounded-full border-2 border-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+                                        >
+                                          Select
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             )}
                           </div>
                         )}
