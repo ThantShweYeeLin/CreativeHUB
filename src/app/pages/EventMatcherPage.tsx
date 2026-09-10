@@ -410,12 +410,12 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                       key={type}
                       type="button"
                       onClick={() => setEventType(type)}
-                      className={`flex flex-col items-start gap-3 rounded-2xl bg-white p-4 text-left transition-all ${
+                      className={`flex flex-row items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-left transition-all ${
                         isSelected ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
                       }`}
                     >
-                      <Icon className="h-6 w-6 text-gray-700" />
-                      <span className={`text-sm ${isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{type}</span>
+                      <Icon className="h-4 w-4 flex-shrink-0 text-gray-700" />
+                      <span className={`text-xs leading-tight ${isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{type}</span>
                     </button>
                   );
                 })}
