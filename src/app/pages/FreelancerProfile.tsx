@@ -149,6 +149,28 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const convertedHourlyRate = freelancerProfile?.hourly_rate
     ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, viewerCurrency)
     : null;
+  // freelancer_profiles.hourly_rate actually stores whatever number the
+  // freelancer entered as "Starting Price" during onboarding (StepPricing),
+  // regardless of pricing_type — the column name predates pricing_type
+  // existing. pricing_type is what tells us the correct unit/label to
+  // display that same number with.
+  const pricingUnitSuffix: Record<string, string> = { hourly: '/hr', daily: '/day', per_project: '/project', custom_quote: '' };
+  const pricingRateLabel: Record<string, string> = {
+    hourly: 'hourly rate',
+    daily: 'daily rate',
+    per_project: 'starting price',
+    custom_quote: 'custom quote',
+  };
+  const pricingRateFieldLabel: Record<string, string> = {
+    hourly: 'Hourly rate',
+    daily: 'Daily rate',
+    per_project: 'Starting price',
+    custom_quote: 'Custom quote',
+  };
+  const pricingType = freelancerProfile?.pricing_type || 'hourly';
+  const formattedRate = convertedHourlyRate !== null ? `${formatCurrencyAmount(convertedHourlyRate, viewerCurrency)}${pricingUnitSuffix[pricingType] ?? '/hr'}` : 'Custom';
+  const rateCaption = pricingRateLabel[pricingType] ?? 'starting rate';
+  const rateFieldLabel = pricingRateFieldLabel[pricingType] ?? 'Hourly rate';
   const minimumOffer = freelancerProfile?.hourly_rate
     ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, formData.currency)
     : 0;
@@ -1149,7 +1171,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   {isOwner ? (
                     <button
                       onClick={() => navigate('/edit-profile')}
-                      className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
+                      className="flex items-center gap-2 rounded-xl border border-white/30 bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:bg-black hover:shadow-lg"
                     >
                       <Edit className="h-5 w-5" />
                       Edit Profile
@@ -1353,10 +1375,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
           </div>
 
-          <div className="p-6 md:p-8">
+          <div className="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4">
+            <p className="text-gray-700 leading-7">{bio}</p>
+
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <div className="mt-4 flex flex-col gap-2 text-sm text-gray-700 md:text-base">
+                <div className="mt-2 flex flex-col gap-2 text-sm text-gray-700 md:text-base">
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
                     <span>{location}</span>
@@ -1392,46 +1416,44 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             {isBookableFreelancer && (
-            <div className="mt-6 grid grid-cols-2 gap-4 border-y border-gray-200 py-5 md:grid-cols-5">
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
+            <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="text-sm text-gray-500">{totalReviews} reviews</p>
+                <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
+                  <span className="font-semibold">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">{totalReviews} reviews</p>
               </div>
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{majorSkillExperienceLevel || 'New'}</span>
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="text-sm text-gray-500">experience level</p>
+                <div className="mt-1 flex items-center gap-2 text-gray-900">
+                  <Briefcase className="h-4 w-4 md:h-5 md:w-5" />
+                  <span className="font-semibold">{majorSkillExperienceLevel || 'New'}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">experience level</p>
               </div>
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Sparkles className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{convertedHourlyRate !== null ? `${formatCurrencyAmount(convertedHourlyRate, viewerCurrency)}/hr` : 'Custom'}</span>
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="text-sm text-gray-500">{rateCaption}</p>
+                <div className="mt-1 flex items-center gap-2 text-gray-900">
+                  <Sparkles className="h-4 w-4 md:h-5 md:w-5" />
+                  <span className="font-semibold">{formattedRate}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">starting rate</p>
               </div>
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{activeProjects}</span>
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="text-sm text-gray-500">active projects</p>
+                <div className="mt-1 flex items-center gap-2 text-gray-900">
+                  <Users className="h-4 w-4 md:h-5 md:w-5" />
+                  <span className="font-semibold">{activeProjects}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">active projects</p>
               </div>
-              <div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Users className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{completedProjects}</span>
+              <div className="rounded-xl bg-gray-100 p-4">
+                <p className="text-sm text-gray-500">completed projects</p>
+                <div className="mt-1 flex items-center gap-2 text-gray-900">
+                  <Users className="h-4 w-4 md:h-5 md:w-5" />
+                  <span className="font-semibold">{completedProjects}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">completed projects</p>
               </div>
             </div>
             )}
-
-            <p className="mt-6 text-gray-700 leading-7">{bio}</p>
           </div>
         </section>
 
@@ -1451,7 +1473,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <h2 className="text-xl font-bold text-gray-900">Working Details</h2>
               <div className="mt-4 space-y-3 text-sm text-gray-700">
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
-                <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
+                <p><span className="font-semibold text-gray-900">{rateFieldLabel}:</span> {convertedHourlyRate !== null ? formattedRate : 'Discuss per project'}</p>
                 {majorSkillExperienceLevel && (
                   <p><span className="font-semibold text-gray-900">Experience level:</span> {majorSkillExperienceLevel}</p>
                 )}
@@ -1473,7 +1495,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <h2 className="text-xl font-bold text-gray-900">Skills</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.length > 0 ? skills.map((skill: string) => (
-                  <span key={skill} className="rounded-full bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-700">
+                  <span key={skill} className="rounded-full border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
                     {skill}
                   </span>
                 )) : <p className="text-sm text-gray-600">No skills listed yet.</p>}
@@ -1598,7 +1620,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   </div>
                   {review.comment && <p className="mt-3 text-sm text-gray-700">{review.comment}</p>}
                   {review.reply && (
-                    <div className="mt-3 rounded-xl bg-white p-4 ring-1 ring-gray-200">
+                    <div className="mt-3 rounded-r-xl border-l-4 border-gray-900 bg-gray-100 p-4">
                       <p className="text-xs font-semibold text-gray-900">Response from {profile?.full_name || 'the freelancer'}</p>
                       <p className="mt-1 text-sm text-gray-700">{review.reply}</p>
                     </div>

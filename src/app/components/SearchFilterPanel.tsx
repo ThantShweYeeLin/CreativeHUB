@@ -1,8 +1,9 @@
-import { X, Sparkles, MapPin, LocateFixed, Loader2, Star } from 'lucide-react';
+import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
+import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
 
 interface SearchFilterPanelProps {
   onClose: () => void;
@@ -78,6 +79,43 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
   const [otherLocationDraft, setOtherLocationDraft] = useState('');
   const [isLocating, setIsLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
+
+  // This panel renders as a fixed full-screen overlay on top of Explore,
+  // which stays mounted underneath it (unlike Event Matcher, a route whose
+  // previous page fully unmounts) — without this, Explore's own taller-
+  // than-viewport content keeps the document scrollable behind the overlay,
+  // showing a scrollbar even though the panel's own content fits. Same
+  // iOS-safe lock PostDetailModal uses: `overflow: hidden` alone doesn't
+  // stop touch-scrolling on iOS Safari, so the body is pinned in place too.
+  useEffect(() => {
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.left = previous.left;
+      body.style.right = previous.right;
+      body.style.width = previous.width;
+      body.style.overflow = previous.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, []);
 
   useEffect(() => {
     if (initialFilters) {
@@ -224,23 +262,36 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-8 py-6 rounded-t-3xl flex items-center justify-between z-10">
-          <h2 className="text-3xl font-bold text-gray-900">Advanced Filters</h2>
+    // Above the global top nav / mobile bottom nav (z-[1200], see MainLayout
+    // and MobileBottomNav) — otherwise this panel's own header renders
+    // underneath the persistent nav bar instead of replacing it.
+    <div className="fixed inset-0 z-[1300] overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100">
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-lg">
+        <div className="mx-auto max-w-4xl px-4 py-4">
           <button
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black"
           >
-            <X className="w-6 h-6 text-gray-600" />
+            <ChevronLeft className="h-5 w-5" />
+            Back
           </button>
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gray-900 text-white">
+              <SlidersHorizontal className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">Advanced Filters</h2>
+              <p className="text-sm text-gray-600">Narrow results down to providers that fit what you need.</p>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div className="p-8 space-y-8">
+      <div className="mx-auto max-w-4xl px-4 py-6">
+        <div className="space-y-6">
           {/* Types of Services */}
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Types of Services</h3>
+            <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Types of Services</h3>
             <div className="flex flex-wrap gap-3">
               {serviceOptions.map((service) => {
                 const isSelected = filters.services.includes(service);
@@ -248,11 +299,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={service}
                     onClick={() => toggleService(service)}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={chipClass(isSelected)}
                   >
                     {service}
                   </button>
@@ -263,15 +310,11 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
 
           {/* Minimum Rating */}
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Minimum Rating</h3>
+            <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Minimum Rating</h3>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, minRating: null }))}
-                className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                  filters.minRating === null
-                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={chipClass(filters.minRating === null)}
               >
                 Any
               </button>
@@ -281,13 +324,8 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={rating}
                     onClick={() => setFilters((prev) => ({ ...prev, minRating: rating }))}
-                    className={`flex items-center gap-1.5 px-6 py-3 rounded-xl font-semibold transition-all ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={chipClass(isSelected)}
                   >
-                    <Star className={`h-4 w-4 ${isSelected ? 'fill-current' : 'fill-current text-amber-400'}`} />
                     {rating}+
                   </button>
                 );
@@ -297,14 +335,17 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
 
           {/* Price Range */}
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Price Range ({(filters.currency || 'THB').toUpperCase()})</h3>
+            <h3 className={`${FIELD_LABEL_CLASS} mb-1`}>Price Range ({(filters.currency || 'THB').toUpperCase()})</h3>
+            <p className="mb-3 text-xs text-gray-500">
+              Choose a preset for quick filtering, or type your exact minimum and maximum budget.
+            </p>
             <div className="space-y-6">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-900">Currency</label>
+                <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Currency</label>
                 <select
                   value={filters.currency}
                   onChange={(event) => handleCurrencyChange(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
+                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
                 >
                   {SUPPORTED_CURRENCIES.map((item) => (
                     <option key={item.code} value={item.code}>
@@ -323,11 +364,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     <button
                       key={preset.key}
                       onClick={() => setFilters((prev) => ({ ...prev, priceRange: preset.range }))}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                        isActive
-                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
+                      className={chipClass(isActive)}
                     >
                       {preset.label}
                     </button>
@@ -337,7 +374,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
 
               {/* Price display */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
+                <div className={`flex items-center gap-3 ${INPUT_CONTAINER_CLASS}`}>
                   <span className="w-7 text-lg font-bold text-gray-900">{currencySymbol}</span>
                   <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Min</div>
@@ -348,11 +385,11 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                       step={PRICE_STEP}
                       value={filters.priceRange[0]}
                       onChange={(e) => setMinPrice(Number(e.target.value || PRICE_MIN))}
-                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                      className="w-full border-none bg-transparent text-2xl font-bold text-gray-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </div>
                 </div>
-                <div className="flex items-center gap-3 bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 rounded-xl border-2 border-gray-200">
+                <div className={`flex items-center gap-3 ${INPUT_CONTAINER_CLASS}`}>
                   <span className="w-7 text-lg font-bold text-gray-900">{currencySymbol}</span>
                   <div className="flex-1">
                     <div className="text-xs text-gray-600 font-medium">Max</div>
@@ -363,31 +400,23 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                       step={PRICE_STEP}
                       value={filters.priceRange[1]}
                       onChange={(e) => setMaxPrice(Number(e.target.value || PRICE_MAX))}
-                      className="w-full bg-transparent text-xl font-bold text-gray-900 focus:outline-none"
+                      className="w-full border-none bg-transparent text-2xl font-bold text-gray-900 focus:outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                   </div>
                 </div>
               </div>
-
-              <p className="text-sm text-gray-500">
-                Tip: Choose a preset for quick filtering, or type your exact minimum and maximum budget.
-              </p>
             </div>
           </div>
 
           {/* Preferred Locations */}
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Preferred Location</h3>
+            <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Preferred Location</h3>
 
             <div className="mb-3 flex flex-wrap gap-3">
               <button
                 onClick={toggleNearMe}
                 disabled={isLocating}
-                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all disabled:opacity-70 ${
-                  filters.nearMe
-                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={chipClass(Boolean(filters.nearMe), 'flex items-center gap-2 disabled:opacity-70')}
               >
                 {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
                 {isLocating ? 'Locating...' : 'Near Me'}
@@ -398,10 +427,10 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                 return (
                   <button
                     onClick={() => toggleLocation(userLocation)}
-                    className={`flex items-center gap-2 rounded-xl px-6 py-3 font-semibold transition-all ${
+                    className={`${CHIP_BASE_CLASS} flex items-center gap-2 ${
                       isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                        : 'border-2 border-dashed border-gray-300 bg-white text-gray-700 hover:border-gray-500 hover:bg-gray-50'
+                        ? CHIP_SELECTED_CLASS
+                        : 'border-2 border-dashed border-gray-300 bg-white font-medium text-gray-600 hover:border-gray-500 hover:bg-gray-50'
                     }`}
                   >
                     <MapPin className="h-4 w-4" /> Use my area: {userLocation}
@@ -417,9 +446,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={km}
                     onClick={() => setNearMeRadius(km)}
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition-all ${
-                      filters.nearMe?.radiusKm === km ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={chipClass(filters.nearMe?.radiusKm === km)}
                   >
                     {km} km
                   </button>
@@ -436,11 +463,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={location}
                     onClick={() => toggleLocation(location)}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                      isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
+                    className={chipClass(isSelected)}
                   >
                     {location}
                   </button>
@@ -453,7 +476,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={location}
                     onClick={() => toggleLocation(location)}
-                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 font-semibold text-white shadow-lg scale-105"
+                    className={`${CHIP_BASE_CLASS} ${CHIP_SELECTED_CLASS} flex items-center gap-1.5`}
                   >
                     {location} <X className="h-3.5 w-3.5" />
                   </button>
@@ -462,7 +485,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               {!showOtherInput ? (
                 <button
                   onClick={() => setShowOtherInput(true)}
-                  className="rounded-xl border-2 border-dashed border-gray-300 px-6 py-3 font-semibold text-gray-600 transition-all hover:border-gray-500 hover:bg-gray-50"
+                  className={`${CHIP_BASE_CLASS} border-2 border-dashed border-gray-300 font-medium text-gray-600 hover:border-gray-500 hover:bg-gray-50`}
                 >
                   + Other
                 </button>
@@ -474,9 +497,9 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     onChange={(event) => setOtherLocationDraft(event.target.value)}
                     onKeyDown={(event) => event.key === 'Enter' && applyOtherLocation()}
                     placeholder="e.g. Krabi"
-                    className="rounded-xl border border-gray-300 px-4 py-3 font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-300"
+                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-gray-900"
                   />
-                  <button onClick={applyOtherLocation} className="rounded-xl bg-gray-900 px-4 py-3 font-semibold text-white hover:bg-black">
+                  <button onClick={applyOtherLocation} className="rounded-xl border-2 border-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white">
                     Add
                   </button>
                   <button onClick={() => { setShowOtherInput(false); setOtherLocationDraft(''); }} className="p-2 text-gray-400 hover:text-gray-900">
@@ -489,7 +512,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-6 rounded-b-3xl flex items-center justify-between">
+        <div className="mt-8 flex items-center justify-between border-t border-gray-200 pt-6">
           <button
             onClick={() => {
               setFilters({
@@ -504,13 +527,13 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               setOtherLocationDraft('');
               setLocateError(null);
             }}
-            className="px-6 py-3 text-gray-700 font-semibold hover:bg-gray-100 rounded-xl transition-colors"
+            className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-gray-100"
           >
             Clear All
           </button>
           <button
             onClick={handleSearch}
-            className="flex items-center gap-2 px-8 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all"
+            className="flex items-center gap-2 rounded-xl bg-gray-900 px-8 py-3.5 font-semibold text-white transition-colors hover:bg-black"
           >
             <Sparkles className="w-5 h-5" />
             <span>Apply Filters</span>

@@ -636,6 +636,14 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                 </select>
               </div>
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold text-gray-700">Bio</label>
+                <textarea
+                  value={basicForm.bio}
+                  onChange={(event) => setBasicForm((current) => ({ ...current, bio: event.target.value }))}
+                  className="min-h-28 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                />
+              </div>
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
                 <input
@@ -652,14 +660,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     {isResolvingLocation ? 'Resolving...' : 'Resolve Address'}
                   </button>
                 </div>
-              </div>
-              <div className="md:col-span-2">
-                <label className="mb-2 block text-sm font-semibold text-gray-700">Bio</label>
-                <textarea
-                  value={basicForm.bio}
-                  onChange={(event) => setBasicForm((current) => ({ ...current, bio: event.target.value }))}
-                  className="min-h-28 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
-                />
               </div>
             </div>
           </div>

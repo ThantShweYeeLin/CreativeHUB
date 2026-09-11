@@ -34,6 +34,7 @@ import { SUPPORTED_CURRENCIES, appendBudgetMeta, type BudgetMeta } from '../../l
 import { appendScheduleMeta } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
 import { isFreelancerFreeOnDate } from '../../lib/availability';
+import { chipClass, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
 import {
   EVENT_SETTING_OPTIONS,
   EVENT_STYLE_OPTIONS,
@@ -407,7 +408,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             {inputError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{inputError}</div>}
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Event type</label>
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Event type</label>
               <div className="grid grid-cols-2 gap-3">
                 {EVENT_TYPES.map((type) => {
                   const Icon = EVENT_TYPE_ICONS[type];
@@ -430,7 +431,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Event date</label>
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Event date</label>
               <div className="flex justify-center rounded-2xl border border-gray-200 bg-white">
                 <Calendar
                   mode="single"
@@ -443,8 +444,8 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Total budget</label>
-              <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3.5 focus-within:ring-2 focus-within:ring-gray-900">
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Total budget</label>
+              <div className={`flex items-center gap-2 ${INPUT_CONTAINER_CLASS}`}>
                 <select
                   value={currency}
                   onChange={(event) => setCurrency(normalizeCurrencyCode(event.target.value))}
@@ -471,9 +472,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                       key={amount}
                       type="button"
                       onClick={() => setBudget(String(amount))}
-                      className={`rounded-full px-3.5 py-1.5 text-xs transition-all ${
-                        isSelected ? 'border-2 border-gray-900 font-bold text-gray-900' : 'border border-gray-200 font-medium text-gray-600 hover:border-gray-400'
-                      }`}
+                      className={chipClass(isSelected)}
                     >
                       {formatCurrencyAmount(amount, currency)}
                     </button>
@@ -483,13 +482,13 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             </div>
 
             <div>
-              <p className="mb-1 text-sm font-semibold text-gray-900">Style / theme</p>
+              <p className={`mb-1 ${FIELD_LABEL_CLASS}`}>Style / theme</p>
               <p className="mb-3 text-xs text-gray-500">Pick everything that fits — this shapes which categories and providers we suggest.</p>
               <TagSelector suggestions={EVENT_STYLE_OPTIONS} selected={styles} onChange={setStyles} otherPlaceholder="e.g. Tropical" variant="moodboard" />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Venue / setting</label>
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Venue / setting</label>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {EVENT_SETTING_OPTIONS.map((option) => {
                   const Icon = VENUE_SETTING_ICONS[option];
@@ -512,7 +511,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Location</label>
               <button
                 type="button"
                 onClick={() => setIsLocationPickerOpen(true)}
