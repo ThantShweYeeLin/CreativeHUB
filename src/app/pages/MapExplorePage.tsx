@@ -98,8 +98,14 @@ function professionVisual(freelancer: FreelancerMapProfile) {
       return { accent: '#f59e0b', glyph: 'HR' };
     case 'Fashion Designer':
       return { accent: '#7c3aed', glyph: 'FD' };
-    case 'Model':
-      return { accent: '#14b8a6', glyph: 'MD' };
+    case 'Videographer':
+      return { accent: '#2563eb', glyph: 'VD' };
+    case 'Decorator/Florist':
+      return { accent: '#ec4899', glyph: 'DF' };
+    case 'Cake/Dessert Maker':
+      return { accent: '#f97316', glyph: 'CK' };
+    case 'Musician/Live Entertainment':
+      return { accent: '#8b5cf6', glyph: 'DJ' };
     default:
       return { accent: '#475569', glyph: 'CR' };
   }

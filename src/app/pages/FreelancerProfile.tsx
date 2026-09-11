@@ -20,9 +20,9 @@ import {
   SUPPORTED_CURRENCIES,
   type BudgetMeta,
 } from '../../lib/requestBudget';
-import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
+import { appendScheduleMeta, generateTimeSlots, formatTimeLabel, addMinutesToTime } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
-import { isDateBlocked, isFreelancerFreeAt, isTimeSlotTaken } from '../../lib/availability';
+import { isDateBlocked, isRangeAvailable, isTimeSlotTaken } from '../../lib/availability';
 import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
@@ -47,6 +47,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
+  const [minorSkills, setMinorSkills] = useState<Array<{ name: string; experienceLevel: string | null }>>([]);
+  const [majorSkillExperienceLevel, setMajorSkillExperienceLevel] = useState<string | null>(null);
   const [services, setServices] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
@@ -109,6 +111,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     scheduleDate: '',
     scheduleTime: '',
+    scheduleEndTime: '',
   });
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
@@ -215,13 +218,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setFreelancerProfile(freelancerResponse.data || null);
 
       if (freelancerResponse.data?.id) {
-        const [servicesResponse, blockedDatesResponse] = await Promise.all([
+        const [servicesResponse, blockedDatesResponse, skillsResponse] = await Promise.all([
           DataService.getFreelancerServices(freelancerResponse.data.id),
           DataService.getFreelancerBlockedDates(freelancerResponse.data.id),
+          DataService.getFreelancerSkills(freelancerResponse.data.id),
         ]);
         if (isMounted) {
           setServices(servicesResponse.data || []);
           setFreelancerBlockedDates(blockedDatesResponse.data || []);
+          setMinorSkills((skillsResponse.data?.minor || []).map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
+          setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
         }
       }
 
@@ -357,6 +363,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         taken: formData.scheduleDate ? isTimeSlotTaken(freelancerBookings, formData.scheduleDate, slot) : false,
       })),
     [allTimeSlots, freelancerBookings, formData.scheduleDate]
+  );
+  // Bounded by the same working-hours slot list as the start time — an end
+  // time must be after the chosen start, within that same range.
+  const availableEndTimeSlots = useMemo(
+    () => (formData.scheduleTime ? allTimeSlots.filter((slot) => slot > formData.scheduleTime) : []),
+    [allTimeSlots, formData.scheduleTime]
   );
   const trust = useMemo(
     () =>
@@ -548,13 +560,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       return;
     }
 
-    if (!formData.scheduleDate || !formData.scheduleTime) {
-      setError('Choose a date and time for this booking.');
+    if (!formData.scheduleDate || !formData.scheduleTime || !formData.scheduleEndTime) {
+      setError('Choose a start and end time for this booking.');
       return;
     }
 
-    if (!isFreelancerFreeAt(freelancerBookings, freelancerBlockedDates, formData.scheduleDate, formData.scheduleTime)) {
-      setError('This freelancer is already occupied at that date and time. Please choose a different slot.');
+    if (formData.scheduleEndTime <= formData.scheduleTime) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
+    // Instant client-side pre-check only — the real, race-safe enforcement
+    // is the database's bookings_no_overlap exclusion constraint, applied
+    // once the freelancer actually accepts (see DataService.createBooking).
+    if (!isRangeAvailable(freelancerBookings, freelancerBlockedDates, formData.scheduleDate, formData.scheduleTime, formData.scheduleEndTime)) {
+      setError('This freelancer is already occupied during that time range. Please choose a different slot.');
       return;
     }
 
@@ -567,7 +587,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     const requestMessage = appendLocationMeta(
       appendScheduleMeta(
         appendBudgetMeta(formData.notes, budgetMeta),
-        { date: formData.scheduleDate, time: formData.scheduleTime }
+        { date: formData.scheduleDate, time: formData.scheduleTime, endTime: formData.scheduleEndTime }
       ),
       resolvedLocation
     );
@@ -604,6 +624,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       offerAmount: '',
       scheduleDate: '',
       scheduleTime: '',
+      scheduleEndTime: '',
     }));
     setIsSubmittingRequest(false);
   };
@@ -637,6 +658,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         prefillNotes: formData.notes || undefined,
         prefillScheduleDate: formData.scheduleDate || undefined,
         prefillScheduleTime: formData.scheduleTime || undefined,
+        prefillScheduleEndTime: formData.scheduleEndTime || undefined,
         prefillCurrency: formData.currency || undefined,
       },
     });
@@ -1381,9 +1403,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Briefcase className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                  <span className="font-semibold text-gray-900">{freelancerProfile?.experience_years || 0} yrs</span>
+                  <span className="font-semibold text-gray-900">{majorSkillExperienceLevel || 'New'}</span>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">experience</p>
+                <p className="mt-1 text-sm text-gray-500">experience level</p>
               </div>
               <div>
                 <div className="flex items-center gap-2 text-gray-700">
@@ -1430,7 +1452,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="mt-4 space-y-3 text-sm text-gray-700">
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
                 <p><span className="font-semibold text-gray-900">Hourly rate:</span> {convertedHourlyRate !== null ? formatCurrencyAmount(convertedHourlyRate, viewerCurrency) : 'Discuss per project'}</p>
-                <p><span className="font-semibold text-gray-900">Experience:</span> {freelancerProfile?.experience_years || 0} years</p>
+                {majorSkillExperienceLevel && (
+                  <p><span className="font-semibold text-gray-900">Experience level:</span> {majorSkillExperienceLevel}</p>
+                )}
                 {studioName && (
                   <p>
                     <span className="font-semibold text-gray-900">Studio:</span> {studioName}
@@ -1466,6 +1490,29 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
               </div>
             </div>
+
+            {(minorSkills.length > 0 || majorSkillExperienceLevel) && (
+              <div className="rounded-3xl bg-white p-6 shadow-xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
+                <p className="mt-1 text-base font-bold text-gray-900">
+                  {title}
+                  {majorSkillExperienceLevel && <span className="ml-2 text-sm font-semibold text-gray-500">· {majorSkillExperienceLevel}</span>}
+                </p>
+                {minorSkills.length > 0 && (
+                  <>
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {minorSkills.map((skill) => (
+                        <span key={skill.name} className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600">
+                          {skill.name}
+                          {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </aside>
         </section>
         )}
@@ -1963,14 +2010,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-gray-900">Schedule</label>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                   <div>
                     <input
                       type="date"
                       required
                       min={todayDateString}
                       value={formData.scheduleDate}
-                      onChange={(event) => setFormData((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '' }))}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '', scheduleEndTime: '' }))}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   </div>
@@ -1979,16 +2026,32 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       required
                       disabled={!formData.scheduleDate || isSelectedDateBlocked}
                       value={formData.scheduleTime}
-                      onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value }))}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value, scheduleEndTime: '' }))}
                       className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
                     >
                       <option value="" disabled>
-                        {!formData.scheduleDate ? 'Choose a date first' : isSelectedDateBlocked ? 'Not available this day' : 'Select a time'}
+                        {!formData.scheduleDate ? 'Choose a date first' : isSelectedDateBlocked ? 'Not available this day' : 'Start time'}
                       </option>
                       {availableTimeSlots.map((slot) => (
                         <option key={slot.value} value={slot.value} disabled={slot.taken}>
                           {formatTimeLabel(slot.value)}{slot.taken ? ' — Already booked' : ''}
                         </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <select
+                      required
+                      disabled={!formData.scheduleTime}
+                      value={formData.scheduleEndTime}
+                      onChange={(event) => setFormData((current) => ({ ...current, scheduleEndTime: event.target.value }))}
+                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                    >
+                      <option value="" disabled>
+                        {!formData.scheduleTime ? 'Choose a start time first' : 'End time'}
+                      </option>
+                      {availableEndTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
                       ))}
                     </select>
                   </div>

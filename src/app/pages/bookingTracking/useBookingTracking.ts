@@ -127,7 +127,11 @@ export function useBookingTracking() {
     }
 
     const servicePrice = Number(booking.budget || 0);
-    const deposit = Math.round(servicePrice * 0.3);
+    // Prefer the persisted figure (stamped at accept time — see
+    // src/lib/acceptRequest.ts) so it's a stable, auditable amount rather
+    // than always re-derived; older bookings from before that column
+    // existed fall back to the same 30% this always computed on the fly.
+    const deposit = booking.deposit_amount != null ? Number(booking.deposit_amount) : Math.round(servicePrice * 0.3);
     // Prefer the real start_date/start_time columns (populated going forward);
     // fall back to the SCHEDULE_META tag in description for older bookings.
     const scheduleMeta = booking.start_date

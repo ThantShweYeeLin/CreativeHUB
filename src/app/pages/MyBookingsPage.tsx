@@ -27,6 +27,8 @@ function formatStatus(status: string) {
       return { label: 'Completed', color: 'bg-gray-100 text-gray-700 border-gray-200' };
     case 'cancelled':
       return { label: 'Cancelled', color: 'bg-red-100 text-red-700 border-red-200' };
+    case 'annulled':
+      return { label: 'Annulled', color: 'bg-red-100 text-red-700 border-red-200' };
     default:
       return { label: 'Pending', color: 'bg-amber-100 text-amber-700 border-amber-200' };
   }

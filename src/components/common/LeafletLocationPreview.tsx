@@ -7,6 +7,8 @@ interface LeafletLocationPreviewProps {
   title: string;
   subtitle?: string;
   radiusMeters?: number;
+  /** Set false for a purely decorative preview (e.g. inside a clickable card) — disables pan/zoom so the map never intercepts the card's own click. */
+  interactive?: boolean;
 }
 
 const locationIcon = divIcon({
@@ -26,11 +28,23 @@ export function LeafletLocationPreview({
   title,
   subtitle,
   radiusMeters = 300,
+  interactive = true,
 }: LeafletLocationPreviewProps) {
   const center: LatLngExpression = [latitude, longitude];
 
   return (
-    <MapContainer center={center} zoom={14} className="h-full w-full" scrollWheelZoom={false}>
+    <MapContainer
+      center={center}
+      zoom={14}
+      className="h-full w-full"
+      scrollWheelZoom={false}
+      dragging={interactive}
+      doubleClickZoom={interactive}
+      touchZoom={interactive}
+      zoomControl={interactive}
+      boxZoom={interactive}
+      keyboard={interactive}
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

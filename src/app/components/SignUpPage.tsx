@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight, ArrowLeft, Check, Briefcase, Search, Camera } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
+import { AuthShowcase } from './AuthShowcase';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import type { Gender } from '../../lib/database.types';
 import { CountrySelect } from '../../components/common/CountrySelect';
@@ -175,47 +176,11 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   return (
     <div className="min-h-screen bg-white flex">
       {/* Left panel */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gray-950 flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: 'radial-gradient(circle at 70% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 20% 80%, #ffffff 0%, transparent 40%)' }}
-        />
-        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-14 rounded-full object-cover" />
-        <div>
-          <h1 className="text-5xl font-bold text-white leading-tight mb-6">
-            Start your<br />creative<br />journey.
-          </h1>
-          <p className="text-gray-400 text-lg leading-relaxed max-w-sm">
-            Join thousands of creatives and clients building amazing projects together.
-          </p>
-          <div className="mt-10 space-y-4">
-            {[
-              'Book verified professional creatives',
-              'Deposit protection on every booking',
-              'AI-powered matching technology',
-              'Premium subscription benefits',
-            ].map(item => (
-              <div key={item} className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <Check className="w-3.5 h-3.5 text-white" />
-                </div>
-                <span className="text-gray-300 text-sm">{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="bg-white/5 rounded-2xl p-5 border border-white/10">
-          <p className="text-white text-sm italic leading-relaxed mb-3">
-            "CreativeHUB AI connected me with the perfect photographer for my fashion shoot. The deposit protection gave me total peace of mind."
-          </p>
-          <div className="flex items-center gap-3">
-            <img src="https://images.unsplash.com/photo-1671454265388-0c0672798125?w=40&h=40&fit=crop" alt="" className="w-9 h-9 rounded-full object-cover" />
-            <div>
-              <div className="text-white text-sm font-semibold">Isabella Rodriguez</div>
-              <div className="text-gray-500 text-xs">Fashion Designer</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <AuthShowcase
+        variant="signup"
+        headline={<>Start your<br />creative<br />journey.</>}
+        subtitle="Join thousands of creatives and clients building amazing projects together."
+      />
 
       {/* Right panel - form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12 overflow-y-auto">

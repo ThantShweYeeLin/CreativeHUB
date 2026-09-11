@@ -4,7 +4,10 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LocationChipList } from '../../components/common/LocationChipList';
 import { TagSelector } from '../../components/common/TagSelector';
+import { MinorSkillsPicker, type MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
+import { ExperienceLevelPicker } from '../../components/common/ExperienceLevelPicker';
 import { FREELANCER_CATEGORIES, isFreelancerCategory, suggestedSkillsForCategory, suggestedStylesForCategory } from '../../lib/categories';
+import { MAX_MINOR_SKILLS } from '../../lib/skillsTaxonomy';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -74,13 +77,14 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
 
   const [freelancerForm, setFreelancerForm] = useState({
     title: '',
-    experience_years: 0,
     hourly_rate: 0,
     is_available: true,
     skills: [] as string[],
     styles: [] as string[],
   });
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
+  const [categoryExperienceLevel, setCategoryExperienceLevel] = useState<string | null>(null);
+  const [minorSkills, setMinorSkills] = useState<MinorSkillSelection[]>([]);
 
   const [workingForm, setWorkingForm] = useState({
     studio_name: '',
@@ -135,6 +139,15 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         if (!isMounted) return;
         freelancerProfile = freelancerResponse.data || null;
         setFreelancerProfileId(freelancerProfile?.id || null);
+
+        if (freelancerProfile?.id) {
+          const skillsResponse = await DataService.getFreelancerSkills(freelancerProfile.id);
+          if (!isMounted) return;
+          setMinorSkills(
+            (skillsResponse.data?.minor || []).map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel }))
+          );
+          setCategoryExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
+        }
       }
 
       setBasicForm({
@@ -155,7 +168,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       if (freelancer && freelancerProfile) {
         setFreelancerForm({
           title: freelancerProfile.title || '',
-          experience_years: Number(freelancerProfile.experience_years || 0),
           hourly_rate: Number(freelancerProfile.hourly_rate || 0),
           is_available: freelancerProfile.is_available !== false,
           skills: freelancerProfile.skills || [],
@@ -323,6 +335,8 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
   // clears everything and lets suggestedSkillsForCategory/
   // suggestedStylesForCategory populate the new category's chips.
   const applyCategoryChange = (nextCategory: string) => {
+    setMinorSkills((current) => current.filter((entry) => entry.name !== nextCategory));
+    setCategoryExperienceLevel(null);
     if (freelancerForm.title && freelancerForm.title !== nextCategory && (freelancerForm.skills.length > 0 || freelancerForm.styles.length > 0)) {
       setPendingCategoryChange(nextCategory);
       return;
@@ -330,9 +344,23 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     setFreelancerForm((current) => ({ ...current, title: nextCategory }));
   };
 
-  const confirmCategoryChange = () => {
+  // moveOldMajorToMinor lets the freelancer keep their old specialty (and
+  // its experience level) as a minor skill instead of losing it outright
+  // when switching majors — capped at MAX_MINOR_SKILLS and never
+  // duplicated if it's already there.
+  const confirmCategoryChange = (moveOldMajorToMinor: boolean) => {
     if (!pendingCategoryChange) return;
+    const oldMajor = freelancerForm.title;
+    const oldMajorLevel = categoryExperienceLevel;
     setFreelancerForm((current) => ({ ...current, title: pendingCategoryChange, skills: [], styles: [] }));
+    setCategoryExperienceLevel(null);
+    if (moveOldMajorToMinor && oldMajor) {
+      setMinorSkills((current) =>
+        current.some((entry) => entry.name === oldMajor) || current.length >= MAX_MINOR_SKILLS
+          ? current
+          : [...current, { name: oldMajor, experienceLevel: oldMajorLevel }]
+      );
+    }
     setPendingCategoryChange(null);
   };
 
@@ -382,6 +410,10 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       setError('Working hours end time must be after the start time.');
       return;
     }
+    if (isFreelancer && workingForm.studio_name.trim() && workingForm.studio_locations.length === 0) {
+      setError(`Add at least one location for ${workingForm.studio_name.trim()}, or clear the studio name.`);
+      return;
+    }
 
     setIsSaving(true);
     setError(null);
@@ -425,17 +457,12 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     }
 
     if (isFreelancer) {
-      // Style embedding regeneration now lives centrally in
-      // DataService.updateFreelancerProfile/createFreelancerProfile - it
-      // fires automatically whenever title/skills/styles/description are
-      // part of the payload below, the same way for every save path in the
-      // app (not just this page), and records embedding_status instead of
-      // silently failing.
       const freelancerPayload = {
         title: freelancerForm.title,
         description: basicForm.bio,
         hourly_rate: freelancerForm.hourly_rate,
-        experience_years: freelancerForm.experience_years,
+        // Experience is captured per-skill now (see categoryExperienceLevel /
+        // minorSkills below), not as one freelancer-wide years field.
         is_available: freelancerForm.is_available,
         skills: freelancerForm.skills,
         styles: freelancerForm.styles,
@@ -452,8 +479,8 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       };
 
       const profileUpdate = freelancerProfileId
-        ? await DataService.updateFreelancerProfile(user.id, freelancerPayload as any)
-        : await DataService.createFreelancerProfile(user.id, freelancerPayload as any);
+        ? await DataService.updateFreelancerProfile(user.id, freelancerPayload as any, { majorSkillExperienceLevel: categoryExperienceLevel })
+        : await DataService.createFreelancerProfile(user.id, freelancerPayload as any, { majorSkillExperienceLevel: categoryExperienceLevel });
 
       if (profileUpdate.error) {
         setError((profileUpdate.error as any)?.message || 'Unable to save your freelancer profile.');
@@ -486,6 +513,13 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
           const links = (refreshedLinks.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
           setSocialLinks(links);
           setOriginalSocialLinkIds(links.map((link) => link.id));
+        }
+
+        const skillsUpdate = await DataService.updateFreelancerSkills(user.id, { minorSkills });
+        if (skillsUpdate.error) {
+          setError((skillsUpdate.error as any)?.message || 'Profile saved, but additional skills could not be saved.');
+        } else if (skillsUpdate.data) {
+          setMinorSkills(skillsUpdate.data.minor.map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
         }
       }
     }
@@ -652,6 +686,15 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   <p className="mt-1.5 text-xs text-gray-500">
                     Your category determines which clients find you in Explore, search, and the AI Matcher.
                   </p>
+                  {freelancerForm.title && (
+                    <div className="mt-3">
+                      <ExperienceLevelPicker
+                        label={`Your experience level as a ${freelancerForm.title} (optional)`}
+                        value={categoryExperienceLevel}
+                        onChange={setCategoryExperienceLevel}
+                      />
+                    </div>
+                  )}
 
                   {pendingCategoryChange && (
                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -661,18 +704,28 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       <p className="mt-1 text-xs text-amber-700">
                         Your current Skills and Styles don't apply to {pendingCategoryChange} and will be cleared.
                       </p>
-                      <div className="mt-3 flex gap-2">
+                      <p className="mt-2 text-xs text-amber-700">
+                        Would you like to keep {freelancerForm.title || 'your current category'} as an additional skill instead of losing it?
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={confirmCategoryChange}
+                          onClick={() => confirmCategoryChange(true)}
                           className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black"
                         >
-                          Change category
+                          Move to minor skills
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => confirmCategoryChange(false)}
+                          className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                        >
+                          Remove {freelancerForm.title}
                         </button>
                         <button
                           type="button"
                           onClick={() => setPendingCategoryChange(null)}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                          className="rounded-lg border border-transparent px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50"
                         >
                           Cancel
                         </button>
@@ -680,17 +733,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     </div>
                   )}
                 </div>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700">Experience (years)</label>
-                    <input
-                      type="number"
-                      value={freelancerForm.experience_years}
-                      onChange={(event) => setFreelancerForm((current) => ({ ...current, experience_years: Number(event.target.value) }))}
-                      placeholder="e.g. 3"
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
-                    />
-                  </div>
+                <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">Starting Rate (THB/hr)</label>
                     <input
@@ -723,6 +766,16 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     otherPlaceholder="e.g. Fantasy Fairy Makeup"
                     emptyHint="Select at least one style."
                   />
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Additional skills</label>
+                  <p className="mb-2 text-xs text-gray-500">
+                    Other capabilities you offer beyond {freelancerForm.title || 'your primary category'} — optional, up to {MAX_MINOR_SKILLS}.
+                  </p>
+                  {minorSkills.length === 0 && (
+                    <p className="mb-2 text-xs text-gray-400">No additional skills added yet.</p>
+                  )}
+                  <MinorSkillsPicker majorSkill={freelancerForm.title || null} selected={minorSkills} onChange={setMinorSkills} />
                 </div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                   <input
@@ -789,7 +842,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
               <h2 className="mb-4 text-lg font-bold text-gray-900 md:text-xl">Working Information</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Studio name</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Studio name (optional)</label>
                   <input
                     value={workingForm.studio_name}
                     onChange={(event) => setWorkingForm((current) => ({ ...current, studio_name: event.target.value }))}
@@ -798,12 +851,17 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Studio location</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">
+                    Studio location {workingForm.studio_name.trim() && <span className="text-red-600">*</span>}
+                  </label>
                   <LocationChipList
                     locations={workingForm.studio_locations}
                     onRemove={handleRemoveStudioLocation}
                     onAddFromMap={() => setLocationPickerTarget('studio')}
                   />
+                  {workingForm.studio_name.trim() && workingForm.studio_locations.length === 0 && (
+                    <p className="mt-1.5 text-xs font-semibold text-red-600">Add at least one location for {workingForm.studio_name.trim()}.</p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Preferred service locations</label>

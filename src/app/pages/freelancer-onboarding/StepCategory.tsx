@@ -1,11 +1,14 @@
 import { FREELANCER_CATEGORIES } from '../../../lib/categories';
+import { ExperienceLevelPicker } from '../../../components/common/ExperienceLevelPicker';
 
 interface StepCategoryProps {
   selectedCategory: string | null;
   onSelectCategory: (label: string) => void;
+  experienceLevel: string | null;
+  onExperienceLevelChange: (level: string) => void;
 }
 
-export function StepCategory({ selectedCategory, onSelectCategory }: StepCategoryProps) {
+export function StepCategory({ selectedCategory, onSelectCategory, experienceLevel, onExperienceLevelChange }: StepCategoryProps) {
   return (
     <div>
       <p className="mb-3 text-sm font-semibold text-gray-700">What's your freelancer category?</p>
@@ -26,6 +29,16 @@ export function StepCategory({ selectedCategory, onSelectCategory }: StepCategor
           </button>
         ))}
       </div>
+
+      {selectedCategory && (
+        <div className="mt-5">
+          <ExperienceLevelPicker
+            label={`Your experience level as a ${selectedCategory} (optional)`}
+            value={experienceLevel}
+            onChange={onExperienceLevelChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

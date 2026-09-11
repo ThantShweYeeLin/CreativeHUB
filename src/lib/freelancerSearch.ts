@@ -10,7 +10,10 @@ const CATEGORY_ALIASES: Array<{ label: string; aliases: string[] }> = [
   { label: 'Makeup Artist', aliases: ['makeup', 'makeup artist', 'mua', 'beauty'] },
   { label: 'Hair Stylist', aliases: ['hair', 'hairstylist', 'hair stylist', 'hairstyling', 'hairdresser'] },
   { label: 'Fashion Designer', aliases: ['fashion', 'fashion designer', 'designer', 'design'] },
-  { label: 'Model', aliases: ['model', 'models', 'modeling', 'modelling'] },
+  { label: 'Videographer', aliases: ['video', 'videography', 'videographer', 'videographers', 'cinematographer', 'cinematography'] },
+  { label: 'Decorator/Florist', aliases: ['decorator', 'decorators', 'decoration', 'decor', 'florist', 'florists', 'flowers', 'floral', 'styling'] },
+  { label: 'Cake/Dessert Maker', aliases: ['cake', 'cakes', 'dessert', 'desserts', 'bakery', 'baker', 'pastry'] },
+  { label: 'Musician/Live Entertainment', aliases: ['dj', 'djs', 'musician', 'musicians', 'music', 'band', 'live band', 'entertainment', 'entertainer'] },
 ];
 
 const STOPWORDS = new Set(['a', 'an', 'the', 'in', 'at', 'for', 'with', 'and', 'or', 'of', 'near', 'me']);
@@ -86,6 +89,8 @@ export interface FreelancerSearchable {
   title: string | null;
   skills: string[];
   styles: string[];
+  /** Secondary capabilities beyond the major skill/title — see freelancer_skills. */
+  minorSkills?: string[];
   description: string | null;
   location: string | null;
   fullName: string | null;
@@ -107,6 +112,7 @@ export function scoreFreelancerMatch(
   const normTitle = (freelancer.title || '').toLowerCase();
   const normSkills = (freelancer.skills || []).map((s) => s.toLowerCase());
   const normStyles = (freelancer.styles || []).map((s) => s.toLowerCase());
+  const normMinorSkills = (freelancer.minorSkills || []).map((s) => s.toLowerCase());
   const normLocation = (freelancer.location || '').toLowerCase();
   const normDescription = (freelancer.description || '').toLowerCase();
   const normName = (freelancer.fullName || '').toLowerCase();
@@ -124,11 +130,18 @@ export function scoreFreelancerMatch(
     // A detected category (from a pill, or a word like "photographer") is a
     // hard requirement, not just one more signal — "makeup bangkok" must
     // mean Makeup freelancers in Bangkok, not any Bangkok freelancer.
+    // Three tiers, not a binary match/exclude: an exact major-skill (title)
+    // match ranks highest, a minor-skill match still surfaces the
+    // freelancer but ranks below anyone whose major skill matches, and a
+    // plain skills/styles tag mention ranks lowest of the three. Nobody is
+    // excluded just for having the category as a minor skill instead of major.
     const normCategory = category.toLowerCase();
     if (normTitle === normCategory) {
       score += 10;
-    } else if (normSkills.includes(normCategory) || normStyles.includes(normCategory)) {
+    } else if (normMinorSkills.includes(normCategory)) {
       score += 6;
+    } else if (normSkills.includes(normCategory) || normStyles.includes(normCategory)) {
+      score += 4;
     } else {
       return 0;
     }

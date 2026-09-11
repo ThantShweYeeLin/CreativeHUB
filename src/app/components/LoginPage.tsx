@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 import { authService } from '../../lib/authService';
+import { AuthShowcase } from './AuthShowcase';
 
 interface LoginPageProps {
   onLogin: (email: string, password: string) => Promise<void>;
@@ -75,40 +76,11 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
   return (
     <div className="min-h-screen bg-white flex">
       {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gray-950 flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10"
-          style={{ backgroundImage: 'radial-gradient(circle at 30% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 80% 20%, #ffffff 0%, transparent 40%)' }}
-        />
-        <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-14 rounded-full object-cover" />
-        <div>
-          <h1 className="text-5xl font-bold text-white leading-tight mb-6">
-            Connect with<br />top creative<br />talent.
-          </h1>
-          <p className="text-gray-400 text-lg leading-relaxed max-w-sm">
-            Discover photographers, makeup artists, and models. Book, collaborate, and create together.
-          </p>
-          <div className="flex gap-8 mt-10">
-            {[['500+', 'Freelancers'], ['2K+', 'Bookings'], ['4.9★', 'Rating']].map(([num, label]) => (
-              <div key={label}>
-                <div className="text-2xl font-bold text-white">{num}</div>
-                <div className="text-gray-500 text-sm">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="flex gap-3">
-          {['https://images.unsplash.com/photo-1594171549465-a28ba0220a1b?w=120&h=120&fit=crop',
-            'https://images.unsplash.com/photo-1596704182101-542876d47a68?w=120&h=120&fit=crop',
-            'https://images.unsplash.com/photo-1706661912295-bd1dc10ffe7f?w=120&h=120&fit=crop',
-            'https://images.unsplash.com/photo-1559878541-926091e4c31b?w=120&h=120&fit=crop',
-          ].map((src, i) => (
-            <div key={i} className="w-14 h-14 rounded-2xl overflow-hidden ring-2 ring-white/10">
-              <img src={src} alt="" className="w-full h-full object-cover" />
-            </div>
-          ))}
-          <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center text-white text-sm font-semibold">+496</div>
-        </div>
-      </div>
+      <AuthShowcase
+        variant="login"
+        headline={<>Connect with<br />top creative<br />talent.</>}
+        subtitle="Photographers, decorators, DJs, and more — everything you need for your wedding, birthday, or next big event."
+      />
 
       {/* Right panel - form */}
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-6 sm:px-12 lg:px-16 py-12">

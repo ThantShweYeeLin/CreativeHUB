@@ -15,6 +15,7 @@ import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
+import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -46,6 +47,55 @@ export interface MutualUserResult {
   email: string;
   avatar_url: string | null;
   gender: Gender | null;
+}
+
+export interface FreelancerSkillRef {
+  id: string;
+  name: string;
+}
+
+export interface FreelancerSkillWithLevel extends FreelancerSkillRef {
+  experienceLevel: string | null;
+}
+
+export interface FreelancerSkillsSummary {
+  major: FreelancerSkillWithLevel | null;
+  minor: FreelancerSkillWithLevel[];
+}
+
+export interface AuthShowcaseAvatar {
+  name: string;
+  avatarUrl: string;
+}
+
+export interface AuthShowcaseTestimonial {
+  id: string;
+  comment: string;
+  rating: number;
+  reviewerName: string;
+  reviewerAvatar: string | null;
+  revieweeName: string | null;
+}
+
+export interface AuthShowcaseSpotlight {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  title: string | null;
+  skills: string[];
+  rating: number;
+  totalReviews: number;
+  location: string | null;
+}
+
+export interface AuthShowcaseData {
+  freelancerCount: number;
+  memberCount: number;
+  totalReviews: number;
+  avgRating: number;
+  avatars: AuthShowcaseAvatar[];
+  testimonials: AuthShowcaseTestimonial[];
+  spotlights: AuthShowcaseSpotlight[];
 }
 
 export class DataService {
@@ -514,45 +564,151 @@ export class DataService {
     return { data: firstAttempt.data, error: firstAttempt.error };
   }
 
-  // Semantic style matching — ranks category-filtered freelancers by cosine
-  // similarity between queryEmbedding and each freelancer's style_embedding
-  // (see supabase/ai_style_matching.sql's match_freelancer_styles function).
-  static async matchFreelancersByStyle(category: string, queryEmbedding: number[], limit = 10) {
+  // Public, unauthenticated snapshot of real platform activity used to power
+  // the rotating showcase on the login/sign-up screens — every table read
+  // here has a "viewable by everyone" RLS policy, so this works pre-login.
+  static async getAuthShowcaseData(): Promise<{ data: AuthShowcaseData | null; error: unknown }> {
     if (!hasSupabaseConfig) {
-      return { data: [], error: new Error('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your environment.') };
+      return { data: null, error: new Error('Supabase is not configured.') };
     }
 
-    const rpcResponse = await (supabase as any).rpc('match_freelancer_styles', {
-      query_embedding: queryEmbedding,
-      match_category: category,
-      match_count: limit,
-    });
+    const [
+      freelancerCountResp,
+      memberCountResp,
+      reviewStatsResp,
+      avatarRowsResp,
+      testimonialRowsResp,
+      spotlightRowsResp,
+    ] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact', head: true })
+        .eq('role', 'freelancer').eq('account_status', 'active'),
+      supabase.from('users').select('id', { count: 'exact', head: true })
+        .eq('account_status', 'active'),
+      // Read straight from the reviews table rather than the per-user
+      // users.rating/total_reviews aggregate — that aggregate was seeded
+      // with placeholder counts for demo profiles that have no matching
+      // rows in `reviews`, so it wildly overstates real review volume.
+      (supabase as any).from('reviews').select('rating', { count: 'exact' }).limit(1000),
+      supabase.from('users').select('full_name, avatar_url')
+        .eq('role', 'freelancer').eq('account_status', 'active')
+        .not('avatar_url', 'is', null)
+        .order('total_reviews', { ascending: false })
+        .limit(6),
+      (supabase as any).from('reviews')
+        .select('id, rating, comment, created_at, reviewer:reviewer_id(full_name, avatar_url), reviewee:reviewee_id(full_name)')
+        .not('comment', 'is', null)
+        .gte('rating', 4)
+        .order('created_at', { ascending: false })
+        .limit(15),
+      // Freelancer spotlight — the old file-upload "portfolio" feature was
+      // removed from the product (onboarding now only collects social
+      // links), so the rotating showcase highlights real, currently-active
+      // freelancer profiles instead of stale/orphaned portfolio rows.
+      (supabase as any).from('freelancer_profiles')
+        .select('user_id, title, skills, users:user_id!inner(full_name, avatar_url, rating, total_reviews, location, account_status)')
+        .neq('visibility', 'limited')
+        .eq('is_available', true)
+        .eq('users.account_status', 'active')
+        .not('users.avatar_url', 'is', null)
+        .order('total_reviews', { foreignTable: 'users', ascending: false })
+        .limit(8),
+    ]);
 
-    if (rpcResponse.error || !rpcResponse.data) {
-      return { data: [], error: rpcResponse.error };
-    }
+    const reviewRows = (reviewStatsResp.data || []) as Array<{ rating: number | null }>;
+    const totalReviews = reviewStatsResp.count ?? reviewRows.length;
+    const avgRating = reviewRows.length > 0
+      ? reviewRows.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewRows.length
+      : 0;
 
-    const ranked: Array<{ user_id: string; similarity: number }> = rpcResponse.data;
-    const userIds = ranked.map((row) => row.user_id);
-    if (userIds.length === 0) {
-      return { data: [], error: null };
-    }
+    const avatars: AuthShowcaseAvatar[] = ((avatarRowsResp.data || []) as Array<{ full_name: string | null; avatar_url: string | null }>)
+      .filter((r) => !!r.avatar_url)
+      .map((r) => ({ name: r.full_name || 'Creative', avatarUrl: r.avatar_url as string }));
 
-    const { data, error } = await supabase
+    const testimonials: AuthShowcaseTestimonial[] = ((testimonialRowsResp.data || []) as Array<any>)
+      .filter((r) => typeof r.comment === 'string' && r.comment.trim().length >= 12 && r.reviewer)
+      .slice(0, 6)
+      .map((r) => ({
+        id: r.id,
+        comment: (r.comment as string).trim(),
+        rating: Number(r.rating) || 5,
+        reviewerName: r.reviewer?.full_name || 'CreativeHUB member',
+        reviewerAvatar: r.reviewer?.avatar_url || null,
+        revieweeName: r.reviewee?.full_name || null,
+      }));
+
+    const spotlights: AuthShowcaseSpotlight[] = ((spotlightRowsResp.data || []) as Array<any>)
+      .filter((r) => r.users?.avatar_url)
+      .slice(0, 8)
+      .map((r) => ({
+        id: r.user_id,
+        name: r.users?.full_name || 'Freelancer',
+        avatarUrl: r.users?.avatar_url || null,
+        title: r.title || null,
+        skills: Array.isArray(r.skills) ? r.skills.slice(0, 3) : [],
+        rating: Number(r.users?.rating) || 0,
+        totalReviews: Number(r.users?.total_reviews) || 0,
+        location: r.users?.location || null,
+      }));
+
+    return {
+      data: {
+        freelancerCount: freelancerCountResp.count || 0,
+        memberCount: memberCountResp.count || 0,
+        totalReviews,
+        avgRating,
+        avatars,
+        testimonials,
+        spotlights,
+      },
+      error: freelancerCountResp.error || memberCountResp.error || reviewStatsResp.error || null,
+    };
+  }
+
+  // EVENT MATCHER
+  // Fetches everything the pure ranking/filtering logic in lib/eventMatcher.ts
+  // needs for one category on one event date: candidate profiles, their
+  // blocked dates for that date, any existing booking that day, and their
+  // service packages. Filtering (availability, location coverage) and
+  // ranking happen entirely in application code afterward — this method is
+  // just the query, same split as freelancerSearch.ts's interpretSearchQuery
+  // / scoreFreelancerMatch versus this file's searchFreelancers.
+  static async getEventMatcherCandidates(category: string, eventDate: string) {
+    const { data: profiles, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), social_links(*)')
-      .in('user_id', userIds);
+      .select(
+        'id, user_id, title, styles, experience_years, hourly_rate, locations, studio_locations, users:user_id!inner(id, full_name, avatar_url, gender, rating, total_reviews, account_status, preferred_currency)' as any
+      )
+      .eq('title', category)
+      .eq('is_available', true)
+      .neq('visibility', 'limited')
+      .eq('users.account_status', 'active');
 
-    if (error || !data) {
-      return { data: [], error };
+    if (error || !profiles || profiles.length === 0) {
+      return { data: { profiles: [], blockedDates: [], bookings: [], services: [] }, error };
     }
 
-    const similarityByUserId = new Map(ranked.map((row) => [row.user_id, row.similarity]));
-    const merged = (data as any[])
-      .map((row) => ({ ...row, similarity: similarityByUserId.get(row.user_id) ?? 0 }))
-      .sort((a, b) => b.similarity - a.similarity);
+    const profileIds = (profiles as any[]).map((profile) => profile.id);
+    const userIds = (profiles as any[]).map((profile) => profile.user_id);
 
-    return { data: merged, error: null };
+    const [blockedDatesResponse, bookingsResponse, servicesResponse] = await Promise.all([
+      (supabase as any)
+        .from('freelancer_blocked_dates')
+        .select('freelancer_id, blocked_date')
+        .in('freelancer_id', profileIds)
+        .eq('blocked_date', eventDate),
+      supabase.from('bookings').select('freelancer_id, start_date, status').in('freelancer_id', userIds).eq('start_date', eventDate),
+      (supabase as any).from('freelancer_services').select('*').in('freelancer_id', profileIds),
+    ]);
+
+    return {
+      data: {
+        profiles: profiles as any[],
+        blockedDates: (blockedDatesResponse.data || []) as any[],
+        bookings: (bookingsResponse.data || []) as any[],
+        services: (servicesResponse.data || []) as any[],
+      },
+      error: null,
+    };
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {
@@ -647,85 +803,193 @@ export class DataService {
     return { data: finalResults, error: null };
   }
 
-  // The fields the AI Match Finder's embedding is actually built from — any
-  // profile write that touches one of these needs a fresh embedding, and
-  // one that doesn't (e.g. just working hours or hourly rate) can skip it.
-  private static readonly AI_RELEVANT_FREELANCER_FIELDS = ['title', 'skills', 'styles', 'description'] as const;
+  // Keeps freelancer_skills' one 'major' row in sync with
+  // freelancer_profiles.title, which stays the source of truth every other
+  // part of the app already reads. No-ops silently if the title isn't a
+  // recognized skill row (shouldn't happen — title only ever comes from
+  // the controlled category list — but this is best-effort bookkeeping,
+  // not something that should block a profile save). experienceLevel is
+  // optional: omit it (undefined) to carry forward whatever level was
+  // already set — only pass a value when the caller actually means to
+  // set/change it, so an unrelated profile update (e.g. changing the
+  // hourly rate) can never accidentally wipe a previously-set level.
+  private static async syncMajorSkill(freelancerId: string, title: string | null | undefined, experienceLevel?: string | null) {
+    if (!title) return;
+    const skillResp = await (supabase as any).from('skills').select('id').eq('name', title).maybeSingle();
+    const skillId = (skillResp.data as { id?: string } | null)?.id;
+    if (!skillId) return;
 
-  // Central place every freelancer-profile write in the app funnels
-  // through (create on first onboarding, update on every later edit) so a
-  // style embedding is generated the same way no matter which screen
-  // triggered the save — this is what actually fixes "most freelancers
-  // have no embedding": BecomeFreelancerPage's onboarding save used to
-  // skip embedding generation entirely because that logic used to live
-  // only in EditProfilePage's save handler, not here.
-  private static async withStyleEmbedding(
-    userId: string,
-    payload: Record<string, any>,
-    options: { isCreate?: boolean } = {}
-  ): Promise<Record<string, any>> {
-    const touchesRelevantField = this.AI_RELEVANT_FREELANCER_FIELDS.some((field) => field in payload);
-    if (!options.isCreate && !touchesRelevantField) {
-      return payload;
-    }
-
-    // An update only sends the fields that changed - the embedding needs
-    // the freelancer's *current* full profile, not just this call's diff.
-    let merged: Record<string, any> = payload;
-    if (!options.isCreate) {
-      const current = await supabase
-        .from('freelancer_profiles')
-        .select('title, skills, styles, description')
-        .eq('user_id', userId)
+    let levelToSet = experienceLevel;
+    if (levelToSet === undefined) {
+      const existing = await (supabase as any)
+        .from('freelancer_skills')
+        .select('experience_level')
+        .eq('freelancer_id', freelancerId)
+        .eq('skill_type', 'major')
         .maybeSingle();
-      merged = { ...(current.data || {}), ...payload };
+      levelToSet = (existing.data as { experience_level?: string | null } | null)?.experience_level ?? null;
     }
 
-    try {
-      const profileText = buildFreelancerStyleProfileText({
-        category: String(merged.title || ''),
-        skills: Array.isArray(merged.skills) ? merged.skills : [],
-        styles: Array.isArray(merged.styles) ? merged.styles : [],
-        description: String(merged.description || ''),
-      });
-      const embedding = await embedText(profileText);
-      return {
-        ...payload,
-        style_embedding: embedding,
-        embedding_status: 'ready',
-        embedding_updated_at: new Date().toISOString(),
-      };
-    } catch {
-      // Leave any existing embedding in place (stale is still more useful
-      // than none) - just flag that a retry is needed rather than
-      // blocking the profile save itself over a Gemini hiccup.
-      return {
-        ...payload,
-        embedding_status: 'failed',
-        embedding_updated_at: new Date().toISOString(),
-      };
-    }
+    await (supabase as any).from('freelancer_skills').delete().eq('freelancer_id', freelancerId).eq('skill_type', 'major');
+    await (supabase as any)
+      .from('freelancer_skills')
+      .insert({ freelancer_id: freelancerId, skill_id: skillId, skill_type: 'major', experience_level: levelToSet ?? null });
   }
 
-  static async createFreelancerProfile(userId: string, profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>) {
-    const payload = await this.withStyleEmbedding(userId, profile, { isCreate: true });
+  static async createFreelancerProfile(
+    userId: string,
+    profile: Omit<FreelancerProfile, 'id' | 'user_id' | 'created_at' | 'updated_at'>,
+    options: { majorSkillExperienceLevel?: string | null } = {}
+  ) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .insert({ user_id: userId, ...payload })
+      .insert({ user_id: userId, ...profile })
       .select()
       .single();
+    if (data?.id) await this.syncMajorSkill(data.id, (data as any).title, options.majorSkillExperienceLevel);
     return { data, error };
   }
 
-  static async updateFreelancerProfile(userId: string, updates: Partial<FreelancerProfile>) {
-    const payload = await this.withStyleEmbedding(userId, updates as Record<string, any>);
+  static async updateFreelancerProfile(
+    userId: string,
+    updates: Partial<FreelancerProfile>,
+    options: { majorSkillExperienceLevel?: string | null } = {}
+  ) {
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .update(payload)
+      .update(updates)
       .eq('user_id', userId)
       .select()
       .single();
+    if (data?.id && ('title' in updates || options.majorSkillExperienceLevel !== undefined)) {
+      await this.syncMajorSkill(data.id, (data as any).title, options.majorSkillExperienceLevel);
+    }
     return { data, error };
+  }
+
+  // MAJOR/MINOR SKILLS
+  // The major skill is freelancer_profiles.title itself (unchanged — every
+  // existing consumer keeps reading it exactly as before). This surfaces
+  // it alongside the freelancer's minor skills from freelancer_skills, both
+  // normalized against the `skills` table (see supabase/freelancer_skills.sql).
+  static async getFreelancerSkills(freelancerProfileId: string): Promise<{ data: FreelancerSkillsSummary | null; error: unknown }> {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_skills')
+      .select('skill_type, experience_level, skills(id, name)')
+      .eq('freelancer_id', freelancerProfileId);
+
+    if (error) return { data: null, error };
+
+    type SkillRow = { skill_type: 'major' | 'minor'; experience_level: string | null; skills: FreelancerSkillRef | null };
+    const rows = (data || []) as SkillRow[];
+    const toWithLevel = (row: SkillRow | undefined): FreelancerSkillWithLevel | null =>
+      row?.skills ? { ...row.skills, experienceLevel: row.experience_level } : null;
+
+    const major = toWithLevel(rows.find((row) => row.skill_type === 'major'));
+    const minor = rows
+      .filter((row) => row.skill_type === 'minor')
+      .map(toWithLevel)
+      .filter((skill): skill is FreelancerSkillWithLevel => !!skill);
+
+    return { data: { major, minor }, error: null };
+  }
+
+  // Batched minor-skill lookup for list/card views (e.g. Explore) that
+  // already loaded a page of freelancer_profiles and just need each one's
+  // minor skill names — one query for the whole page instead of N.
+  static async getMinorSkillsForFreelancers(freelancerProfileIds: string[]): Promise<Map<string, string[]>> {
+    const map = new Map<string, string[]>();
+    if (freelancerProfileIds.length === 0) return map;
+
+    const { data } = await (supabase as any)
+      .from('freelancer_skills')
+      .select('freelancer_id, skills(name)')
+      .in('freelancer_id', freelancerProfileIds)
+      .eq('skill_type', 'minor');
+
+    for (const row of (data || []) as Array<{ freelancer_id: string; skills: { name: string } | null }>) {
+      if (!row.skills?.name) continue;
+      const existing = map.get(row.freelancer_id) || [];
+      existing.push(row.skills.name);
+      map.set(row.freelancer_id, existing);
+    }
+    return map;
+  }
+
+  // The only mutating entry point for minor skills — the major skill keeps
+  // changing through the existing category/title flow. Takes skill NAMES
+  // (matching how skills/styles tags already work everywhere else in this
+  // app — no other part of the app plumbs skill ids through the UI) plus
+  // each one's optional experience level, and re-validates everything
+  // server-side (max count, no duplicates, not equal to the current major
+  // skill, must be real active skill rows, level must be a recognized
+  // value) rather than trusting whatever the picker UI already enforced
+  // client-side.
+  static async updateFreelancerSkills(
+    userId: string,
+    { minorSkills }: { minorSkills: Array<{ name: string; experienceLevel?: string | null }> }
+  ): Promise<{ data: FreelancerSkillsSummary | null; error: unknown }> {
+    const dedupedByName = new Map(minorSkills.map((entry) => [entry.name, entry.experienceLevel ?? null]));
+    const dedupedNames = Array.from(dedupedByName.keys());
+    if (dedupedNames.length > MAX_MINOR_SKILLS) {
+      return { data: null, error: new Error(`You can select up to ${MAX_MINOR_SKILLS} minor skills.`) };
+    }
+    for (const level of dedupedByName.values()) {
+      if (level !== null && !isSkillExperienceLevel(level)) {
+        return { data: null, error: new Error('Invalid experience level.') };
+      }
+    }
+
+    const profileResp = await supabase
+      .from('freelancer_profiles')
+      .select('id, title')
+      .eq('user_id', userId)
+      .maybeSingle();
+    const freelancerId = (profileResp.data as { id?: string; title?: string } | null)?.id;
+    const majorTitle = (profileResp.data as { id?: string; title?: string } | null)?.title || null;
+    if (!freelancerId) {
+      return { data: null, error: new Error('Complete your freelancer profile before adding skills.') };
+    }
+
+    if (majorTitle && dedupedNames.includes(majorTitle)) {
+      return { data: null, error: new Error('Your major skill cannot also be a minor skill.') };
+    }
+
+    let validSkills: FreelancerSkillRef[] = [];
+    if (dedupedNames.length > 0) {
+      const skillsResp = await (supabase as any)
+        .from('skills')
+        .select('id, name')
+        .in('name', dedupedNames)
+        .eq('is_active', true);
+      validSkills = (skillsResp.data || []) as FreelancerSkillRef[];
+      if (validSkills.length !== dedupedNames.length) {
+        return { data: null, error: new Error('One or more selected skills are no longer available.') };
+      }
+    }
+
+    const deleteResp = await (supabase as any)
+      .from('freelancer_skills')
+      .delete()
+      .eq('freelancer_id', freelancerId)
+      .eq('skill_type', 'minor');
+    if (deleteResp.error) return { data: null, error: deleteResp.error };
+
+    if (validSkills.length > 0) {
+      const insertResp = await (supabase as any)
+        .from('freelancer_skills')
+        .insert(
+          validSkills.map((skill) => ({
+            freelancer_id: freelancerId,
+            skill_id: skill.id,
+            skill_type: 'minor',
+            experience_level: dedupedByName.get(skill.name) ?? null,
+          }))
+        );
+      if (insertResp.error) return { data: null, error: insertResp.error };
+    }
+
+    return this.getFreelancerSkills(freelancerId);
   }
 
   static async updateUser(userId: string, updates: Partial<User>) {
@@ -929,13 +1193,262 @@ export class DataService {
   }
 
   // BOOKINGS
+  // Postgres exclusion-constraint violation (bookings_no_overlap, see
+  // supabase/booking_overlap_protection.sql) — the actual race-safe
+  // enforcement, since two clients/freelancers could act at nearly the
+  // same instant and a client-side "check then write" can't close that
+  // gap. Translated into copy a user can act on instead of a raw DB error.
+  private static readonly BOOKING_OVERLAP_ERROR_CODE = '23P01';
+
+  private static isBookingOverlapError(error: unknown): boolean {
+    return (error as { code?: string } | null)?.code === this.BOOKING_OVERLAP_ERROR_CODE;
+  }
+
+  static readonly BOOKING_SLOT_TAKEN_MESSAGE = 'This time slot is no longer available — it was just booked by someone else.';
+
   static async createBooking(booking: Omit<Booking, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await supabase
       .from('bookings')
       .insert(booking)
       .select()
       .single();
+    if (error && this.isBookingOverlapError(error)) {
+      return { data: null, error: new Error(this.BOOKING_SLOT_TAKEN_MESSAGE) };
+    }
     return { data, error };
+  }
+
+  // Instant client-side pre-check for form UX only — NOT the safety
+  // mechanism (the bookings_no_overlap exclusion constraint is, enforced
+  // atomically by Postgres on the actual write). Only ever needs to look
+  // at 'pending'/'confirmed' bookings, matching the constraint's own scope
+  // — a freelancer can have any number of overlapping pending *requests*.
+  static async checkBookingSlotAvailable(freelancerId: string, startAt: string, endAt: string): Promise<boolean> {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('id')
+      .eq('freelancer_id', freelancerId)
+      .in('status', ['pending', 'confirmed'])
+      .lt('start_at', endAt)
+      .gt('end_at', startAt)
+      .limit(1);
+    if (error) return true; // fail open — the DB constraint is the real gate
+    return (data || []).length === 0;
+  }
+
+  // Reschedules an existing booking to a new time range. Relies on the
+  // same exclusion constraint to reject a conflicting new time — a plain
+  // UPDATE changing start_at/end_at is re-validated against every *other*
+  // row by Postgres automatically, so there's no separate "release the old
+  // slot, then reserve the new one" step needed.
+  static async rescheduleBooking(bookingId: string, newStartAt: Date, newEndAt: Date) {
+    // start_date/start_time/end_time are kept as a mirror for existing
+    // readers (e.g. src/lib/availability.ts's client-side pre-check) — the
+    // canonical instant is start_at/end_at. Formatted in Asia/Bangkok
+    // wall-clock terms regardless of the caller's own timezone, matching
+    // supabase/booking_checkin.sql's existing interpretation.
+    const bangkokParts = (date: Date) => {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Bangkok',
+        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+      });
+      const parts = Object.fromEntries(formatter.formatToParts(date).map((p) => [p.type, p.value]));
+      return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+    };
+    const startParts = bangkokParts(newStartAt);
+    const endParts = bangkokParts(newEndAt);
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        start_at: newStartAt.toISOString(),
+        end_at: newEndAt.toISOString(),
+        start_date: startParts.date,
+        start_time: startParts.time,
+        end_time: endParts.time,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error && this.isBookingOverlapError(error)) {
+      return { data: null, error: new Error(this.BOOKING_SLOT_TAKEN_MESSAGE) };
+    }
+    return { data, error };
+  }
+
+  // RESCHEDULE HANDSHAKE — propose/accept/decline, so neither participant
+  // can unilaterally move an already-accepted booking (see
+  // supabase/booking_reschedule.sql for the full rationale). The actual
+  // move only ever happens inside acceptBookingReschedule, via
+  // rescheduleBooking() above — so it's re-checked against
+  // bookings_no_overlap at accept time, not just at propose time, and a
+  // proposal that's gone stale by then is safely rejected.
+  static async proposeBookingReschedule(
+    bookingId: string,
+    input: { proposerId: string; proposerRole: 'client' | 'freelancer'; newStartAt: Date; newEndAt: Date; reason?: string }
+  ) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: input.newStartAt.toISOString(),
+        reschedule_proposed_end_at: input.newEndAt.toISOString(),
+        reschedule_proposed_by: input.proposerId,
+        reschedule_proposed_reason: input.reason?.trim() || null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: input.proposerRole,
+      action: 'reschedule_proposed',
+      reason: input.reason?.trim() || null,
+    });
+
+    const otherUserId = input.proposerRole === 'client' ? (data as any).freelancer_id : (data as any).client_id;
+    await this.notifyEvent({
+      userId: otherUserId,
+      actorId: input.proposerId,
+      type: 'booking_reschedule_proposed',
+      title: 'New time proposed',
+      message: 'A new time was proposed for your booking — review and respond.',
+      relatedId: bookingId,
+    });
+
+    return { data, error: null };
+  }
+
+  static async acceptBookingReschedule(bookingId: string, accepterId: string, accepterRole: 'client' | 'freelancer') {
+    const { data: current, error: fetchError } = await supabase
+      .from('bookings')
+      .select('reschedule_proposed_start_at, reschedule_proposed_end_at, reschedule_proposed_by')
+      .eq('id', bookingId)
+      .single();
+
+    if (fetchError || !current) {
+      return { data: null, error: fetchError || new Error('Booking not found.') };
+    }
+    const proposedStart = (current as any).reschedule_proposed_start_at;
+    const proposedEnd = (current as any).reschedule_proposed_end_at;
+    if (!proposedStart || !proposedEnd) {
+      return { data: null, error: new Error('There is no pending reschedule proposal to accept.') };
+    }
+
+    const moveResponse = await this.rescheduleBooking(bookingId, new Date(proposedStart), new Date(proposedEnd));
+    if (moveResponse.error) {
+      return moveResponse;
+    }
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: accepterRole,
+      action: 'reschedule_accepted',
+    });
+
+    const proposerId = (current as any).reschedule_proposed_by;
+    if (proposerId) {
+      await this.notifyEvent({
+        userId: proposerId,
+        actorId: accepterId,
+        type: 'booking_reschedule_accepted',
+        title: 'Reschedule accepted',
+        message: 'Your proposed new time was accepted.',
+        relatedId: bookingId,
+      });
+    }
+
+    return { data, error: null };
+  }
+
+  static async declineBookingReschedule(bookingId: string, declinerId: string, declinerRole: 'client' | 'freelancer') {
+    const { data: current } = await supabase
+      .from('bookings')
+      .select('reschedule_proposed_by')
+      .eq('id', bookingId)
+      .single();
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: declinerRole,
+      action: 'reschedule_declined',
+    });
+
+    const proposerId = (current as any)?.reschedule_proposed_by;
+    if (proposerId) {
+      await this.notifyEvent({
+        userId: proposerId,
+        actorId: declinerId,
+        type: 'booking_reschedule_declined',
+        title: 'Reschedule declined',
+        message: 'Your proposed new time was declined.',
+        relatedId: bookingId,
+      });
+    }
+
+    return { data, error: null };
+  }
+
+  static async withdrawBookingRescheduleProposal(bookingId: string, withdrawerRole: 'client' | 'freelancer') {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        reschedule_proposed_start_at: null,
+        reschedule_proposed_end_at: null,
+        reschedule_proposed_by: null,
+        reschedule_proposed_reason: null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      return { data, error };
+    }
+
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: withdrawerRole,
+      action: 'reschedule_withdrawn',
+    });
+
+    return { data, error: null };
   }
 
   // acceptRequestAndCreateBooking() stamps this exact deliverables string
@@ -2717,24 +3230,13 @@ export class DataService {
     });
   }
 
-  static async notifyAiMatchResults(userId: string, resultCount: number) {
+  static async notifyEventMatcherPlanSent(userId: string, recipientCount: number) {
     return this.notifyEvent({
       userId,
-      type: 'ai_match_results',
-      title: 'AI match results',
-      message: `Your AI matcher found ${resultCount} freelancer${resultCount === 1 ? '' : 's'}.`,
-      metadata: { results_count: resultCount },
-    });
-  }
-
-  static async notifyPortfolioMatchedByAI(freelancerUserId: string, actorUserId: string | null) {
-    return this.notifyEvent({
-      userId: freelancerUserId,
-      actorId: actorUserId,
-      type: 'portfolio_matched_ai',
-      title: 'Portfolio matched by AI',
-      message: 'Your portfolio appeared in AI match results.',
-      metadata: {},
+      type: 'event_matcher_plan_sent',
+      title: 'Event team requests sent',
+      message: `Your Event Matcher plan sent ${recipientCount} request${recipientCount === 1 ? '' : 's'}.`,
+      metadata: { recipient_count: recipientCount },
     });
   }
 
@@ -2864,6 +3366,16 @@ export class DataService {
         ? appendGroupRequestMeta(baseDescription, groupMeta)
         : stripGroupRequestMeta(baseDescription);
 
+      // Structured columns alongside the existing free-text
+      // [[SCHEDULE_META:...]] tag (kept for backward-compatible display) —
+      // this is what lets a still-pending request's slot be queried at all
+      // (e.g. to show "N pending requests" on a freelancer's calendar)
+      // without full-text parsing, while staying a non-exclusive soft hold:
+      // nothing scopes the bookings_no_overlap constraint to this table, so
+      // any number of requests can share an overlapping slot until one is
+      // actually accepted.
+      const scheduleMeta = extractScheduleMeta(payloadMessage);
+
       const response = await this.createRequest({
         client_id: input.clientId,
         freelancer_id: recipientId,
@@ -2872,6 +3384,9 @@ export class DataService {
         message: payloadMessage,
         budget,
         status: 'pending',
+        start_date: scheduleMeta?.date || null,
+        start_time: scheduleMeta?.time || null,
+        end_time: scheduleMeta?.endTime || null,
       } as any);
 
       if (response.error) {
@@ -2880,7 +3395,6 @@ export class DataService {
 
       created.push(response.data);
       if (response.data?.id) {
-        const scheduleMeta = extractScheduleMeta(payloadMessage);
         await this.logRequestOffer({
           request_id: response.data.id,
           round: 1,
@@ -3010,11 +3524,15 @@ export class DataService {
 
     if (!meta?.group_id) {
       const nextMessage = stripGroupRequestMeta(input.description);
+      const scheduleMeta = extractScheduleMeta(nextMessage);
       return this.updateRequest(input.requestId, {
         project_name: input.projectName,
         description: nextMessage,
         message: nextMessage,
         budget: input.budget,
+        start_date: scheduleMeta?.date || null,
+        start_time: scheduleMeta?.time || null,
+        end_time: scheduleMeta?.endTime || null,
       } as any);
     }
 
@@ -3040,6 +3558,7 @@ export class DataService {
       recipients: Array.from(desiredRecipients),
     };
     const nextMessage = appendGroupRequestMeta(input.description, mergedMeta as any);
+    const groupScheduleMeta = extractScheduleMeta(nextMessage);
 
     for (const request of groupRequests) {
       await this.updateRequest(request.id, {
@@ -3047,6 +3566,9 @@ export class DataService {
         description: nextMessage,
         message: nextMessage,
         budget: input.budget,
+        start_date: groupScheduleMeta?.date || null,
+        start_time: groupScheduleMeta?.time || null,
+        end_time: groupScheduleMeta?.endTime || null,
       } as any);
     }
 
@@ -3063,6 +3585,9 @@ export class DataService {
         message: nextMessage,
         budget: input.budget,
         status: 'pending',
+        start_date: groupScheduleMeta?.date || null,
+        start_time: groupScheduleMeta?.time || null,
+        end_time: groupScheduleMeta?.endTime || null,
       } as any);
     }
 
