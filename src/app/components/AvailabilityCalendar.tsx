@@ -116,14 +116,12 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
               key={cell.key}
               onClick={() => setSelectedDateKey(cell.key)}
               className={`h-11 rounded-lg border text-xs font-semibold transition-colors ${
-                isSelected
+                blocked
                   ? 'border-gray-900 bg-gray-900 text-white'
-                  : blocked
-                  ? 'border-red-200 bg-red-50 text-red-700 hover:border-red-300'
                   : dayBookings.length > 0
-                  ? 'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300'
+                  ? 'border-gray-300 bg-gray-200 text-gray-700 hover:border-gray-400'
                   : 'border-gray-100 text-gray-700 hover:border-gray-300'
-              } ${isToday && !isSelected ? 'ring-1 ring-gray-400' : ''}`}
+              } ${isSelected ? 'ring-2 ring-gray-900 ring-offset-1' : ''} ${isToday && !isSelected ? 'ring-1 ring-gray-400' : ''}`}
             >
               {cell.date.getDate()}
             </button>
@@ -132,8 +130,8 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
       </div>
 
       <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-gray-500">
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Partially booked</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-red-400" /> Unavailable</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gray-300" /> Partially booked</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gray-900" /> Unavailable</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full border border-gray-300" /> Open</span>
       </div>
 
@@ -143,7 +141,7 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
             {new Date(selectedDateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
           {selectedBlocked ? (
-            <p className="flex items-center gap-1.5 text-red-700">
+            <p className="flex items-center gap-1.5 text-gray-900">
               <Ban className="h-4 w-4 flex-shrink-0" /> Not available this day.
             </p>
           ) : selectedBookings.length === 0 ? (
@@ -153,7 +151,7 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
               <p className="mb-1 text-gray-600">Already booked at:</p>
               <div className="flex flex-wrap gap-1.5">
                 {selectedBookings.map((booking) => (
-                  <span key={booking.id} className="rounded-full border border-amber-200 bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">
+                  <span key={booking.id} className="rounded-full border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
                     {formatTimeLabel(booking.start_time?.slice(0, 5) || '00:00')}
                     {booking.end_time ? `–${formatTimeLabel(booking.end_time.slice(0, 5))}` : ''}
                   </span>
