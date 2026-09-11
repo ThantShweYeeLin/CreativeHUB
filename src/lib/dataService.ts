@@ -13,8 +13,7 @@ import {
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
-import type { BookingCheckIn } from './bookingCheckIn';
-import type { LocationPoint } from '../components/common/LeafletLocationPicker';
+import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -990,42 +989,89 @@ export class DataService {
     return { data, error };
   }
 
-  // BOOKING CHECK-IN
-  static async setBookingLocation(bookingId: string, point: LocationPoint) {
-    const { data, error } = await (supabase as any).rpc('set_booking_location', {
+  // MUTUAL ATTENDANCE VERIFICATION
+  // Each party confirms the OTHER party's presence — never their own — and
+  // either can report an attendance problem instead. See
+  // supabase/attendance_verification.sql for the security-definer RPCs that
+  // actually enforce role/window eligibility server-side.
+  static async reconcileAttendanceWindow(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('reconcile_attendance_window', { p_booking_id: bookingId });
+    return { data, error };
+  }
+
+  static async confirmAttendance(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('confirm_attendance', { p_booking_id: bookingId });
+    const row = Array.isArray(data) ? data[0] : data;
+    return { data: row as (AttendanceConfirmation & { already_confirmed: boolean }) | null, error };
+  }
+
+  static async submitAttendanceReport(
+    bookingId: string,
+    input: { reason: string; explanation: string; evidencePaths: string[] }
+  ) {
+    const { data, error } = await (supabase as any).rpc('submit_attendance_report', {
       p_booking_id: bookingId,
-      p_lat: point.latitude,
-      p_lng: point.longitude,
-      p_address: point.formattedAddress,
-      p_place_id: point.placeId,
-      p_city: point.city || null,
-      p_district: point.district || null,
+      p_reason: input.reason,
+      p_explanation: input.explanation || null,
+      p_evidence_paths: input.evidencePaths,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    return { data: row as AttendanceReport | null, error };
+  }
+
+  static async getBookingAttendanceConfirmations(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('booking_attendance_confirmations')
+      .select('*')
+      .eq('booking_id', bookingId);
+    return { data: (data || []) as AttendanceConfirmation[], error };
+  }
+
+  static async getBookingAttendanceReport(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('attendance_reports')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return { data: (data || null) as AttendanceReport | null, error };
+  }
+
+  static async adminResolveAttendanceReport(reportId: string, decision: string, reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_resolve_attendance_report', {
+      p_report_id: reportId,
+      p_decision: decision,
+      p_reason: reason || null,
     });
     return { data, error };
   }
 
-  static async checkInToBooking(
-    bookingId: string,
-    input: { lat?: number | null; lng?: number | null; permissionDenied?: boolean; locationUnavailable?: boolean }
-  ) {
-    const { data, error } = await (supabase as any).rpc('checkin_to_booking', {
-      p_booking_id: bookingId,
-      p_lat: input.lat ?? null,
-      p_lng: input.lng ?? null,
-      p_permission_denied: input.permissionDenied ?? false,
-      p_location_unavailable: input.locationUnavailable ?? false,
-    });
-    // The RPC returns a table (array); callers want the single row.
-    const row = Array.isArray(data) ? data[0] : data;
-    return { data: row as (BookingCheckIn & { already_checked_in: boolean }) | null, error };
+  static async adminRequestAttendanceEvidence(reportId: string) {
+    const { data, error } = await (supabase as any).rpc('admin_request_attendance_evidence', { p_report_id: reportId });
+    return { data, error };
   }
 
-  static async getBookingCheckIns(bookingId: string) {
+  static async getAllAttendanceReportsForAdmin() {
     const { data, error } = await (supabase as any)
-      .from('booking_check_ins')
-      .select('*')
-      .eq('booking_id', bookingId);
-    return { data: (data || []) as BookingCheckIn[], error };
+      .from('attendance_reports')
+      .select(
+        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+      )
+      .in('status', ['open', 'under_review'])
+      .order('created_at', { ascending: false });
+    return { data: data || [], error };
+  }
+
+  static async getResolvedAttendanceReportsForAdmin() {
+    const { data, error } = await (supabase as any)
+      .from('attendance_reports')
+      .select(
+        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+      )
+      .eq('status', 'resolved')
+      .order('resolved_at', { ascending: false });
+    return { data: data || [], error };
   }
 
   static async getBookingEvents(bookingId: string) {
@@ -1421,7 +1467,7 @@ export class DataService {
   static async openBookingDispute(
     bookingId: string,
     input: {
-      category: 'no_show' | 'not_performed' | 'differed_from_agreement' | 'other';
+      category: 'not_performed' | 'differed_from_agreement' | 'other';
       reason: string;
       evidenceText?: string | null;
       evidencePhotoPaths?: string[];
@@ -1456,18 +1502,12 @@ export class DataService {
       evidence_photos: input.evidencePhotoPaths || [],
     });
 
-    // A no_show report stays neutral — CreativeHUB flags an attendance
-    // issue for review rather than relaying the client's complaint
-    // verbatim, to avoid putting the two parties in direct confrontation.
-    const isNoShow = input.category === 'no_show';
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: isNoShow ? 'Attendance issue flagged' : 'Client reported a problem',
-      message: isNoShow
-        ? 'Your recent booking has been flagged for an attendance issue. Please review the booking and confirm what happened.'
-        : `The client disputed this booking: ${input.reason}`,
+      title: 'Client reported a problem',
+      message: `The client disputed this booking: ${input.reason}`,
       relatedId: bookingId,
     });
 

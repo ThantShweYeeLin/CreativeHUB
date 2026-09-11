@@ -6,10 +6,9 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { formatCurrencyAmount } from '../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from './bookingTracking/DisputeTimeline';
-import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
-import type { BookingCheckIn } from '../../lib/bookingCheckIn';
+import { AttendanceReportsTab } from './admin/AttendanceReportsTab';
 
-type Tab = 'overview' | 'users' | 'reports' | 'disputes' | 'activity';
+type Tab = 'overview' | 'users' | 'reports' | 'disputes' | 'attendance' | 'activity';
 
 const REPORT_REASON_LABEL: Record<string, string> = {
   harassment: 'Harassment',
@@ -34,6 +33,7 @@ const TAB_LABEL: Record<Tab, string> = {
   users: 'User Management',
   reports: 'Reports',
   disputes: 'Deposit Disputes',
+  attendance: 'Attendance Reports',
   activity: 'Activity Log',
 };
 
@@ -54,7 +54,7 @@ export function AdminDashboardPage() {
             <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
           </div>
           <div className="mt-4 flex gap-2 overflow-x-auto">
-            {(['overview', 'users', 'reports', 'disputes', 'activity'] as Tab[]).map((t) => (
+            {(['overview', 'users', 'reports', 'disputes', 'attendance', 'activity'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -74,6 +74,7 @@ export function AdminDashboardPage() {
         {tab === 'users' && <UsersTab />}
         {tab === 'reports' && <ReportsTab />}
         {tab === 'disputes' && <DisputesTab />}
+        {tab === 'attendance' && <AttendanceReportsTab />}
         {tab === 'activity' && <ActivityLogTab />}
       </div>
     </div>
@@ -569,7 +570,6 @@ function DisputesTab() {
   const [activeBookings, setActiveBookings] = useState<any[]>([]);
   const [resolvedBookings, setResolvedBookings] = useState<any[]>([]);
   const [events, setEvents] = useState<Record<string, any[]>>({});
-  const [checkIns, setCheckIns] = useState<Record<string, BookingCheckIn[]>>({});
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -586,14 +586,6 @@ function DisputesTab() {
     );
     const eventsMap = Object.fromEntries(eventEntries);
     setEvents((current) => ({ ...current, ...eventsMap }));
-
-    const checkInEntries = await Promise.all(
-      bookings.map(async (b: any) => {
-        const res = await DataService.getBookingCheckIns(b.id);
-        return [b.id, res.data || []] as const;
-      })
-    );
-    setCheckIns((current) => ({ ...current, ...Object.fromEntries(checkInEntries) }));
 
     const paths = Object.values(eventsMap)
       .flat()
@@ -718,8 +710,6 @@ function DisputesTab() {
               </div>
             </div>
 
-            <AttendanceEvidence checkIns={checkIns[b.id] || []} disputeCategory={clientClaim?.category} detailed />
-
             <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Full Timeline</p>
             <DisputeTimeline events={bookingEvents} signedUrls={signedUrls} />
 
@@ -797,7 +787,6 @@ function DisputesTab() {
                 <p className="text-sm text-gray-700">{decisionEvent.reason}</p>
               </div>
             )}
-            <AttendanceEvidence checkIns={checkIns[b.id] || []} disputeCategory={clientClaim?.category} detailed />
             <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Full Timeline</p>
             <DisputeTimeline events={bookingEvents} signedUrls={signedUrls} />
           </div>

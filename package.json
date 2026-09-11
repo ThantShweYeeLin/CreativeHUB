@@ -8,7 +8,7 @@
     "dev": "concurrently -n web,api -c blue,green \"vite\" \"pnpm --filter creativehub-server dev\"",
     "dev:web": "vite",
     "test:e2e": "playwright test",
-    "test:checkin-security": "tsx --env-file=.env.local scripts/checkin-security-check.ts",
+    "test:attendance-verification": "tsx --env-file=.env.local scripts/attendance-verification-check.ts",
     "preview": "vite preview"
   },
   "dependencies": {

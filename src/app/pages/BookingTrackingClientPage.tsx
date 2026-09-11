@@ -10,8 +10,8 @@ import { formatCountdown } from '../../lib/bookingEscrow';
 import { formatCardLabel } from '../../lib/paymentCard';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
-import { BookingCheckIn } from './bookingTracking/BookingCheckIn';
-import { AttendanceEvidence } from './bookingTracking/AttendanceEvidence';
+import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
+import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
@@ -24,7 +24,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, checkIns, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -47,7 +47,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeCategory, setDisputeCategory] = useState<'no_show' | 'not_performed' | 'differed_from_agreement' | 'other'>('no_show');
+  const [disputeCategory, setDisputeCategory] = useState<'not_performed' | 'differed_from_agreement' | 'other'>('not_performed');
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
@@ -170,7 +170,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   };
 
   const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'client';
-  const reportedDisputeCategory = events.find((e: any) => e.round === 1 && e.actor === 'client' && e.action === 'complain')?.category || null;
   // No known schedule data at all shouldn't permanently block a client from
   // ever reporting a problem - default to allowing it in that case.
   const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
@@ -189,7 +188,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         onChange={(e) => setDisputeCategory(e.target.value as any)}
         className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
       >
-        <option value="no_show">Freelancer did not show up</option>
         <option value="not_performed">Freelancer did not perform the service</option>
         <option value="differed_from_agreement">Service significantly differed from agreement</option>
         <option value="other">Other</option>
@@ -298,14 +296,23 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         </div>
 
         {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
-          <BookingCheckIn
-            booking={booking}
-            bookingId={booking.id}
-            scheduledAt={bookingData.scheduledAt}
-            role="client"
-            checkIns={checkIns}
-            onRefresh={refresh}
-          />
+          <>
+            <AttendanceCheck
+              booking={booking}
+              bookingId={booking.id}
+              scheduledAt={bookingData.scheduledAt}
+              role="client"
+              confirmations={confirmations}
+              report={attendanceReport}
+              onRefresh={refresh}
+            />
+            <AttendanceTimeline
+              events={events}
+              confirmations={confirmations}
+              report={attendanceReport}
+              scheduledAt={bookingData.scheduledAt}
+            />
+          </>
         )}
 
         {/* Annulled */}
@@ -458,7 +465,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </p>
             )}
 
-            <AttendanceEvidence checkIns={checkIns} disputeCategory={reportedDisputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
 
             {canRespondToDispute && !showRespondForm && (
@@ -524,7 +530,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             <p className="text-sm text-gray-600">
               Your dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
             </p>
-            <AttendanceEvidence checkIns={checkIns} disputeCategory={reportedDisputeCategory} />
             <DisputeTimeline events={events} signedUrls={signedUrls} />
           </div>
         )}
