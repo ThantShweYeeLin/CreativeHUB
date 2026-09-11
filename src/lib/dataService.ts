@@ -14,7 +14,6 @@ import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
-import { buildFreelancerStyleProfileText, embedText } from './aiMatching';
 import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 
 type User = Database['public']['Tables']['users']['Row'];

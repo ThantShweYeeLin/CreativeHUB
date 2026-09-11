@@ -108,25 +108,55 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 -- both self-confirmation and post-dispute evidence tampering at the RLS
 -- layer, not just in the UI.
 
-alter table public.booking_events
-  drop constraint if exists booking_events_action_check;
-alter table public.booking_events
-  add constraint booking_events_action_check
-  check (action in (
-    'deposit_paid','completion_submitted','confirmed',
-    'complain','evidence','conceded','released','refunded','annulled',
-    'presence_confirmed','attendance_report_submitted','attendance_evidence_requested','attendance_report_resolved',
-    -- Legacy values from the removed GPS check-in feature — kept here only
-    -- so historical rows stay valid (booking_events is append-only and
-    -- never rewritten); nothing inserts these going forward.
-    'checked_in','check_in_failed','location_set'
-  ));
+-- Widen the allowlist for the four new action values this feature logs,
+-- while guaranteeing every row already in the table stays valid — this
+-- repo's concurrent migrations (booking_reschedule.sql, plus whatever else
+-- may have written booking_events directly) mean the authoritative set of
+-- legacy values isn't something to hand-enumerate here; read it from the
+-- table itself instead of trying to guess/transcribe it.
+DO $$
+DECLARE
+  v_existing_actions text;
+BEGIN
+  SELECT string_agg(DISTINCT quote_literal(action), ',') INTO v_existing_actions FROM public.booking_events;
 
-alter table public.admin_actions
-  drop constraint if exists admin_actions_target_type_check;
-alter table public.admin_actions
-  add constraint admin_actions_target_type_check
-  check (target_type in ('user','report','ticket','dispute','attendance_report'));
+  EXECUTE 'alter table public.booking_events drop constraint if exists booking_events_action_check';
+  EXECUTE format(
+    'alter table public.booking_events add constraint booking_events_action_check check (action in (%s%s%s))',
+    -- Every action value known from source across every migration that
+    -- touches this constraint (booking_escrow.sql's original set, the
+    -- removed check-in feature's legacy values, booking_reschedule.sql's
+    -- reschedule handshake, and this feature's four) — a full union so
+    -- re-running this migration in any order relative to theirs never
+    -- narrows what another feature is allowed to write.
+    quote_literal('deposit_paid') || ',' || quote_literal('completion_submitted') || ',' || quote_literal('confirmed') || ',' ||
+      quote_literal('complain') || ',' || quote_literal('evidence') || ',' || quote_literal('conceded') || ',' ||
+      quote_literal('released') || ',' || quote_literal('refunded') || ',' || quote_literal('annulled') || ',' ||
+      quote_literal('checked_in') || ',' || quote_literal('check_in_failed') || ',' || quote_literal('location_set') || ',' ||
+      quote_literal('reschedule_proposed') || ',' || quote_literal('reschedule_accepted') || ',' ||
+      quote_literal('reschedule_declined') || ',' || quote_literal('reschedule_withdrawn') || ',' ||
+      quote_literal('presence_confirmed') || ',' || quote_literal('attendance_report_submitted') || ',' ||
+      quote_literal('attendance_evidence_requested') || ',' || quote_literal('attendance_report_resolved'),
+    CASE WHEN v_existing_actions IS NOT NULL THEN ',' ELSE '' END,
+    coalesce(v_existing_actions, '')
+  );
+END $$;
+
+DO $$
+DECLARE
+  v_existing_target_types text;
+BEGIN
+  SELECT string_agg(DISTINCT quote_literal(target_type), ',') INTO v_existing_target_types FROM public.admin_actions;
+
+  EXECUTE 'alter table public.admin_actions drop constraint if exists admin_actions_target_type_check';
+  EXECUTE format(
+    'alter table public.admin_actions add constraint admin_actions_target_type_check check (target_type in (%s%s%s))',
+    quote_literal('user') || ',' || quote_literal('report') || ',' || quote_literal('ticket') || ',' ||
+      quote_literal('dispute') || ',' || quote_literal('attendance_report'),
+    CASE WHEN v_existing_target_types IS NOT NULL THEN ',' ELSE '' END,
+    coalesce(v_existing_target_types, '')
+  );
+END $$;
 
 -- ============================================================
 -- RPCs
