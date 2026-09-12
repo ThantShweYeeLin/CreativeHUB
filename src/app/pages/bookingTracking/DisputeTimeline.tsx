@@ -7,6 +7,7 @@ export const DISPUTE_CATEGORY_LABEL: Record<string, string> = {
   // Legacy value from before categories were split into the two above -
   // kept so older dispute events still render a readable label.
   not_as_agreed: 'Service was not as agreed',
+  deliverables_not_received: 'Deliverables not received',
   other: 'Other',
 };
 

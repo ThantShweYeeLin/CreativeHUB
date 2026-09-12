@@ -13,6 +13,7 @@ import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
+import { DeliveryCard, isDeliveryCardEligible } from './bookingTracking/DeliveryCard';
 
 interface BookingTrackingFreelancerPageProps {
   onBack: () => void;
@@ -230,6 +231,10 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
         {user?.id && isBookingRescheduleEligible(escrowState) && (
           <RescheduleCard booking={booking} role="freelancer" userId={user.id} onRefresh={refresh} />
+        )}
+
+        {isDeliveryCardEligible(escrowState) && (
+          <DeliveryCard booking={booking} role="freelancer" onRefresh={refresh} />
         )}
 
         {/* Annulled */}

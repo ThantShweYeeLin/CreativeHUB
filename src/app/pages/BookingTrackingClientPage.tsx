@@ -15,6 +15,7 @@ import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
+import { DeliveryCard, isDeliveryCardEligible } from './bookingTracking/DeliveryCard';
 import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
 
 interface BookingTrackingClientPageProps {
@@ -48,7 +49,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeCategory, setDisputeCategory] = useState<'not_performed' | 'differed_from_agreement' | 'other'>('not_performed');
+  const [disputeCategory, setDisputeCategory] = useState<'not_performed' | 'differed_from_agreement' | 'deliverables_not_received' | 'other'>('not_performed');
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
   const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
@@ -191,8 +192,14 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
       >
         <option value="not_performed">Freelancer did not perform the service</option>
         <option value="differed_from_agreement">Service significantly differed from agreement</option>
+        <option value="deliverables_not_received">Deliverables not received</option>
         <option value="other">Other</option>
       </select>
+      {disputeCategory === 'deliverables_not_received' && (
+        <p className="mb-3 text-xs text-gray-500">
+          The agreed service was completed, but the expected files, photos, videos, designs, or other deliverables have not been received.
+        </p>
+      )}
       <label className="mb-1 block text-xs font-semibold text-gray-600">What went wrong?</label>
       <textarea
         value={disputeReason}
@@ -318,6 +325,21 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {user?.id && isBookingRescheduleEligible(escrowState) && (
           <RescheduleCard booking={booking} role="client" userId={user.id} onRefresh={refresh} />
+        )}
+
+        {isDeliveryCardEligible(escrowState) && (
+          <DeliveryCard
+            booking={booking}
+            role="client"
+            onRefresh={refresh}
+            canReportDeliveryIssue={
+              (escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && booking.dispute_status === 'none'
+            }
+            onReportDeliveryIssue={() => {
+              setDisputeCategory('deliverables_not_received');
+              setShowDisputeForm(true);
+            }}
+          />
         )}
 
         {/* Annulled */}

@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
+import { AdminRoute } from '../components/AdminRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 // Kept eager — the first thing a signed-out visitor sees, so there's
@@ -41,7 +42,17 @@ const MessagesPage = lazy(() => import('./pages/MessagesPage').then((m) => ({ de
 const ForYouPage = lazy(() => import('./pages/ForYouPage').then((m) => ({ default: m.ForYouPage })));
 const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
 const ClientOnboardingPage = lazy(() => import('./pages/ClientOnboardingPage').then((m) => ({ default: m.ClientOnboardingPage })));
-const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const AdminUserDetailPage = lazy(() => import('./pages/admin/AdminUserDetailPage').then((m) => ({ default: m.AdminUserDetailPage })));
+const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage').then((m) => ({ default: m.AdminBookingsPage })));
+const AdminBookingDetailPage = lazy(() => import('./pages/admin/AdminBookingDetailPage').then((m) => ({ default: m.AdminBookingDetailPage })));
+const AdminDisputesPage = lazy(() => import('./pages/admin/AdminDisputesPage').then((m) => ({ default: m.AdminDisputesPage })));
+const AdminDisputeDetailPage = lazy(() => import('./pages/admin/AdminDisputeDetailPage').then((m) => ({ default: m.AdminDisputeDetailPage })));
+const AdminAttendancePage = lazy(() => import('./pages/admin/AdminAttendancePage').then((m) => ({ default: m.AdminAttendancePage })));
+const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage })));
+const AdminReportDetailPage = lazy(() => import('./pages/admin/AdminReportDetailPage').then((m) => ({ default: m.AdminReportDetailPage })));
+const AdminAuditLogPage = lazy(() => import('./pages/admin/AdminAuditLogPage').then((m) => ({ default: m.AdminAuditLogPage })));
 
 // Loading component
 function LoadingScreen() {
@@ -402,14 +413,17 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <AdminDashboardPage />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/admin" element={<AdminRoute><AdminOverviewPage /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+          <Route path="/admin/users/:id" element={<AdminRoute><AdminUserDetailPage /></AdminRoute>} />
+          <Route path="/admin/bookings" element={<AdminRoute><AdminBookingsPage /></AdminRoute>} />
+          <Route path="/admin/bookings/:id" element={<AdminRoute><AdminBookingDetailPage /></AdminRoute>} />
+          <Route path="/admin/disputes" element={<AdminRoute><AdminDisputesPage /></AdminRoute>} />
+          <Route path="/admin/disputes/:id" element={<AdminRoute><AdminDisputeDetailPage /></AdminRoute>} />
+          <Route path="/admin/attendance" element={<AdminRoute><AdminAttendancePage /></AdminRoute>} />
+          <Route path="/admin/reports" element={<AdminRoute><AdminReportsPage /></AdminRoute>} />
+          <Route path="/admin/reports/:id" element={<AdminRoute><AdminReportDetailPage /></AdminRoute>} />
+          <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogPage /></AdminRoute>} />
           <Route
             path="/premium"
             element={

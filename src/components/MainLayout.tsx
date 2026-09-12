@@ -468,7 +468,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate(`/profile/${targetUserId}`);
   };
 
-  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => {
+  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => {
     setShowUserMenu(false);
     switch (item) {
       case 'requests':
@@ -485,9 +485,6 @@ export function MainLayout({ children }: MainLayoutProps) {
         break;
       case 'messages':
         navigate('/messages');
-        break;
-      case 'premium':
-        navigate('/premium');
         break;
       case 'bookings':
         // "My Booked List" is always the client-side function - bookings this

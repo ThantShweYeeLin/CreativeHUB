@@ -1618,16 +1618,71 @@ export class DataService {
     return { isAdmin: Boolean(data), error };
   }
 
-  static async getAllUsersForAdmin(search: string) {
+  static async getAllUsersForAdmin(params: {
+    search?: string;
+    role?: 'client' | 'freelancer' | 'admin';
+    status?: 'active' | 'paused' | 'suspended' | 'banned';
+    limit?: number;
+    offset?: number;
+  }) {
+    const { search = '', role, status, limit = 50, offset = 0 } = params;
     let query = supabase
       .from('users')
-      .select('id, full_name, email, role, account_status, avatar_url, gender')
+      .select('id, full_name, email, role, account_status, avatar_url, gender, created_at', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(200);
+      .range(offset, offset + limit - 1);
     if (search.trim()) {
       query = query.or(`full_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`);
     }
-    const { data, error } = await query;
+    if (role) {
+      query = query.eq('role', role);
+    }
+    // "suspended" in the UI covers both suspended and banned accounts —
+    // banned is the harder version of the same "can't use the platform"
+    // state, so it belongs in the same filter bucket.
+    if (status === 'suspended') {
+      query = query.in('account_status', ['suspended', 'banned']);
+    } else if (status) {
+      query = query.eq('account_status', status);
+    }
+    const { data, error, count } = await query;
+    return { data: data || [], count: count ?? 0, error };
+  }
+
+  static async getAdminUser(userId: string) {
+    const { data, error } = await supabase.from('users').select('*').eq('id', userId).single();
+    return { data, error };
+  }
+
+  static async adminSetUserRole(userId: string, role: 'client' | 'freelancer' | 'admin', reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_set_user_role', {
+      p_user_id: userId,
+      p_role: role,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  // A booking row matches a user on exactly one of client_id/freelancer_id
+  // (never both), so this can't produce duplicate rows — and it returns
+  // every booking this account has ever been party to, regardless of
+  // which side of the booking they were on.
+  static async getAdminUserBookings(userId: string, limit = 20) {
+    const { data, error } = await (supabase as any)
+      .from('bookings')
+      .select('*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url)')
+      .or(`client_id.eq.${userId},freelancer_id.eq.${userId}`)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    return { data: data || [], error };
+  }
+
+  static async getAdminUserReports(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .select('*, reporter:reporter_id(id, full_name), reported:reported_user_id(id, full_name)')
+      .or(`reporter_id.eq.${userId},reported_user_id.eq.${userId}`)
+      .order('created_at', { ascending: false });
     return { data: data || [], error };
   }
 
@@ -1698,6 +1753,15 @@ export class DataService {
       .order('created_at', { ascending: false })
       .limit(200);
     return { data: data || [], error };
+  }
+
+  static async getUserReportForAdmin(reportId: string) {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .select('*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email)')
+      .eq('id', reportId)
+      .single();
+    return { data, error };
   }
 
   static async adminResolveUserReport(reportId: string, decision: 'no_action' | 'warning' | 'suspended' | 'banned', reason?: string) {
@@ -1778,20 +1842,92 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  // General (non-disputed-only) admin bookings browser — reuses the same
+  // "Admins view all bookings" RLS policy the dispute queries above
+  // already rely on, so no new migration is needed for this.
+  static async getAdminBookings(params: {
+    status?: 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'annulled';
+    disputeStatus?: 'none' | 'open' | 'under_admin_review' | 'resolved';
+    depositStatus?: 'unpaid' | 'deposit_paid' | 'paid' | 'refunded';
+    clientId?: string;
+    freelancerId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    search?: string;
+    /** estimated_delivery_at in the past and not yet delivered/n-a — a signal for the admin, not a dispute. */
+    overdueOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  }) {
+    const { limit = 25, offset = 0 } = params;
+    let query = (supabase as any)
+      .from('bookings')
+      .select('*, client:client_id(id, full_name, email, avatar_url), freelancer:freelancer_id(id, full_name, email, avatar_url)', { count: 'exact' })
+      .order(params.overdueOnly ? 'estimated_delivery_at' : 'created_at', { ascending: Boolean(params.overdueOnly) })
+      .range(offset, offset + limit - 1);
+    if (params.status) query = query.eq('status', params.status);
+    if (params.disputeStatus) query = query.eq('dispute_status', params.disputeStatus);
+    if (params.depositStatus) query = query.eq('payment_status', params.depositStatus);
+    if (params.clientId) query = query.eq('client_id', params.clientId);
+    if (params.freelancerId) query = query.eq('freelancer_id', params.freelancerId);
+    if (params.dateFrom) query = query.gte('start_date', params.dateFrom);
+    if (params.dateTo) query = query.lte('start_date', params.dateTo);
+    if (params.search?.trim()) query = query.ilike('project_name', `%${params.search.trim()}%`);
+    if (params.overdueOnly) {
+      query = query.lt('estimated_delivery_at', new Date().toISOString()).in('delivery_status', ['pending', 'in_progress']);
+    }
+    const { data, error, count } = await query;
+    return { data: data || [], count: count ?? 0, error };
+  }
+
   static async getAdminDashboardStats() {
-    const [usersResponse, freelancersResponse, reportsResponse, disputesResponse] = await Promise.all([
+    const [
+      usersResponse, freelancersResponse, clientsResponse, bookingsResponse,
+      openDisputesResponse, underReviewDisputesResponse,
+      openReportsResponse, openTicketsResponse, reviewsResponse,
+      overdueDeliveriesResponse,
+    ] = await Promise.all([
       supabase.from('users').select('id', { count: 'exact', head: true }),
       supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'freelancer').eq('account_status', 'active'),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('account_status', 'active'),
+      supabase.from('bookings').select('id', { count: 'exact', head: true }),
+      (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).eq('dispute_status', 'open'),
+      (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).eq('dispute_status', 'under_admin_review'),
       (supabase as any).from('user_reports').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-      (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).in('dispute_status', ['open', 'under_admin_review']),
+      (supabase as any).from('support_tickets').select('id', { count: 'exact', head: true }).in('status', ['open', 'in_progress']),
+      supabase.from('reviews').select('id', { count: 'exact', head: true }),
+      // A signal, not a dispute — just how many bookings have an estimated
+      // delivery date in the past with nothing marked delivered yet. Never
+      // implies fault; the admin's job is to notice, not to auto-decide.
+      (supabase as any)
+        .from('bookings')
+        .select('id', { count: 'exact', head: true })
+        .lt('estimated_delivery_at', new Date().toISOString())
+        .in('delivery_status', ['pending', 'in_progress']),
     ]);
 
     return {
       totalUsers: usersResponse.count || 0,
       activeFreelancers: freelancersResponse.count || 0,
-      openReports: reportsResponse.count || 0,
-      pendingDisputes: disputesResponse.count || 0,
-      error: usersResponse.error || freelancersResponse.error || reportsResponse.error || disputesResponse.error || null,
+      activeClients: clientsResponse.count || 0,
+      totalBookings: bookingsResponse.count || 0,
+      // Kept for back-compat with anything still reading the old combined
+      // field; disputesAwaitingResponse/disputesNeedingDecision are the
+      // new, more specific breakdown used by the dashboard's "Needs
+      // Attention" panel.
+      pendingDisputes: (openDisputesResponse.count || 0) + (underReviewDisputesResponse.count || 0),
+      disputesAwaitingResponse: openDisputesResponse.count || 0,
+      disputesNeedingDecision: underReviewDisputesResponse.count || 0,
+      openReports: openReportsResponse.count || 0,
+      openTickets: openTicketsResponse.count || 0,
+      totalReviews: reviewsResponse.count || 0,
+      resultsOverdue: overdueDeliveriesResponse.count || 0,
+      error: [
+        usersResponse, freelancersResponse, clientsResponse, bookingsResponse,
+        openDisputesResponse, underReviewDisputesResponse,
+        openReportsResponse, openTicketsResponse, reviewsResponse,
+        overdueDeliveriesResponse,
+      ].map((r) => r.error).find(Boolean) || null,
     };
   }
 
@@ -1947,6 +2083,105 @@ export class DataService {
     return { data, error: null };
   }
 
+  // RESULT DELIVERY — a separate axis from the booking's status/escrow
+  // lifecycle (see supabase/booking_delivery_tracking.sql). A booking can
+  // be 'completed' with no deliverables ever due (makeup, hair) or can sit
+  // in 'delivery pending' long after the appointment itself is over
+  // (photo/video editing, final design files). Freelancer-only in
+  // practice — enforced at the UI layer (only rendered on the freelancer's
+  // tracking page), same as "mark complete" above; RLS's existing "Users
+  // can update own bookings" already covers the write for either
+  // participant, consistent with every other booking-detail field.
+  static async setBookingDeliveryPlan(bookingId: string, input: { hasDeliverables: boolean; estimatedDeliveryAt?: string | null; deliveryNotes?: string | null }) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({
+        delivery_status: input.hasDeliverables ? 'pending' : 'not_applicable',
+        estimated_delivery_at: input.hasDeliverables ? input.estimatedDeliveryAt || null : null,
+        delivery_notes: input.hasDeliverables ? input.deliveryNotes || null : null,
+      } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error || !data) {
+      return { data, error };
+    }
+    // Declaring "no deliverables" isn't itself an event worth logging in
+    // the dispute-relevant timeline — only a real estimate is.
+    if (input.hasDeliverables) {
+      await (supabase as any).from('booking_events').insert({
+        booking_id: bookingId,
+        actor: 'freelancer',
+        action: 'delivery_date_set',
+        reason: input.deliveryNotes || null,
+      });
+      await this.notifyEvent({
+        userId: (data as any).client_id,
+        actorId: (data as any).freelancer_id,
+        type: 'booking_delivery_estimate_set',
+        title: 'Estimated delivery set',
+        message: 'The freelancer set an estimated delivery date for your results.',
+        relatedId: bookingId,
+      });
+    }
+    return { data, error: null };
+  }
+
+  static async updateBookingDeliveryEstimate(bookingId: string, input: { estimatedDeliveryAt: string; reason?: string }) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ estimated_delivery_at: input.estimatedDeliveryAt } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error || !data) {
+      return { data, error };
+    }
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'freelancer',
+      action: 'delivery_date_updated',
+      reason: input.reason || null,
+    });
+    await this.notifyEvent({
+      userId: (data as any).client_id,
+      actorId: (data as any).freelancer_id,
+      type: 'booking_delivery_estimate_updated',
+      title: 'Estimated delivery updated',
+      message: 'The freelancer updated the estimated delivery date for your results.',
+      relatedId: bookingId,
+    });
+    return { data, error: null };
+  }
+
+  static async updateBookingDeliveryStatus(bookingId: string, status: 'in_progress' | 'delivered') {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ delivery_status: status } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error || !data) {
+      return { data, error };
+    }
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'freelancer',
+      action: status === 'delivered' ? 'deliverables_delivered' : 'deliverables_marked_in_progress',
+    });
+    if (status === 'delivered') {
+      await this.notifyEvent({
+        userId: (data as any).client_id,
+        actorId: (data as any).freelancer_id,
+        type: 'booking_delivery_delivered',
+        title: 'Results delivered',
+        message: 'The freelancer marked your results as delivered.',
+        relatedId: bookingId,
+      });
+    }
+    return { data, error: null };
+  }
+
   static async confirmBookingCompletion(bookingId: string) {
     const previous = await supabase.from('bookings').select('dispute_status').eq('id', bookingId).maybeSingle();
     const wasDisputed = (previous.data as any)?.dispute_status === 'open';
@@ -1979,7 +2214,7 @@ export class DataService {
   static async openBookingDispute(
     bookingId: string,
     input: {
-      category: 'not_performed' | 'differed_from_agreement' | 'other';
+      category: 'not_performed' | 'differed_from_agreement' | 'deliverables_not_received' | 'other';
       reason: string;
       evidenceText?: string | null;
       evidencePhotoPaths?: string[];

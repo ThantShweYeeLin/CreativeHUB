@@ -1,8 +1,8 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, Crown, Package, Users, Bookmark } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, Package, Users, Bookmark } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
-  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'premium' | 'bookings' | 'groupRequest') => void;
+  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => void;
   onLogout: () => void;
 }
 
@@ -35,21 +35,6 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
       {/* Menu Dropdown */}
       <div className="absolute top-16 right-6 z-[1210] w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeIn">
         <div className="py-2">
-          {/* Premium Option - Featured */}
-          <button
-            onClick={() => handleClick('premium')}
-            className="w-full mx-2 my-2 px-4 py-3 flex items-center gap-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl hover:shadow-lg transition-all group"
-          >
-            <Crown className="w-5 h-5" />
-            <div className="flex-1 text-left">
-              <span className="font-bold block">Go Premium</span>
-              <span className="text-xs text-gray-300">Unlock exclusive features</span>
-            </div>
-          </button>
-
-          {/* Divider */}
-          <div className="my-2 border-t border-gray-200" />
-
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
