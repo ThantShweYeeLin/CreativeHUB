@@ -17,6 +17,7 @@ import { StepPortfolio } from './freelancer-onboarding/StepPortfolio';
 import { StepAvailability } from './freelancer-onboarding/StepAvailability';
 import { StepServiceLocations } from './freelancer-onboarding/StepServiceLocations';
 import { StepPricing } from './freelancer-onboarding/StepPricing';
+import { StepBilling } from './freelancer-onboarding/StepBilling';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
 import { StepVerification } from './freelancer-onboarding/StepVerification';
@@ -35,7 +36,7 @@ interface StoredLocation {
   district: string | null;
 }
 
-const TOTAL_STEPS = 11;
+const TOTAL_STEPS = 12;
 
 const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Profile', description: 'Tell clients who you are.' },
@@ -46,6 +47,7 @@ const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Availability', description: 'When can clients book you?' },
   { title: 'Service information', description: 'Where and how you provide services.' },
   { title: 'Pricing', description: 'Give clients a sense of your rates.' },
+  { title: 'Billing information', description: 'Add your payout details so you can get paid (optional — add this later in Settings if you prefer).' },
   { title: 'Requirements & limitations', description: 'Set expectations up front.' },
   { title: 'Contact preferences', description: 'How should clients reach you?' },
   { title: 'Verification', description: 'Build trust with a verified badge.' },
@@ -115,6 +117,11 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [startingPriceCurrency, setStartingPriceCurrency] = useState(normalizeCurrencyCode(preferredCurrency, 'THB'));
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
+
+  // (i.5) Billing — payout details so the freelancer can actually get paid.
+  const [billingBankName, setBillingBankName] = useState('');
+  const [billingAccountHolderName, setBillingAccountHolderName] = useState('');
+  const [billingAccountNumber, setBillingAccountNumber] = useState('');
 
   // (j) Requirements / limitations
   const [requirements, setRequirements] = useState('');
@@ -395,6 +402,9 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       pricing_type: pricingType || null,
       min_price: minPrice ? Number(minPrice) : null,
       max_price: maxPrice ? Number(maxPrice) : null,
+      billing_bank_name: billingBankName.trim() || null,
+      billing_account_holder_name: billingAccountHolderName.trim() || null,
+      billing_account_number: billingAccountNumber.trim() || null,
       requirements: requirements.trim() || null,
       limitation_days: limitationDays,
       limitation_note: limitationNote.trim() || null,
@@ -615,6 +625,17 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       )}
 
       {step === 9 && (
+        <StepBilling
+          bankName={billingBankName}
+          onBankNameChange={setBillingBankName}
+          accountHolderName={billingAccountHolderName}
+          onAccountHolderNameChange={setBillingAccountHolderName}
+          accountNumber={billingAccountNumber}
+          onAccountNumberChange={setBillingAccountNumber}
+        />
+      )}
+
+      {step === 10 && (
         <StepRequirements
           requirements={requirements}
           onRequirementsChange={setRequirements}
@@ -625,11 +646,11 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         />
       )}
 
-      {step === 10 && (
+      {step === 11 && (
         <StepContactPreferences contactPreference={contactPreference} onContactPreferenceChange={setContactPreference} />
       )}
 
-      {step === 11 && (
+      {step === 12 && (
         <StepVerification
           emailVerified={Boolean(user?.emailConfirmedAt)}
           phoneVerified={phoneVerified}
