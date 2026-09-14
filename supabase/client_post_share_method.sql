@@ -10,5 +10,5 @@ alter table public.client_post_shares
 DO $$ BEGIN
   alter table public.client_post_shares
     add constraint client_post_shares_share_method_check
-    check (share_method is null or share_method in ('copy_link', 'native', 'whatsapp', 'facebook', 'x'));
+    check (share_method is null or share_method in ('copy_link', 'native', 'whatsapp', 'facebook', 'instagram', 'x'));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;

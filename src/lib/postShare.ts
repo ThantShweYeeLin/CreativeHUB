@@ -92,9 +92,33 @@ export function shareToWhatsApp(postId: string): boolean {
   return openExternalShareWindow(`https://wa.me/?text=${encodeURIComponent(text)}`);
 }
 
-export function shareToFacebook(postId: string): boolean {
+export function shareToFacebook(postId: string, quoteText?: string): boolean {
   const url = getPostShareUrl(postId);
-  return openExternalShareWindow(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
+  // sharer.php scrapes `u` for a link preview, but that scrape can fail
+  // (unreachable on localhost, or a slow/blocked crawl) and leave the
+  // composer looking empty. `quote` pre-fills real text regardless of
+  // whether the scrape succeeds, so the post being shared is never blank.
+  const quote = quoteText?.trim() || `Check out this creative post on CreativeHUB: ${url}`;
+  return openExternalShareWindow(
+    `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}&quote=${encodeURIComponent(quote)}`
+  );
+}
+
+/**
+ * Instagram has no public web share URL that accepts a prefilled link or
+ * caption the way Facebook/WhatsApp/X do — posting to a feed/story/DM only
+ * works through Instagram's own app via a native device share sheet, not
+ * from a website. The honest thing to do from web is copy the link and
+ * hand the user off to Instagram themselves to paste it in (their Stories
+ * "link sticker", bio, or a DM) — not silently do nothing or pretend a
+ * prefilled share happened.
+ */
+export async function shareToInstagram(postId: string): Promise<CopyLinkResult> {
+  const result = await copyPostLink(postId);
+  if (result.ok) {
+    openExternalShareWindow('https://www.instagram.com/');
+  }
+  return result;
 }
 
 export function shareToX(postId: string): boolean {

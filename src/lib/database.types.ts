@@ -14,7 +14,7 @@ export type CreativeProfession =
 
 export type PostMediaType = 'image' | 'video';
 export type ShareTarget = 'creativehub' | 'copy_link' | 'whatsapp' | 'telegram' | 'facebook' | 'x';
-export type PostShareMethod = 'copy_link' | 'native' | 'whatsapp' | 'facebook' | 'x';
+export type PostShareMethod = 'copy_link' | 'native' | 'whatsapp' | 'facebook' | 'instagram' | 'x';
 export type Gender = 'male' | 'female' | 'lgbtq_plus' | 'prefer_not_to_say';
 
 type Row<T> = T;

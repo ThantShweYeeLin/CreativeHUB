@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link2, Share2 } from 'lucide-react';
+import { Instagram, Link2, Share2 } from 'lucide-react';
 import {
   copyPostLink,
   getPostShareUrl,
   isNativeShareSupported,
   shareNative,
   shareToFacebook,
+  shareToInstagram,
   shareToWhatsApp,
   shareToX,
   type PostShareMethod,
@@ -51,7 +52,7 @@ export function PostShareMenu({
   // by a post card's own `overflow-hidden`, or sit underneath a later post
   // card in the feed — it needs its own viewport-relative position instead
   // of the usual "absolute, relative to the trigger" popover positioning.
-  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; left: number; maxHeight: number } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -94,20 +95,28 @@ export function PostShareMenu({
 
     const rect = triggerRef.current.getBoundingClientRect();
     const menuWidth = 256; // w-64
-    const estimatedMenuHeight = 340;
+    const gap = 8;
+    const edgeMargin = 8;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
     let left = align === 'right' ? rect.right - menuWidth : rect.left;
-    left = Math.min(Math.max(left, 8), viewportWidth - menuWidth - 8);
+    left = Math.min(Math.max(left, edgeMargin), viewportWidth - menuWidth - edgeMargin);
 
-    const spaceBelow = viewportHeight - rect.bottom;
-    if (spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight) {
-      // Not enough room below the trigger — anchor to the bottom edge
-      // instead, so the menu opens upward and stays fully on screen.
-      setMenuPosition({ bottom: viewportHeight - rect.top + 8, left });
+    // The item count varies by caller (extraItems can add several more, e.g.
+    // "Send in Messages" + "Report Post"), so this can't rely on a fixed
+    // height estimate — it measures the actual space on each side and picks
+    // whichever has more room, then caps the menu to that space with an
+    // internal scroll (below) so it can never render off-screen even when
+    // the content is taller than either side can fit.
+    const spaceBelow = viewportHeight - rect.bottom - gap - edgeMargin;
+    const spaceAbove = rect.top - gap - edgeMargin;
+    const minUsableHeight = 160;
+
+    if (spaceBelow >= minUsableHeight || spaceBelow >= spaceAbove) {
+      setMenuPosition({ top: rect.bottom + gap, left, maxHeight: Math.max(minUsableHeight, spaceBelow) });
     } else {
-      setMenuPosition({ top: rect.bottom + 8, left });
+      setMenuPosition({ bottom: viewportHeight - rect.top + gap, left, maxHeight: Math.max(minUsableHeight, spaceAbove) });
     }
   }, [isOpen, align]);
 
@@ -158,9 +167,20 @@ export function PostShareMenu({
   };
 
   const handleFacebook = () => {
-    shareToFacebook(postId);
+    const quote = description?.trim() ? `${title} — ${description.trim()}` : title;
+    shareToFacebook(postId, quote);
     onShared?.('facebook');
     setIsOpen(false);
+  };
+
+  const handleInstagram = async () => {
+    const result = await shareToInstagram(postId);
+    if (result.ok) {
+      setStatus({ kind: 'success', message: 'Link copied! Paste it into your Instagram bio, story, or DM.' });
+      onShared?.('instagram');
+    } else {
+      setStatus({ kind: 'error', message: result.message });
+    }
   };
 
   const handleX = () => {
@@ -196,8 +216,8 @@ export function PostShareMenu({
           ref={menuRef}
           role="menu"
           aria-label="Share this post"
-          style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left }}
-          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl"
+          style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
+          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl"
         >
           <p className="px-2 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Share this post</p>
 
@@ -255,6 +275,21 @@ export function PostShareMenu({
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-[#1877F2]`}>f</span>
             Facebook
+          </button>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleInstagram();
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+          >
+            <span className={`${PLATFORM_BADGE_CLASS} bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]`}>
+              <Instagram className="h-4 w-4" />
+            </span>
+            Instagram
           </button>
 
           <button
