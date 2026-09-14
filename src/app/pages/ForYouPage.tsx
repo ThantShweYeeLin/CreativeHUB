@@ -48,6 +48,10 @@ interface ComposerAttachment {
   name: string;
   type: string;
   previewUrl: string | null;
+  // The real File, kept only for the composer's lifetime so publish can
+  // actually upload it — previewUrl alone (a blob: URL) only resolves in
+  // this same browser tab and can't be persisted as the post's image.
+  file: File | null;
 }
 
 interface ComposerState {
@@ -1724,6 +1728,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       name: file.name,
       type: file.type || 'application/octet-stream',
       previewUrl: file.type.startsWith('image/') || file.type.startsWith('video/') ? URL.createObjectURL(file) : null,
+      file,
     }));
 
     setComposer((current) => ({
@@ -1766,7 +1771,25 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     setIsPublishing(true);
     setError(null);
 
-    const firstMedia = composer.attachments.find((attachment) => attachment.previewUrl)?.previewUrl || null;
+    const firstAttachmentWithMedia = composer.attachments.find((attachment) => attachment.previewUrl);
+    // A freelancer's post here never gets persisted (see the role check
+    // below — no equivalent of createClientPost exists for them yet), so
+    // its blob: preview is fine for that same-tab-only local post; only a
+    // client's post is actually saved, and only then does the blob: URL
+    // need to become a real, durable upload — uploading unconditionally
+    // would just waste storage on posts nothing ever reads back.
+    let firstMedia: string | null = firstAttachmentWithMedia?.previewUrl || null;
+
+    if (user.role === 'client' && firstAttachmentWithMedia?.file) {
+      const uploadResponse = await DataService.uploadPostMedia(user.id, firstAttachmentWithMedia.file);
+      if (uploadResponse.error || !uploadResponse.publicUrl) {
+        setError((uploadResponse.error as any)?.message || 'Unable to upload photo. Please try again.');
+        setIsPublishing(false);
+        return;
+      }
+      firstMedia = uploadResponse.publicUrl;
+    }
+
     let createdId = `local-post-${Date.now()}`;
     let createdAt = 'Just now';
     let createdAtRaw = new Date().toISOString();

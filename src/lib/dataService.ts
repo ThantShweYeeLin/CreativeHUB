@@ -1080,6 +1080,31 @@ export class DataService {
     return { publicUrl: data.publicUrl, error: null };
   }
 
+  // Public bucket (see supabase/post_media_storage.sql) — a For You post's
+  // photo/video needs to be viewable by anyone (the feed, the public
+  // /post/:postId page, other profiles), same as an avatar.
+  static async uploadPostMedia(userId: string, file: File) {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('post-media')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
+
+    if (error) {
+      return { publicUrl: null, error };
+    }
+
+    const { data } = supabase.storage
+      .from('post-media')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
+  }
+
   // SOCIAL LINKS
   static async getFreelancerSocialLinks(freelancerId: string) {
     const { data, error } = await supabase
