@@ -659,8 +659,8 @@ export function SettingsPage() {
               <h2 className="text-lg font-bold">Terms & Support</h2>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
-              <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Privacy Policy</a>
-              <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Terms of Service</a>
+              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Privacy Policy</a>
+              <a href="/terms" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Terms of Service</a>
               <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">FAQ</a>
               <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Contact Support</a>
               <button

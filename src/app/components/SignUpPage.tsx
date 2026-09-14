@@ -498,9 +498,25 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 </div>
                 <span className="text-sm text-gray-600">
                   I agree to the{' '}
-                  <span className="font-semibold text-gray-900 hover:underline cursor-pointer">Terms of Service</span>
+                  <a
+                    href="/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="font-semibold text-gray-900 hover:underline"
+                  >
+                    Terms of Service
+                  </a>
                   {' '}and{' '}
-                  <span className="font-semibold text-gray-900 hover:underline cursor-pointer">Privacy Policy</span>
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                    className="font-semibold text-gray-900 hover:underline"
+                  >
+                    Privacy Policy
+                  </a>
                 </span>
               </label>
 

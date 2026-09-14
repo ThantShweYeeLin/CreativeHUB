@@ -43,6 +43,8 @@ const MessagesPage = lazy(() => import('./pages/MessagesPage').then((m) => ({ de
 const ForYouPage = lazy(() => import('./pages/ForYouPage').then((m) => ({ default: m.ForYouPage })));
 const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
 const PublicPostPage = lazy(() => import('./pages/PublicPostPage').then((m) => ({ default: m.PublicPostPage })));
+const TermsOfServicePage = lazy(() => import('./pages/legal/TermsOfServicePage').then((m) => ({ default: m.TermsOfServicePage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/legal/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
 const ClientOnboardingPage = lazy(() => import('./pages/ClientOnboardingPage').then((m) => ({ default: m.ClientOnboardingPage })));
 const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
@@ -117,6 +119,11 @@ export default function App() {
           isAuthenticated/!isAuthenticated blocks below, otherwise the
           logged-out block's own catch-all (`*` -> /signup) would swallow it. */}
       <Route path="/post/:postId" element={<PublicPostPage />} />
+      {/* Same reasoning — a prospective signer-upper must be able to read
+          these before creating an account, so they can't sit behind the
+          logged-out block's own catch-all either. */}
+      <Route path="/terms" element={<TermsOfServicePage />} />
+      <Route path="/privacy" element={<PrivacyPolicyPage />} />
       {/* Public Routes */}
       {!isAuthenticated && (
         <>
