@@ -345,6 +345,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const coverUrl = profile?.cover_url || freelancerProfile?.cover_image_url || freelancerProfile?.image_urls?.[0] || '';
   const location = profile?.location || 'Location not provided';
   const isBookableFreelancer = profile?.role === 'freelancer' && Boolean(freelancerProfile?.id);
+  // Reviews of a client are only ever useful to another freelancer deciding
+  // whether to work with them, and must never be visible to the client
+  // themselves or to any other client — RLS (see supabase/review_visibility.sql)
+  // already enforces this server-side; this just controls whether the
+  // section renders at all for someone it wouldn't apply to.
+  const canViewClientReviews = profile?.role === 'client' && user?.role === 'freelancer';
   // Bio is canonical from freelancer_profiles.description for freelancers,
   // users.bio for everyone else — this must match the priority Edit Profile
   // saves to, or the two pages would show different bios again.
@@ -1594,9 +1600,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </section>
         )}
 
-        {isBookableFreelancer && reviews.length > 0 && (
+        {(isBookableFreelancer || canViewClientReviews) && reviews.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
-            <h2 className="text-2xl font-bold text-gray-900">Reviews</h2>
+            <h2 className="text-2xl font-bold text-gray-900">{canViewClientReviews ? 'Reviews from Freelancers' : 'Reviews'}</h2>
+            {canViewClientReviews && (
+              <p className="mt-1 text-sm text-gray-500">Only visible to freelancers — {displayName} can't see these.</p>
+            )}
             <div className="mt-5 space-y-4">
               {reviews.map((review) => (
                 <div key={review.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
@@ -1604,12 +1613,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <div className="flex items-center gap-3">
                       <Avatar
                         src={review.reviewer?.avatar_url || avatarUrl}
-                        alt={review.reviewer?.full_name || 'Client'}
+                        alt={review.reviewer?.full_name || (canViewClientReviews ? 'Freelancer' : 'Client')}
                         gender={review.reviewer?.gender}
                         sizeClassName="w-9 h-9"
                       />
                       <div>
-                        <p className="text-sm font-semibold text-gray-900">{review.reviewer?.full_name || 'Client'}</p>
+                        <p className="text-sm font-semibold text-gray-900">{review.reviewer?.full_name || (canViewClientReviews ? 'Freelancer' : 'Client')}</p>
                         <p className="text-xs text-gray-500">{new Date(review.created_at).toLocaleDateString()}</p>
                       </div>
                     </div>

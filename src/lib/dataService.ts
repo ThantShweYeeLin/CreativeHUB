@@ -4495,6 +4495,52 @@ export class DataService {
     return { data, error };
   }
 
+  // The oldest finished (deposit released/refunded — see getBookingEscrowState)
+  // booking where this user hasn't yet reviewed the other party and hasn't
+  // dismissed the prompt for it, for the global site-wide "rate your
+  // experience" popup (MainLayout mounts this once per session, not tied to
+  // any specific booking page). Returns at most one booking — after it's
+  // resolved (submitted or dismissed), the caller re-queries for the next.
+  static async getNextBookingAwaitingReview(userId: string, role: 'client' | 'freelancer') {
+    const participantColumn = role === 'client' ? 'client_id' : 'freelancer_id';
+    const dismissedColumn = role === 'client' ? 'client_review_prompt_dismissed_at' : 'freelancer_review_prompt_dismissed_at';
+
+    const { data: candidates, error } = await (supabase as any)
+      .from('bookings')
+      .select(
+        'id, project_name, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url)'
+      )
+      .eq(participantColumn, userId)
+      .in('payment_status', ['paid', 'refunded'])
+      .is(dismissedColumn, null)
+      .order('created_at', { ascending: true })
+      .limit(10);
+
+    if (error || !candidates?.length) {
+      return { data: null, error };
+    }
+
+    const { data: existingReviews } = await supabase
+      .from('reviews')
+      .select('booking_id')
+      .eq('reviewer_id', userId)
+      .in('booking_id', candidates.map((booking: any) => booking.id));
+
+    const reviewedBookingIds = new Set((existingReviews || []).map((review: any) => review.booking_id));
+    const next = candidates.find((booking: any) => !reviewedBookingIds.has(booking.id)) || null;
+
+    return { data: next, error: null };
+  }
+
+  static async dismissReviewPrompt(bookingId: string, role: 'client' | 'freelancer') {
+    const column = role === 'client' ? 'client_review_prompt_dismissed_at' : 'freelancer_review_prompt_dismissed_at';
+    const { error } = await (supabase as any)
+      .from('bookings')
+      .update({ [column]: new Date().toISOString() })
+      .eq('id', bookingId);
+    return { error };
+  }
+
   static async replyToReview(reviewId: string, reply: string) {
     const { data, error } = await supabase
       .from('reviews')
