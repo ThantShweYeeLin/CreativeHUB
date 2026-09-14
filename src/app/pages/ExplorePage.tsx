@@ -151,6 +151,8 @@ export function ExplorePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [clientInterests, setClientInterests] = useState<string[]>([]);
+  const [clientPreferences, setClientPreferences] = useState<string[]>([]);
+  const [clientCoords, setClientCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [userLocation, setUserLocation] = useState<string | null>(null);
   // "Popular X in Thailand" used to be hardcoded regardless of who was
@@ -261,6 +263,8 @@ export function ExplorePage() {
   useEffect(() => {
     if (!user?.id) {
       setClientInterests([]);
+      setClientPreferences([]);
+      setClientCoords(null);
       setFavoritedIds(new Set());
       return;
     }
@@ -272,7 +276,13 @@ export function ExplorePage() {
       if (Array.isArray((data as any)?.client_interests)) {
         setClientInterests((data as any).client_interests);
       }
+      if (Array.isArray((data as any)?.client_preferences)) {
+        setClientPreferences((data as any).client_preferences);
+      }
       setUserLocation((data as any)?.location || null);
+      const lat = Number((data as any)?.location_latitude);
+      const lng = Number((data as any)?.location_longitude);
+      setClientCoords(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
     });
 
     DataService.getUserFavorites(user.id).then(({ data }) => {
@@ -540,6 +550,80 @@ export function ExplorePage() {
       .filter((section) => section.profiles.length > 0);
   }, [filteredProfiles, freelancers, clientInterests, popularSectionSuffix]);
 
+  // "Recommended for you" ranks freelancers against what this client told us
+  // during onboarding — category interests (a strong, directly-comparable
+  // signal: client_interests is drawn from the same FREELANCER_CATEGORIES
+  // labels as freelancer_profiles.title) and the softer client_preferences
+  // checkboxes (experienced, high quality, affordable, nearby). A freelancer
+  // only appears here if at least one of those signals actually matched —
+  // this is deliberately not "everyone, sorted somehow," so the section is
+  // hidden entirely for a client with no onboarding preferences set.
+  const recommendedProfiles = useMemo(() => {
+    if (clientInterests.length === 0 && clientPreferences.length === 0) return [];
+
+    const sourceById = new Map(freelancers.map((item) => [item.user_id || item.users?.id || item.id, item]));
+
+    const scored = profiles
+      .map((profile) => {
+        const source = sourceById.get(profile.id);
+        if (!source) return null;
+
+        let score = 0;
+        let matched = false;
+
+        if (source.title && clientInterests.includes(source.title)) {
+          score += 10;
+          matched = true;
+        }
+
+        if (clientPreferences.includes('high_quality')) {
+          const rating = Number(source.users?.rating);
+          if (rating > 0) {
+            score += rating * 2;
+            matched = true;
+          }
+        }
+
+        if (clientPreferences.includes('experienced_freelancers')) {
+          const years = Number(source.experience_years);
+          if (years > 0) {
+            score += Math.min(years, 15);
+            matched = true;
+          }
+        }
+
+        if (clientPreferences.includes('affordable_pricing')) {
+          const rate = Number(source.hourly_rate);
+          if (Number.isFinite(rate) && rate > 0) {
+            score += Math.max(0, 20 - rate / 50);
+            matched = true;
+          }
+        }
+
+        if (clientPreferences.includes('nearby') && clientCoords) {
+          const freelancerLat = Number(source.users?.location_latitude);
+          const freelancerLng = Number(source.users?.location_longitude);
+          if (Number.isFinite(freelancerLat) && Number.isFinite(freelancerLng)) {
+            const distanceKm = haversineDistanceKm(clientCoords.lat, clientCoords.lng, freelancerLat, freelancerLng);
+            score += Math.max(0, 20 - distanceKm / 5);
+            matched = true;
+          }
+        }
+
+        if (!matched) return null;
+
+        // Small tie-break nudge among already-matched profiles only — never
+        // enough on its own to pull in a freelancer with no real match.
+        score += (Number(source.users?.rating) || 0) * 0.1;
+
+        return { profile, score };
+      })
+      .filter((item): item is { profile: ProfileCardProps; score: number } => item !== null)
+      .sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, 12).map((item) => item.profile);
+  }, [profiles, freelancers, clientInterests, clientPreferences, clientCoords]);
+
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
   const activeAdvancedFilterCount = useMemo(() => {
@@ -675,6 +759,15 @@ export function ExplorePage() {
           <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers found</h2>
           <p className="text-gray-600">Available freelancer profiles from the database will appear here.</p>
         </div>
+      )}
+
+      {!isLoading && !hasActiveSearch && recommendedProfiles.length > 0 && (
+        <CarouselSection
+          title="Recommended for you"
+          profiles={recommendedProfiles}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
+        />
       )}
 
       {!isLoading && profiles.length > 0 && filteredProfiles.length === 0 && (
