@@ -79,6 +79,23 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
 
   await DataService.ensureConversation(request.client_id, request.freelancer_id, { forceAccepted: true });
 
+  // A freshly-accepted request becomes a 'pending' booking that lapses into
+  // 'annulled' if the deposit isn't paid within DEPOSIT_DEADLINE_HOURS (see
+  // reconcile_booking_escrow) — the client otherwise has no prompt telling
+  // them that clock has started, so this fires once, right when it starts.
+  await DataService.createNotification({
+    user_id: request.client_id,
+    actor_id: request.freelancer_id,
+    type: 'deposit_payment_required',
+    title: 'Deposit payment required',
+    message: `Pay the deposit for "${request.project_name}" within ${DEPOSIT_DEADLINE_HOURS} hours to confirm your booking.`,
+    related_id: bookingResponse.data.id,
+    post_id: null,
+    comment_id: null,
+    metadata: { booking_id: bookingResponse.data.id },
+    read: false,
+  } as any);
+
   if (groupMeta?.group_id) {
     // Not getClientRequestsWithProgress(request.client_id) — that queries
     // `requests` under the current user's own RLS, which is almost always

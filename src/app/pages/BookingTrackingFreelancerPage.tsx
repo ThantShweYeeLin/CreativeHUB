@@ -38,6 +38,16 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
     }
   }, [booking, user?.id, navigate]);
 
+  // Symmetric to BookingTrackingClientPage's hash-scroll — lets a
+  // notification link straight to a section (e.g. "#attendance-check").
+  useEffect(() => {
+    if (!booking || !window.location.hash) {
+      return;
+    }
+    const target = document.getElementById(window.location.hash.slice(1));
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [booking]);
+
   const [completionText, setCompletionText] = useState('');
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);
   const [isSubmittingCompletion, setIsSubmittingCompletion] = useState(false);
@@ -210,7 +220,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
         </div>
 
         {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
-          <>
+          <div id="attendance-check">
             <AttendanceCheck
               booking={booking}
               bookingId={booking.id}
@@ -226,7 +236,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               report={attendanceReport}
               scheduledAt={bookingData.scheduledAt}
             />
-          </>
+          </div>
         )}
 
         {user?.id && isBookingRescheduleEligible(escrowState) && (

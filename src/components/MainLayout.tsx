@@ -191,6 +191,27 @@ export function MainLayout({ children }: MainLayoutProps) {
         const mapped = await Promise.all(
           rows.map(async (row: any) => {
             const notification = mapNotificationRecord(row);
+
+            // A group message's "actor" is more useful shown as which group
+            // chat it's in (a viewer in several group chats needs to know
+            // where to look) than the individual sender's name — a
+            // dedicated branch instead of the person-actor resolution chain
+            // below, which has no notion of a group as the "actor".
+            if (String(row.type || '') === 'group_message' && row.related_id) {
+              const groupResponse = await supabase
+                .from('group_conversations')
+                .select('id, title')
+                .eq('id', row.related_id)
+                .maybeSingle();
+              const groupTitle = groupResponse.data?.title || 'Group chat';
+              return {
+                ...notification,
+                actorName: groupTitle,
+                actorAvatar: null,
+                message: `New message in ${groupTitle}.`,
+              };
+            }
+
             const rawMessageText = String(row.message || '');
             const shouldResolveActorName = (
               (
@@ -272,6 +293,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                 'booking_deposit_paid',
                 'booking_cancelled',
                 'booking_completed',
+                'attendance_window_open',
+                'deposit_payment_required',
               ].includes(String(row.type || ''))) {
                 const bookingResponse = await supabase
                   .from('bookings')
@@ -468,6 +491,48 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate(`/profile/${targetUserId}`);
   };
 
+  // Booking-related notifications (attendance checks, deposit reminders,
+  // payment updates, cancellations, completions) all carry the booking's id
+  // as relatedId — this resolves which side of that booking the viewer is
+  // on (RLS guarantees they're one of the two) to pick the right route, and
+  // appends a #section hash the tracking page scrolls to once it loads.
+  const handleOpenNotificationBooking = async (notification: NotificationPanelItem) => {
+    const bookingId = notification.relatedId;
+    if (!bookingId || !user?.id) {
+      return;
+    }
+
+    const bookingResponse = await supabase
+      .from('bookings')
+      .select('id, client_id')
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (!bookingResponse.data) {
+      return;
+    }
+
+    const isClient = String(bookingResponse.data.client_id) === String(user.id);
+    const basePath = isClient ? `/booking/${bookingId}` : `/freelancer-booking/${bookingId}`;
+    const section =
+      notification.type === 'attendance_window_open'
+        ? 'attendance-check'
+        : notification.type === 'deposit_payment_required'
+          ? 'deposit-section'
+          : null;
+
+    setShowNotifications(false);
+    navigate(section ? `${basePath}#${section}` : basePath);
+  };
+
+  const handleOpenNotificationGroupMessage = (notification: NotificationPanelItem) => {
+    if (!notification.relatedId) {
+      return;
+    }
+    setShowNotifications(false);
+    navigate('/messages', { state: { openGroupConversationId: notification.relatedId } });
+  };
+
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => {
     setShowUserMenu(false);
     switch (item) {
@@ -646,6 +711,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                       navigate('/messages');
                     }}
                     onOpenProfile={handleOpenNotificationProfile}
+                    onOpenBooking={handleOpenNotificationBooking}
+                    onOpenGroupMessage={handleOpenNotificationGroupMessage}
                   />
                 )}
               </div>

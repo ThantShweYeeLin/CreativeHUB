@@ -43,6 +43,19 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     }
   }, [booking, user?.id, navigate]);
 
+  // Lets a notification link straight to a specific section (e.g.
+  // "#attendance-check" from an attendance_window_open notification,
+  // "#deposit-section" from a deposit_payment_required one) instead of just
+  // landing on top of the page — waits for `booking` so the target section
+  // has actually rendered (it's conditional on escrowState) before scrolling.
+  useEffect(() => {
+    if (!booking || !window.location.hash) {
+      return;
+    }
+    const target = document.getElementById(window.location.hash.slice(1));
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [booking]);
+
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [isPayingDeposit, setIsPayingDeposit] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
@@ -304,7 +317,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         </div>
 
         {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
-          <>
+          <div id="attendance-check">
             <AttendanceCheck
               booking={booking}
               bookingId={booking.id}
@@ -320,7 +333,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               report={attendanceReport}
               scheduledAt={bookingData.scheduledAt}
             />
-          </>
+          </div>
         )}
 
         {user?.id && isBookingRescheduleEligible(escrowState) && (
@@ -358,7 +371,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {/* Awaiting deposit — 24-hour payment window */}
         {escrowState === 'awaiting_deposit' && (
-          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-gradient-to-br from-gray-900 to-black text-white p-5 mb-6">
+          <div id="deposit-section" className="rounded-2xl shadow-lg border-2 border-gray-900 bg-gradient-to-br from-gray-900 to-black text-white p-5 mb-6">
             <div className="flex items-center gap-2 mb-3">
               <Shield className="w-6 h-6 text-white" />
               <h2 className="font-bold text-lg text-white">Deposit Transfer Required</h2>

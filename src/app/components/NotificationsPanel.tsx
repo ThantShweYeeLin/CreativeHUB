@@ -28,6 +28,8 @@ interface NotificationsPanelProps {
   onOpenRequests?: (notification?: NotificationPanelItem) => void;
   onOpenMessages?: () => void;
   onOpenProfile?: (notification: NotificationPanelItem) => void;
+  onOpenGroupMessage?: (notification: NotificationPanelItem) => void;
+  onOpenBooking?: (notification: NotificationPanelItem) => void;
 }
 
 const getNotificationIcon = (type: string) => {
@@ -130,6 +132,8 @@ export function NotificationsPanel({
   onOpenRequests,
   onOpenMessages,
   onOpenProfile,
+  onOpenGroupMessage,
+  onOpenBooking,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -197,8 +201,30 @@ export function NotificationsPanel({
                     return;
                   }
 
+                  if (notification.type === 'group_message') {
+                    onOpenGroupMessage?.(notification);
+                    onClose();
+                    return;
+                  }
+
                   if (notification.type.includes('message')) {
                     onOpenMessages?.();
+                    onClose();
+                    return;
+                  }
+
+                  if (
+                    [
+                      'attendance_window_open',
+                      'deposit_payment_required',
+                      'payment_update',
+                      'payment_released',
+                      'booking_deposit_paid',
+                      'booking_cancelled',
+                      'booking_completed',
+                    ].includes(notification.type)
+                  ) {
+                    onOpenBooking?.(notification);
                     onClose();
                   }
                 }}

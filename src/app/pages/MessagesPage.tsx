@@ -131,6 +131,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [sharedPostCommentDraft, setSharedPostCommentDraft] = useState('');
   const [isSubmittingSharedPostComment, setIsSubmittingSharedPostComment] = useState(false);
   const openConversationWithUserId = (location.state as { openConversationWithUserId?: string } | null)?.openConversationWithUserId || null;
+  const openGroupConversationId = (location.state as { openGroupConversationId?: string } | null)?.openGroupConversationId || null;
   const isGroupConversationKey = (value: string | null) => !!value && value.startsWith('group:');
   const toGroupConversationKey = (conversationId: string) => `group:${conversationId}`;
   const fromGroupConversationKey = (value: string) => value.replace(/^group:/, '');
@@ -188,6 +189,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       } else {
         let directItems = directResponse.data || [];
         const groupItems = groupResponse.data || [];
+        const hasExplicitTarget = !!openConversationWithUserId || !!openGroupConversationId;
 
         let preferredConversation = openConversationWithUserId
           ? directItems.find((conversation: any) => {
@@ -195,6 +197,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               const participant2Id = conversation.participant_2?.id;
               return participant1Id === openConversationWithUserId || participant2Id === openConversationWithUserId;
             })
+          : null;
+
+        // A group_message notification's target — reuses the already-loaded
+        // list rather than a fresh fetch since, unlike a 1:1 conversation,
+        // there's nothing to "ensure" (the notification could only exist
+        // because this conversation already does).
+        const preferredGroupConversation = openGroupConversationId
+          ? groupItems.find((group: any) => String(group.id) === String(openGroupConversationId))
           : null;
 
         // Arriving here from "Message" on a request/counter-offer targets a
@@ -232,15 +242,19 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           const hasDirect = current && directItems.some((item: any) => item.id === current);
           const hasGroup = current && isGroupConversationKey(current) && groupItems.some((item: any) => item.id === fromGroupConversationKey(current));
 
-          if (!openConversationWithUserId && (hasDirect || hasGroup)) {
+          if (!hasExplicitTarget && (hasDirect || hasGroup)) {
             return current;
+          }
+
+          if (preferredGroupConversation?.id) {
+            return toGroupConversationKey(String(preferredGroupConversation.id));
           }
 
           if (preferredConversation?.id) {
             return preferredConversation.id;
           }
 
-          if (!openConversationWithUserId && !isDesktopViewport) {
+          if (!hasExplicitTarget && !isDesktopViewport) {
             return null;
           }
 
@@ -258,7 +272,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     return () => {
       isMounted = false;
     };
-  }, [openConversationWithUserId, user?.id]);
+  }, [openConversationWithUserId, openGroupConversationId, user?.id]);
 
   useEffect(() => {
     let isMounted = true;
