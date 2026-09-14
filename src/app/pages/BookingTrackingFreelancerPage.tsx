@@ -1,4 +1,4 @@
-import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield, X } from 'lucide-react';
+import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -11,6 +11,7 @@ import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
+import { RespondToDisputeForm } from './bookingTracking/RespondToDisputeForm';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
 import { DeliveryCard, isDeliveryCardEligible } from './bookingTracking/DeliveryCard';
@@ -23,7 +24,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // Symmetric to BookingTrackingClientPage's redirect — a client landing on
   // this freelancer-facing route directly would otherwise see a confusing
@@ -53,8 +54,6 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const [isSubmittingCompletion, setIsSubmittingCompletion] = useState(false);
 
   const [showRespondForm, setShowRespondForm] = useState(false);
-  const [respondReason, setRespondReason] = useState('');
-  const [respondFiles, setRespondFiles] = useState<File[]>([]);
   const [isResponding, setIsResponding] = useState(false);
 
   const handleSubmitCompletion = async () => {
@@ -83,43 +82,6 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
     setCompletionText('');
     setCompletionFiles([]);
-    await refresh();
-  };
-
-  const handleRespondWithEvidence = async () => {
-    if (!booking || !user?.id) return;
-    setIsResponding(true);
-    setError(null);
-
-    const photoPaths: string[] = [];
-    for (const file of respondFiles) {
-      const uploadResponse = await DataService.uploadBookingEvidencePhoto(user.id, booking.id, file);
-      if (uploadResponse.error || !uploadResponse.path) {
-        setError('Unable to upload one of the evidence photos.');
-        setIsResponding(false);
-        return;
-      }
-      photoPaths.push(uploadResponse.path);
-    }
-
-    const response = await DataService.respondToBookingDispute(booking.id, {
-      actor: 'freelancer',
-      hasEvidence: true,
-      evidenceText: respondReason,
-      evidencePhotoPaths: photoPaths,
-      reason: respondReason,
-    });
-
-    setIsResponding(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to submit response.');
-      return;
-    }
-
-    setShowRespondForm(false);
-    setRespondReason('');
-    setRespondFiles([]);
     await refresh();
   };
 
@@ -377,7 +339,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </p>
             )}
 
-            <DisputeTimeline events={events} signedUrls={signedUrls} />
+            <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
 
             {canRespondToDispute && !showRespondForm && (
               <div className="flex flex-wrap gap-2">
@@ -397,38 +359,17 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </div>
             )}
 
-            {canRespondToDispute && showRespondForm && (
-              <div className="rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-bold text-gray-900">Respond with Evidence</p>
-                  <button onClick={() => setShowRespondForm(false)} className="text-gray-400 hover:text-gray-900">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <textarea
-                  value={respondReason}
-                  onChange={(e) => setRespondReason(e.target.value)}
-                  placeholder="Explain your side..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                />
-                <div className="mb-3">
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence photos (optional)</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => setRespondFiles(Array.from(e.target.files || []).slice(0, 6))}
-                    className="text-xs"
-                  />
-                </div>
-                <button
-                  onClick={() => void handleRespondWithEvidence()}
-                  disabled={isResponding}
-                  className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
-                >
-                  {isResponding ? 'Submitting...' : 'Submit'}
-                </button>
-              </div>
+            {canRespondToDispute && showRespondForm && user?.id && (
+              <RespondToDisputeForm
+                bookingId={booking.id}
+                userId={user.id}
+                round={Number(booking.dispute_round || 1)}
+                onClose={() => setShowRespondForm(false)}
+                onSubmitted={async () => {
+                  setShowRespondForm(false);
+                  await refresh();
+                }}
+              />
             )}
 
             {!canRespondToDispute && (
@@ -444,12 +385,9 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
             <div className="mb-3 flex items-center gap-2">
               <Shield className="w-6 h-6 text-gray-900" />
-              <h2 className="font-bold text-lg text-gray-900">Under Review</h2>
+              <h2 className="font-bold text-lg text-gray-900">Deposit Frozen</h2>
             </div>
-            <p className="text-sm text-gray-600">
-              This dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
-            </p>
-            <DisputeTimeline events={events} signedUrls={signedUrls} />
+            <p className="text-sm text-gray-600">The deposit is frozen due to an issue reported on this booking. CreativeHUB support is reviewing it.</p>
           </div>
         )}
 

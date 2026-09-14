@@ -13,6 +13,7 @@ export function useBookingTracking() {
   const { id } = useParams();
   const [booking, setBooking] = useState<any | null>(null);
   const [events, setEvents] = useState<any[]>([]);
+  const [disputeEvidence, setDisputeEvidence] = useState<any[]>([]);
   const [confirmations, setConfirmations] = useState<AttendanceConfirmation[]>([]);
   const [attendanceReport, setAttendanceReport] = useState<AttendanceReport | null>(null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -58,6 +59,11 @@ export function useBookingTracking() {
         setEvents(eventsResponse.data || []);
       }
 
+      const disputeEvidenceResponse = await DataService.getDisputeEvidence(id);
+      if (isMounted) {
+        setDisputeEvidence(disputeEvidenceResponse.data || []);
+      }
+
       const [confirmationsResponse, reportResponse] = await Promise.all([
         DataService.getBookingAttendanceConfirmations(id),
         DataService.getBookingAttendanceReport(id),
@@ -81,6 +87,7 @@ export function useBookingTracking() {
     const paths = [
       ...((booking?.completion_evidence_photos as string[]) || []),
       ...events.flatMap((event) => (event.evidence_photos as string[]) || []),
+      ...disputeEvidence.map((item) => item.storage_path).filter(Boolean),
     ];
     const missing = Array.from(new Set(paths.filter((p) => p && !signedUrls[p])));
     if (!missing.length) return;
@@ -103,18 +110,20 @@ export function useBookingTracking() {
     return () => {
       isMounted = false;
     };
-  }, [booking, events]);
+  }, [booking, events, disputeEvidence]);
 
   const refresh = async () => {
     if (!id) return;
-    const [bookingResponse, eventsResponse, confirmationsResponse, reportResponse] = await Promise.all([
+    const [bookingResponse, eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse] = await Promise.all([
       DataService.getBooking(id),
       DataService.getBookingEvents(id),
+      DataService.getDisputeEvidence(id),
       DataService.getBookingAttendanceConfirmations(id),
       DataService.getBookingAttendanceReport(id),
     ]);
     if (bookingResponse.data) setBooking(bookingResponse.data);
     setEvents(eventsResponse.data || []);
+    setDisputeEvidence(disputeEvidenceResponse.data || []);
     setConfirmations(confirmationsResponse.data || []);
     setAttendanceReport(reportResponse.data || null);
   };
@@ -189,5 +198,5 @@ export function useBookingTracking() {
     };
   }, [booking]);
 
-  return { id, booking, setBooking, events, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
+  return { id, booking, setBooking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
 }

@@ -5,6 +5,7 @@ import { DataService } from '../../../lib/dataService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
 import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
+import { PlatformRecordsPanel } from '../bookingTracking/PlatformRecordsPanel';
 import type { AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
 
 // Loads a booking + its events/attendance/evidence-signed-urls once, shared
@@ -14,6 +15,7 @@ import type { AttendanceConfirmation, AttendanceReport } from '../../../lib/atte
 export function useAdminBookingDetail(bookingId: string | undefined) {
   const [booking, setBooking] = useState<any>(null);
   const [events, setEvents] = useState<any[]>([]);
+  const [disputeEvidence, setDisputeEvidence] = useState<any[]>([]);
   const [confirmations, setConfirmations] = useState<AttendanceConfirmation[]>([]);
   const [attendanceReport, setAttendanceReport] = useState<AttendanceReport | null>(null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -32,17 +34,23 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     }
     setBooking(bookingResponse.data);
 
-    const [eventsResponse, confirmationsResponse, reportResponse] = await Promise.all([
+    const [eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse] = await Promise.all([
       DataService.getBookingEvents(bookingId),
+      DataService.getDisputeEvidence(bookingId),
       DataService.getBookingAttendanceConfirmations(bookingId),
       DataService.getBookingAttendanceReport(bookingId),
     ]);
     const bookingEvents = eventsResponse.data || [];
+    const bookingDisputeEvidence = disputeEvidenceResponse.data || [];
     setEvents(bookingEvents);
+    setDisputeEvidence(bookingDisputeEvidence);
     setConfirmations(confirmationsResponse.data || []);
     setAttendanceReport(reportResponse.data || null);
 
-    const paths = bookingEvents.flatMap((e: any) => (e.evidence_photos as string[]) || []);
+    const paths = [
+      ...bookingEvents.flatMap((e: any) => (e.evidence_photos as string[]) || []),
+      ...bookingDisputeEvidence.map((item: any) => item.storage_path).filter(Boolean),
+    ];
     const entries = await Promise.all(
       Array.from(new Set(paths)).map(async (path) => {
         const res = await DataService.getBookingEvidenceSignedUrl(path as string);
@@ -59,7 +67,7 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
-  return { booking, events, confirmations, attendanceReport, signedUrls, isLoading, error, refresh };
+  return { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, refresh };
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -139,6 +147,7 @@ function BookingEventsTimeline({ events }: { events: any[] }) {
 export function AdminBookingDetail({
   booking,
   events,
+  disputeEvidence = [],
   confirmations,
   attendanceReport,
   signedUrls,
@@ -147,6 +156,7 @@ export function AdminBookingDetail({
 }: {
   booking: any;
   events: any[];
+  disputeEvidence?: any[];
   confirmations: AttendanceConfirmation[];
   attendanceReport: AttendanceReport | null;
   signedUrls: Record<string, string>;
@@ -163,6 +173,7 @@ export function AdminBookingDetail({
   const freelancerResponse = [...events].reverse().find((e) => e.actor === 'freelancer' && e.action === 'evidence');
   const hasDispute = booking.dispute_status && booking.dispute_status !== 'none';
   const canDecide = showResolutionControls && booking.dispute_status === 'under_admin_review';
+  const agreement = booking.confirmed_agreement || null;
 
   const handleDecision = async (decision: 'refund' | 'release') => {
     setIsPending(true);
@@ -217,9 +228,59 @@ export function AdminBookingDetail({
         </div>
       </div>
 
-      {/* Agreement */}
+      {/* Locked agreement — the immutable snapshot taken the moment this
+          booking was confirmed (supabase/booking_agreement_lock.sql). This
+          is what to check a claim against, not the "Current booking
+          details" panel below, which reflects live values that may have
+          since been edited or rescheduled. */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <h3 className="mb-3 text-lg font-bold text-gray-900">Agreement</h3>
+        <h3 className="mb-1 text-lg font-bold text-gray-900">Locked Agreement</h3>
+        {agreement ? (
+          <>
+            <p className="mb-3 text-xs text-gray-500">
+              Snapshot taken at booking confirmation{agreement.locked_at ? ` (${new Date(agreement.locked_at).toLocaleString()})` : ''} — never edited afterward.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">Service</p>
+                <p className="mt-1 text-gray-900">{agreement.service || '—'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">Price / Deposit</p>
+                <p className="mt-1 text-gray-900">
+                  {agreement.price != null ? formatCurrencyAmount(Number(agreement.price), 'THB') : '—'}
+                  {agreement.deposit_amount != null ? ` (deposit ${formatCurrencyAmount(Number(agreement.deposit_amount), 'THB')})` : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">Scheduled time</p>
+                <p className="mt-1 text-gray-900">{agreement.scheduled_start_at ? new Date(agreement.scheduled_start_at).toLocaleString() : '—'}</p>
+              </div>
+              {agreement.deliverables && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold uppercase text-gray-500">Deliverables</p>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-700">{agreement.deliverables}</p>
+                </div>
+              )}
+              {agreement.description && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold uppercase text-gray-500">Description</p>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-700">{agreement.description}</p>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-gray-500">
+            No locked agreement recorded — this booking was confirmed before the Booking Agreement Lock existed. Use the current booking details below instead.
+          </p>
+        )}
+      </div>
+
+      {/* Current booking details — live, mutable fields, which may have
+          changed since the agreement above was locked in. */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <h3 className="mb-3 text-lg font-bold text-gray-900">Current Booking Details</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <p className="text-xs font-semibold uppercase text-gray-500">Schedule</p>
@@ -311,7 +372,7 @@ export function AdminBookingDetail({
               {clientClaim ? (
                 <>
                   <p className="text-sm font-semibold text-gray-900">{DISPUTE_CATEGORY_LABEL[clientClaim.category] || clientClaim.category}</p>
-                  <p className="mt-1 text-sm text-gray-700">{clientClaim.reason}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{clientClaim.reason}</p>
                 </>
               ) : (
                 <p className="text-sm text-gray-500">No report recorded.</p>
@@ -326,8 +387,13 @@ export function AdminBookingDetail({
               )}
             </div>
           </div>
+
+          {clientClaim?.category && (
+            <PlatformRecordsPanel category={clientClaim.category} booking={booking} events={events} confirmations={confirmations} viewerRole="neutral" />
+          )}
+
           <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Dispute timeline &amp; evidence</p>
-          <DisputeTimeline events={events} signedUrls={signedUrls} />
+          <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
 
           {canDecide && (
             <div className="mt-4 border-t border-gray-100 pt-4">

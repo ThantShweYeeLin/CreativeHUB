@@ -14,6 +14,7 @@ import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
+import type { DisputeFlowCategory } from './disputeCategories';
 import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 
 type User = Database['public']['Tables']['users']['Row'];
@@ -1637,6 +1638,45 @@ export class DataService {
     return { url: data?.signedUrl || null, error };
   }
 
+  // Per-item tagged dispute evidence (supabase/dispute_evidence.sql) — one
+  // row per uploaded item, each with its own type (Photo/Video/Screenshot/
+  // Document/Message/Other) and optional description, unlike the single
+  // evidence_text + flat evidence_photos array a booking_events row carries.
+  // Reuses the same booking-evidence Storage bucket for the file itself.
+  static async getDisputeEvidence(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('dispute_evidence')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
+  }
+
+  static async submitDisputeEvidenceItem(input: {
+    bookingId: string;
+    round: number;
+    submittedBy: string;
+    role: 'client' | 'freelancer';
+    evidenceType: 'photo' | 'video' | 'screenshot' | 'document' | 'message' | 'other';
+    storagePath?: string | null;
+    description?: string | null;
+  }) {
+    const { data, error } = await (supabase as any)
+      .from('dispute_evidence')
+      .insert({
+        booking_id: input.bookingId,
+        round: input.round,
+        submitted_by: input.submittedBy,
+        role: input.role,
+        evidence_type: input.evidenceType,
+        storage_path: input.storagePath || null,
+        description: input.description || null,
+      })
+      .select()
+      .single();
+    return { data, error };
+  }
+
   // ADMIN
   static async isAdmin(userId: string) {
     const { data, error } = await supabase.rpc('is_admin' as any, { uid: userId } as any);
@@ -2267,21 +2307,24 @@ export class DataService {
   static async openBookingDispute(
     bookingId: string,
     input: {
-      category: 'not_performed' | 'differed_from_agreement' | 'deliverables_not_received' | 'other';
+      category: DisputeFlowCategory;
       reason: string;
       evidenceText?: string | null;
       evidencePhotoPaths?: string[];
     }
   ) {
-    const disputeResponseDeadline = new Date(Date.now() + DISPUTE_RESPONSE_HOURS * 60 * 60 * 1000).toISOString();
-
+    // Goes straight to admin review — no more freelancer-response round in
+    // between. The client sees a simple "report submitted" state, the
+    // freelancer sees "deposit frozen," and CreativeHUB support makes the
+    // release/refund call directly from the evidence + platform records
+    // already collected, same as before.
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        dispute_status: 'open',
+        dispute_status: 'under_admin_review',
         dispute_round: 1,
-        dispute_awaiting: 'freelancer',
-        dispute_response_deadline: disputeResponseDeadline,
+        dispute_awaiting: null,
+        dispute_response_deadline: null,
       } as any)
       .eq('id', bookingId)
       .select()
@@ -2306,8 +2349,8 @@ export class DataService {
       userId: (data as any).freelancer_id,
       actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: 'Client reported a problem',
-      message: `The client disputed this booking: ${input.reason}`,
+      title: 'Deposit frozen — a problem was reported',
+      message: 'The client reported a problem with this booking. The deposit is frozen while CreativeHUB support reviews it.',
       relatedId: bookingId,
     });
 
@@ -2418,10 +2461,23 @@ export class DataService {
     return { data, error: null };
   }
 
-  static async updateBooking(bookingId: string, updates: Partial<Booking>) {
+  // Fields covered by the Booking Agreement Lock (supabase/booking_agreement_lock.sql)
+  // — changing any of these on an already-confirmed booking gets logged as
+  // 'agreement_amended' so a "Booking changed without agreement" dispute has
+  // a real platform record, not just each side's word against the other's.
+  private static readonly AGREEMENT_FIELDS = ['description', 'budget', 'deliverables'] as const;
+
+  // actorRole is only used for the agreement_amended change-log entry below
+  // (booking_events.actor must be 'client'/'freelancer' matching the real
+  // caller — see booking_escrow.sql's insert policy; there's no generic
+  // 'system' insert path for a plain client-side call like this one). When
+  // omitted, an agreement-field change still applies but simply isn't
+  // logged — callers that only ever touch status/payment_status (the
+  // common case) are unaffected either way.
+  static async updateBooking(bookingId: string, updates: Partial<Booking>, options?: { actorRole?: 'client' | 'freelancer' }) {
     const previous = await supabase
       .from('bookings')
-      .select('id, client_id, freelancer_id, status, payment_status')
+      .select('id, client_id, freelancer_id, status, payment_status, description, budget, deliverables')
       .eq('id', bookingId)
       .maybeSingle();
 
@@ -2435,6 +2491,29 @@ export class DataService {
     if (!error && data) {
       const previousStatus = String(previous.data?.status || '');
       const nextStatus = String((data as any).status || '');
+
+      // Only meaningful once a booking is actually confirmed (not while it's
+      // still being created, and not for the 'pending' window before a
+      // client has ever seen/paid for it) — matches the same statuses the
+      // rest of the escrow/dispute lifecycle treats as "this is a real,
+      // agreed booking now".
+      const wasConfirmed = ['confirmed', 'in_progress', 'completed'].includes(previousStatus);
+      if (wasConfirmed && previous.data) {
+        const changedFields = this.AGREEMENT_FIELDS.filter(
+          (field) => field in updates && String((updates as any)[field] ?? '') !== String((previous.data as any)[field] ?? '')
+        );
+        if (changedFields.length > 0 && options?.actorRole) {
+          const summary = changedFields
+            .map((field) => `${field}: "${(previous.data as any)[field] ?? ''}" -> "${(data as any)[field] ?? ''}"`)
+            .join('; ');
+          await (supabase as any).from('booking_events').insert({
+            booking_id: bookingId,
+            actor: options.actorRole,
+            action: 'agreement_amended',
+            reason: summary,
+          });
+        }
+      }
       const previousPaymentStatus = String(previous.data?.payment_status || '');
       const nextPaymentStatus = String((data as any).payment_status || '');
       const clientId = String((data as any).client_id || previous.data?.client_id || '');
@@ -2527,6 +2606,33 @@ export class DataService {
     }
 
     return { data, error };
+  }
+
+  // Participant-initiated cancellation of an already-confirmed booking,
+  // capturing who/when/why (supabase/booking_cancellation.sql) — until now
+  // cancellation_reason was only ever system-written for a lapsed deposit
+  // deadline (see reconcile_booking_escrow), so an "Unexpected cancellation"
+  // dispute had no real platform record to check against. Routes through
+  // updateBooking() so the existing 'booking_cancelled' notifications to
+  // both parties still fire.
+  static async cancelBooking(bookingId: string, actorId: string, actorRole: 'client' | 'freelancer', reason: string) {
+    const response = await this.updateBooking(bookingId, {
+      status: 'cancelled',
+      cancelled_by: actorId,
+      cancelled_at: new Date().toISOString(),
+      cancellation_reason: reason,
+    } as any);
+
+    if (!response.error && response.data) {
+      await (supabase as any).from('booking_events').insert({
+        booking_id: bookingId,
+        actor: actorRole,
+        action: 'cancelled',
+        reason,
+      });
+    }
+
+    return response;
   }
 
   // MESSAGES

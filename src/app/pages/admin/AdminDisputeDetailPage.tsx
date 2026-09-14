@@ -4,7 +4,7 @@ import { AdminBookingDetail, useAdminBookingDetail } from './AdminBookingDetail'
 
 export function AdminDisputeDetailPage() {
   const { id } = useParams();
-  const { booking, events, confirmations, attendanceReport, signedUrls, isLoading, error, refresh } = useAdminBookingDetail(id);
+  const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, refresh } = useAdminBookingDetail(id);
 
   return (
     <AdminLayout
@@ -19,6 +19,7 @@ export function AdminDisputeDetailPage() {
         <AdminBookingDetail
           booking={booking}
           events={events}
+          disputeEvidence={disputeEvidence}
           confirmations={confirmations}
           attendanceReport={attendanceReport}
           signedUrls={signedUrls}

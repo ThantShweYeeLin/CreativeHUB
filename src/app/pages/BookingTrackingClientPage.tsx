@@ -13,7 +13,9 @@ import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
+import { ReportProblemFlow } from './bookingTracking/ReportProblemFlow';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
+import type { DisputeFlowCategory } from '../../lib/disputeCategories';
 import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
 import { DeliveryCard, isDeliveryCardEligible } from './bookingTracking/DeliveryCard';
 import { checkGroupDepositsAndCreateChat } from '../../lib/groupDepositChat';
@@ -26,7 +28,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -62,10 +64,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
-  const [disputeCategory, setDisputeCategory] = useState<'not_performed' | 'differed_from_agreement' | 'deliverables_not_received' | 'other'>('not_performed');
-  const [disputeReason, setDisputeReason] = useState('');
-  const [disputeFiles, setDisputeFiles] = useState<File[]>([]);
-  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+  const [disputeInitialCategory, setDisputeInitialCategory] = useState<DisputeFlowCategory | undefined>(undefined);
 
   const [showRespondForm, setShowRespondForm] = useState(false);
   const [respondReason, setRespondReason] = useState('');
@@ -117,44 +116,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     await refresh();
   };
 
-  const handleSubmitDispute = async () => {
-    if (!booking || !user?.id || !disputeReason.trim()) {
-      setError('Describe the problem before submitting.');
-      return;
-    }
-    setIsSubmittingDispute(true);
-    setError(null);
-
-    const photoPaths: string[] = [];
-    for (const file of disputeFiles) {
-      const uploadResponse = await DataService.uploadBookingEvidencePhoto(user.id, booking.id, file);
-      if (uploadResponse.error || !uploadResponse.path) {
-        setError('Unable to upload one of the evidence photos.');
-        setIsSubmittingDispute(false);
-        return;
-      }
-      photoPaths.push(uploadResponse.path);
-    }
-
-    const response = await DataService.openBookingDispute(booking.id, {
-      category: disputeCategory,
-      reason: disputeReason.trim(),
-      evidencePhotoPaths: photoPaths,
-    });
-
-    setIsSubmittingDispute(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to submit dispute.');
-      return;
-    }
-
-    setShowDisputeForm(false);
-    setDisputeReason('');
-    setDisputeFiles([]);
-    await refresh();
-  };
-
   const handleStillNotSatisfied = async () => {
     if (!booking) return;
     setIsResponding(true);
@@ -189,57 +150,28 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   // ever reporting a problem - default to allowing it in that case.
   const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
 
-  const renderDisputeForm = () => (
-    <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="font-bold text-gray-900">Report a Problem</p>
-        <button onClick={() => setShowDisputeForm(false)} className="text-gray-400 hover:text-gray-900">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-      <label className="mb-1 block text-xs font-semibold text-gray-600">Reason</label>
-      <select
-        value={disputeCategory}
-        onChange={(e) => setDisputeCategory(e.target.value as any)}
-        className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-      >
-        <option value="not_performed">Freelancer did not perform the service</option>
-        <option value="differed_from_agreement">Service significantly differed from agreement</option>
-        <option value="deliverables_not_received">Deliverables not received</option>
-        <option value="other">Other</option>
-      </select>
-      {disputeCategory === 'deliverables_not_received' && (
-        <p className="mb-3 text-xs text-gray-500">
-          The agreed service was completed, but the expected files, photos, videos, designs, or other deliverables have not been received.
-        </p>
-      )}
-      <label className="mb-1 block text-xs font-semibold text-gray-600">What went wrong?</label>
-      <textarea
-        value={disputeReason}
-        onChange={(e) => setDisputeReason(e.target.value)}
-        placeholder="Describe the issue in detail..."
-        className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+  const renderDisputeForm = () =>
+    booking && user?.id ? (
+      <ReportProblemFlow
+        bookingId={booking.id}
+        userId={user.id}
+        booking={booking}
+        events={events}
+        confirmations={confirmations}
+        freelancerId={booking.freelancer_id}
+        freelancerName={bookingData?.freelancer.name || 'the freelancer'}
+        initialCategory={disputeInitialCategory}
+        onClose={() => {
+          setShowDisputeForm(false);
+          setDisputeInitialCategory(undefined);
+        }}
+        onSubmitted={async () => {
+          setShowDisputeForm(false);
+          setDisputeInitialCategory(undefined);
+          await refresh();
+        }}
       />
-      <div className="mb-3">
-        <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence (optional) — screenshots, photos, etc.</label>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={(e) => setDisputeFiles(Array.from(e.target.files || []).slice(0, 6))}
-          className="text-xs"
-        />
-        {disputeFiles.length > 0 && <p className="mt-1 text-xs text-gray-500">{disputeFiles.length} file(s) selected</p>}
-      </div>
-      <button
-        onClick={() => void handleSubmitDispute()}
-        disabled={isSubmittingDispute}
-        className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
-      >
-        {isSubmittingDispute ? 'Submitting...' : 'Submit Dispute'}
-      </button>
-    </div>
-  );
+    ) : null;
 
   if (isLoading) {
     return (
@@ -349,7 +281,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               (escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && booking.dispute_status === 'none'
             }
             onReportDeliveryIssue={() => {
-              setDisputeCategory('deliverables_not_received');
+              setDisputeInitialCategory('deliverables_not_received');
               setShowDisputeForm(true);
             }}
           />
@@ -507,7 +439,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </p>
             )}
 
-            <DisputeTimeline events={events} signedUrls={signedUrls} />
+            <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
 
             {canRespondToDispute && !showRespondForm && (
               <div className="flex flex-wrap gap-2">
@@ -567,12 +499,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
           <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
             <div className="mb-3 flex items-center gap-2">
               <Shield className="w-6 h-6 text-gray-900" />
-              <h2 className="font-bold text-lg text-gray-900">Under Review</h2>
+              <h2 className="font-bold text-lg text-gray-900">Report Submitted</h2>
             </div>
-            <p className="text-sm text-gray-600">
-              Your dispute is under review by CreativeHUB support. You'll be notified as soon as a decision is made.
-            </p>
-            <DisputeTimeline events={events} signedUrls={signedUrls} />
+            <p className="text-sm text-gray-600">Please wait for a response from the admins.</p>
           </div>
         )}
 

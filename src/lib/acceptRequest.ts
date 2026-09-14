@@ -42,6 +42,23 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
 
   const groupMeta = DataService.getRequestGroupMeta(request);
 
+  // Booking Agreement Lock — an immutable snapshot of what was actually
+  // agreed, taken once right here. Every other booking field stays freely
+  // editable afterward (DataService.updateBooking()/rescheduleBooking()),
+  // but this one never changes again — it's the baseline the dispute
+  // system compares "what's true now" against instead of only ever seeing
+  // already-edited values. See supabase/booking_agreement_lock.sql.
+  const confirmedAgreement = {
+    service: request.project_name || null,
+    description: stripBudgetMeta(request.description || request.message || null),
+    deliverables: request.includes || null,
+    price: budget,
+    deposit_amount: depositAmount,
+    scheduled_start_at: startAt?.toISOString() || null,
+    scheduled_end_at: endAt?.toISOString() || null,
+    locked_at: new Date().toISOString(),
+  };
+
   const bookingResponse = await DataService.createBooking({
     client_id: request.client_id,
     freelancer_id: request.freelancer_id,
@@ -66,6 +83,7 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     end_at: endAt?.toISOString() || null,
     deposit_amount: depositAmount,
     deposit_deadline: new Date(Date.now() + DEPOSIT_DEADLINE_HOURS * 60 * 60 * 1000).toISOString(),
+    confirmed_agreement: confirmedAgreement,
     // Lets checkGroupDepositsAndCreateChat (src/lib/groupDepositChat.ts)
     // find every sibling booking from this same group request once each
     // one's deposit gets paid — the group chat is created then, not at
