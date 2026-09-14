@@ -1,14 +1,17 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, Search, Users, X } from 'lucide-react';
+import { ChevronLeft, MapPin, Search, Users, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
+import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
-import { appendBudgetMeta, inferCurrencyFromLocation, SUPPORTED_CURRENCIES, type BudgetMeta } from '../../lib/requestBudget';
+import { appendBudgetMeta, inferCurrencyFromLocation, type BudgetMeta } from '../../lib/requestBudget';
 import { appendScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
+import { geocodeAddress } from '../../lib/osmGeocoding';
 
 interface GroupRequestPageProps {
   onBack: () => void;
@@ -53,12 +56,14 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
   const [allFreelancers, setAllFreelancers] = useState<FreelancerOption[]>([]);
   const [isLoadingFreelancers, setIsLoadingFreelancers] = useState(true);
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [perFreelancerForm, setPerFreelancerForm] = useState<Record<string, PerFreelancerForm>>({});
 
   const [projectName, setProjectName] = useState('');
-  const [location, setLocation] = useState('');
+  const [location, setLocation] = useState<LocationPoint | null>(null);
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
@@ -98,6 +103,25 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     };
   }, [user?.id]);
 
+  // So already-favorited freelancers float to the top of the picker before
+  // the client starts typing a search — the same personalization Explore
+  // already does with category interests.
+  useEffect(() => {
+    if (!user?.id) {
+      setFavoritedIds(new Set());
+      return;
+    }
+
+    let isMounted = true;
+    DataService.getUserFavorites(user.id).then(({ data }) => {
+      if (!isMounted || !data) return;
+      setFavoritedIds(new Set(data.map((favorite: any) => favorite.freelancer_id).filter(Boolean)));
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -129,7 +153,24 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     const state = routerLocation.state as GroupRequestPrefillState | null;
     if (!state) return;
 
-    if (state.prefillLocation) setLocation(state.prefillLocation);
+    // The handoff only carries plain address text (from the single-freelancer
+    // booking form), not coordinates — geocode it so the map picker below can
+    // show a real pin instead of making the client re-enter it from scratch.
+    if (state.prefillLocation) {
+      const prefillText = state.prefillLocation;
+      geocodeAddress(prefillText).then((result) => {
+        if (result) {
+          setLocation({
+            latitude: result.latitude,
+            longitude: result.longitude,
+            formattedAddress: result.formattedAddress,
+            placeId: result.placeId,
+            city: result.city,
+            district: result.district,
+          });
+        }
+      });
+    }
     if (state.prefillNotes) setNotes(state.prefillNotes);
     if (state.prefillScheduleDate) setScheduleDate(state.prefillScheduleDate);
     if (state.prefillScheduleTime) setScheduleTime(state.prefillScheduleTime);
@@ -161,11 +202,19 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return allFreelancers
+    const filtered = allFreelancers
       .filter((item) => !selectedIds.includes(item.userId))
-      .filter((item) => !query || item.fullName.toLowerCase().includes(query) || item.title.toLowerCase().includes(query))
-      .slice(0, 30);
-  }, [allFreelancers, selectedIds, searchQuery]);
+      .filter((item) => !query || item.fullName.toLowerCase().includes(query) || item.title.toLowerCase().includes(query));
+
+    // Before the client has typed a search, favorited freelancers float to
+    // the top; once they're actively searching, text relevance takes over
+    // and this comparator is a no-op (stable sort keeps the filtered order).
+    if (!query) {
+      filtered.sort((a, b) => Number(favoritedIds.has(b.userId)) - Number(favoritedIds.has(a.userId)));
+    }
+
+    return filtered.slice(0, 30);
+  }, [allFreelancers, selectedIds, searchQuery, favoritedIds]);
 
   const timeSlots = useMemo(() => generateTimeSlots('06:00', '22:00'), []);
   const endTimeSlots = useMemo(() => timeSlots.filter((slot) => slot > scheduleTime), [timeSlots, scheduleTime]);
@@ -178,6 +227,11 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     setSelectedIds((current) => (current.includes(freelancerId) ? current : [...current, freelancerId]));
     setPerFreelancerForm((current) => (current[freelancerId] ? current : { ...current, [freelancerId]: { purpose: '', customPurpose: '', budget: '' } }));
     setSearchQuery('');
+  };
+
+  const handleLocationPicked = (point: LocationPoint) => {
+    setLocation(point);
+    setIsLocationPickerOpen(false);
   };
 
   const removeFreelancer = (freelancerId: string) => {
@@ -212,8 +266,8 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       setError('Select at least one freelancer.');
       return;
     }
-    if (!location.trim()) {
-      setError('Enter a location for this booking.');
+    if (!location) {
+      setError('Choose a location for this booking.');
       return;
     }
     if (!scheduleDate || !scheduleTime || !scheduleEndTime) {
@@ -251,7 +305,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       const budgetMeta: BudgetMeta = { currency, min: minimum, max: budgetAmount };
       const description = appendLocationMeta(
         appendScheduleMeta(appendBudgetMeta(notes, budgetMeta), { date: scheduleDate, time: scheduleTime, endTime: scheduleEndTime }),
-        location.trim()
+        location.formattedAddress
       );
 
       // Each freelancer's own purpose stays visible alongside the overall
@@ -438,15 +492,30 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
           <p className="text-sm font-semibold text-gray-900">Shared for the whole group</p>
 
           <div>
-            <label htmlFor="location" className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
-            <input
-              id="location"
-              required
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
-              placeholder="Where should everyone meet?"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-            />
+            <label className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
+            <button
+              type="button"
+              onClick={() => setIsLocationPickerOpen(true)}
+              className={`w-full overflow-hidden rounded-2xl bg-gray-50 text-left transition-all ${
+                location ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+              }`}
+            >
+              {location ? (
+                <div className="h-36 w-full">
+                  <LeafletLocationPreview latitude={location.latitude} longitude={location.longitude} title={location.formattedAddress} interactive={false} />
+                </div>
+              ) : (
+                <div className="flex h-36 w-full items-center justify-center bg-gray-100">
+                  <MapPin className="h-6 w-6 text-gray-400" />
+                </div>
+              )}
+              <div className="flex items-center gap-2 p-4">
+                <MapPin className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                <span className={location ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
+                  {location?.formattedAddress || 'Choose where everyone should meet on the map'}
+                </span>
+              </div>
+            </button>
           </div>
 
           <div>
@@ -497,19 +566,6 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               </select>
             </div>
           </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Currency</label>
-            <select
-              value={currency}
-              onChange={(event) => setCurrency(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
-            >
-              {SUPPORTED_CURRENCIES.map((item) => (
-                <option key={item.code} value={item.code}>{item.label}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
         <button
@@ -520,6 +576,10 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
           {isSubmitting ? 'Sending...' : selectedFreelancers.length > 0 ? `Send Request to ${selectedFreelancers.length} Freelancer${selectedFreelancers.length === 1 ? '' : 's'}` : 'Select freelancers to continue'}
         </button>
       </form>
+
+      {isLocationPickerOpen && (
+        <LeafletLocationPicker initialPoint={location} onCancel={() => setIsLocationPickerOpen(false)} onConfirm={handleLocationPicked} />
+      )}
     </div>
   );
 }
