@@ -38,6 +38,10 @@ interface StoredLocation {
 
 const TOTAL_STEPS = 12;
 
+// A blob: object URL only resolves in the exact browser tab that created
+// it — never a value worth persisting to the database.
+const isUsablePhotoUrl = (url: string | null | undefined): url is string => !!url && !url.startsWith('blob:');
+
 const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Profile', description: 'Tell clients who you are.' },
   { title: 'Freelancer category', description: 'What service do you provide? You can add a minor category too.' },
@@ -153,13 +157,19 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
     DataService.getUser(user.id).then(({ data }) => {
       if (!isMounted || !data) return;
-      // full_name/avatar_url: only fall back to this DB read when there's no
+      // full_name: only fall back to this DB read when there's no
       // pendingProfile — a fresh signup's DB row can still be mid-flight
       // (see pendingSignupProfile.ts), so a value it already provided must
       // win over whatever this read happens to see.
       if (!pendingProfile) {
         if (data.full_name) setDisplayName(data.full_name);
-        if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      }
+      // avatar_url is different: pendingProfile's copy is only ever a
+      // blob: preview (sign-up's real upload lands in the DB slightly
+      // after signUp() resolves), so the real uploaded URL — once this
+      // read sees it — should always replace it, pendingProfile or not.
+      if (isUsablePhotoUrl(data.avatar_url)) {
+        setExistingAvatarUrl(data.avatar_url);
       }
       if (data.location) setLocation((current) => current || data.location || '');
       if (typeof data.location_latitude === 'number') setLocationLatitude(data.location_latitude);
@@ -371,12 +381,27 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
     const resolvedPronouns = pronouns === 'Custom' ? pronounsCustom.trim() : pronouns;
 
+    // existingAvatarUrl can still be a blob: URL here — it's seeded from
+    // pendingProfile.avatarPreviewUrl (see the comment above its useEffect)
+    // as an immediate preview while sign-up's own real upload may still be
+    // mid-flight, and that DB catch-up read doesn't always land before this
+    // form is submitted. A blob: URL only resolves in the tab that created
+    // it, so persisting it here would overwrite sign-up's real, already-
+    // uploaded avatar with a URL that's already dead — never write it.
+    const resolvedAvatarUrl =
+      uploadedAvatarUrl ||
+      (isUsablePhotoUrl(existingAvatarUrl) ? existingAvatarUrl : null) ||
+      (isUsablePhotoUrl(user.avatar_url) ? user.avatar_url : null);
+
     const userUpdate = await DataService.updateUser(user.id, {
       role: 'freelancer',
       full_name: displayName.trim(),
       pronouns: resolvedPronouns || null,
-      avatar_url: uploadedAvatarUrl || existingAvatarUrl || user.avatar_url || null,
-      cover_url: uploadedCoverUrl,
+      // Omitted entirely (not set to null) when there's nothing new/usable —
+      // revisiting this form without re-picking a photo must never erase
+      // whatever is already saved.
+      ...(resolvedAvatarUrl ? { avatar_url: resolvedAvatarUrl } : {}),
+      ...(uploadedCoverUrl ? { cover_url: uploadedCoverUrl } : {}),
       bio: bio.trim() || null,
       preferred_currency: normalizeCurrencyCode(startingPriceCurrency, 'THB'),
       location: location.trim() || null,

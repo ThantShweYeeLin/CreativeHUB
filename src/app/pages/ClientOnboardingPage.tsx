@@ -29,6 +29,10 @@ function toggle(list: string[], value: string) {
 
 const TOTAL_STEPS = 5;
 
+// A blob: object URL only resolves in the exact browser tab that created
+// it — never a value worth persisting to the database.
+const isUsablePhotoUrl = (url: string | null | undefined): url is string => !!url && !url.startsWith('blob:');
+
 interface ClientOnboardingPageProps {
   onBack?: () => void;
 }
@@ -91,13 +95,19 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
         return;
       }
 
-      // full_name/avatar_url: only fall back to this DB read when there's no
+      // full_name: only fall back to this DB read when there's no
       // pendingProfile — a fresh signup's DB row can still be mid-flight
       // (see pendingSignupProfile.ts), so a value it already provided must
       // win over whatever this read happens to see.
       if (!pendingProfile) {
         if (data.full_name) setDisplayName(data.full_name);
-        if (data.avatar_url) setExistingAvatarUrl(data.avatar_url);
+      }
+      // avatar_url is different: pendingProfile's copy is only ever a
+      // blob: preview (sign-up's real upload lands in the DB slightly
+      // after signUp() resolves), so the real uploaded URL — once this
+      // read sees it — should always replace it, pendingProfile or not.
+      if (isUsablePhotoUrl(data.avatar_url)) {
+        setExistingAvatarUrl(data.avatar_url);
       }
       if (data.location) setLocation(data.location);
       if (typeof data.location_latitude === 'number') setLocationLatitude(data.location_latitude);
@@ -186,13 +196,26 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
       if (upload.publicUrl) uploadedAvatarUrl = upload.publicUrl;
     }
 
+    // existingAvatarUrl can still be a blob: URL here — it's seeded from
+    // pendingProfile.avatarPreviewUrl as an immediate preview while sign-up's
+    // own real upload may still be mid-flight. A blob: URL only resolves in
+    // the tab that created it, so persisting it would overwrite sign-up's
+    // real, already-uploaded avatar with a URL that's already dead.
+    const resolvedAvatarUrl =
+      uploadedAvatarUrl ||
+      (isUsablePhotoUrl(existingAvatarUrl) ? existingAvatarUrl : null) ||
+      (isUsablePhotoUrl(user.avatar_url) ? user.avatar_url : null);
+
     const response = await DataService.updateUser(user.id, {
       full_name: displayName.trim(),
       location: location.trim(),
       location_latitude: resolvedLat,
       location_longitude: resolvedLng,
       location_place_id: resolvedPlaceId,
-      avatar_url: uploadedAvatarUrl || existingAvatarUrl || user.avatar_url || null,
+      // Omitted entirely (not set to null) when there's nothing new/usable —
+      // revisiting this form without re-picking a photo must never erase
+      // whatever is already saved.
+      ...(resolvedAvatarUrl ? { avatar_url: resolvedAvatarUrl } : {}),
       client_type: clientType,
       client_interests: interests,
       client_budget_preference: budgetPreference || null,
