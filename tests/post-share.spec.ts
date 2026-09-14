@@ -100,21 +100,31 @@ test.describe('post public page', () => {
     await expect(page.locator('button[aria-label="Like post"], button[aria-label="Unlike post"]')).toBeVisible({ timeout: 15000 });
   });
 
-  test('For You feed: existing Share button still opens the sheet, and it now offers external sharing without breaking "Send in messages"', async ({ browser }) => {
-    const context = await browser.newContext();
+  test('For You feed: Share opens the share menu directly, with "Send in Messages" folded in as a menu item', async ({ browser }) => {
+    const context = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
     const page = await context.newPage();
     await login(page, AUTHOR_EMAIL!, AUTHOR_PASSWORD!);
     await page.goto('/for-you');
 
-    const shareBtn = page.getByRole('button', { name: 'Share', exact: true }).first();
+    const shareBtn = page.locator('button[aria-label="Share post"]').first();
     await shareBtn.waitFor({ state: 'visible', timeout: 20000 });
     await shareBtn.click();
 
-    await expect(page.getByText('Send this post')).toBeVisible();
-    await expect(page.getByText('Share externally')).toBeVisible();
-    await expect(page.getByText('Send in messages')).toBeVisible();
-
-    // Clicking Share doesn't trigger the underlying post card's own click/navigation.
+    // No intermediate "Send this post" sheet — the real share options are
+    // reachable in one click, folding "Send in Messages" in as a 6th item.
+    await expect(page.getByText('Share this post')).toBeVisible();
+    await expect(page.locator('button[role="menuitem"]', { hasText: 'Copy Link' })).toBeVisible();
+    await expect(page.locator('button[role="menuitem"]', { hasText: 'Send in Messages' })).toBeVisible();
     expect(page.url()).toContain('/for-you');
+
+    await page.locator('button[role="menuitem"]', { hasText: 'Copy Link' }).click();
+    await expect(page.getByText('Post link copied!')).toBeVisible({ timeout: 5000 });
+
+    // "Send in Messages" closes the share popover and opens the mutuals picker.
+    await page.keyboard.press('Escape');
+    await shareBtn.click();
+    await page.locator('button[role="menuitem"]', { hasText: 'Send in Messages' }).click();
+    await expect(page.getByText('Send to mutuals')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Share this post')).not.toBeVisible();
   });
 });

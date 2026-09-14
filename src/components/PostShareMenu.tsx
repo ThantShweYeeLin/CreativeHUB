@@ -24,6 +24,8 @@ interface PostShareMenuProps {
   children?: React.ReactNode;
   align?: 'left' | 'right';
   onShared?: (method: PostShareMethod) => void;
+  /** Extra menu items rendered after the 5 built-in options (e.g. "Send in Messages" on the For You feed) — kept out of the base 5 so this component stays generically reusable. Receives a `close` callback so a caller-owned item (which likely opens its own separate overlay, like a mutuals picker) can close this menu first instead of leaving it open underneath. */
+  extraItems?: (close: () => void) => React.ReactNode;
 }
 
 const PLATFORM_BADGE_CLASS = 'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-sm font-bold text-white';
@@ -37,6 +39,7 @@ export function PostShareMenu({
   children,
   align = 'right',
   onShared,
+  extraItems,
 }: PostShareMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
@@ -221,6 +224,8 @@ export function PostShareMenu({
             <span className={`${PLATFORM_BADGE_CLASS} bg-black`}>X</span>
             X
           </button>
+
+          {extraItems?.(() => setIsOpen(false))}
 
           {status && (
             <p

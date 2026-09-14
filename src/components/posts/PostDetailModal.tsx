@@ -43,6 +43,8 @@ interface PostDetailModalProps {
   onToggleSave?: () => void;
 
   onShare?: () => void;
+  /** Renders in place of the plain onShare button — used to put a PostShareMenu directly here instead of routing through a separate modal. Takes priority over onShare when both are given. */
+  shareSlot?: React.ReactNode;
 
   likedUsers?: LikedUser[];
   loadingLikedUsers?: boolean;
@@ -103,6 +105,7 @@ export function PostDetailModal({
   saved,
   onToggleSave,
   onShare,
+  shareSlot,
   likedUsers = [],
   loadingLikedUsers,
   showLikedUsers,
@@ -293,12 +296,12 @@ export function PostDetailModal({
                     {commentsCount ?? comments.length}
                   </span>
                 )}
-                {onShare && (
+                {shareSlot || (onShare && (
                   <button onClick={onShare} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                     <Share2 className="h-5 w-5 text-gray-700" />
                     Share
                   </button>
-                )}
+                ))}
                 {onToggleSave && (
                   <button onClick={onToggleSave} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                     <Bookmark className={`h-5 w-5 ${saved ? 'fill-gray-900 text-gray-900' : 'text-gray-700'}`} />

@@ -29,6 +29,8 @@ interface PostCardProps {
   onOpenComment: () => void;
 
   onShare?: () => void;
+  /** Renders in place of the plain onShare button — used to put a PostShareMenu directly in the action row instead of routing through a separate modal. Takes priority over onShare when both are given. */
+  shareSlot?: React.ReactNode;
 
   saved?: boolean;
   onToggleSave?: () => void;
@@ -53,6 +55,7 @@ export function PostCard({
   commentsCount,
   onOpenComment,
   onShare,
+  shareSlot,
   saved,
   onToggleSave,
 }: PostCardProps) {
@@ -117,12 +120,12 @@ export function PostCard({
               <span className="font-semibold text-gray-900">{commentsCount}</span>
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Comment</span>
             </button>
-            {onShare && (
+            {shareSlot || (onShare && (
               <button type="button" onClick={onShare} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
                 <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
               </button>
-            )}
+            ))}
           </div>
           {onToggleSave && (
             <button type="button" onClick={onToggleSave} className="transition-all">
