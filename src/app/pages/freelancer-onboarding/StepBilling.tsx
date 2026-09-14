@@ -18,8 +18,8 @@ export function StepBilling({
   return (
     <div className="space-y-6">
       <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        This is where deposits get paid out once a booking completes. You can skip this for now and add it later from
-        Freelancer Dashboard → Settings.
+        This is where deposits get paid out once a booking completes — required so you can actually get paid. You can
+        still update it later from Freelancer Dashboard → Settings.
       </div>
 
       <div>

@@ -47,13 +47,13 @@ const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Availability', description: 'When can clients book you?' },
   { title: 'Service information', description: 'Where and how you provide services.' },
   { title: 'Pricing', description: 'Give clients a sense of your rates.' },
-  { title: 'Billing information', description: 'Add your payout details so you can get paid (optional — add this later in Settings if you prefer).' },
+  { title: 'Billing information', description: 'Add your payout details so you can get paid.' },
   { title: 'Requirements & limitations', description: 'Set expectations up front.' },
   { title: 'Contact preferences', description: 'How should clients reach you?' },
   { title: 'Verification', description: 'Build trust with a verified badge.' },
 ];
 
-const REQUIRED_STEPS = new Set([1, 2, 3, 4]);
+const REQUIRED_STEPS = new Set([1, 2, 3, 4, 9]);
 const TRAVEL_ANYWHERE = 'Open to travel anywhere';
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
@@ -229,6 +229,13 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     // can't have one without the other.
     if (current === 7 && studioName.trim() && studioLocations.length === 0) {
       return `Add at least one location for ${studioName.trim()}, or clear the studio name.`;
+    }
+    // Billing details are required so a freelancer can actually be paid —
+    // unlike every other post-basics step, this one can't be skipped.
+    if (current === 9) {
+      if (!billingBankName.trim() || !billingAccountHolderName.trim() || !billingAccountNumber.trim()) {
+        return 'Add your bank name, account holder name, and account number so you can get paid.';
+      }
     }
     return null;
   };
