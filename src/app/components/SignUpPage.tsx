@@ -9,6 +9,7 @@ import { CitySelect } from '../../components/common/CitySelect';
 import { PhoneInput } from '../../components/common/PhoneInput';
 import { findCountryByCode } from '../../lib/geoData';
 import { validatePhoneForCountry } from '../../lib/phone';
+import { LegalContentModal } from '../../components/LegalContentModal';
 
 export type AccountType = 'client' | 'freelancer';
 
@@ -43,6 +44,7 @@ const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
 
 export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSignUp }: SignUpPageProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
   const [accountType, setAccountType] = useState<AccountType | null>(null);
   const [gender, setGender] = useState<Gender | ''>('');
   const [firstName, setFirstName] = useState('');
@@ -498,25 +500,27 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 </div>
                 <span className="text-sm text-gray-600">
                   I agree to the{' '}
-                  <a
-                    href="/terms"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setLegalModalTab('terms');
+                    }}
                     className="font-semibold text-gray-900 hover:underline"
                   >
                     Terms of Service
-                  </a>
+                  </button>
                   {' '}and{' '}
-                  <a
-                    href="/privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(event) => event.stopPropagation()}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setLegalModalTab('privacy');
+                    }}
                     className="font-semibold text-gray-900 hover:underline"
                   >
                     Privacy Policy
-                  </a>
+                  </button>
                 </span>
               </label>
 
@@ -544,6 +548,8 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
           </p>
         </div>
       </div>
+
+      {legalModalTab && <LegalContentModal initialTab={legalModalTab} onClose={() => setLegalModalTab(null)} />}
     </div>
   );
 }
