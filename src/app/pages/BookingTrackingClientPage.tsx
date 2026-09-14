@@ -481,6 +481,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                   {isConfirming ? 'Confirming...' : 'Confirm Completion'}
                 </button>
                 <button
+                  id="report-a-problem-button"
                   onClick={() => setShowDisputeForm(true)}
                   className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold hover:bg-gray-200 transition-all"
                 >

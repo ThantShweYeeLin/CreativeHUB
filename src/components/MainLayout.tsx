@@ -295,6 +295,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 'booking_completed',
                 'attendance_window_open',
                 'deposit_payment_required',
+                'booking_completion_submitted',
               ].includes(String(row.type || ''))) {
                 const bookingResponse = await supabase
                   .from('bookings')
@@ -519,7 +520,9 @@ export function MainLayout({ children }: MainLayoutProps) {
         ? 'attendance-check'
         : notification.type === 'deposit_payment_required'
           ? 'deposit-section'
-          : null;
+          : notification.type === 'booking_completion_submitted'
+            ? 'report-a-problem-button'
+            : null;
 
     setShowNotifications(false);
     navigate(section ? `${basePath}#${section}` : basePath);

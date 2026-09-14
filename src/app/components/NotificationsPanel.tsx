@@ -222,6 +222,7 @@ export function NotificationsPanel({
                       'booking_deposit_paid',
                       'booking_cancelled',
                       'booking_completed',
+                      'booking_completion_submitted',
                     ].includes(notification.type)
                   ) {
                     onOpenBooking?.(notification);
