@@ -6,7 +6,7 @@ import { LocationChipList } from '../../components/common/LocationChipList';
 import { TagSelector } from '../../components/common/TagSelector';
 import { MinorSkillsPicker, type MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
 import { ExperienceLevelPicker } from '../../components/common/ExperienceLevelPicker';
-import { FREELANCER_CATEGORIES, isFreelancerCategory, suggestedSkillsForCategory, suggestedStylesForCategory } from '../../lib/categories';
+import { FREELANCER_CATEGORIES, isFreelancerCategory, MUSICIAN_CATEGORY_LABEL, suggestedPerformerTypesForCategory, suggestedSkillsForCategory, suggestedStylesForCategory } from '../../lib/categories';
 import { MAX_MINOR_SKILLS } from '../../lib/skillsTaxonomy';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -81,6 +81,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     is_available: true,
     skills: [] as string[],
     styles: [] as string[],
+    performer_type: [] as string[],
   });
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
   const [categoryExperienceLevel, setCategoryExperienceLevel] = useState<string | null>(null);
@@ -172,6 +173,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
           is_available: freelancerProfile.is_available !== false,
           skills: freelancerProfile.skills || [],
           styles: freelancerProfile.styles || [],
+          performer_type: freelancerProfile.performer_type || [],
         });
         setWorkingForm({
           studio_name: freelancerProfile.studio_name || '',
@@ -341,7 +343,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       setPendingCategoryChange(nextCategory);
       return;
     }
-    setFreelancerForm((current) => ({ ...current, title: nextCategory }));
+    setFreelancerForm((current) => ({ ...current, title: nextCategory, performer_type: [] }));
   };
 
   // moveOldMajorToMinor lets the freelancer keep their old specialty (and
@@ -352,7 +354,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     if (!pendingCategoryChange) return;
     const oldMajor = freelancerForm.title;
     const oldMajorLevel = categoryExperienceLevel;
-    setFreelancerForm((current) => ({ ...current, title: pendingCategoryChange, skills: [], styles: [] }));
+    setFreelancerForm((current) => ({ ...current, title: pendingCategoryChange, skills: [], styles: [], performer_type: [] }));
     setCategoryExperienceLevel(null);
     if (moveOldMajorToMinor && oldMajor) {
       setMinorSkills((current) =>
@@ -466,6 +468,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         is_available: freelancerForm.is_available,
         skills: freelancerForm.skills,
         styles: freelancerForm.styles,
+        performer_type: freelancerForm.performer_type,
         studio_name: workingForm.studio_name.trim() || null,
         studio_locations: workingForm.studio_locations,
         locations: workingForm.locations,
@@ -758,7 +761,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 </div>
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Styles</label>
-                  <p className="mb-2 text-xs text-gray-500">What your work looks like — the AI Matcher searches by these.</p>
+                  <p className="mb-2 text-xs text-gray-500">What your work looks like — clients search and filter by these.</p>
                   <TagSelector
                     suggestions={suggestedStylesForCategory(freelancerForm.title)}
                     selected={freelancerForm.styles}
@@ -767,6 +770,18 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     emptyHint="Select at least one style."
                   />
                 </div>
+                {freelancerForm.title === MUSICIAN_CATEGORY_LABEL && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-700">Performer type</label>
+                    <p className="mb-2 text-xs text-gray-500">How you perform — separate from genre, so clients can filter by both.</p>
+                    <TagSelector
+                      suggestions={suggestedPerformerTypesForCategory(freelancerForm.title)}
+                      selected={freelancerForm.performer_type}
+                      onChange={(next) => setFreelancerForm((current) => ({ ...current, performer_type: next }))}
+                      otherPlaceholder="e.g. String Quartet"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-700">Additional skills</label>
                   <p className="mb-2 text-xs text-gray-500">

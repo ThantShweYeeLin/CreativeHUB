@@ -466,6 +466,7 @@ export function ExplorePage() {
             title: source?.title || null,
             skills: source?.skills || [],
             styles: source?.styles || [],
+            performerType: source?.performer_type || [],
             minorSkills: profile.minorSkills || [],
             description: source?.description || null,
             location: profile.location || null,

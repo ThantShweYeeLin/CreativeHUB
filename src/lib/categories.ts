@@ -9,66 +9,81 @@ export interface FreelancerCategoryDef {
   /** Suggested skill tags shown as quick-add chips for this category. */
   skills: string[];
   /**
-   * Suggested style tags — what search/matching filters by within this
-   * category. For Musician/Live Entertainment these are performer
-   * subtypes (Solo Artist, Band, DJ, ...) rather than visual styles, reusing
-   * the same field since the UI/matching treatment is identical.
+   * Suggested style/genre tags — an aesthetic descriptor of the work
+   * itself, comparable against a client's chosen event style/theme (see
+   * lib/eventMatcher.ts's scoreEventCandidate). For Musician/Live
+   * Entertainment these are music genres (Pop, Jazz, Rock, ...), not
+   * performer format — that lives in `performerType` instead, since a
+   * performer format (Band, DJ, ...) isn't an aesthetic match signal the
+   * way a genre or visual style is.
    */
   styles: string[];
+  /**
+   * Suggested performer-format tags — only populated for Musician/Live
+   * Entertainment. Deliberately excluded from style-overlap scoring;
+   * see the `styles` doc comment above.
+   */
+  performerType?: string[];
 }
 
 export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
   {
     id: 'photographer',
     label: 'Photographer',
-    skills: ['Portrait Photography', 'Wedding Photography', 'Event Photography', 'Product Photography', 'Fashion Photography', 'Lifestyle Photography', 'Photo Editing'],
-    styles: ['Cinematic', 'Bright & Airy', 'Moody', 'Vintage', 'Editorial', 'Minimalist', 'Natural', 'Luxury', 'Documentary'],
+    skills: ['Portrait Photography', 'Wedding Photography', 'Event Photography', 'Couple Photography', 'Graduation Photography', 'Photo Editing', 'Retouching', 'Studio Photography'],
+    styles: ['Romantic', 'Bright & Airy', 'Moody', 'Vintage', 'Editorial', 'Minimalist', 'Natural', 'Luxury', 'Documentary', 'Dramatic', 'Elegant', 'Modern', 'Glamorous', 'Traditional'],
   },
   {
     id: 'videographer',
     label: 'Videographer',
-    skills: ['Wedding Videography', 'Event Videography', 'Highlight Reels', 'Drone Videography', 'Cinematography', 'Video Editing', 'Live Streaming'],
-    styles: ['Cinematic', 'Documentary', 'Vintage', 'Moody', 'Bright & Airy', 'Editorial', 'Minimalist'],
+    skills: ['Wedding Videography', 'Event Videography', 'Highlight Video', 'Couple Video', 'Proposal Video', 'Video Editing', 'Short-form Video'],
+    styles: ['Cinematic', 'Documentary', 'Vintage', 'Moody', 'Bright & Airy', 'Editorial', 'Minimalist', 'Elegant', 'Luxury', 'Romantic', 'Modern', 'Traditional'],
   },
   {
     id: 'makeup-artist',
     label: 'Makeup Artist',
-    skills: ['Makeup Application', 'Bridal Makeup', 'Eye Makeup', 'False Lash Application', 'Contouring', 'Base Makeup', 'Event Makeup'],
-    styles: ['Douyin Makeup', 'Soft Glam', 'Natural Glam', 'Bridal Glam', 'Korean-Inspired', 'Chinese-Inspired', 'Glitter Makeup', 'Bold Glam', 'Minimal Makeup'],
+    skills: ['Makeup Application', 'Bridal Makeup', 'Eye Makeup', 'False Lash Application', 'Event Makeup', 'Photoshoot Makeup', 'Airbrush Makeup'],
+    styles: ['Douyin Makeup', 'Soft Glam', 'Natural Glam', 'Bridal Glam', 'Korean-Inspired', 'Chinese-Inspired', 'Glitter Makeup', 'Bold Glam', 'Minimal Makeup', 'Editorial Makeup', 'Smokey Glam', 'Dewy Makeup', 'Elegant', 'Romantic', 'Glamorous', 'Vintage', 'Minimalist'],
   },
   {
     id: 'hair-stylist',
     label: 'Hair Stylist',
-    skills: ['Hair Styling', 'Bridal Hairstyling', 'Braiding', 'Hair Curling', 'Hair Straightening', 'Updos', 'Hair Coloring', 'Event Hairstyling'],
-    styles: ['Korean-Inspired', 'Elegant', 'Romantic', 'Y2K', 'Natural', 'Glamorous', 'Vintage', 'Modern', 'Bridal'],
+    skills: ['Hair Styling', 'Bridal Hairstyling', 'Braiding', 'Updos', 'Blowout', 'Event Hairstyling', 'Hair Extensions Styling'],
+    styles: ['Korean-Inspired', 'Elegant', 'Romantic', 'Y2K', 'Natural', 'Glamorous', 'Vintage', 'Modern', 'Bridal', 'Sleek', 'Messy/Textured', 'Soft Waves', 'Bohemian', 'Traditional'],
   },
   {
     id: 'fashion-designer',
     label: 'Fashion Designer',
-    skills: ['Custom Dress Design', 'Bridal Wear', 'Evening Wear', 'Formal Wear', 'Costume Design', 'Alterations & Fitting', 'Fashion Consultation', 'Custom Outfit Design'],
-    styles: ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear'],
+    skills: ['Custom Dress Design', 'Custom Outfit Design', 'Bridal Wear Design', 'Evening Wear Design', 'Formal Wear Design', 'Costume Design', 'Alterations & Fitting', 'Fashion Consultation', 'Styling', 'Garment Fitting'],
+    styles: ['Minimalist', 'Elegant', 'Luxury', 'Vintage', 'Traditional', 'Modern', 'Romantic', 'Avant-Garde', 'Streetwear', 'Classic', 'Glamorous', 'Contemporary', 'Bohemian'],
   },
   {
     id: 'decorator-florist',
     label: 'Decorator/Florist',
-    skills: ['Event Decoration', 'Floral Arrangements', 'Bridal Bouquets', 'Backdrop Design', 'Balloon Styling', 'Table Centerpieces', 'Venue Styling'],
-    styles: ['Minimalist', 'Elegant', 'Luxury', 'Rustic', 'Romantic', 'Modern', 'Bohemian', 'Traditional', 'Garden'],
+    skills: ['Event Decoration', 'Floral Arrangement', 'Backdrop Setup', 'Table Decoration', 'Proposal Setup', 'Wedding Decoration', 'Balloon Decoration', 'Bridal Bouquets'],
+    styles: ['Romantic', 'Minimalist', 'Luxury', 'Vintage', 'Modern', 'Elegant', 'Cute', 'Floral', 'Rustic', 'Bohemian', 'Garden', 'Traditional', 'Glamorous', 'Whimsical'],
   },
   {
     id: 'cake-dessert-maker',
     label: 'Cake/Dessert Maker',
     skills: ['Custom Cakes', 'Wedding Cakes', 'Cupcakes', 'Dessert Tables', 'Cake Decorating', 'Sugar Flowers', 'Cake Tasting'],
-    styles: ['Elegant', 'Minimalist', 'Rustic', 'Modern', 'Whimsical', 'Luxury', 'Traditional'],
+    styles: ['Elegant', 'Minimalist', 'Rustic', 'Modern', 'Whimsical', 'Luxury', 'Traditional', 'Floral', 'Vintage', 'Romantic', 'Glamorous'],
   },
   {
     id: 'musician-live-entertainment',
     label: 'Musician/Live Entertainment',
     skills: ['Live Performance', 'Wedding Ceremony Music', 'Reception Entertainment', 'MC Hosting', 'Sound Equipment', 'Song Requests', 'Custom Setlists'],
-    styles: ['Solo Artist', 'Band', 'Singer/Vocalist', 'Acoustic Duo', 'Instrumentalist', 'DJ'],
+    styles: ['Pop', 'Acoustic', 'Romantic', 'Jazz', 'Classical', 'R&B', 'Rock'],
+    performerType: ['Solo Artist', 'Band', 'Singer/Vocalist', 'Acoustic Duo', 'Instrumentalist', 'DJ'],
   },
 ];
 
 export const FREELANCER_CATEGORY_LABELS = FREELANCER_CATEGORIES.map((category) => category.label);
+
+// The one category with a performerType list — used to conditionally show
+// the performer-format picker in onboarding/Edit Profile and to decide
+// whether search should also check performerType (see freelancerSearch.ts).
+export const MUSICIAN_CATEGORY_LABEL = 'Musician/Live Entertainment';
 
 // Historically excluded Model from the Event Matcher while Model was still
 // a valid category; Model has since been removed from FREELANCER_CATEGORIES
@@ -99,6 +114,11 @@ export function suggestedSkillsForCategory(categoryLabel: string | null | undefi
 /** Suggested style chips for a single selected category. */
 export function suggestedStylesForCategory(categoryLabel: string | null | undefined): string[] {
   return getFreelancerCategory(categoryLabel || undefined)?.styles ?? [];
+}
+
+/** Suggested performer-format chips — non-empty only for Musician/Live Entertainment. */
+export function suggestedPerformerTypesForCategory(categoryLabel: string | null | undefined): string[] {
+  return getFreelancerCategory(categoryLabel || undefined)?.performerType ?? [];
 }
 
 // Custom (user-typed, via "+ Other") skills/styles are never written to any

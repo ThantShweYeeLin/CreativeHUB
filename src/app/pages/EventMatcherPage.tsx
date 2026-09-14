@@ -31,7 +31,7 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { EVENT_MATCHER_CATEGORY_LABELS } from '../../lib/categories';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { SUPPORTED_CURRENCIES, appendBudgetMeta, type BudgetMeta } from '../../lib/requestBudget';
-import { appendScheduleMeta } from '../../lib/requestSchedule';
+import { appendScheduleMeta, formatTimeLabel, generateTimeSlots } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
 import { isFreelancerFreeOnDate } from '../../lib/availability';
 import { chipClass, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
@@ -97,6 +97,10 @@ const VENUE_SETTING_ICONS: Record<string, LucideIcon> = {
 // Placeholder quick-fill amounts (THB) — swap for real usage data later.
 const BUDGET_QUICK_AMOUNTS = [15000, 35000, 50000, 75000, 120000];
 
+// Full-day range in 30-minute steps — used for both the overall event
+// time and each matched category's own arrival-time picker.
+const EVENT_TIME_SLOTS = generateTimeSlots('06:00', '23:30');
+
 function parseDateInputValue(value: string): Date | undefined {
   if (!value) return undefined;
   const [year, month, day] = value.split('-').map(Number);
@@ -127,6 +131,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   // Event input
   const [eventType, setEventType] = useState<EventType | ''>('');
   const [date, setDate] = useState('');
+  const [eventTime, setEventTime] = useState('12:00');
   const [budget, setBudget] = useState(String(BUDGET_QUICK_AMOUNTS[2]));
   const [currency, setCurrency] = useState(normalizeCurrencyCode(preferredCurrency));
   const [styles, setStyles] = useState<string[]>([]);
@@ -145,6 +150,10 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   const [matchError, setMatchError] = useState<string | null>(null);
   const [categoryMatches, setCategoryMatches] = useState<CategoryMatch[]>([]);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  // Per-category arrival time — defaults to eventTime when matching runs,
+  // but each provider may need to be there at a different time (e.g. the
+  // makeup artist arrives hours before the ceremony itself).
+  const [categoryTimes, setCategoryTimes] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -166,6 +175,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     if (!eventType) return setInputError('Choose an event type.');
     if (!date) return setInputError('Choose an event date.');
     if (date < todayDateString) return setInputError('Choose a date that hasn\'t passed yet.');
+    if (!eventTime) return setInputError('Choose an event time.');
     if (budgetNumber <= 0) return setInputError('Enter your total budget.');
     if (!location) return setInputError('Choose the event location.');
 
@@ -207,6 +217,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     setIsMatching(true);
     setMatchError(null);
     setExpandedCategory(null);
+    setCategoryTimes(Object.fromEntries(confirmedCategories.map((category) => [category, eventTime])));
     setStep('plan');
 
     const eventLocation: LocationPointLike = {
@@ -339,13 +350,10 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     const perRecipient: Record<string, { projectName: string; budget: number; description: string }> = {};
     for (const item of budgetFit.kept) {
       const budgetMeta: BudgetMeta = { currency, min: item.price, max: item.price };
-      // No specific time is collected by the Event Matcher — noon is a
-      // neutral placeholder so the event date still carries through to the
-      // booking created if this request is accepted (see acceptRequest.ts).
       const description = appendLocationMeta(
         appendScheduleMeta(
           appendBudgetMeta(`Matched by CreativeHUB's Event Matcher for a ${eventType}.`, budgetMeta),
-          { date, time: '12:00' }
+          { date, time: categoryTimes[item.category] || eventTime }
         ),
         location.formattedAddress
       );
@@ -441,6 +449,20 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   defaultMonth={parseDateInputValue(date) || todayDate}
                 />
               </div>
+            </div>
+
+            <div>
+              <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Event time</label>
+              <p className="mb-2 text-xs text-gray-500">When your event itself starts — each matched provider's arrival time can be set separately later.</p>
+              <select
+                value={eventTime}
+                onChange={(event) => setEventTime(event.target.value)}
+                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+              >
+                {EVENT_TIME_SLOTS.map((slot) => (
+                  <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -629,7 +651,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                 <div>
                   <h2 className="text-xl font-bold text-gray-900">Your {eventType} Plan</h2>
                   <p className="mt-1 truncate text-sm text-gray-600">
-                    {[formatEventDate(date), location?.city || location?.formattedAddress, styles.length > 0 ? styles.join(', ') : null]
+                    {[`${formatEventDate(date)} at ${formatTimeLabel(eventTime)}`, location?.city || location?.formattedAddress, styles.length > 0 ? styles.join(', ') : null]
                       .filter(Boolean)
                       .join(' · ')}
                   </p>
@@ -703,6 +725,24 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                                 </p>
                                 {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
                               </div>
+                            </div>
+
+                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                              <label htmlFor={`time-${match.category}`} className="text-xs font-semibold text-gray-600">
+                                Arrival time
+                              </label>
+                              <select
+                                id={`time-${match.category}`}
+                                value={categoryTimes[match.category] || eventTime}
+                                onChange={(event) =>
+                                  setCategoryTimes((current) => ({ ...current, [match.category]: event.target.value }))
+                                }
+                                className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                              >
+                                {EVENT_TIME_SLOTS.map((slot) => (
+                                  <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                                ))}
+                              </select>
                             </div>
 
                             {isExpanded && (
