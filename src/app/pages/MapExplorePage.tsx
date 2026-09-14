@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import { LatLngExpression, divIcon } from 'leaflet';
-import { Filter, Layers, Navigation, Sparkles } from 'lucide-react';
+import { Filter, Layers, Navigation, Search, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
@@ -191,7 +191,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
   const [distanceLimitKm, setDistanceLimitKm] = useState<number | null>(null);
   const [clientLocation, setClientLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const hasAppliedDefaultDistance = useRef(false);
-  const [locationSource, setLocationSource] = useState<'profile' | 'device' | null>(null);
+  const [locationSource, setLocationSource] = useState<'profile' | 'device' | 'manual' | null>(null);
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [filtersExpanded, setFiltersExpanded] = useState(false);
@@ -456,6 +459,11 @@ export function MapView({ onViewProfile }: MapViewProps) {
     matchingFreelancers: (count: number) => translateMapText(mapLanguage, `${count} freelancers match filters`, `${count} ฟรีแลนซ์ตรงกับตัวกรอง`),
     locationSourceProfile: translateMapText(mapLanguage, 'Profile location', 'ตำแหน่งตามโปรไฟล์'),
     locationSourceDevice: translateMapText(mapLanguage, 'Current device GPS', 'พิกัด GPS ของอุปกรณ์ปัจจุบัน'),
+    locationSourceManual: translateMapText(mapLanguage, 'Location you set', 'ตำแหน่งที่คุณตั้งค่า'),
+    locationSearchPlaceholder: translateMapText(mapLanguage, 'Search a city or address...', 'ค้นหาเมืองหรือที่อยู่...'),
+    locationSearchButton: translateMapText(mapLanguage, 'Search', 'ค้นหา'),
+    locationSearchSearching: translateMapText(mapLanguage, 'Searching...', 'กำลังค้นหา...'),
+    setDesiredLocation: translateMapText(mapLanguage, 'Set a desired location', 'ตั้งค่าตำแหน่งที่ต้องการ'),
     loading: translateMapText(mapLanguage, 'Loading freelancers...', 'กำลังโหลดฟรีแลนซ์...'),
     unableToLoad: translateMapText(mapLanguage, 'Unable to load freelancers', 'ไม่สามารถโหลดฟรีแลนซ์ได้'),
     noMatches: translateMapText(mapLanguage, 'No freelancers match these filters', 'ไม่มีฟรีแลนซ์ที่ตรงกับตัวกรอง'),
@@ -500,6 +508,30 @@ export function MapView({ onViewProfile }: MapViewProps) {
     );
   };
 
+  // Explicit search-on-submit only (button/Enter) — Nominatim's usage policy
+  // forbids autocomplete-on-keystroke, so there's no live suggestion list here.
+  const handleLocationSearch = async () => {
+    const query = locationSearchQuery.trim();
+    if (!query) return;
+
+    setIsSearchingLocation(true);
+    setLocationSearchError(null);
+
+    const result = await geocodeAddress(query, mapLanguage);
+
+    setIsSearchingLocation(false);
+
+    if (!result) {
+      setLocationSearchError(
+        translateMapText(mapLanguage, "Couldn't find that location. Try a different search.", 'ไม่พบตำแหน่งนี้ ลองค้นหาใหม่อีกครั้ง')
+      );
+      return;
+    }
+
+    setClientLocation({ lat: result.latitude, lng: result.longitude, label: result.formattedAddress });
+    setLocationSource('manual');
+  };
+
   return (
     <div className="space-y-6 md:space-y-8">
       <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-xl md:p-6">
@@ -515,6 +547,34 @@ export function MapView({ onViewProfile }: MapViewProps) {
           >
             {filtersExpanded ? mapText.hideFilters : mapText.showFilters}
           </button>
+        </div>
+
+        <div className="mb-4">
+          <h3 className="mb-2 text-sm font-bold text-gray-900">{mapText.setDesiredLocation}</h3>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleLocationSearch();
+            }}
+            className="flex flex-wrap gap-2"
+          >
+            <input
+              type="text"
+              value={locationSearchQuery}
+              onChange={(event) => setLocationSearchQuery(event.target.value)}
+              placeholder={mapText.locationSearchPlaceholder}
+              className="min-w-[200px] flex-1 rounded-xl border border-gray-300 px-4 py-2 text-sm focus:border-gray-900 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={isSearchingLocation || !locationSearchQuery.trim()}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Search className="h-4 w-4" />
+              {isSearchingLocation ? mapText.locationSearchSearching : mapText.locationSearchButton}
+            </button>
+          </form>
+          {locationSearchError && <p className="mt-2 text-xs text-red-600">{locationSearchError}</p>}
         </div>
 
         {!filtersExpanded && (
@@ -670,7 +730,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               <Marker position={[clientLocation.lat, clientLocation.lng]} icon={clientMarkerIcon}>
                 <Popup>
                   <div className="text-sm">
-                    <p className="font-bold text-gray-900">{mapText.yourLocation} {locationSource === 'device' ? '(Live)' : ''}</p>
+                    <p className="font-bold text-gray-900">{mapText.yourLocation} {locationSource === 'device' ? '(Live)' : locationSource === 'manual' ? '(Set by you)' : ''}</p>
                     <p className="text-gray-600">{clientLocation.label}</p>
                   </div>
                 </Popup>
@@ -730,7 +790,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
           <p className="mt-1 text-xs text-gray-600">{mapText.matchingFreelancers(mapFreelancers.length)}</p>
           {clientLocation ? (
             <p className="mt-0.5 text-xs text-gray-500">
-              {translateMapText(mapLanguage, 'Location source: ', 'แหล่งที่มาของตำแหน่ง: ')}{locationSource === 'device' ? mapText.locationSourceDevice : mapText.locationSourceProfile}
+              {translateMapText(mapLanguage, 'Location source: ', 'แหล่งที่มาของตำแหน่ง: ')}
+              {locationSource === 'device'
+                ? mapText.locationSourceDevice
+                : locationSource === 'manual'
+                  ? mapText.locationSourceManual
+                  : mapText.locationSourceProfile}
             </p>
           ) : null}
         </div>
