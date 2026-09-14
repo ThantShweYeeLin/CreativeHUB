@@ -91,6 +91,14 @@ export interface FreelancerSearchable {
   styles: string[];
   /** Secondary capabilities beyond the major skill/title — see freelancer_skills. */
   minorSkills?: string[];
+  /**
+   * Musician/Live Entertainment only — performer format (Band, DJ, ...).
+   * Kept out of `styles` (see categories.ts's performerType doc) since it's
+   * not an aesthetic match signal, but still needs to be searchable —
+   * checked alongside styles/skills below so "DJ" or "solo artist" still
+   * finds the right providers.
+   */
+  performerType?: string[];
   description: string | null;
   location: string | null;
   fullName: string | null;
@@ -113,6 +121,7 @@ export function scoreFreelancerMatch(
   const normSkills = (freelancer.skills || []).map((s) => s.toLowerCase());
   const normStyles = (freelancer.styles || []).map((s) => s.toLowerCase());
   const normMinorSkills = (freelancer.minorSkills || []).map((s) => s.toLowerCase());
+  const normPerformerType = (freelancer.performerType || []).map((s) => s.toLowerCase());
   const normLocation = (freelancer.location || '').toLowerCase();
   const normDescription = (freelancer.description || '').toLowerCase();
   const normName = (freelancer.fullName || '').toLowerCase();
@@ -149,7 +158,7 @@ export function scoreFreelancerMatch(
 
   for (const term of styleTerms) {
     const t = term.toLowerCase();
-    if (normStyles.includes(t) || normSkills.includes(t) || normTitle.includes(t)) score += 4;
+    if (normStyles.includes(t) || normSkills.includes(t) || normPerformerType.includes(t) || normTitle.includes(t)) score += 4;
   }
 
   for (const term of remainingTerms) {
@@ -157,6 +166,7 @@ export function scoreFreelancerMatch(
     if (
       normSkills.some((s) => s.includes(term)) ||
       normStyles.some((s) => s.includes(term)) ||
+      normPerformerType.some((s) => s.includes(term)) ||
       normDescription.includes(term) ||
       normTitle.includes(term) ||
       normName.includes(term)

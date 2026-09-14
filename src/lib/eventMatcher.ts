@@ -264,6 +264,12 @@ export interface EventMatcherCandidate {
   userId: string;
   freelancerProfileId: string;
   fullName: string;
+  // Aesthetic descriptors only — for Musician/Live Entertainment this is
+  // genre (Pop, Jazz, Rock, ...), never performer format (Band, DJ, ...).
+  // Performer format isn't an aesthetic match signal the way genre or
+  // visual style is, so it's deliberately not part of this candidate shape
+  // and never enters style-overlap scoring below (see categories.ts's
+  // performerType doc for where it actually lives).
   styles: string[];
   rating: number;
   totalReviews: number;

@@ -46,35 +46,11 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   paid: 'Paid in full',
 };
 
-const SERVICE_PRICING_TYPES = ['fixed', 'starting_from', 'custom_quote'] as const;
-
 interface FreelancerDashboardProps {
   onBack: () => void;
   section: DashboardSection;
   initialOpenRequestId?: string | undefined;
 }
-
-interface ServiceFormState {
-  name: string;
-  description: string;
-  starting_price: string;
-  pricing_type: (typeof SERVICE_PRICING_TYPES)[number];
-  duration: string;
-  included: string;
-  extras: string;
-  requirements: string;
-}
-
-const EMPTY_SERVICE_FORM: ServiceFormState = {
-  name: '',
-  description: '',
-  starting_price: '',
-  pricing_type: 'starting_from',
-  duration: '',
-  included: '',
-  extras: '',
-  requirements: '',
-};
 
 export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: FreelancerDashboardProps) {
   const navigate = useNavigate();
@@ -106,11 +82,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [newBlockedDate, setNewBlockedDate] = useState('');
   const [newBlockedReason, setNewBlockedReason] = useState('');
   const [isSavingBlockedDate, setIsSavingBlockedDate] = useState(false);
-  const [services, setServices] = useState<any[]>([]);
-  const [isServiceFormOpen, setIsServiceFormOpen] = useState(false);
-  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
-  const [serviceForm, setServiceForm] = useState<ServiceFormState>(EMPTY_SERVICE_FORM);
-  const [isSavingService, setIsSavingService] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [replyDraftByReviewId, setReplyDraftByReviewId] = useState<Record<string, string>>({});
   const [isSubmittingReplyForId, setIsSubmittingReplyForId] = useState<string | null>(null);
@@ -153,15 +124,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       setRequests(requestsResponse.data || []);
       setBookings(bookingsResponse.data || []);
 
-      const [blockedDatesResponse, servicesResponse, reviewsResponse] = await Promise.all([
+      const [blockedDatesResponse, reviewsResponse] = await Promise.all([
         DataService.getFreelancerBlockedDates(profileResponse.data.id),
-        DataService.getFreelancerServices(profileResponse.data.id),
         DataService.getFreelancerReviews(user.id),
       ]);
       if (!isMounted) return;
 
       setBlockedDates(blockedDatesResponse.data || []);
-      setServices(servicesResponse.data || []);
       setReviews(reviewsResponse.data || []);
       void loadTeamsData(user.id);
 
@@ -550,89 +519,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setBlockedDates((current) => current.filter((item) => item.id !== id));
   };
 
-  const openServiceForm = (service?: any) => {
-    if (service) {
-      setEditingServiceId(service.id);
-      setServiceForm({
-        name: service.name || '',
-        description: service.description || '',
-        starting_price: service.starting_price != null ? String(service.starting_price) : '',
-        pricing_type: service.pricing_type || 'starting_from',
-        duration: service.duration || '',
-        included: service.included || '',
-        extras: (service.extras || []).map((extra: any) => `${extra.label}:${extra.price}`).join(', '),
-        requirements: service.requirements || '',
-      });
-    } else {
-      setEditingServiceId(null);
-      setServiceForm(EMPTY_SERVICE_FORM);
-    }
-    setIsServiceFormOpen(true);
-  };
-
-  const parseExtras = (value: string) =>
-    value
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .map((entry) => {
-        const [label, price] = entry.split(':').map((part) => part.trim());
-        return { label: label || entry, price: Number(price || 0) };
-      });
-
-  const handleSaveService = async () => {
-    if (!freelancerProfile?.id || !serviceForm.name.trim()) {
-      setError('Give this service a name.');
-      return;
-    }
-
-    setError(null);
-    setIsSavingService(true);
-
-    const payload = {
-      freelancer_id: freelancerProfile.id,
-      name: serviceForm.name.trim(),
-      description: serviceForm.description.trim() || null,
-      starting_price: serviceForm.starting_price ? Number(serviceForm.starting_price) : null,
-      pricing_type: serviceForm.pricing_type,
-      duration: serviceForm.duration.trim() || null,
-      included: serviceForm.included.trim() || null,
-      extras: parseExtras(serviceForm.extras),
-      requirements: serviceForm.requirements.trim() || null,
-    };
-
-    const response = editingServiceId
-      ? await DataService.updateFreelancerService(editingServiceId, payload)
-      : await DataService.createFreelancerService(payload);
-
-    setIsSavingService(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to save service.');
-      return;
-    }
-
-    setServices((current) =>
-      editingServiceId
-        ? current.map((item) => (item.id === editingServiceId ? response.data : item))
-        : [...current, response.data]
-    );
-    setIsServiceFormOpen(false);
-    setEditingServiceId(null);
-    setServiceForm(EMPTY_SERVICE_FORM);
-    setSuccess('Service saved.');
-  };
-
-  const handleDeleteService = async (id: string) => {
-    setError(null);
-    const response = await DataService.deleteFreelancerService(id);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to delete service.');
-      return;
-    }
-    setServices((current) => current.filter((item) => item.id !== id));
-  };
-
   const handleSubmitReviewReply = async (reviewId: string) => {
     const reply = (replyDraftByReviewId[reviewId] || '').trim();
     if (!reply) {
@@ -685,7 +571,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     { id: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/freelancer-dashboard/analytics' },
     { id: 'reviews', label: 'Reviews', icon: Star, path: '/freelancer-dashboard/reviews' },
     { id: 'earnings', label: 'Earnings', icon: DollarSign, path: '/freelancer-dashboard/earnings' },
-    { id: 'settings', label: 'Services', icon: Settings, path: '/freelancer-dashboard/settings' },
+    { id: 'settings', label: 'Settings', icon: Settings, path: '/freelancer-dashboard/settings' },
   ];
 
   const filteredRequests = useMemo(() => {
@@ -770,7 +656,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 md:text-3xl">Freelancer Dashboard</h1>
-              <p className="text-sm text-gray-600 md:text-base">Manage requests, calendar, services, and bookings</p>
+              <p className="text-sm text-gray-600 md:text-base">Manage requests, calendar, and bookings</p>
             </div>
             {freelancerProfile && (
               <button
@@ -1471,8 +1357,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         ) : (
           <div className="space-y-6 md:space-y-8">
             <div>
-              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Services</h2>
-              <p className="text-sm text-gray-600 md:text-base">Manage your bookable services and blocked availability. Category, skills, styles, rate, and working hours are edited from Edit Profile — see your current choices below.</p>
+              <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Settings</h2>
+              <p className="text-sm text-gray-600 md:text-base">Manage your blocked availability. Category, skills, styles, rate, and working hours are edited from Edit Profile — see your current choices below.</p>
             </div>
 
             {freelancerProfile && (
@@ -1594,141 +1480,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   Block Date
                 </button>
               </div>
-            </div>
-
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">My Services</h3>
-                  <p className="text-sm text-gray-600">Shown on your public profile so clients know what you offer and what it costs.</p>
-                </div>
-                <button
-                  onClick={() => openServiceForm()}
-                  className="flex flex-shrink-0 items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Service
-                </button>
-              </div>
-
-              {services.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  {services.map((service) => (
-                    <div key={service.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900">{service.name}</p>
-                        <p className="text-xs text-gray-600">
-                          {service.pricing_type === 'fixed' && service.starting_price != null
-                            ? formatCurrencyAmount(Number(service.starting_price), 'THB')
-                            : service.pricing_type === 'custom_quote'
-                            ? 'Custom quote'
-                            : service.starting_price != null
-                            ? `From ${formatCurrencyAmount(Number(service.starting_price), 'THB')}`
-                            : 'Price on request'}
-                          {service.duration ? ` · ${service.duration}` : ''}
-                        </p>
-                      </div>
-                      <div className="flex flex-shrink-0 gap-1">
-                        <button
-                          onClick={() => openServiceForm(service)}
-                          className="rounded-lg p-2 text-gray-500 hover:bg-gray-200 hover:text-gray-900"
-                          aria-label={`Edit ${service.name}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => void handleDeleteService(service.id)}
-                          className="rounded-lg p-2 text-gray-500 hover:bg-red-100 hover:text-red-600"
-                          aria-label={`Delete ${service.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {isServiceFormOpen && (
-                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
-                  <p className="text-sm font-semibold text-gray-900">{editingServiceId ? 'Edit service' : 'New service'}</p>
-                  <input
-                    value={serviceForm.name}
-                    onChange={(event) => setServiceForm((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="Service name, e.g. Wedding Photography"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <textarea
-                    value={serviceForm.description}
-                    onChange={(event) => setServiceForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="What this service includes"
-                    rows={2}
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <select
-                      value={serviceForm.pricing_type}
-                      onChange={(event) => setServiceForm((current) => ({ ...current, pricing_type: event.target.value as ServiceFormState['pricing_type'] }))}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                    >
-                      <option value="fixed">Fixed price</option>
-                      <option value="starting_from">Starting from</option>
-                      <option value="custom_quote">Custom quote</option>
-                    </select>
-                    <input
-                      type="number"
-                      min={0}
-                      value={serviceForm.starting_price}
-                      onChange={(event) => setServiceForm((current) => ({ ...current, starting_price: event.target.value }))}
-                      placeholder="e.g. 1500"
-                      disabled={serviceForm.pricing_type === 'custom_quote'}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-50"
-                    />
-                    <input
-                      value={serviceForm.duration}
-                      onChange={(event) => setServiceForm((current) => ({ ...current, duration: event.target.value }))}
-                      placeholder="How long it takes, e.g. 8 hours (not a price)"
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                    />
-                  </div>
-                  <input
-                    value={serviceForm.included}
-                    onChange={(event) => setServiceForm((current) => ({ ...current, included: event.target.value }))}
-                    placeholder="What's included, e.g. 300 edited photos, online gallery"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <input
-                    value={serviceForm.extras}
-                    onChange={(event) => setServiceForm((current) => ({ ...current, extras: event.target.value }))}
-                    placeholder="Optional extras, e.g. Additional hour:1000, Drone shots:1500"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <input
-                    value={serviceForm.requirements}
-                    onChange={(event) => setServiceForm((current) => ({ ...current, requirements: event.target.value }))}
-                    placeholder="Requirements for this service (optional)"
-                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => {
-                        setIsServiceFormOpen(false);
-                        setEditingServiceId(null);
-                      }}
-                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => void handleSaveService()}
-                      disabled={isSavingService}
-                      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
-                    >
-                      {isSavingService ? 'Saving...' : 'Save Service'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}

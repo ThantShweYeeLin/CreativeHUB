@@ -1,5 +1,5 @@
 import { TagSelector } from '../../../components/common/TagSelector';
-import { suggestedStylesForCategory } from '../../../lib/categories';
+import { MUSICIAN_CATEGORY_LABEL, suggestedPerformerTypesForCategory, suggestedStylesForCategory } from '../../../lib/categories';
 
 interface StepStylesProps {
   category: string | null;
@@ -8,6 +8,10 @@ interface StepStylesProps {
   minorCategory?: string | null;
   minorCategoryStyles?: string[];
   onMinorCategoryStylesChange?: (styles: string[]) => void;
+  performerType?: string[];
+  onPerformerTypeChange?: (performerType: string[]) => void;
+  minorCategoryPerformerType?: string[];
+  onMinorCategoryPerformerTypeChange?: (performerType: string[]) => void;
 }
 
 export function StepStyles({
@@ -17,6 +21,10 @@ export function StepStyles({
   minorCategory,
   minorCategoryStyles = [],
   onMinorCategoryStylesChange,
+  performerType = [],
+  onPerformerTypeChange,
+  minorCategoryPerformerType = [],
+  onMinorCategoryPerformerTypeChange,
 }: StepStylesProps) {
   return (
     <div className="space-y-6">
@@ -31,6 +39,19 @@ export function StepStyles({
         />
       </div>
 
+      {category === MUSICIAN_CATEGORY_LABEL && onPerformerTypeChange && (
+        <div>
+          <p className="mb-1 text-sm font-semibold text-gray-700">Performer type</p>
+          <p className="mb-4 text-xs text-gray-500">How you perform — separate from genre, so clients can filter by both.</p>
+          <TagSelector
+            suggestions={suggestedPerformerTypesForCategory(category)}
+            selected={performerType}
+            onChange={onPerformerTypeChange}
+            otherPlaceholder="e.g. String Quartet"
+          />
+        </div>
+      )}
+
       {minorCategory && onMinorCategoryStylesChange && (
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Styles for {minorCategory}</p>
@@ -40,6 +61,19 @@ export function StepStyles({
             selected={minorCategoryStyles}
             onChange={onMinorCategoryStylesChange}
             otherPlaceholder="e.g. Fantasy Fairy Makeup"
+          />
+        </div>
+      )}
+
+      {minorCategory === MUSICIAN_CATEGORY_LABEL && onMinorCategoryPerformerTypeChange && (
+        <div>
+          <p className="mb-1 text-sm font-semibold text-gray-700">Performer type for {minorCategory}</p>
+          <p className="mb-4 text-xs text-gray-500">How you perform in this minor category.</p>
+          <TagSelector
+            suggestions={suggestedPerformerTypesForCategory(minorCategory)}
+            selected={minorCategoryPerformerType}
+            onChange={onMinorCategoryPerformerTypeChange}
+            otherPlaceholder="e.g. String Quartet"
           />
         </div>
       )}

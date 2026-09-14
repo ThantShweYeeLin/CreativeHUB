@@ -84,6 +84,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   // freelancer_profiles.skills/styles are stored.
   const [minorCategorySkills, setMinorCategorySkills] = useState<string[]>([]);
   const [minorCategoryStyles, setMinorCategoryStyles] = useState<string[]>([]);
+  // Only populated (and only shown) when category/minorCategory is
+  // Musician/Live Entertainment — see categories.ts's performerType doc.
+  const [performerType, setPerformerType] = useState<string[]>([]);
+  const [minorCategoryPerformerType, setMinorCategoryPerformerType] = useState<string[]>([]);
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
 
   // (f) Social links — one URL per platform (matches the social_links
@@ -179,6 +183,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       setMinorCategory(null);
       setMinorCategorySkills([]);
       setMinorCategoryStyles([]);
+      setMinorCategoryPerformerType([]);
     }
     if (category && category !== nextCategory && (skills.length > 0 || styles.length > 0)) {
       setPendingCategoryChange(nextCategory);
@@ -194,6 +199,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setMinorCategory(nextMinorCategory);
     setMinorCategorySkills([]);
     setMinorCategoryStyles([]);
+    setMinorCategoryPerformerType([]);
   };
 
   const confirmCategoryChange = () => {
@@ -201,6 +207,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setCategory(pendingCategoryChange);
     setSkills([]);
     setStyles([]);
+    setPerformerType([]);
     setPendingCategoryChange(null);
   };
 
@@ -382,6 +389,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       // state (to fix cross-category selection highlighting), merged here.
       skills: Array.from(new Set([...skills, ...minorCategorySkills])),
       styles: Array.from(new Set([...styles, ...minorCategoryStyles])),
+      performer_type: Array.from(new Set([...performerType, ...minorCategoryPerformerType])),
       // Experience is now captured per-skill (see categoryExperienceLevel,
       // synced into freelancer_skills) instead of this one freelancer-wide
       // field, so onboarding no longer collects or sends it.
@@ -558,6 +566,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           onStylesChange={setStyles}
           minorCategoryStyles={minorCategoryStyles}
           onMinorCategoryStylesChange={setMinorCategoryStyles}
+          performerType={performerType}
+          onPerformerTypeChange={setPerformerType}
+          minorCategoryPerformerType={minorCategoryPerformerType}
+          onMinorCategoryPerformerTypeChange={setMinorCategoryPerformerType}
         />
       )}
 
