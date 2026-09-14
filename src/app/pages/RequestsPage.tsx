@@ -372,10 +372,18 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     return normalizedRequest?.scheduleMeta || { date: '', time: '' };
   };
 
+  // The price a counter offer starts from if the client doesn't touch that
+  // field at all — the request's current terms, so e.g. changing only the
+  // time doesn't force re-typing a price that isn't actually changing.
+  const getEffectivePrice = (normalizedRequest: any) =>
+    normalizedRequest?.status === 'countered' && normalizedRequest.counterPrice != null
+      ? Number(normalizedRequest.counterPrice)
+      : Number(normalizedRequest?.budget || 0);
+
   const openCounterForm = (normalizedRequest: any) => {
     const schedule = getEffectiveSchedule(normalizedRequest);
     setCounterFormOpenForId(normalizedRequest.id);
-    setCounterPriceInput('');
+    setCounterPriceInput(String(getEffectivePrice(normalizedRequest) || ''));
     setCounterMessageInput('');
     setCounterIncludesInput('');
     setCounterDateInput(schedule.date || '');
@@ -383,15 +391,26 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   };
 
   const handleSendCounterOffer = async (requestId: string) => {
-    const price = Number(counterPriceInput);
-    if (!counterPriceInput.trim() || !Number.isFinite(price) || price <= 0) {
+    const normalizedRequest = normalizedRequests.find((item) => item.id === requestId);
+
+    // Every field here is optional — whatever the client leaves untouched
+    // (or clears) just carries over the request's current terms, so e.g.
+    // countering only the time doesn't require re-entering a price.
+    const trimmedPrice = counterPriceInput.trim();
+    const price = trimmedPrice ? Number(trimmedPrice) : getEffectivePrice(normalizedRequest);
+    if (!Number.isFinite(price) || price <= 0) {
       setError('Enter a valid proposed price.');
       return;
     }
-    if (!counterDateInput || !counterTimeInput) {
+
+    const effectiveSchedule = getEffectiveSchedule(normalizedRequest);
+    const counterDate = counterDateInput || effectiveSchedule.date;
+    const counterTime = counterTimeInput || effectiveSchedule.time;
+    if (!counterDate || !counterTime) {
       setError('Choose a date and time for your counter offer.');
       return;
     }
+
     const rawRequest = requests.find((item) => item.id === requestId);
     const nextRound = Number(rawRequest?.counter_round || 1) + 1;
 
@@ -405,8 +424,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       counter_by: 'client',
       counter_round: nextRound,
       includes: counterIncludesInput.trim() || null,
-      counter_date: counterDateInput,
-      counter_time: counterTimeInput,
+      counter_date: counterDate,
+      counter_time: counterTime,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -717,24 +736,30 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
                         <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <input
-                            type="number"
-                            min={0}
-                            value={counterPriceInput}
-                            onChange={(event) => setCounterPriceInput(event.target.value)}
-                            placeholder="e.g. 6000"
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
-                          />
-                          <input
-                            value={counterMessageInput}
-                            onChange={(event) => setCounterMessageInput(event.target.value)}
-                            placeholder="Message (optional)"
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
-                          />
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">My proposed price (optional — keeps the current price if left blank)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={counterPriceInput}
+                              onChange={(event) => setCounterPriceInput(event.target.value)}
+                              placeholder="e.g. 6000"
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Message (optional)</label>
+                            <input
+                              value={counterMessageInput}
+                              onChange={(event) => setCounterMessageInput(event.target.value)}
+                              placeholder="Message (optional)"
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            />
+                          </div>
                         </div>
                         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date (optional — keeps the current date if left blank)</label>
                             <input
                               type="date"
                               value={counterDateInput}
@@ -743,7 +768,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time (optional — keeps the current time if left blank)</label>
                             <input
                               type="time"
                               value={counterTimeInput}

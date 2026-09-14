@@ -7,6 +7,7 @@ import {
   ChevronRight,
   ClipboardList,
   Clock,
+  CreditCard,
   DollarSign,
   Edit,
   Layers,
@@ -97,6 +98,11 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [counterIncludesInput, setCounterIncludesInput] = useState('');
   const [counterDateInput, setCounterDateInput] = useState('');
   const [counterTimeInput, setCounterTimeInput] = useState('');
+  const [isEditingBilling, setIsEditingBilling] = useState(false);
+  const [isSavingBilling, setIsSavingBilling] = useState(false);
+  const [billingBankName, setBillingBankName] = useState('');
+  const [billingAccountHolderName, setBillingAccountHolderName] = useState('');
+  const [billingAccountNumber, setBillingAccountNumber] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
@@ -275,6 +281,41 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setFreelancerProfile((current: any) => ({ ...current, is_available: nextValue }));
   };
 
+  // Keyed on the profile's id (not the whole object) so an unrelated update
+  // to freelancerProfile elsewhere (e.g. the availability toggle above)
+  // doesn't clobber whatever the freelancer is mid-way through typing here.
+  useEffect(() => {
+    if (!freelancerProfile) return;
+    setBillingBankName(freelancerProfile.billing_bank_name || '');
+    setBillingAccountHolderName(freelancerProfile.billing_account_holder_name || '');
+    setBillingAccountNumber(freelancerProfile.billing_account_number || '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freelancerProfile?.id]);
+
+  const handleSaveBilling = async () => {
+    if (!user?.id) return;
+
+    setIsSavingBilling(true);
+    setError(null);
+
+    const response = await DataService.updateFreelancerProfile(user.id, {
+      billing_bank_name: billingBankName.trim() || null,
+      billing_account_holder_name: billingAccountHolderName.trim() || null,
+      billing_account_number: billingAccountNumber.trim() || null,
+    } as any);
+
+    setIsSavingBilling(false);
+
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to save billing information.');
+      return;
+    }
+
+    setFreelancerProfile((current: any) => ({ ...current, ...response.data }));
+    setIsEditingBilling(false);
+    setSuccess('Billing information saved.');
+  };
+
   const stats = useMemo(() => {
     const pending = requests.filter((request) => request.status === 'pending').length;
     const accepted = requests.filter((request) => request.status === 'accepted').length;
@@ -367,10 +408,16 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     return extractScheduleMeta(request?.message, request?.description) || { date: '', time: '' };
   };
 
+  // The price a counter offer starts from if the freelancer doesn't touch
+  // that field at all — the request's current terms, so e.g. changing only
+  // the time doesn't force re-typing a price that isn't actually changing.
+  const getEffectivePrice = (request: any) =>
+    request?.status === 'countered' && request.counter_price != null ? Number(request.counter_price) : Number(request?.budget || 0);
+
   const openCounterForm = (request: any) => {
     const schedule = getEffectiveSchedule(request);
     setCounterFormOpenForId(request.id);
-    setCounterPriceInput('');
+    setCounterPriceInput(String(getEffectivePrice(request) || ''));
     setCounterMessageInput('');
     setCounterIncludesInput('');
     setCounterDateInput(schedule.date || '');
@@ -378,17 +425,26 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   };
 
   const handleSendCounterOffer = async (requestId: string) => {
-    const price = Number(counterPriceInput);
-    if (!counterPriceInput.trim() || !Number.isFinite(price) || price <= 0) {
+    const request = requests.find((item) => item.id === requestId);
+
+    // Every field here is optional — whatever the freelancer leaves
+    // untouched (or clears) just carries over the request's current terms,
+    // so e.g. countering only the time doesn't require re-entering a price.
+    const trimmedPrice = counterPriceInput.trim();
+    const price = trimmedPrice ? Number(trimmedPrice) : getEffectivePrice(request);
+    if (!Number.isFinite(price) || price <= 0) {
       setError('Enter a valid proposed price.');
       return;
     }
-    if (!counterDateInput || !counterTimeInput) {
+
+    const effectiveSchedule = getEffectiveSchedule(request);
+    const counterDate = counterDateInput || effectiveSchedule.date;
+    const counterTime = counterTimeInput || effectiveSchedule.time;
+    if (!counterDate || !counterTime) {
       setError('Choose a date and time for your counter offer.');
       return;
     }
 
-    const request = requests.find((item) => item.id === requestId);
     const nextRound = Number(request?.counter_round || 1) + 1;
     const includes = counterIncludesInput.trim() || null;
 
@@ -403,8 +459,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       counter_by: 'freelancer',
       counter_round: nextRound,
       includes,
-      counter_date: counterDateInput,
-      counter_time: counterTimeInput,
+      counter_date: counterDate,
+      counter_time: counterTime,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -425,8 +481,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               counter_by: 'freelancer',
               counter_round: nextRound,
               includes,
-              counter_date: counterDateInput,
-              counter_time: counterTimeInput,
+              counter_date: counterDate,
+              counter_time: counterTime,
             }
           : request
       )
@@ -1060,7 +1116,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">My proposed price</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">My proposed price (optional — keeps the current price if left blank)</label>
                             <input
                               type="number"
                               min={0}
@@ -1082,7 +1138,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         </div>
                         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date (optional — keeps the current date if left blank)</label>
                             <input
                               type="date"
                               value={counterDateInput}
@@ -1091,7 +1147,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time (optional — keeps the current time if left blank)</label>
                             <input
                               type="time"
                               value={counterTimeInput}
@@ -1545,6 +1601,91 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 </div>
               </div>
             )}
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Billing Information</h3>
+                  <p className="text-sm text-gray-600">Where deposits get paid out once a booking completes.</p>
+                </div>
+                {!isEditingBilling && (
+                  <button
+                    onClick={() => setIsEditingBilling(true)}
+                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    <Edit className="h-4 w-4" />
+                    {billingAccountNumber ? 'Edit' : 'Add'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingBilling ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Bank name</label>
+                    <input
+                      value={billingBankName}
+                      onChange={(event) => setBillingBankName(event.target.value)}
+                      placeholder="e.g. Kasikorn Bank"
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Account holder name</label>
+                    <input
+                      value={billingAccountHolderName}
+                      onChange={(event) => setBillingAccountHolderName(event.target.value)}
+                      placeholder="Name on the bank account"
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Account number</label>
+                    <input
+                      value={billingAccountNumber}
+                      onChange={(event) => setBillingAccountNumber(event.target.value)}
+                      placeholder="Bank account number"
+                      inputMode="numeric"
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        setIsEditingBilling(false);
+                        setBillingBankName(freelancerProfile?.billing_bank_name || '');
+                        setBillingAccountHolderName(freelancerProfile?.billing_account_holder_name || '');
+                        setBillingAccountNumber(freelancerProfile?.billing_account_number || '');
+                      }}
+                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => void handleSaveBilling()}
+                      disabled={isSavingBilling}
+                      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+                    >
+                      {isSavingBilling ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              ) : billingAccountNumber ? (
+                <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
+                  <CreditCard className="h-5 w-5 flex-shrink-0 text-gray-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{billingBankName || 'Bank account'}</p>
+                    <p className="text-xs text-gray-600">
+                      {billingAccountHolderName ? `${billingAccountHolderName} · ` : ''}•••• {billingAccountNumber.slice(-4)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Add your bank details so you can get paid — you won't be able to receive deposits until this is set.
+                </p>
+              )}
+            </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
               <h3 className="mb-1 text-lg font-bold text-gray-900">Blocked Dates</h3>
