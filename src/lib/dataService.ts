@@ -1,6 +1,6 @@
 import { hasSupabaseConfig, supabase } from './supabase';
 import type { Database } from './supabase';
-import type { Gender, Json } from './database.types';
+import type { Gender, Json, PostShareMethod } from './database.types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   appendGroupRequestMeta,
@@ -2954,7 +2954,7 @@ export class DataService {
 
     let query = supabase
       .from('notifications')
-      .select('*, actor:actor_id(id, full_name, avatar_url, gender)')
+      .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -2964,30 +2964,26 @@ export class DataService {
     }
 
     const { data, error } = await query;
-    if (!error) {
-      return { data, error: null };
-    }
-
-    const message = String((error as any)?.message || '').toLowerCase();
-    const missingActorColumn = message.includes('actor_id') && (message.includes('does not exist') || message.includes('schema cache'));
-
-    if (!missingActorColumn) {
+    if (error || !data) {
       return { data: null, error };
     }
 
-    let fallbackQuery = supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (unreadOnly) {
-      fallbackQuery = fallbackQuery.eq('read', false);
+    // notifications.actor_id references auth.users(id) (see
+    // fix_notifications_actor_fk.sql — repointed there for data-integrity
+    // reasons, since a plain client/freelancer with no public.profiles row
+    // couldn't otherwise be referenced). PostgREST can't embed across that
+    // boundary — auth isn't part of its exposed API schema, so
+    // `actor:actor_id(...)` always fails with "could not find a
+    // relationship" — so actor profiles are fetched separately from
+    // public.users instead, which shares the same id and is embeddable.
+    const actorIds = Array.from(new Set(data.map((n: any) => n.actor_id).filter(Boolean)));
+    let actorsById: Record<string, any> = {};
+    if (actorIds.length > 0) {
+      const actorsResponse = await supabase.from('users').select('id, full_name, avatar_url, gender').in('id', actorIds);
+      actorsById = Object.fromEntries((actorsResponse.data || []).map((u: any) => [u.id, u]));
     }
 
-    const fallback = await fallbackQuery;
-    return { data: fallback.data || [], error: fallback.error };
+    return { data: data.map((n: any) => ({ ...n, actor: n.actor_id ? actorsById[n.actor_id] || null : null })), error: null };
   }
 
   static async markNotificationAsRead(notificationId: string) {
@@ -4014,6 +4010,30 @@ export class DataService {
     return { data: enriched, error: null };
   }
 
+  // Single-post fetch for the public /post/:postId page. Relies on the
+  // same "Client posts are viewable by everyone" RLS policy (is_published
+  // = true, and not authored by someone the viewer has blocked) that
+  // already permits anonymous reads — no separate "public" query path or
+  // service-role access needed. A post that's unpublished, deleted, or
+  // whose author has blocked the viewer simply comes back as no rows,
+  // which the caller treats as "not available" without distinguishing why
+  // (never leaks *which* reason applies to an unauthorized viewer).
+  static async getClientPostById(postId: string, viewerUserId?: string) {
+    const { data, error } = await supabase
+      .from('client_posts')
+      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location, role)')
+      .eq('id', postId)
+      .eq('is_published', true)
+      .maybeSingle();
+
+    if (error || !data) {
+      return { data: null, error };
+    }
+
+    const enriched = await this.enrichClientPostsWithEngagement([data], viewerUserId);
+    return { data: enriched[0] || null, error: null };
+  }
+
   static async getClientPostsByClientId(clientId: string, limit = 20, viewerUserId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
@@ -4231,7 +4251,7 @@ export class DataService {
     return { saved: true, error: null };
   }
 
-  static async recordClientPostShare(userId: string, postId: string) {
+  static async recordClientPostShare(userId: string, postId: string, shareMethod?: PostShareMethod) {
     const relationMissing = (error: any) => {
       const message = String(error?.message || '').toLowerCase();
       return message.includes('does not exist') || message.includes('schema cache');
@@ -4239,7 +4259,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('client_post_shares')
-      .insert({ user_id: userId, post_id: postId })
+      .insert({ user_id: userId, post_id: postId, ...(shareMethod ? { share_method: shareMethod } : {}) } as any)
       .select()
       .single();
 

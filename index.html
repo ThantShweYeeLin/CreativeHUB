@@ -4,6 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CreativeHUB</title>
+    <!--
+      Generic, non-per-post fallback. This is a static Vite SPA (see
+      vercel.json — a plain catch-all rewrite to index.html, no SSR), and a
+      social crawler fetching a URL gets exactly this file's markup
+      regardless of the path — it never executes the React app, so no
+      client-side Helmet-style tag injection can ever change what a
+      crawler sees. A best-effort per-post override exists separately at
+      api/post/[postId].js (see that file's own comments for what it does
+      and its real, unverified-in-production status); this block is what
+      every other page, and any crawler that bypasses that function, falls
+      back to.
+    -->
+    <meta property="og:site_name" content="CreativeHUB" />
+    <meta property="og:title" content="CreativeHUB" />
+    <meta property="og:description" content="Discover and book creative freelancers on CreativeHUB." />
+    <meta property="og:image" content="/creativehub-social-preview.png" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="CreativeHUB" />
+    <meta name="twitter:description" content="Discover and book creative freelancers on CreativeHUB." />
+    <meta name="twitter:image" content="/creativehub-social-preview.png" />
   </head>
   <body>
     <div id="root"></div>
