@@ -19,6 +19,7 @@ import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
+import { LegalContentModal } from '../../components/LegalContentModal';
 
 type Role = 'freelancer' | 'client';
 
@@ -116,6 +117,7 @@ export function SettingsPage() {
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
   const [showTicketModal, setShowTicketModal] = useState(false);
+  const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
   const [ticketCategory, setTicketCategory] = useState<'technical' | 'payment' | 'account' | 'booking' | 'suggestion' | 'other'>('technical');
   const [ticketDescription, setTicketDescription] = useState('');
   const [ticketFile, setTicketFile] = useState<File | null>(null);
@@ -659,8 +661,8 @@ export function SettingsPage() {
               <h2 className="text-lg font-bold">Terms & Support</h2>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
-              <a href="/privacy" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Privacy Policy</a>
-              <a href="/terms" target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Terms of Service</a>
+              <button type="button" onClick={() => setLegalModalTab('privacy')} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Privacy Policy</button>
+              <button type="button" onClick={() => setLegalModalTab('terms')} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Terms of Service</button>
               <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">FAQ</a>
               <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Contact Support</a>
               <button
@@ -681,6 +683,8 @@ export function SettingsPage() {
           </div>
         </div>
       </div>
+
+      {legalModalTab && <LegalContentModal initialTab={legalModalTab} onClose={() => setLegalModalTab(null)} />}
 
       {showTicketModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
