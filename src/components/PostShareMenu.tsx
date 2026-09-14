@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link2, Share2 } from 'lucide-react';
 import {
   copyPostLink,
@@ -44,6 +45,13 @@ export function PostShareMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  // The menu is rendered in a portal (see below) so it can never be clipped
+  // by a post card's own `overflow-hidden`, or sit underneath a later post
+  // card in the feed — it needs its own viewport-relative position instead
+  // of the usual "absolute, relative to the trigger" popover positioning.
+  const [menuPosition, setMenuPosition] = useState<{ top?: number; bottom?: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -54,18 +62,54 @@ export function PostShareMenu({
       }
     };
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
+    // A scrolling feed would otherwise leave this fixed-position menu
+    // stranded away from the button it came from — closing on scroll is
+    // simpler and more predictable than continuously re-tracking position.
+    const handleScroll = () => setIsOpen(false);
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
     };
   }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !triggerRef.current) {
+      return;
+    }
+
+    const rect = triggerRef.current.getBoundingClientRect();
+    const menuWidth = 256; // w-64
+    const estimatedMenuHeight = 340;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let left = align === 'right' ? rect.right - menuWidth : rect.left;
+    left = Math.min(Math.max(left, 8), viewportWidth - menuWidth - 8);
+
+    const spaceBelow = viewportHeight - rect.bottom;
+    if (spaceBelow < estimatedMenuHeight && rect.top > estimatedMenuHeight) {
+      // Not enough room below the trigger — anchor to the bottom edge
+      // instead, so the menu opens upward and stays fully on screen.
+      setMenuPosition({ bottom: viewportHeight - rect.top + 8, left });
+    } else {
+      setMenuPosition({ top: rect.bottom + 8, left });
+    }
+  }, [isOpen, align]);
 
   const toggleOpen = (event: React.MouseEvent) => {
     // The share button often sits in the same action row as Like/Comment/
@@ -128,6 +172,7 @@ export function PostShareMenu({
   return (
     <div ref={containerRef} className="relative inline-block">
       <button
+        ref={triggerRef}
         type="button"
         onClick={toggleOpen}
         aria-label="Share post"
@@ -146,13 +191,13 @@ export function PostShareMenu({
         )}
       </button>
 
-      {isOpen && (
+      {isOpen && menuPosition && createPortal(
         <div
+          ref={menuRef}
           role="menu"
           aria-label="Share this post"
-          className={`absolute top-full z-50 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl ${
-            align === 'right' ? 'right-0' : 'left-0'
-          }`}
+          style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left }}
+          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl"
         >
           <p className="px-2 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Share this post</p>
 
@@ -236,7 +281,8 @@ export function PostShareMenu({
               {status.message}
             </p>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
