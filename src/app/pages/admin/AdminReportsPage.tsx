@@ -96,12 +96,17 @@ function UserReportsSection() {
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-bold text-gray-900">
-                  {r.reporter?.full_name || 'Someone'} reported {r.reported?.full_name || 'a user'}
+                  {r.reported_post_id
+                    ? `${r.reporter?.full_name || 'Someone'} reported a post by ${r.reported?.full_name || 'a user'}`
+                    : `${r.reporter?.full_name || 'Someone'} reported ${r.reported?.full_name || 'a user'}`}
                 </p>
                 <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
                   {REPORT_REASON_LABEL[r.reason] || r.reason}
                 </span>
               </div>
+              {r.reported_post_id && r.reported_post?.caption && (
+                <p className="mt-1 line-clamp-1 text-xs text-gray-600">"{r.reported_post.caption}"</p>
+              )}
               <p className="mt-1 text-xs text-gray-500">{new Date(r.created_at).toLocaleString()}</p>
             </button>
           ))}
@@ -118,7 +123,7 @@ function UserReportsSection() {
                 onClick={() => navigate(`/admin/reports/${r.id}`)}
                 className="block w-full rounded-lg bg-gray-50 px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100"
               >
-                {r.reported?.full_name || 'A user'} — {REPORT_REASON_LABEL[r.reason] || r.reason} → <span className="font-semibold">{r.decision}</span>
+                {r.reported_post_id ? `Post by ${r.reported?.full_name || 'a user'}` : r.reported?.full_name || 'A user'} — {REPORT_REASON_LABEL[r.reason] || r.reason} → <span className="font-semibold">{r.decision}</span>
               </button>
             ))}
           </div>

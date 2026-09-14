@@ -1746,10 +1746,36 @@ export class DataService {
     return { data, error };
   }
 
+  // Reuses user_reports (reported_user_id is set to the post's author) so
+  // this flows straight into the existing admin reports queue/resolution
+  // RPC — reported_post_id is only an extra pointer for the admin UI.
+  static async submitPostReport(input: {
+    reporterId: string;
+    postId: string;
+    postAuthorId: string;
+    reason: 'harassment' | 'scam_fraud' | 'fake_information' | 'inappropriate_content' | 'unprofessional_behavior' | 'other';
+    description: string;
+  }) {
+    const { data, error } = await (supabase as any)
+      .from('user_reports')
+      .insert({
+        reporter_id: input.reporterId,
+        reported_user_id: input.postAuthorId,
+        reported_post_id: input.postId,
+        reason: input.reason,
+        description: input.description,
+      })
+      .select()
+      .single();
+    return { data, error };
+  }
+
   static async getAllUserReportsForAdmin() {
     const { data, error } = await (supabase as any)
       .from('user_reports')
-      .select('*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email)')
+      .select(
+        '*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email), reported_post:reported_post_id(id, caption, image_url)'
+      )
       .order('created_at', { ascending: false })
       .limit(200);
     return { data: data || [], error };
@@ -1758,7 +1784,9 @@ export class DataService {
   static async getUserReportForAdmin(reportId: string) {
     const { data, error } = await (supabase as any)
       .from('user_reports')
-      .select('*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email)')
+      .select(
+        '*, reporter:reporter_id(id, full_name, email), reported:reported_user_id(id, full_name, email), reported_post:reported_post_id(id, caption, image_url)'
+      )
       .eq('id', reportId)
       .single();
     return { data, error };

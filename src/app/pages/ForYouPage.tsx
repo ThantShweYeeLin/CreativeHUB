@@ -4,6 +4,7 @@ import {
   Check,
   ChevronDown,
   FileText,
+  Flag,
   Globe2,
   Hash,
   ImagePlus,
@@ -950,6 +951,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isSendingShare, setIsSendingShare] = useState(false);
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
+  const [reportingPost, setReportingPost] = useState<FeedPost | null>(null);
+  const [reportReason, setReportReason] = useState<'harassment' | 'scam_fraud' | 'fake_information' | 'inappropriate_content' | 'unprofessional_behavior' | 'other'>('inappropriate_content');
+  const [reportDescription, setReportDescription] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const userName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'Creative member');
   const userAvatar = user?.avatar_url || fallbackProfileImage;
@@ -1598,6 +1605,41 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     );
   };
 
+  const handleOpenReport = (post: FeedPost) => {
+    setReportingPost(post);
+    setReportReason('inappropriate_content');
+    setReportDescription('');
+    setReportError(null);
+    setReportSubmitted(false);
+  };
+
+  const handleSubmitPostReport = async () => {
+    if (!user?.id || !reportingPost || !reportDescription.trim()) {
+      setReportError('Describe what happened before submitting.');
+      return;
+    }
+
+    setIsSubmittingReport(true);
+    setReportError(null);
+
+    const response = await DataService.submitPostReport({
+      reporterId: user.id,
+      postId: reportingPost.id.replace(/^client-post-/, ''),
+      postAuthorId: reportingPost.authorId,
+      reason: reportReason,
+      description: reportDescription.trim(),
+    });
+
+    setIsSubmittingReport(false);
+
+    if (response.error) {
+      setReportError((response.error as any).message || 'Unable to submit report.');
+      return;
+    }
+
+    setReportSubmitted(true);
+  };
+
   // Share now opens directly from the post card/modal instead of behind an
   // intermediate "Send this post" sheet — the old flow buried Copy Link/
   // WhatsApp/Facebook/X two clicks deep. "Send in Messages" (the one thing
@@ -1621,21 +1663,44 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         }
       }}
       extraItems={(close) => (
-        <button
-          type="button"
-          role="menuitem"
-          onClick={(event) => {
-            event.stopPropagation();
-            close();
-            void handleShare(post.id);
-          }}
-          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
-        >
-          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-700 text-white">
-            <Send className="h-4 w-4" />
-          </span>
-          Send in Messages
-        </button>
+        <>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => {
+              event.stopPropagation();
+              close();
+              void handleShare(post.id);
+            }}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+          >
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-700 text-white">
+              <Send className="h-4 w-4" />
+            </span>
+            Send in Messages
+          </button>
+
+          {/* Reporting only makes sense for a real, stored post — not the
+              freelancer-portfolio/demo cards synthesized elsewhere in this
+              feed — and never on the viewer's own post. */}
+          {post.isClientPost && post.authorId !== user?.id && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation();
+                close();
+                handleOpenReport(post);
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+            >
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <Flag className="h-4 w-4" />
+              </span>
+              Report Post
+            </button>
+          )}
+        </>
       )}
     >
       {variant === 'card' ? (
@@ -2158,6 +2223,62 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 {isSendingShare ? 'Sending...' : 'Send to selected users'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {reportingPost && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            {reportSubmitted ? (
+              <>
+                <h3 className="mb-2 text-lg font-bold text-gray-900">Report submitted</h3>
+                <p className="mb-4 text-sm text-gray-600">Thanks — our team will review this post.</p>
+                <button
+                  onClick={() => setReportingPost(null)}
+                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-gray-900">Report post</h3>
+                  <button onClick={() => setReportingPost(null)} className="text-gray-400 hover:text-gray-900">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                {reportError && <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{reportError}</p>}
+                <label className="mb-1 block text-xs font-semibold text-gray-600">Reason</label>
+                <select
+                  value={reportReason}
+                  onChange={(e) => setReportReason(e.target.value as any)}
+                  className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                >
+                  <option value="inappropriate_content">Inappropriate content</option>
+                  <option value="harassment">Harassment</option>
+                  <option value="scam_fraud">Scam / Fraud</option>
+                  <option value="fake_information">Fake information</option>
+                  <option value="unprofessional_behavior">Unprofessional behavior</option>
+                  <option value="other">Other</option>
+                </select>
+                <label className="mb-1 block text-xs font-semibold text-gray-600">What's wrong with this post?</label>
+                <textarea
+                  value={reportDescription}
+                  onChange={(e) => setReportDescription(e.target.value)}
+                  placeholder="Describe the issue in detail..."
+                  className="mb-4 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                />
+                <button
+                  onClick={() => void handleSubmitPostReport()}
+                  disabled={isSubmittingReport}
+                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                >
+                  {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}

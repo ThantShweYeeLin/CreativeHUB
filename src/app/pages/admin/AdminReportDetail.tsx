@@ -69,13 +69,31 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <button onClick={() => navigate(`/admin/users/${report.reported_user_id}`)} className="font-bold text-gray-900 hover:underline text-left">
-          {report.reporter?.full_name || 'Someone'} reported {report.reported?.full_name || 'a user'}
+          {report.reported_post_id
+            ? `${report.reporter?.full_name || 'Someone'} reported a post by ${report.reported?.full_name || 'a user'}`
+            : `${report.reporter?.full_name || 'Someone'} reported ${report.reported?.full_name || 'a user'}`}
         </button>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${report.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'}`}>
           {REPORT_REASON_LABEL[report.reason] || report.reason}
         </span>
       </div>
       <p className="text-xs text-gray-500 mb-2">{new Date(report.created_at).toLocaleString()} · {report.status}</p>
+      {report.reported_post_id && (
+        <a
+          href={`/post/${report.reported_post_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-3 flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm hover:bg-gray-100"
+        >
+          {report.reported_post?.image_url && !String(report.reported_post.image_url).startsWith('blob:') && (
+            <img src={report.reported_post.image_url} alt="Reported post" className="h-12 w-12 flex-shrink-0 rounded-lg object-cover" />
+          )}
+          <div className="min-w-0">
+            <p className="font-semibold text-gray-900 underline">View reported post ↗</p>
+            {report.reported_post?.caption && <p className="truncate text-xs text-gray-600">{report.reported_post.caption}</p>}
+          </div>
+        </a>
+      )}
       {report.description && <p className="mb-3 text-sm text-gray-700">{report.description}</p>}
       {(report.evidence_photo_paths || []).length > 0 && (
         <div className="mb-3 grid grid-cols-4 gap-2 max-w-md">
