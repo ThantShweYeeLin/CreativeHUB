@@ -41,6 +41,7 @@ const SavedPostsPage = lazy(() => import('./pages/SavedPostsPage').then((m) => (
 const MessagesPage = lazy(() => import('./pages/MessagesPage').then((m) => ({ default: m.MessagesPage })));
 const ForYouPage = lazy(() => import('./pages/ForYouPage').then((m) => ({ default: m.ForYouPage })));
 const ExplorePage = lazy(() => import('./pages/ExplorePage').then((m) => ({ default: m.ExplorePage })));
+const PublicPostPage = lazy(() => import('./pages/PublicPostPage').then((m) => ({ default: m.PublicPostPage })));
 const ClientOnboardingPage = lazy(() => import('./pages/ClientOnboardingPage').then((m) => ({ default: m.ClientOnboardingPage })));
 const AdminOverviewPage = lazy(() => import('./pages/admin/AdminOverviewPage').then((m) => ({ default: m.AdminOverviewPage })));
 const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
@@ -110,6 +111,11 @@ export default function App() {
     <Routes>
       {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      {/* A shared post must open for a logged-out visitor too, so this is
+          unconditional like reset-password above — never nested inside the
+          isAuthenticated/!isAuthenticated blocks below, otherwise the
+          logged-out block's own catch-all (`*` -> /signup) would swallow it. */}
+      <Route path="/post/:postId" element={<PublicPostPage />} />
       {/* Public Routes */}
       {!isAuthenticated && (
         <>

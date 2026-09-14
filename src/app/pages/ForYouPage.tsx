@@ -26,7 +26,8 @@ import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import type { Gender } from '../../lib/database.types';
+import type { Gender, PostShareMethod } from '../../lib/database.types';
+import { PostShareMenu } from '../../components/PostShareMenu';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
@@ -947,7 +948,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isLoadingMutualUsers, setIsLoadingMutualUsers] = useState(false);
   const [isSendingShare, setIsSendingShare] = useState(false);
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
-  const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const [composer, setComposer] = useState<ComposerState>(emptyComposerState);
 
   const userName = user?.fullName || (user?.email ? user.email.split('@')[0] : 'Creative member');
@@ -1532,23 +1532,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       return;
     }
 
-    if (post.isClientPost) {
-      const clientPostId = postId.replace(/^client-post-/, '');
-      const shareRecord = await DataService.recordClientPostShare(user.id, clientPostId);
-      if (shareRecord.error) {
-        const message = String((shareRecord.error as any).message || '').toLowerCase();
-        if (!message.includes('row-level security policy')) {
-          setError((shareRecord.error as any).message || 'Unable to share this post.');
-        }
-      }
-    }
-
     setSharingPost(post);
     setIsShareSheetOpen(true);
     setIsLoadingMutualUsers(true);
     setSelectedShareRecipientIds([]);
     setShareStatusMessage(null);
-    setCopyLinkError(null);
 
     const response = await DataService.getMutualUsers(user.id);
     if (response.error) {
@@ -1559,51 +1547,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     }
 
     setIsLoadingMutualUsers(false);
-  };
-
-  const copyShareLink = async () => {
-    if (!sharingPost) {
-      return;
-    }
-
-    // Copy just the URL, not the caption too — appending the caption after a
-    // newline meant pasting it anywhere that collapses whitespace (an address
-    // bar, a single-line field) turned it into one garbled, non-URL string.
-    const text = `${window.location.origin}/profile/${sharingPost.authorId}`;
-    setCopyLinkError(null);
-
-    try {
-      if (!navigator.clipboard || !window.isSecureContext) {
-        throw new Error('Clipboard API unavailable');
-      }
-      await navigator.clipboard.writeText(text);
-      setShareStatusMessage('Post link copied to clipboard.');
-      return;
-    } catch {
-      // Fall through to the legacy fallback below (older browsers, or a
-      // non-HTTPS/non-localhost origin where the async Clipboard API doesn't exist).
-    }
-
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.style.position = 'fixed';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    let fallbackWorked = false;
-    try {
-      fallbackWorked = document.execCommand('copy');
-    } catch {
-      fallbackWorked = false;
-    }
-    document.body.removeChild(textarea);
-
-    if (fallbackWorked) {
-      setShareStatusMessage('Post link copied to clipboard.');
-    } else {
-      setCopyLinkError('Could not copy automatically — select and copy the link below.');
-    }
   };
 
   const sendShareToMutuals = async () => {
@@ -2072,14 +2015,22 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
             </div>
 
             <div className="mt-5 grid gap-3 md:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void copyShareLink()}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
+              <PostShareMenu
+                postId={sharingPost.id.replace(/^client-post-/, '')}
+                title={`CreativeHUB post by @${sharingPost.username}`}
+                description={sharingPost.caption}
+                align="left"
+                triggerClassName="flex w-full flex-col items-start rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                onShared={(method: PostShareMethod) => {
+                  if (user?.id && sharingPost.isClientPost) {
+                    void DataService.recordClientPostShare(user.id, sharingPost.id.replace(/^client-post-/, ''), method);
+                  }
+                  setShareStatusMessage('Post shared!');
+                }}
               >
-                <p className="text-sm font-semibold text-gray-900">Copy link</p>
-                <p className="mt-1 text-xs text-gray-500">Copies the post link so you can paste it anywhere.</p>
-              </button>
+                <p className="text-sm font-semibold text-gray-900">Share externally</p>
+                <p className="mt-1 text-xs text-gray-500">Copy link, WhatsApp, Facebook, X, or your device's share sheet.</p>
+              </PostShareMenu>
 
               <button
                 type="button"
@@ -2100,17 +2051,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
             {shareStatusMessage && (
               <p className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-700">{shareStatusMessage}</p>
-            )}
-            {copyLinkError && (
-              <div className="mt-3 space-y-2">
-                <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600">{copyLinkError}</p>
-                <input
-                  readOnly
-                  value={`${window.location.origin}/profile/${sharingPost.authorId}`}
-                  onFocus={(event) => event.target.select()}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700"
-                />
-              </div>
             )}
 
             <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">

@@ -2,5 +2,8 @@
   "framework": "vite",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/post/:postId", "destination": "/api/post/:postId" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

@@ -14,6 +14,7 @@ export type CreativeProfession =
 
 export type PostMediaType = 'image' | 'video';
 export type ShareTarget = 'creativehub' | 'copy_link' | 'whatsapp' | 'telegram' | 'facebook' | 'x';
+export type PostShareMethod = 'copy_link' | 'native' | 'whatsapp' | 'facebook' | 'x';
 export type Gender = 'male' | 'female' | 'lgbtq_plus' | 'prefer_not_to_say';
 
 type Row<T> = T;
@@ -136,6 +137,30 @@ export interface Database {
         }>;
         Insert: Insert<Database['public']['Tables']['posts']['Row']>;
         Update: Update<Database['public']['Tables']['posts']['Row']>;
+      };
+      client_posts: {
+        Row: Row<{
+          id: string;
+          client_id: string;
+          caption: string;
+          image_url: string | null;
+          is_published: boolean;
+          created_at: string;
+          updated_at: string;
+        }>;
+        Insert: Insert<Database['public']['Tables']['client_posts']['Row']>;
+        Update: Update<Database['public']['Tables']['client_posts']['Row']>;
+      };
+      client_post_shares: {
+        Row: Row<{
+          id: string;
+          post_id: string;
+          user_id: string;
+          share_method: PostShareMethod | null;
+          created_at: string;
+        }>;
+        Insert: Insert<Database['public']['Tables']['client_post_shares']['Row']>;
+        Update: Update<Database['public']['Tables']['client_post_shares']['Row']>;
       };
       post_media: {
         Row: Row<{
