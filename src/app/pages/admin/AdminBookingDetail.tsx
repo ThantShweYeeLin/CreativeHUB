@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { AlertCircle, Ban, CheckCircle } from 'lucide-react';
+import { Ban, CheckCircle } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
@@ -185,18 +185,6 @@ export function AdminBookingDetail({
       return;
     }
     setDecisionReason('');
-    await onResolved();
-  };
-
-  const handleRequestMoreEvidence = async () => {
-    setIsPending(true);
-    setActionError(null);
-    const response = await DataService.adminRequestMoreEvidence(booking.id);
-    setIsPending(false);
-    if (response.error) {
-      setActionError((response.error as any).message || 'Unable to request more evidence.');
-      return;
-    }
     await onResolved();
   };
 
@@ -419,13 +407,6 @@ export function AdminBookingDetail({
                   className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
                 >
                   <CheckCircle className="h-4 w-4" /> Release Deposit to Freelancer
-                </button>
-                <button
-                  disabled={isPending}
-                  onClick={() => void handleRequestMoreEvidence()}
-                  className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
-                >
-                  <AlertCircle className="h-4 w-4" /> Request More Evidence
                 </button>
               </div>
               <p className="mt-2 text-xs text-gray-500">This action will be recorded in the administrative audit log.</p>

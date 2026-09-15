@@ -655,6 +655,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       deposit_secured: { label: 'Deposit secured', color: 'bg-blue-100 text-blue-700 border-blue-200' },
       awaiting_client_confirmation: { label: 'Awaiting client confirmation', color: 'bg-blue-100 text-blue-700 border-blue-200' },
       disputed: { label: 'Disputed — action needed', color: 'bg-amber-100 text-amber-700 border-amber-200' },
+      under_admin_review: { label: 'Deposit Frozen', color: 'bg-amber-100 text-amber-700 border-amber-200' },
       released: { label: 'Paid in full', color: 'bg-green-100 text-green-700 border-green-200' },
       refunded: { label: 'Refunded', color: 'bg-red-100 text-red-700 border-red-200' },
       annulled: { label: 'Booking Deleted', color: 'bg-red-100 text-red-700 border-red-200' },
@@ -1334,7 +1335,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 {monthFilteredBookings
                   .filter((booking) => booking.payment_status !== 'unpaid')
                   .map((booking) => {
-                  const isDisputed = booking.dispute_status === 'open';
+                  const isDisputed = booking.dispute_status === 'open' || booking.dispute_status === 'under_admin_review';
                   const isRefunded = booking.payment_status === 'refunded';
                   // unpaid -> deposit_paid is a client-only action (paying money in) —
                   // a freelancer can only advance deposit_paid -> paid from here.
@@ -1363,7 +1364,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             onClick={() => navigate(`/freelancer-booking/${booking.id}`)}
                             className="flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
                           >
-                            Disputed — action needed
+                            Deposit Frozen
                           </button>
                         ) : isRefunded ? (
                           <span className="flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
@@ -1434,7 +1435,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Category</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Specialty</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900">{freelancerProfile.title || 'Not set'}</p>
                   </div>
                   <div>

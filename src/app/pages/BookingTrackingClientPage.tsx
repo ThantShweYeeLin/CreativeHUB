@@ -507,7 +507,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               <Shield className="w-6 h-6 text-gray-900" />
               <h2 className="font-bold text-lg text-gray-900">Report Submitted</h2>
             </div>
-            <p className="text-sm text-gray-600">Please wait for a response from the admins.</p>
+            <p className="text-sm text-gray-600">Your report has been submitted. Our team will review it and follow up within 5 business days.</p>
           </div>
         )}
 

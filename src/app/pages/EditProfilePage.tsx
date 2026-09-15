@@ -398,7 +398,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     if (!user?.id) return;
 
     if (isFreelancer && !isFreelancerCategory(freelancerForm.title)) {
-      setError('Select a freelancer category before saving.');
+      setError('Select a specialty before saving.');
       return;
     }
     if (isFreelancer && freelancerForm.skills.length === 0) {
@@ -678,19 +678,19 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
               <h2 className="mb-4 text-lg font-bold text-gray-900 md:text-xl">Freelancer Profile</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Specialty</label>
                   <select
                     value={freelancerForm.title}
                     onChange={(event) => applyCategoryChange(event.target.value)}
                     className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   >
-                    <option value="" disabled>Select a category</option>
+                    <option value="" disabled>Select a specialty</option>
                     {FREELANCER_CATEGORIES.map((category) => (
                       <option key={category.id} value={category.label}>{category.label}</option>
                     ))}
                   </select>
                   <p className="mt-1.5 text-xs text-gray-500">
-                    Your category determines which clients find you in Explore, search, and the AI Matcher.
+                    Your specialty determines which clients find you in Explore, search, and the AI Matcher.
                   </p>
                   {freelancerForm.title && (
                     <div className="mt-3">
@@ -705,13 +705,13 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   {pendingCategoryChange && (
                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                       <p className="text-sm font-semibold text-amber-900">
-                        Changing your freelancer category will require you to update your Skills and Styles.
+                        Changing your specialty will require you to update your Skills and Styles.
                       </p>
                       <p className="mt-1 text-xs text-amber-700">
                         Your current Skills and Styles don't apply to {pendingCategoryChange} and will be cleared.
                       </p>
                       <p className="mt-2 text-xs text-amber-700">
-                        Would you like to keep {freelancerForm.title || 'your current category'} as an additional skill instead of losing it?
+                        Would you like to keep {freelancerForm.title || 'your current specialty'} as an additional skill instead of losing it?
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
@@ -938,7 +938,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     value={workingForm.requirements}
                     onChange={(event) => setWorkingForm((current) => ({ ...current, requirements: event.target.value }))}
                     rows={3}
-                    placeholder="Minimum 3 days advance booking. 30% deposit required."
+                    placeholder="Minimum 3 days advance booking. 50% deposit required."
                     className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>

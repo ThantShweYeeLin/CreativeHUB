@@ -44,7 +44,7 @@ const isUsablePhotoUrl = (url: string | null | undefined): url is string => !!ur
 
 const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Profile', description: 'Tell clients who you are.' },
-  { title: 'Freelancer category', description: 'What service do you provide? You can add a minor category too.' },
+  { title: 'Specialty', description: "What's your specialty? You can add one you're also skilled in." },
   { title: 'Skills', description: 'What you can do.' },
   { title: 'Styles', description: 'What your work looks like.' },
   { title: 'Portfolio links', description: 'Show off your best work (optional — add more later).' },

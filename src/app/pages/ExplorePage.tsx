@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { Search, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
@@ -118,7 +118,28 @@ interface CarouselSectionProps {
   onToggleFavorite?: (id: string) => void;
 }
 
+// Module-level (not component state) so it survives ExplorePage unmounting
+// entirely when a user opens a profile — a plain useState/ref would reset
+// to 0 the moment this remounts on Back, losing exactly the scroll position
+// this exists to restore. Keyed by section title since each row's content
+// (and therefore its scrollable width) differs. Session-lifetime only, same
+// as everything else in React Router's in-memory history — a hard refresh
+// starting the carousels back at the left edge is expected, not a bug.
+const carouselScrollPositions = new Map<string, number>();
+
 function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: CarouselSectionProps) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const saved = carouselScrollPositions.get(title);
+    if (saved && scrollRef.current) {
+      scrollRef.current.scrollLeft = saved;
+    }
+    // Only ever restore once, right after this row's cards exist — not on
+    // every profiles/title change while the row stays mounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="mb-12 md:mb-16">
       <div className="flex items-center justify-between mb-4 md:mb-6">
@@ -130,7 +151,11 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
           <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 to-blue-500 explore-underline-glow" />
         </div>
       </div>
-      <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide">
+      <div
+        ref={scrollRef}
+        onScroll={(event) => carouselScrollPositions.set(title, event.currentTarget.scrollLeft)}
+        className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide"
+      >
         {profiles.map((profile, index) => (
           <ProfileCard
             key={profile.id || index}
@@ -182,8 +207,50 @@ export function ExplorePage() {
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>([]);
   const [minorSkillsByFreelancerId, setMinorSkillsByFreelancerId] = useState<Map<string, string[]>>(new Map());
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  // Both searchQuery and selectedCategory below are kept in the URL (not
+  // just component state) so the exact search a user was looking at
+  // survives visiting a freelancer's profile and hitting Back — otherwise
+  // that route unmounts this page and its plain useState would reset on
+  // remount, which is exactly the bug this was reported as.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQueryState] = useState(() => searchParams.get('q') || '');
+  const setSearchQuery = (value: string) => {
+    setSearchQueryState(value);
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (value) {
+          params.set('q', value);
+        } else {
+          params.delete('q');
+        }
+        return params;
+      },
+      { replace: true }
+    );
+  };
+  const [selectedCategory, setSelectedCategoryState] = useState(() => {
+    const fromUrl = searchParams.get('category');
+    return fromUrl && isFreelancerCategory(fromUrl) ? fromUrl : 'All';
+  });
+  const setSelectedCategory = (next: string | ((current: string) => string)) => {
+    setSelectedCategoryState((current) => {
+      const resolved = typeof next === 'function' ? (next as (c: string) => string)(current) : next;
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (resolved === 'All') {
+            params.delete('category');
+          } else {
+            params.set('category', resolved);
+          }
+          return params;
+        },
+        { replace: true }
+      );
+      return resolved;
+    });
+  };
   const [clientInterests, setClientInterests] = useState<string[]>([]);
   const [clientPreferences, setClientPreferences] = useState<string[]>([]);
   const [clientCoords, setClientCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -1060,7 +1127,7 @@ export function ExplorePage() {
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
-              <div className="font-semibold text-sm md:text-base text-gray-900">Event Matcher</div>
+              <div className="font-semibold text-sm md:text-base text-gray-900">Event Assistant</div>
               <div className="text-xs text-gray-500 hidden md:block">Plan your event, get matched</div>
             </div>
           </button>
