@@ -25,7 +25,7 @@ export function StepRequirements({
           value={requirements}
           onChange={(event) => onRequirementsChange(event.target.value)}
           rows={3}
-          placeholder="Minimum 3 days advance booking. 30% deposit required. Travel fee applies outside city limits."
+          placeholder="Minimum 3 days advance booking. 50% deposit required. Travel fee applies outside city limits."
           className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
         />
       </div>

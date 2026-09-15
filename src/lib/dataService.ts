@@ -2042,11 +2042,6 @@ export class DataService {
     return { data, error };
   }
 
-  static async adminRequestMoreEvidence(bookingId: string) {
-    const { data, error } = await (supabase as any).rpc('admin_request_more_evidence', { p_booking_id: bookingId });
-    return { data, error };
-  }
-
   // PAYMENT METHODS (simulated — only display info is ever stored, never
   // the full card number or CVC)
   static async getPaymentMethods(userId: string) {
@@ -2345,12 +2340,14 @@ export class DataService {
       evidence_photos: input.evidencePhotoPaths || [],
     });
 
+    // No actorId — this notification is deliberately anonymized on the
+    // freelancer's side (see NotificationsPanel.tsx's booking_disputed
+    // special-case), so it never names or shows the client who reported it.
     await this.notifyEvent({
       userId: (data as any).freelancer_id,
-      actorId: (data as any).client_id,
       type: 'booking_disputed',
-      title: 'Deposit frozen — a problem was reported',
-      message: 'The client reported a problem with this booking. The deposit is frozen while CreativeHUB support reviews it.',
+      title: 'Deposit Frozen',
+      message: 'Deposit frozen due to an issue.',
       relatedId: bookingId,
     });
 
@@ -3657,7 +3654,7 @@ export class DataService {
         actor_id: request.client_id,
         type: 'request',
         title: 'New booking request',
-        message: `${clientName}: A new booking request - ${request.project_name}`,
+        message: `${clientName} requested a booking for '${request.project_name}.'`,
         related_id: (data as any)?.id || null,
         post_id: null,
         comment_id: null,

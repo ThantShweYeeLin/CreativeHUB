@@ -70,7 +70,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       }
 
       if (type === 'request') {
-        return `${finalActorName}: A new booking request - ${projectName}.`;
+        return `${finalActorName} requested a booking for '${projectName}.'`;
       }
 
       if (type === 'message' || type === 'group_message') {
@@ -296,6 +296,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 'attendance_window_open',
                 'deposit_payment_required',
                 'booking_completion_submitted',
+                'attendance_remaining_balance',
               ].includes(String(row.type || ''))) {
                 const bookingResponse = await supabase
                   .from('bookings')

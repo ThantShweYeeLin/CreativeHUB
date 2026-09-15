@@ -352,7 +352,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       const budgetMeta: BudgetMeta = { currency, min: item.price, max: item.price };
       const description = appendLocationMeta(
         appendScheduleMeta(
-          appendBudgetMeta(`Matched by CreativeHUB's Event Matcher for a ${eventType}.`, budgetMeta),
+          appendBudgetMeta(`Matched by CreativeHUB's Event Assistant for a ${eventType}.`, budgetMeta),
           { date, time: categoryTimes[item.category] || eventTime }
         ),
         location.formattedAddress
@@ -403,7 +403,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Event Matcher</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Event Assistant</h1>
               <p className="text-sm text-gray-600">Plan your event and get matched with real providers within your budget.</p>
             </div>
           </div>

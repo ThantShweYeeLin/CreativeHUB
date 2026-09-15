@@ -34,7 +34,7 @@ export function StepSkills({
       {minorCategory && onMinorCategorySkillsChange && (
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Skills for {minorCategory}</p>
-          <p className="mb-4 text-xs text-gray-500">Your minor category — select what you can do here too.</p>
+          <p className="mb-4 text-xs text-gray-500">The specialty you're also skilled in — select what you can do here too.</p>
           <TagSelector
             suggestions={suggestedSkillsForCategory(minorCategory)}
             selected={minorCategorySkills}

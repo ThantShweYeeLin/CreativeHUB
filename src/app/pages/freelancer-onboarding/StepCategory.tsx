@@ -20,7 +20,7 @@ export function StepCategory({
 }: StepCategoryProps) {
   return (
     <div>
-      <p className="mb-3 text-sm font-semibold text-gray-700">What's your freelancer category?</p>
+      <p className="mb-3 text-sm font-semibold text-gray-700">What's your specialty?</p>
       <p className="mb-4 text-xs text-gray-500">Pick the one that best describes your services — this determines the Skills and Styles you'll choose next.</p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {FREELANCER_CATEGORIES.map((category) => (
@@ -51,7 +51,7 @@ export function StepCategory({
 
       {selectedCategory && (
         <div className="mt-6">
-          <p className="mb-1 text-sm font-semibold text-gray-700">Minor category (optional)</p>
+          <p className="mb-1 text-sm font-semibold text-gray-700">Also skilled in (optional)</p>
           <p className="mb-3 text-xs text-gray-500">
             Also provide services in a second area? We'll include its Skills and Styles as suggestions too.
           </p>

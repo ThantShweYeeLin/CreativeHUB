@@ -362,6 +362,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  const performerType: string[] = freelancerProfile?.performer_type || [];
   const studioName: string = freelancerProfile?.studio_name || '';
   const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
   const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
@@ -1165,10 +1166,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     badgeSize="md"
                   />
                   <div className="text-white">
-                    <h1 className="text-2xl font-bold md:text-3xl">
-                      {displayName}
-                      {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
-                    </h1>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="text-2xl font-bold md:text-3xl">
+                        {displayName}
+                        {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
+                      </h1>
+                      {performerType.map((type: string) => (
+                        <span key={type} className="rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold text-white md:text-sm">
+                          {type}
+                        </span>
+                      ))}
+                    </div>
                     <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
                   </div>
                 </div>
@@ -1288,10 +1296,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   badgeSize="md"
                 />
               </div>
-              <h1 className="text-xl font-bold text-gray-900">
-                {displayName}
-                {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-bold text-gray-900">
+                  {displayName}
+                  {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
+                </h1>
+                {performerType.map((type: string) => (
+                  <span key={type} className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-900">
+                    {type}
+                  </span>
+                ))}
+              </div>
               <p className="mt-1 text-sm text-gray-600">{title}</p>
 
               <div className="mt-4 flex flex-wrap gap-2">

@@ -1,4 +1,4 @@
-import { Bell, Check, MessageCircle, Heart, MessageSquare, Users, X as XIcon } from 'lucide-react';
+import { AlertCircle, Bell, Check, MessageCircle, Heart, MessageSquare, Users, X as XIcon } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
@@ -50,6 +50,8 @@ const getNotificationIcon = (type: string) => {
       return <Users className="w-4 h-4 text-green-600" />;
     case 'booking_cancelled':
       return <XIcon className="w-4 h-4 text-red-600" />;
+    case 'booking_disputed':
+      return <AlertCircle className="w-4 h-4 text-amber-600" />;
     case 'booking_completed':
       return <Check className="w-4 h-4 text-green-600" />;
     case 'review':
@@ -223,6 +225,7 @@ export function NotificationsPanel({
                       'booking_cancelled',
                       'booking_completed',
                       'booking_completion_submitted',
+                      'booking_disputed',
                     ].includes(notification.type)
                   ) {
                     onOpenBooking?.(notification);
@@ -234,25 +237,45 @@ export function NotificationsPanel({
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <Avatar
-                      src={notification.actorAvatar || DEFAULT_AVATAR_URL}
-                      alt={notification.actorName}
-                      gender={notification.actorGender}
-                      sizeClassName="w-12 h-12 ring-2 ring-white rounded-full"
-                      badgePosition="top-right"
-                    />
-                    {/* Notification Type Icon */}
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md">
+                  {/* Avatar — hidden for system notifications with no real
+                      actor to attribute to a person (e.g. a dispute report,
+                      which is deliberately anonymized on the freelancer's
+                      side; see openBookingDispute). */}
+                  {notification.type === 'booking_disputed' ? (
+                    <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-50 ring-2 ring-white">
                       {getNotificationIcon(notification.type)}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="relative flex-shrink-0">
+                      <Avatar
+                        src={notification.actorAvatar || DEFAULT_AVATAR_URL}
+                        alt={notification.actorName}
+                        gender={notification.actorGender}
+                        sizeClassName="w-12 h-12 ring-2 ring-white rounded-full"
+                        badgePosition="top-right"
+                      />
+                      {/* Notification Type Icon */}
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center shadow-md">
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900">
-                      <span className="font-bold">{notification.actorName || 'User'}</span>{' '}
+                      {/* These two are instructional, not informational — the
+                          recipient is the one being told to act (pay a
+                          deposit, check in), not the actor named in the
+                          message, so a bold name up front would read like a
+                          command directed AT that other person instead of a
+                          reminder TO the recipient. Their message text
+                          already spells out "Booking with [Name]: ..." on
+                          its own, so the separate bold prefix would just be
+                          a redundant repeat of that same name. */}
+                      {!['booking_disputed', 'deposit_payment_required', 'attendance_window_open'].includes(notification.type) && (
+                        <span className="font-bold">{notification.actorName || 'User'}</span>
+                      )}{' '}
                       <span className="text-gray-700">{normalizeNotificationText(notification)}</span>
                     </p>
                     <p className="text-xs text-gray-500 mt-1">{formatRelativeTime(notification.createdAt)}</p>

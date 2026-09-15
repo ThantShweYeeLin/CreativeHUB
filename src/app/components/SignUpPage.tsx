@@ -77,7 +77,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name.'); return; }
+    if (!firstName.trim()) { setError('Please enter your first name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
     if (!countryIsoCode) { setError('Please select your country.'); return; }
     if (!city || !city.trim()) { setError('Please select your city.'); return; }
@@ -352,7 +352,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name <span className="font-normal text-gray-400">(Optional)</span></label>
                   <input
                     type="text"
                     value={lastName}

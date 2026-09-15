@@ -4,10 +4,13 @@ import { extractScheduleMeta, addMinutesToTime, minutesBetween, combineBangkokDa
 import { DEPOSIT_DEADLINE_HOURS } from './bookingEscrow';
 
 const DEFAULT_BOOKING_DURATION_MINUTES = 120;
-// Matches the deposit percentage src/app/pages/bookingTracking/useBookingTracking.ts
-// has always computed client-side — persisted here now instead of only
-// ever derived on the fly, so it's a stable, auditable figure.
-const DEPOSIT_PERCENTAGE = 0.3;
+// The platform holds this share of the fee as an escrowed deposit; the rest
+// is settled directly between client and freelancer (see
+// src/app/pages/admin/AdminBookingDetail.tsx's note on that). Older bookings
+// created before this was persisted still fall back to 30% client-side
+// (src/app/pages/bookingTracking/useBookingTracking.ts) — that's the actual
+// rate those legacy rows were charged, not this current policy.
+const DEPOSIT_PERCENTAGE = 0.5;
 
 // Shared by both sides of a request/counter-offer negotiation
 // (FreelancerDashboard accepting a request or a client's counter, and
@@ -101,12 +104,22 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   // 'annulled' if the deposit isn't paid within DEPOSIT_DEADLINE_HOURS (see
   // reconcile_booking_escrow) — the client otherwise has no prompt telling
   // them that clock has started, so this fires once, right when it starts.
+  const freelancerResponse = await DataService.getUser(String(request.freelancer_id));
+  const freelancerName = freelancerResponse.data?.full_name || 'your freelancer';
+
   await DataService.createNotification({
     user_id: request.client_id,
     actor_id: request.freelancer_id,
     type: 'deposit_payment_required',
     title: 'Deposit payment required',
-    message: `Pay the deposit for "${request.project_name}" within ${DEPOSIT_DEADLINE_HOURS} hours to confirm your booking.`,
+    // Instructional, not informational — the freelancer isn't the one being
+    // told to pay, so their name can't be the sentence's grammatical
+    // subject the way NotificationsPanel's bold actor-name prefix would
+    // otherwise imply ("<b>BabyGurl</b> Pay the deposit..." reads like a
+    // command directed AT her). "Booking with [Name]:" frames the name as
+    // context instead — see NotificationsPanel.tsx's per-type suppression
+    // of that bold prefix for 'deposit_payment_required'.
+    message: `Booking with ${freelancerName}: please pay the deposit for '${request.project_name}' within ${DEPOSIT_DEADLINE_HOURS} hours to confirm.`,
     related_id: bookingResponse.data.id,
     post_id: null,
     comment_id: null,
