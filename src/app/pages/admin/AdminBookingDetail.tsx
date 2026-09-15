@@ -131,7 +131,7 @@ function BookingEventsTimeline({ events }: { events: any[] }) {
     return <p className="text-sm text-gray-500">No events recorded yet.</p>;
   }
   return (
-    <div className="space-y-3 border-l-2 border-gray-200 pl-4">
+    <div className="space-y-3 border-l-2 border-sky-100 pl-4">
       {events.map((event) => (
         <div key={event.id} className="relative">
           <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-gray-400" />
@@ -203,25 +203,25 @@ export function AdminBookingDetail({
   return (
     <div className="space-y-6">
       {/* Booking header */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-gray-900">{booking.project_name}</h2>
             <p className="text-xs text-gray-500">#{String(booking.id).slice(0, 8).toUpperCase()} · Created {new Date(booking.created_at).toLocaleString()}</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-full bg-gray-200 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">{booking.status}</span>
+            <span className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">{booking.status}</span>
             {hasDispute && (
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 capitalize">{booking.dispute_status.replace('_', ' ')}</span>
             )}
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-2">
-          <button onClick={() => navigate(`/admin/users/${booking.client_id}`)} className="rounded-xl bg-gray-50 p-3 text-left hover:bg-gray-100">
+        <div className="mt-4 grid grid-cols-1 gap-4 border-t border-sky-100 pt-4 sm:grid-cols-2">
+          <button onClick={() => navigate(`/admin/users/${booking.client_id}`)} className="rounded-xl bg-sky-50/50 p-3 text-left hover:bg-sky-100">
             <p className="text-xs font-semibold uppercase text-gray-500">Client</p>
             <p className="mt-1 font-semibold text-gray-900">{booking.client?.full_name || 'Client'}</p>
           </button>
-          <button onClick={() => navigate(`/admin/users/${booking.freelancer_id}`)} className="rounded-xl bg-gray-50 p-3 text-left hover:bg-gray-100">
+          <button onClick={() => navigate(`/admin/users/${booking.freelancer_id}`)} className="rounded-xl bg-sky-50/50 p-3 text-left hover:bg-sky-100">
             <p className="text-xs font-semibold uppercase text-gray-500">Freelancer</p>
             <p className="mt-1 font-semibold text-gray-900">{booking.freelancer?.full_name || 'Freelancer'}</p>
           </button>
@@ -233,7 +233,7 @@ export function AdminBookingDetail({
           is what to check a claim against, not the "Current booking
           details" panel below, which reflects live values that may have
           since been edited or rescheduled. */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h3 className="mb-1 text-lg font-bold text-gray-900">Locked Agreement</h3>
         {agreement ? (
           <>
@@ -279,7 +279,7 @@ export function AdminBookingDetail({
 
       {/* Current booking details — live, mutable fields, which may have
           changed since the agreement above was locked in. */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h3 className="mb-3 text-lg font-bold text-gray-900">Current Booking Details</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
@@ -327,7 +327,7 @@ export function AdminBookingDetail({
       </div>
 
       {/* Financial summary */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h3 className="mb-3 text-lg font-bold text-gray-900">Financial summary</h3>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div>
@@ -357,17 +357,17 @@ export function AdminBookingDetail({
       />
 
       {/* Booking timeline */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h3 className="mb-3 text-lg font-bold text-gray-900">Booking timeline</h3>
         <BookingEventsTimeline events={events} />
       </div>
 
       {/* Dispute info */}
       {hasDispute && (
-        <div className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-amber-200 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h3 className="mb-3 text-lg font-bold text-gray-900">Dispute</h3>
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="rounded-xl bg-gray-50 p-4">
+            <div className="rounded-xl bg-sky-50/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Client's report</p>
               {clientClaim ? (
                 <>
@@ -378,7 +378,7 @@ export function AdminBookingDetail({
                 <p className="text-sm text-gray-500">No report recorded.</p>
               )}
             </div>
-            <div className="rounded-xl bg-gray-50 p-4">
+            <div className="rounded-xl bg-sky-50/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Freelancer's response</p>
               {freelancerResponse ? (
                 <p className="text-sm text-gray-700">{freelancerResponse.evidence_text || '(no written response)'}</p>
@@ -396,13 +396,13 @@ export function AdminBookingDetail({
           <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
 
           {canDecide && (
-            <div className="mt-4 border-t border-gray-100 pt-4">
+            <div className="mt-4 border-t border-sky-100 pt-4">
               <label className="mb-1 block text-xs font-semibold text-gray-600">Resolution reason</label>
               <textarea
                 value={decisionReason}
                 onChange={(e) => setDecisionReason(e.target.value)}
                 placeholder="Why are you making this decision?"
-                className="mb-3 w-full min-h-[70px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                className="mb-3 w-full min-h-[70px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
               />
               {actionError && <p className="mb-3 text-sm text-red-600">{actionError}</p>}
               <div className="flex flex-wrap gap-2">
@@ -423,7 +423,7 @@ export function AdminBookingDetail({
                 <button
                   disabled={isPending}
                   onClick={() => void handleRequestMoreEvidence()}
-                  className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                 >
                   <AlertCircle className="h-4 w-4" /> Request More Evidence
                 </button>

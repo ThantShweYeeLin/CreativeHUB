@@ -3,7 +3,7 @@ import type { TrustLevel } from '../../lib/trustLevel';
 
 export function TrustBadge({ trust }: { trust: TrustLevel }) {
   return (
-    <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5">
+    <div className="inline-flex items-center gap-1.5 rounded-full border border-sky-100 bg-white px-3 py-1.5">
       <div className="flex items-center">
         {Array.from({ length: 5 }, (_, index) => (
           <Star

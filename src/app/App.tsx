@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
@@ -7,6 +7,7 @@ import { AdminRoute } from '../components/AdminRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { GlobalReviewPrompt } from '../components/GlobalReviewPrompt';
+import { BootSplash } from './components/BootSplash';
 // Kept eager — the first thing a signed-out visitor sees, so there's
 // nothing to gain (and a loading flicker to lose) by chunking these.
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
@@ -61,9 +62,9 @@ const AdminAuditLogPage = lazy(() => import('./pages/admin/AdminAuditLogPage').t
 // Loading component
 function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center bg-sky-50">
       <div className="text-center">
-        <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+        <div className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
         <p className="text-sm text-gray-600">Checking authentication...</p>
       </div>
     </div>
@@ -72,16 +73,16 @@ function LoadingScreen() {
 
 function SupabaseSetupScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
-        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-black text-lg font-bold text-white">
+    <div className="flex min-h-screen items-center justify-center bg-sky-50 px-4">
+      <div className="w-full max-w-xl rounded-2xl border border-sky-100 bg-white p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-8">
+        <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-lg font-bold text-white">
           CH
         </div>
         <h1 className="mb-2 text-2xl font-bold text-gray-900">Supabase setup needed</h1>
         <p className="mb-6 text-sm leading-6 text-gray-600">
           CreativeHUB needs your Supabase project URL and anon key before it can show the app.
         </p>
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
           <p className="mb-3 text-sm font-semibold text-gray-900">Create a file named .env in the project root:</p>
           <pre className="overflow-x-auto rounded-xl bg-black p-4 text-xs text-white">
 {`VITE_SUPABASE_URL=your_supabase_project_url
@@ -99,9 +100,10 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
 export default function App() {
   const { loading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (loading) {
-    return <LoadingScreen />;
+    return <BootSplash />;
   }
 
   if (!isSupabaseConfigured) {
@@ -130,6 +132,45 @@ export default function App() {
           <Route path="/login" element={<LoginPageWithRouting />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/signup" element={<SignUpPageWithRouting />} />
+          {/* Guests can browse these three the same as a signed-in user -
+              MainLayout and each page already null-guard every use of
+              `user`, so no ProtectedRoute wrapper here. Everything else
+              still funnels through the catch-all below. */}
+          <Route path="/explore" element={<MainLayout><ExplorePage /></MainLayout>} />
+          <Route
+            path="/map"
+            element={
+              <MainLayout>
+                <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/for-you"
+            element={
+              <MainLayout>
+                <ForYouPage
+                  onViewProfile={(id) => navigate(`/profile/${id}`)}
+                  onOpenMessages={() => navigate('/login')}
+                />
+              </MainLayout>
+            }
+          />
+          {/* Public profile pages - browsable, but every write action inside
+              them (favorite, follow, message, book, report) is soft-gated
+              via AuthPromptModal rather than hidden or crashing. */}
+          <Route
+            path="/profile/:id"
+            element={
+              <FreelancerProfile
+                onBack={() => navigate(-1)}
+                requestStatus={null}
+                onOpenChat={() => navigate('/login')}
+              />
+            }
+          />
+          <Route path="/team/:id" element={<TeamProfilePage />} />
+          <Route path="/" element={<Navigate to="/explore" replace />} />
           <Route path="*" element={<Navigate to="/signup" replace />} />
         </>
       )}
@@ -454,7 +495,10 @@ export default function App() {
       )}
     </Routes>
     </Suspense>
-    {isAuthenticated && user?.onboardingCompleted && <MobileBottomNav />}
+    {(
+      (isAuthenticated && user?.onboardingCompleted) ||
+      (!isAuthenticated && ['/explore', '/map', '/for-you'].includes(location.pathname))
+    ) && <MobileBottomNav />}
     {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
     </>
   );

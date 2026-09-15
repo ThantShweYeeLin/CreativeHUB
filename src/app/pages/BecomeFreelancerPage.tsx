@@ -572,14 +572,14 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                 <button
                   type="button"
                   onClick={confirmCategoryChange}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black"
+                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-semibold text-white hover:shadow-lg"
                 >
                   Change category
                 </button>
                 <button
                   type="button"
                   onClick={() => setPendingCategoryChange(null)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  className="rounded-lg border border-sky-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50"
                 >
                   Cancel
                 </button>

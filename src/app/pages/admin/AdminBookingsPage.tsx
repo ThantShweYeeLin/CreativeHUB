@@ -81,13 +81,13 @@ export function AdminBookingsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by project name..."
-              className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-sky-100 px-3 py-2 text-sm"
           >
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>{s ? s.replace('_', ' ') : 'All statuses'}</option>
@@ -96,7 +96,7 @@ export function AdminBookingsPage() {
           <select
             value={disputeStatus}
             onChange={(e) => setDisputeStatus(e.target.value)}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="rounded-lg border border-sky-100 px-3 py-2 text-sm"
           >
             {DISPUTE_OPTIONS.map((s) => (
               <option key={s} value={s}>{s ? `Dispute: ${s.replace('_', ' ')}` : 'All dispute statuses'}</option>
@@ -105,7 +105,7 @@ export function AdminBookingsPage() {
           <button
             onClick={toggleOverdue}
             className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-              overdueOnly ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              overdueOnly ? 'bg-amber-500 text-white' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
             }`}
           >
             ⚠ Results overdue only
@@ -114,10 +114,10 @@ export function AdminBookingsPage() {
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-xs font-semibold uppercase text-gray-500">
+              <tr className="border-b border-sky-100 text-left text-xs font-semibold uppercase text-gray-500">
                 <th className="px-4 py-3">Project</th>
                 <th className="px-4 py-3">Client</th>
                 <th className="px-4 py-3">Freelancer</th>
@@ -134,7 +134,7 @@ export function AdminBookingsPage() {
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">{overdueOnly ? 'No overdue results right now.' : 'No bookings found.'}</td></tr>
               ) : (
                 bookings.map((b) => (
-                  <tr key={b.id} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 cursor-pointer" onClick={() => navigate(`/admin/bookings/${b.id}`)}>
+                  <tr key={b.id} className="border-b border-sky-100 last:border-0 hover:bg-sky-50 cursor-pointer" onClick={() => navigate(`/admin/bookings/${b.id}`)}>
                     <td className="px-4 py-3 font-semibold text-gray-900">{b.project_name}</td>
                     <td className="px-4 py-3 text-gray-700">{b.client?.full_name || '—'}</td>
                     <td className="px-4 py-3 text-gray-700">{b.freelancer?.full_name || '—'}</td>
@@ -167,14 +167,14 @@ export function AdminBookingsPage() {
             <button
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-40"
             >
               Prev
             </button>
             <button
               disabled={offset + PAGE_SIZE >= count}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-40"
             >
               Next
             </button>

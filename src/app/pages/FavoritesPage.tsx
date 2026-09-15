@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Heart, MapPin, Star } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -97,9 +98,11 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
+    <div className="relative min-h-screen pb-20 md:pb-12">
+      <PageBackdrop />
+      <div className="relative z-10">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200 mb-6 md:mb-8">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-sky-100 mb-6 md:mb-8">
         <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-4 md:py-6">
           <button
             onClick={onBack}
@@ -109,7 +112,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             Back to Home
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center">
               <Heart className="w-5 h-5 md:w-6 md:h-6 text-white fill-white" />
             </div>
             <div>
@@ -129,7 +132,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
 
         {isLoading && (
           <div className="flex justify-center py-16">
-            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+            <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         )}
 
@@ -145,14 +148,14 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             {categoryCards.map((freelancer) => (
               <div
                 key={freelancer.id}
-                className="group relative bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-2xl transition-all duration-300"
+                className="group relative bg-white/90 backdrop-blur-xl rounded-xl md:rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden hover:shadow-[0_12px_36px_rgba(56,189,248,0.25)] transition-all duration-300"
               >
                 {/* Favorite Heart Button */}
                 <button
                   onClick={() => removeFavorite(freelancer.id)}
                   className="absolute top-3 right-3 md:top-4 md:right-4 z-10 w-9 h-9 md:w-10 md:h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"
                 >
-                  <Heart className="w-4 h-4 md:w-5 md:h-5 text-red-500 fill-red-500" />
+                  <Heart className="w-4 h-4 md:w-5 md:h-5 text-blue-500 fill-blue-500" />
                 </button>
 
                 {/* Profile Image */}
@@ -168,7 +171,7 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                   <div className="absolute bottom-4 left-4 right-4 transform translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                     <button
                       onClick={() => onViewProfile(freelancer.id)}
-                      className="w-full bg-white text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                      className="w-full bg-white text-gray-900 py-3 rounded-lg font-semibold hover:bg-sky-50 transition-colors"
                     >
                       View Profile
                     </button>
@@ -192,11 +195,11 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-3 md:pt-4 border-t border-gray-200">
+                  <div className="flex items-center justify-between pt-3 md:pt-4 border-t border-sky-100">
                     <span className="text-xs md:text-sm text-gray-600">{freelancer.projects} portfolio items</span>
                     <button
                       onClick={() => onViewProfile(freelancer.id)}
-                      className="text-xs md:text-sm text-gray-900 font-semibold hover:text-black transition-colors"
+                      className="text-xs md:text-sm text-sky-700/80 font-semibold hover:text-sky-800 transition-colors"
                     >
                       Book Now →
                     </button>
@@ -209,9 +212,9 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             ))}
           </div>
         ) : (
-          !isLoading && <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-16 text-center">
-            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Heart className="w-12 h-12 text-gray-700" />
+          !isLoading && <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-16 text-center">
+            <div className="w-24 h-24 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Heart className="w-12 h-12 text-sky-400" />
             </div>
             <h3 className="text-2xl font-bold text-gray-900 mb-3">No Favorites Yet</h3>
             <p className="text-gray-600 mb-6 max-w-md mx-auto">
@@ -219,12 +222,13 @@ export function FavoritesPage({ onBack, onViewProfile }: FavoritesPageProps) {
             </p>
             <button
               onClick={onBack}
-              className="px-8 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl font-semibold hover:shadow-lg hover:scale-105 transition-all"
+              className="px-8 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-105 transition-all"
             >
               Explore Freelancers
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

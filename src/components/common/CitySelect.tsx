@@ -114,7 +114,7 @@ export function CitySelect({ countryIsoCode, value, onChange, placeholder = 'Sea
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={disabled ? 'Select a country first' : placeholder}
-          className="w-full rounded-xl border border-gray-200 px-4 py-3 pr-9 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
+          className="w-full rounded-xl border border-sky-100 px-4 py-3 pr-9 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:cursor-not-allowed disabled:bg-sky-50 disabled:text-gray-400"
         />
         {value && (
           <button
@@ -129,18 +129,18 @@ export function CitySelect({ countryIsoCode, value, onChange, placeholder = 'Sea
       </div>
 
       {isOpen && !disabled && isLoading && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 shadow-lg">Loading cities…</div>
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-sky-100 bg-white p-3 text-sm text-gray-500 shadow-lg">Loading cities…</div>
       )}
 
       {isOpen && !disabled && !isLoading && results.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-sky-100 bg-white shadow-lg">
           {results.map((city, index) => (
             <li key={city}>
               <button
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectCity(city)}
-                className={`block w-full px-4 py-2.5 text-left text-sm text-gray-900 ${index === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-50'}`}
+                className={`block w-full px-4 py-2.5 text-left text-sm text-gray-900 ${index === highlightedIndex ? 'bg-sky-100' : 'hover:bg-sky-50'}`}
               >
                 {city}
               </button>
@@ -150,7 +150,7 @@ export function CitySelect({ countryIsoCode, value, onChange, placeholder = 'Sea
       )}
 
       {isOpen && !disabled && !isLoading && query.trim() && results.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-sky-100 bg-white p-3 text-sm text-gray-500 shadow-lg">
           No matching cities — you can still type your own.
         </div>
       )}

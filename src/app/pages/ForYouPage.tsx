@@ -33,6 +33,8 @@ import { PostShareMenu } from '../../components/PostShareMenu';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
+import { AuthPromptModal } from '../components/AuthPromptModal';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { buildCommentThreads, buildMentionPrefill, extractMentionToken, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import type { CommentItem } from '../../components/posts/CommentsList';
 
@@ -235,14 +237,14 @@ function ComposerLauncher({ onOpen }: { onOpen: () => void }) {
     <div className="mx-4 mb-5 flex items-center gap-3 md:mb-6">
       <button
         onClick={onOpen}
-        className="flex-1 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left text-sm font-medium text-gray-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-xl md:text-base"
+        className="flex-1 rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl px-4 py-3 text-left text-sm font-medium text-gray-500 shadow-[0_8px_24px_rgba(56,189,248,0.15)] transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-[0_12px_32px_rgba(56,189,248,0.25)] md:text-base"
       >
         Write A Post
       </button>
       <button
         onClick={onOpen}
         aria-label="Create post"
-        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gray-900 text-white shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+        className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg"
       >
         <Plus className="h-5 w-5" />
       </button>
@@ -396,15 +398,15 @@ function CreatePostSheet({
 
   const pillButtonClass = (active: boolean) =>
     `flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm font-semibold transition-all ${
-      active ? 'border-gray-900 bg-gray-900 text-white shadow-sm' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+      active ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm' : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'
     }`;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-in fade-in-0">
-      <div className="fixed inset-x-0 bottom-0 max-h-[96vh] overflow-hidden rounded-t-[2rem] bg-white shadow-2xl animate-in slide-in-from-bottom-8 md:bottom-auto md:left-1/2 md:top-1/2 md:w-[760px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl">
+      <div className="fixed inset-x-0 bottom-0 max-h-[96vh] overflow-hidden rounded-t-[2rem] bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] animate-in slide-in-from-bottom-8 md:bottom-auto md:left-1/2 md:top-1/2 md:w-[760px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl">
         <div className="flex h-full max-h-[96vh] flex-col">
           <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
+            <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-sky-50">
               <X className="h-5 w-5" />
             </button>
             <div className="text-center">
@@ -473,7 +475,7 @@ function CreatePostSheet({
             </div>
 
             {activePanel && (
-              <div className="mb-4 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+              <div className="mb-4 rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
                 {activePanel === 'tag' && (
                   <div className="space-y-3">
                     {taggedList.length > 0 && (
@@ -492,10 +494,10 @@ function CreatePostSheet({
                       value={tagQuery}
                       onChange={(event) => setTagQuery(event.target.value)}
                       placeholder="Search people to tag"
-                      className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-gray-100"
+                      className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-sky-100"
                     />
                     {tagQuery.trim().length >= 2 && (
-                      <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                      <div className="max-h-48 overflow-y-auto rounded-xl border border-sky-100 bg-white">
                         {isTagSearching ? (
                           <p className="flex items-center gap-2 px-3 py-3 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Searching...</p>
                         ) : tagResults.length === 0 ? (
@@ -509,7 +511,7 @@ function CreatePostSheet({
                                 key={String(result.id)}
                                 type="button"
                                 onClick={() => toggleTaggedPerson(name)}
-                                className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                                className="flex w-full items-center gap-3 border-b border-sky-100 px-3 py-2.5 text-left transition-colors hover:bg-sky-50 last:border-b-0"
                               >
                                 <Avatar src={result.avatar_url || fallbackProfileImage} alt={name} gender={result.gender} sizeClassName="h-8 w-8 rounded-full" />
                                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-900">{name}</span>
@@ -552,7 +554,7 @@ function CreatePostSheet({
                         onChange({ category: '' });
                         setActivePanel(null);
                       }}
-                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${!composer.category ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                      className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${!composer.category ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'}`}
                     >
                       None
                     </button>
@@ -564,7 +566,7 @@ function CreatePostSheet({
                           onChange({ category });
                           setActivePanel(null);
                         }}
-                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${composer.category === category ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${composer.category === category ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'}`}
                       >
                         {category}
                       </button>
@@ -578,7 +580,7 @@ function CreatePostSheet({
                     value={composer.hashtags}
                     onChange={(event) => onChange({ hashtags: event.target.value })}
                     placeholder="#branding #photoshoot"
-                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-gray-100"
+                    className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2.5 text-sm text-gray-900 outline-none focus:ring-4 focus:ring-sky-100"
                   />
                 )}
               </div>
@@ -592,10 +594,10 @@ function CreatePostSheet({
                 onChange={handleTextChange}
                 onSelect={handleTextSelect}
                 placeholder="What’s happening in your work today? Type @ to mention someone"
-                className="min-h-40 w-full resize-none rounded-3xl border border-gray-200 bg-gray-50 px-5 py-4 text-base text-gray-950 outline-none transition-all placeholder:text-gray-400 focus:border-gray-300 focus:bg-white focus:ring-4 focus:ring-gray-100"
+                className="min-h-40 w-full resize-none rounded-3xl border border-sky-100 bg-sky-50/50 px-5 py-4 text-base text-gray-950 outline-none transition-all placeholder:text-gray-400 focus:border-sky-300 focus:bg-white focus:ring-4 focus:ring-sky-100"
               />
               {mention && (
-                <div className="absolute left-4 right-4 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-lg">
+                <div className="absolute left-4 right-4 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-2xl border border-sky-100 bg-white shadow-lg">
                   {mention.query.trim().length < 2 ? (
                     <p className="px-3 py-3 text-sm text-gray-500">Keep typing to search people...</p>
                   ) : isMentionSearching ? (
@@ -611,7 +613,7 @@ function CreatePostSheet({
                           event.preventDefault();
                           applyMention(result);
                         }}
-                        className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-2.5 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                        className="flex w-full items-center gap-3 border-b border-sky-100 px-3 py-2.5 text-left transition-colors hover:bg-sky-50 last:border-b-0"
                       >
                         <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-8 w-8 rounded-full" />
                         <div className="min-w-0">
@@ -631,7 +633,7 @@ function CreatePostSheet({
             {composer.attachments.length > 0 && (
               <div className="mt-4 grid grid-cols-2 gap-3">
                 {composer.attachments.map((attachment) => (
-                  <div key={attachment.id} className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50">
+                  <div key={attachment.id} className="relative overflow-hidden rounded-2xl border border-sky-100 bg-sky-50/50">
                     {attachment.previewUrl ? (
                       attachment.type.startsWith('video/') ? (
                         <video src={attachment.previewUrl} className="h-44 w-full object-cover" controls />
@@ -656,10 +658,10 @@ function CreatePostSheet({
             )}
 
             <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
-              <button type="button" onClick={() => mediaInputRef.current?.click()} title="Photos/Videos" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100">
+              <button type="button" onClick={() => mediaInputRef.current?.click()} title="Photos/Videos" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-gray-700 transition-colors hover:bg-sky-100">
                 <ImagePlus className="h-5 w-5" />
               </button>
-              <button type="button" onClick={() => fileInputRef.current?.click()} title="Files" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gray-50 text-gray-700 transition-colors hover:bg-gray-100">
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Files" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-gray-700 transition-colors hover:bg-sky-100">
                 <Paperclip className="h-5 w-5" />
               </button>
               <input ref={mediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(event) => onAddFiles(event.target.files)} />
@@ -668,7 +670,7 @@ function CreatePostSheet({
           </div>
 
           <div className="flex gap-3 border-t border-gray-100 px-5 py-4">
-            <button onClick={onClose} className="flex-1 rounded-2xl bg-gray-100 px-4 py-3 font-bold text-gray-700 transition-colors hover:bg-gray-200">
+            <button onClick={onClose} className="flex-1 rounded-2xl bg-sky-50 px-4 py-3 font-bold text-gray-700 transition-colors hover:bg-sky-100">
               Cancel
             </button>
             <button
@@ -944,6 +946,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const savedScrollYRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
@@ -1228,6 +1231,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       return;
     }
 
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to like and save creative work.');
+      return;
+    }
+
     setLikingByPostId((current) => ({ ...current, [postId]: true }));
 
     const nextLiked = !targetPost.isLiked;
@@ -1239,7 +1247,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       )
     );
 
-    if (!targetPost.isClientPost || !user?.id) {
+    if (!targetPost.isClientPost) {
       setLikingByPostId((current) => ({ ...current, [postId]: false }));
       return;
     }
@@ -1269,6 +1277,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       return;
     }
 
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to like and save creative work.');
+      return;
+    }
+
     const nextSaved = !targetPost.isSaved;
     setPosts((current) =>
       current.map((post) =>
@@ -1276,7 +1289,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       )
     );
 
-    if (!targetPost.isClientPost || !user?.id) {
+    if (!targetPost.isClientPost) {
       return;
     }
 
@@ -1296,7 +1309,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     const draft = (commentDraftByPostId[postId] || '').trim();
     const post = posts.find((item) => item.id === postId);
 
-    if (!draft || !user?.id || !post) {
+    if (!draft || !post) {
+      return;
+    }
+
+    if (!user?.id) {
+      setAuthPromptMessage('Sign up to join the conversation.');
       return;
     }
 
@@ -1377,7 +1395,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
   const submitReply = async (postId: string, comment: FeedComment | CommentItem) => {
     const post = posts.find((item) => item.id === postId);
-    if (!post || !user?.id) {
+    if (!post) {
+      return;
+    }
+
+    if (!user?.id) {
+      setAuthPromptMessage('Sign up to join the conversation.');
       return;
     }
 
@@ -1536,6 +1559,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
   const handleShare = async (postId: string) => {
     if (!user?.id) {
+      setAuthPromptMessage('Create an account to send posts to other members in Messages.');
       return;
     }
 
@@ -1658,7 +1682,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       align={variant === 'card' ? 'right' : 'left'}
       triggerClassName={
         variant === 'card'
-          ? 'group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100'
+          ? 'group flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 transition-all hover:bg-sky-100'
           : 'inline-flex items-center gap-2 text-sm font-semibold text-gray-800'
       }
       onShared={(method: PostShareMethod) => {
@@ -1676,7 +1700,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               close();
               void handleShare(post.id);
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-700 text-white">
               <Send className="h-4 w-4" />
@@ -1757,8 +1781,10 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
   const handlePublishPost = async () => {
     if (!user?.id) {
-      setError('Please sign in before publishing a post.');
-      setIsComposerOpen(false);
+      // Leave the composer open, with their draft intact, underneath - the
+      // modal is dismissible ("Continue browsing") so nothing they typed is
+      // lost if they're not ready to sign up yet.
+      setAuthPromptMessage('Create an account to publish your own posts.');
       return;
     }
 
@@ -1848,7 +1874,9 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 py-4 md:py-8 -mx-4 md:mx-0">
+    <div className="relative -mx-4 md:mx-0">
+      <PageBackdrop />
+      <div className="relative z-10 min-h-screen py-4 md:py-8">
       <div className="mx-auto max-w-2xl">
         {shareStatusMessage && (
           <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-800 shadow-sm">
@@ -1860,19 +1888,19 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           <h1 className="mb-2 text-3xl font-bold text-gray-900 md:text-4xl">For You</h1>
           <p className="text-sm text-gray-600 md:text-base">Live creative feed from the CreativeHUB community</p>
 
-          <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="mt-4 rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-3 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
               <input
                 value={userSearchQuery}
                 onChange={(event) => setUserSearchQuery(event.target.value)}
                 placeholder="Search users by name or email"
-                className="h-10 w-full rounded-xl border border-gray-200 bg-gray-50 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-gray-300 focus:bg-white"
+                className="h-10 w-full rounded-xl border border-sky-100 bg-sky-50/50 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-sky-300 focus:bg-white"
               />
             </div>
 
             {(userSearchQuery.trim().length >= 2 || isUserSearchLoading) && (
-              <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-sky-100 bg-white">
                 {isUserSearchLoading ? (
                   <p className="px-3 py-3 text-sm text-gray-500">Searching users...</p>
                 ) : userSearchResults.length === 0 ? (
@@ -1886,7 +1914,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                         setUserSearchResults([]);
                         onViewProfile?.(String(result.id));
                       }}
-                      className="flex w-full items-center gap-3 border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-gray-50 last:border-b-0"
+                      className="flex w-full items-center gap-3 border-b border-sky-50 px-3 py-3 text-left transition-colors hover:bg-sky-50 last:border-b-0"
                     >
                       <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
                       <div className="min-w-0">
@@ -1900,16 +1928,16 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
             )}
           </div>
 
-          <div className="mt-4 inline-flex rounded-xl border border-gray-200 bg-white p-1">
+          <div className="mt-4 inline-flex rounded-xl border border-sky-100 bg-white/80 backdrop-blur-xl p-1">
             <button
               onClick={() => setActiveFeedTab('for-you')}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'for-you' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'for-you' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm' : 'text-gray-700 hover:bg-sky-50'}`}
             >
               For You
             </button>
             <button
               onClick={() => setActiveFeedTab('following')}
-              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'following' ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'}`}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'following' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm' : 'text-gray-700 hover:bg-sky-50'}`}
             >
               Following
             </button>
@@ -1926,12 +1954,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
         {isLoading && (
           <div className="flex justify-center py-12">
-            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+            <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         )}
 
         {!isLoading && sortedPosts.length === 0 && (
-          <div className="mx-4 rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+          <div className="mx-4 rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-10 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="mb-2 text-xl font-bold text-gray-900">No feed posts yet</h2>
             <p className="text-gray-600">
               {activeFeedTab === 'following'
@@ -1963,10 +1991,10 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 badges={
                   hasBadges ? (
                     <>
-                      {post.location && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.location}</span>}
-                      {post.category && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.category}</span>}
-                      {post.visibility && <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">{post.visibility}</span>}
-                      {post.labels?.map((label) => <span key={label} className="rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
+                      {post.location && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{post.location}</span>}
+                      {post.category && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{post.category}</span>}
+                      {post.visibility && <span className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">{post.visibility}</span>}
+                      {post.labels?.map((label) => <span key={label} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1 text-xs font-semibold text-white">{label}</span>)}
                     </>
                   ) : undefined
                 }
@@ -1984,11 +2012,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                         </div>
                       )}
                       {post.poll && (
-                        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                        <div className="rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
                           <p className="mb-3 font-bold text-gray-900">{post.poll.question}</p>
                           <div className="space-y-2">
                             {post.poll.options.map((option) => (
-                              <div key={option} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
+                              <div key={option} className="rounded-xl border border-sky-100 bg-white px-4 py-2 text-sm font-semibold text-gray-700">
                                 {option}
                               </div>
                             ))}
@@ -1998,7 +2026,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                       {(post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0 && (
                         <div className="space-y-2">
                           {post.attachments?.filter((attachment) => !attachment.previewUrl).map((attachment) => (
-                            <div key={attachment.id} className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
+                            <div key={attachment.id} className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm font-semibold text-gray-700">
                               <FileText className="h-4 w-4" />
                               {attachment.name}
                             </div>
@@ -2006,7 +2034,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                         </div>
                       )}
                       {showLikesByPostId[post.id] ? (
-                        <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                        <div className="rounded-2xl bg-sky-50/50 p-4 text-sm text-gray-700">
                           <p className="mb-2 font-semibold text-gray-900">Liked by</p>
                           {loadingLikesByPostId[post.id] ? (
                             <p className="text-sm text-gray-500">Loading likes...</p>
@@ -2019,7 +2047,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                                   key={likedUser.id}
                                   type="button"
                                   onClick={() => onViewProfile?.(String(likedUser.id))}
-                                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-100"
+                                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-sky-50"
                                 >
                                   <Avatar
                                     src={likedUser.avatar_url || fallbackProfileImage}
@@ -2069,7 +2097,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           isVideo={!!(focusedPost.image?.startsWith('blob:') && focusedPost.attachments?.find((attachment) => attachment.previewUrl === focusedPost.image)?.type.startsWith('video/'))}
           afterCaption={
             focusedPost.location ? (
-              <div className="rounded-2xl bg-gray-50 px-3 py-2 text-sm text-gray-700">{focusedPost.location}</div>
+              <div className="rounded-2xl bg-sky-50/50 px-3 py-2 text-sm text-gray-700">{focusedPost.location}</div>
             ) : undefined
           }
           likesCount={focusedPost.likes}
@@ -2131,19 +2159,19 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
       {isShareSheetOpen && sharingPost && (
         <div className="fixed inset-0 z-[70] animate-in fade-in-0 bg-black/50 backdrop-blur-sm">
-          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl md:top-24 md:p-6">
+          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-sky-100 bg-white p-5 shadow-[0_20px_60px_rgba(56,189,248,0.25)] md:top-24 md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Send in Messages</p>
                 <h3 className="mt-1 text-xl font-bold text-gray-950">Send to mutuals</h3>
                 <p className="mt-1 text-sm text-gray-600">Choose people you both follow to send this post to directly.</p>
               </div>
-              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-sky-50">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 flex-shrink-0">
                   <div className="h-full w-full overflow-hidden rounded-xl">
@@ -2162,7 +2190,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 type="button"
                 onClick={() => void sendShareToMutuals()}
                 disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
-                className="w-full rounded-2xl bg-gray-900 px-4 py-3 text-left text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-left text-white transition-colors hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <p className="text-sm font-semibold">Send in messages</p>
                 <p className="mt-1 text-xs text-white/75">
@@ -2179,7 +2207,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <p className="mt-3 rounded-xl bg-green-50 px-3 py-2 text-sm font-medium text-green-700">{shareStatusMessage}</p>
             )}
 
-            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-sky-100 bg-white">
               {isLoadingMutualUsers ? (
                 <p className="px-4 py-3 text-sm text-gray-500">Finding mutual connections...</p>
               ) : mutualUsers.length === 0 ? (
@@ -2216,9 +2244,9 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                               : [...current, mutual.id]
                           )
                         }
-                        className={`flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                        className={`flex w-full items-center gap-3 border-b border-sky-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-sky-50' : 'hover:bg-sky-50'}`}
                       >
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-transparent'}`}>
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-200 bg-white text-transparent'}`}>
                           <Check className="h-3 w-3" />
                         </div>
                         <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} gender={mutual.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
@@ -2234,7 +2262,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">
                 Close
               </button>
               <button
@@ -2259,7 +2287,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 <p className="mb-4 text-sm text-gray-600">Thanks — our team will review this post.</p>
                 <button
                   onClick={() => setReportingPost(null)}
-                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black"
+                  className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-semibold text-white hover:shadow-lg"
                 >
                   Close
                 </button>
@@ -2277,7 +2305,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="inappropriate_content">Inappropriate content</option>
                   <option value="harassment">Harassment</option>
@@ -2291,12 +2319,12 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   placeholder="Describe the issue in detail..."
-                  className="mb-4 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-4 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   onClick={() => void handleSubmitPostReport()}
                   disabled={isSubmittingReport}
-                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                  className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
                 </button>
@@ -2330,6 +2358,11 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         onClose={() => setIsLocationPickerOpen(false)}
         onSelect={(location) => setComposer((current) => ({ ...current, location }))}
       />
+
+      {authPromptMessage && (
+        <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
+      </div>
     </div>
   );
 }

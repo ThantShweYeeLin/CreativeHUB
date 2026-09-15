@@ -17,7 +17,7 @@ export function StepBilling({
 }: StepBillingProps) {
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+      <div className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm text-gray-600">
         This is where deposits get paid out once a booking completes — required so you can actually get paid. You can
         still update it later from Freelancer Dashboard → Settings.
       </div>
@@ -28,7 +28,7 @@ export function StepBilling({
           value={bankName}
           onChange={(event) => onBankNameChange(event.target.value)}
           placeholder="e.g. Kasikorn Bank"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
         />
       </div>
 
@@ -38,7 +38,7 @@ export function StepBilling({
           value={accountHolderName}
           onChange={(event) => onAccountHolderNameChange(event.target.value)}
           placeholder="Name on the bank account"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
         />
       </div>
 
@@ -49,7 +49,7 @@ export function StepBilling({
           onChange={(event) => onAccountNumberChange(event.target.value)}
           placeholder="Bank account number"
           inputMode="numeric"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
         />
       </div>
     </div>

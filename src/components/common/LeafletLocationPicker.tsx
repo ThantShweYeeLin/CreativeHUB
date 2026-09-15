@@ -161,15 +161,15 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
 
   return (
     <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
-        <div className="border-b border-gray-200 px-5 py-4">
+      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+        <div className="border-b border-sky-100 px-5 py-4">
           <h3 className="text-lg font-bold text-gray-900">Pick a Location</h3>
           <p className="text-sm text-gray-600">
             Search a place, building, street, neighborhood, district, or city — or click directly on the map.
           </p>
         </div>
 
-        <div className="space-y-3 border-b border-gray-200 px-5 py-4">
+        <div className="space-y-3 border-b border-sky-100 px-5 py-4">
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               value={searchText}
@@ -181,26 +181,26 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
                 }
               }}
               placeholder='e.g. "Siam Paragon", "Thonglor", "Sukhumvit 24"'
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
             <button
               type="button"
               onClick={() => void handleSearch()}
               disabled={isResolving}
-              className="flex-shrink-0 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+              className="flex-shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
             >
               {isResolving ? 'Searching...' : 'Find Address'}
             </button>
           </div>
 
           {searchResults.length > 0 && (
-            <ul className="max-h-52 divide-y divide-gray-100 overflow-y-auto rounded-lg border border-gray-200">
+            <ul className="max-h-52 divide-y divide-sky-100 overflow-y-auto rounded-lg border border-sky-100">
               {searchResults.map((result, index) => (
                 <li key={`${result.placeId ?? 'result'}-${index}`}>
                   <button
                     type="button"
                     onClick={() => applyResult(result)}
-                    className="flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm hover:bg-gray-50"
+                    className="flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm hover:bg-sky-50"
                   >
                     <span aria-hidden className="mt-0.5">📍</span>
                     <span className="text-gray-800">{result.formattedAddress}</span>
@@ -241,14 +241,14 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
           >
             Save Location
           </button>

@@ -62,12 +62,12 @@ export function AttendanceTimeline({
   entries.sort((a, b) => a.time.getTime() - b.time.getTime());
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
       <div className="flex items-center gap-2 mb-3">
         <Clock className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Attendance Timeline</h2>
       </div>
-      <div className="space-y-3 border-l-2 border-gray-200 pl-4">
+      <div className="space-y-3 border-l-2 border-sky-100 pl-4">
         {entries.map((entry, index) => (
           <div key={index} className="relative">
             <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-gray-400" />

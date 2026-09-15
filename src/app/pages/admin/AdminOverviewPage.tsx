@@ -80,9 +80,9 @@ export function AdminOverviewPage() {
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <div className="mb-3 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-gray-900" />
+            <AlertTriangle className="h-5 w-5 text-sky-600" />
             <h2 className="text-lg font-bold text-gray-900">Needs Attention</h2>
           </div>
           {!stats ? (
@@ -132,14 +132,14 @@ export function AdminOverviewPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h2 className="mb-3 text-sm font-bold text-gray-900">Quick Links</h2>
           <div className="flex flex-wrap gap-2">
-            <button onClick={() => navigate('/admin/users')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Manage Users</button>
-            <button onClick={() => navigate('/admin/bookings')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Browse Bookings</button>
-            <button onClick={() => navigate('/admin/reports')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Review Reports</button>
-            <button onClick={() => navigate('/admin/disputes')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Resolve Disputes</button>
-            <button onClick={() => navigate('/admin/audit-logs')} className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">View Activity Log</button>
+            <button onClick={() => navigate('/admin/users')} className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Manage Users</button>
+            <button onClick={() => navigate('/admin/bookings')} className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Browse Bookings</button>
+            <button onClick={() => navigate('/admin/reports')} className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Review Reports</button>
+            <button onClick={() => navigate('/admin/disputes')} className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Resolve Disputes</button>
+            <button onClick={() => navigate('/admin/audit-logs')} className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">View Activity Log</button>
           </div>
         </div>
       </div>
@@ -161,11 +161,11 @@ function StatCard({
   onClick?: () => void;
 }) {
   const Wrapper = onClick ? 'button' : 'div';
-  const iconColor = accent === 'green' ? 'bg-green-50 text-green-600' : accent === 'amber' ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-700';
+  const iconColor = accent === 'green' ? 'bg-green-50 text-green-600' : accent === 'amber' ? 'bg-amber-50 text-amber-600' : 'bg-sky-50 text-sky-600';
   return (
     <Wrapper
       onClick={onClick}
-      className={`rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all ${onClick ? 'hover:shadow-md hover:-translate-y-0.5' : ''}`}
+      className={`rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] transition-all ${onClick ? 'hover:shadow-md hover:-translate-y-0.5' : ''}`}
     >
       <span className={`flex h-9 w-9 items-center justify-center rounded-full ${iconColor}`}>
         <Icon className="h-[18px] w-[18px]" />

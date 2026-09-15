@@ -45,7 +45,7 @@ export function FollowersModal({ userId, type, onClose }: FollowersModalProps) {
       <div className="relative z-50 w-full max-w-md bg-white rounded-lg shadow-lg overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b">
           <h3 className="font-semibold">{type === 'followers' ? 'Followers' : 'Following'}</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1 rounded hover:bg-sky-50"><X className="w-4 h-4" /></button>
         </div>
         <div className="max-h-96 overflow-y-auto p-4">
           {isLoading ? (
@@ -65,7 +65,7 @@ export function FollowersModal({ userId, type, onClose }: FollowersModalProps) {
                   onClose();
                   navigate(`/profile/${targetId}`);
                 }}
-                className="w-full text-left flex items-center gap-3 py-2 border-b last:border-b-0 hover:bg-gray-50"
+                className="w-full text-left flex items-center gap-3 py-2 border-b border-sky-100 last:border-b-0 hover:bg-sky-50"
               >
                 <Avatar src={u.avatar_url || DEFAULT_AVATAR_URL} alt={u.full_name} gender={u.gender} sizeClassName="w-10 h-10" />
                 <div>

@@ -29,7 +29,7 @@ export function ConfirmOfferDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
         <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${isAccept ? 'bg-green-100' : 'bg-red-100'}`}>
           {isAccept ? <Check className="h-6 w-6 text-green-600" /> : <X className="h-6 w-6 text-red-600" />}
         </div>
@@ -43,7 +43,7 @@ export function ConfirmOfferDialog({
         {isAccept ? (
           <>
             <p className="mt-2 text-sm text-gray-600">You are agreeing to:</p>
-            <div className="mt-3 space-y-2 rounded-xl bg-gray-50 p-4 text-sm">
+            <div className="mt-3 space-y-2 rounded-xl bg-sky-50/60 p-4 text-sm">
               {freelancerName && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">Freelancer</span>
@@ -73,7 +73,7 @@ export function ConfirmOfferDialog({
           <button
             onClick={onCancel}
             disabled={isSubmitting}
-            className="flex-1 rounded-xl bg-gray-100 px-4 py-2.5 font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+            className="flex-1 rounded-xl bg-sky-50 px-4 py-2.5 font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
           >
             Cancel
           </button>

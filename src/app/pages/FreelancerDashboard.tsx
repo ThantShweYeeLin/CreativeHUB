@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -699,8 +700,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   }, [bookings]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
-      <div className="sticky top-0 z-10 mb-6 border-b border-gray-200 bg-white/80 backdrop-blur-lg md:mb-8">
+    <div className="relative min-h-screen pb-20 md:pb-12">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 mb-6 border-b border-sky-100 bg-white/80 backdrop-blur-lg md:mb-8">
         <div className="mx-auto max-w-[1400px] px-4 py-4 md:px-8 md:py-6">
           <button
             onClick={onBack}
@@ -722,7 +725,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 title="Click to toggle your availability"
                 className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
                   freelancerProfile.is_available === false
-                    ? 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                    ? 'border-sky-100 bg-white text-gray-700 hover:bg-sky-50'
                     : 'border-green-200 bg-green-50 text-green-700 hover:bg-green-100'
                 }`}
               >
@@ -735,15 +738,15 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       </div>
 
       <div className="mx-auto max-w-[1400px] px-4 md:px-8">
-        <div className="mb-6 flex gap-2 overflow-x-auto rounded-xl border border-gray-200 bg-white p-2 shadow-lg md:mb-8 md:rounded-2xl">
+        <div className="mb-6 flex gap-2 overflow-x-auto rounded-xl border border-sky-100 bg-white p-2 shadow-lg md:mb-8 md:rounded-2xl">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => navigate(tab.path)}
               className={`flex items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold transition-all md:rounded-xl md:px-6 md:py-3 md:text-base ${
                 section === tab.id
-                  ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg'
+                  : 'text-gray-700 hover:bg-sky-50'
               }`}
             >
               <tab.icon className="h-4 w-4 md:h-5 md:w-5" />
@@ -757,7 +760,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
         {isLoading ? (
           <div className="flex justify-center py-16">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-black" />
+            <div className="h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
           </div>
         ) : section === 'requests' ? (
           <div className="space-y-6 md:space-y-8">
@@ -766,7 +769,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               <p className="text-sm text-gray-600 md:text-base">Manage incoming project requests</p>
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-lg md:p-5">
+            <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-lg md:p-5">
               <div className="mb-4 flex flex-wrap gap-2">
                 {(['all', 'pending', 'countered', 'accepted', 'rejected'] as const).map((status) => {
                   const count =
@@ -780,8 +783,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       onClick={() => setRequestStatusFilter(status)}
                       className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
                         requestStatusFilter === status
-                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow'
+                          : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                       }`}
                     >
                       {status[0].toUpperCase() + status.slice(1)} ({count})
@@ -795,20 +798,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   value={requestSearch}
                   onChange={(event) => setRequestSearch(event.target.value)}
                   placeholder="Search by project, client, or message"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <input
                   type="number"
                   value={requestMinBudget}
                   onChange={(event) => setRequestMinBudget(event.target.value)}
                   placeholder="e.g. 2000"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
             </div>
 
             {requests.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+              <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg">
                 <h3 className="text-xl font-bold text-gray-900">No requests yet</h3>
                 <p className="mt-2 text-gray-600">Incoming client requests will appear here.</p>
               </div>
@@ -835,7 +838,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   <div
                     id={`request-${request.id}`}
                     key={request.id}
-                    className={`rounded-2xl border border-gray-200 bg-white p-5 shadow-lg ${highlightRequestId === request.id ? 'ring-4 ring-yellow-200' : ''}`}
+                    className={`rounded-2xl border border-sky-100 bg-white p-5 shadow-lg ${highlightRequestId === request.id ? 'ring-4 ring-yellow-200' : ''}`}
                   >
                     <div className="flex flex-col gap-4 md:flex-row md:items-center">
                       <button
@@ -893,7 +896,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                                   const recipientId = groupMeta.recipients[index];
                                   if (recipientId) navigate(`/profile/${recipientId}`);
                                 }}
-                                className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 hover:border-gray-300 hover:bg-gray-100"
+                                className="rounded-full border border-sky-100 bg-sky-50/50 px-2 py-1 hover:border-sky-200 hover:bg-sky-100"
                               >
                                 {memberName}
                               </button>
@@ -906,7 +909,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             <span className="inline-flex items-center gap-1 font-semibold text-gray-900"><Clock className="h-3.5 w-3.5" />{formatScheduleMeta(scheduleMeta)}</span>
                           )}
                           <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />Sent {new Date(request.created_at).toLocaleDateString()}</span>
-                          <span className="rounded-full border border-gray-200 px-2 py-1 font-semibold capitalize">{request.status}</span>
+                          <span className="rounded-full border border-sky-100 px-2 py-1 font-semibold capitalize">{request.status}</span>
                         </div>
                       </div>
                       {request.status === 'pending' && (
@@ -920,20 +923,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => openCounterForm(request)}
-                              className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                              className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
                             >
                               <DollarSign className="h-4 w-4" /> Counter Offer
                             </button>
                           )}
                           <button
                             onClick={() => setConfirmAction({ type: 'reject', request })}
-                            className="flex items-center gap-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                            className="flex items-center gap-1 rounded-lg bg-sky-50 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-100"
                           >
                             <X className="h-4 w-4" /> Reject
                           </button>
                           <button
                             onClick={() => setHistoryModalRequestId(request.id)}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             View Details
                           </button>
@@ -950,20 +953,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           {Number(request.counter_round || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => openCounterForm(request)}
-                              className="flex items-center gap-1 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                              className="flex items-center gap-1 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
                             >
                               <DollarSign className="h-4 w-4" /> Counter Again
                             </button>
                           )}
                           <button
                             onClick={() => setConfirmAction({ type: 'reject', request })}
-                            className="flex items-center gap-1 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200"
+                            className="flex items-center gap-1 rounded-lg bg-sky-50 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-100"
                           >
                             <X className="h-4 w-4" /> Reject
                           </button>
                           <button
                             onClick={() => setHistoryModalRequestId(request.id)}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             View Details
                           </button>
@@ -976,7 +979,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           </div>
                           <button
                             onClick={() => setHistoryModalRequestId(request.id)}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             View Details
                           </button>
@@ -985,7 +988,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     </div>
 
                     {request.status === 'countered' && (
-                      <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                      <div className="mt-3 rounded-xl bg-sky-50/60 px-4 py-3 text-sm text-gray-700">
                         <span className="font-semibold text-gray-900">
                           {request.counter_by === 'client' ? "Client's counter offer: " : 'Your counter offer: '}
                         </span>
@@ -998,7 +1001,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     )}
 
                     {counterFormOpenForId === request.id && (
-                      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/50 p-4">
                         <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
@@ -1009,7 +1012,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               value={counterPriceInput}
                               onChange={(event) => setCounterPriceInput(event.target.value)}
                               placeholder="e.g. 7000"
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                           <div>
@@ -1018,7 +1021,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               value={counterMessageInput}
                               onChange={(event) => setCounterMessageInput(event.target.value)}
                               placeholder='e.g. "I can provide the requested service for ฿7,000."'
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                         </div>
@@ -1029,7 +1032,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               type="date"
                               value={counterDateInput}
                               onChange={(event) => setCounterDateInput(event.target.value)}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                           <div>
@@ -1038,7 +1041,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                               type="time"
                               value={counterTimeInput}
                               onChange={(event) => setCounterTimeInput(event.target.value)}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                         </div>
@@ -1049,20 +1052,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             onChange={(event) => setCounterIncludesInput(event.target.value)}
                             rows={3}
                             placeholder={'8 hours photography\nEdited photos\nOnline gallery'}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                           />
                         </div>
                         <div className="mt-3 flex justify-end gap-2">
                           <button
                             onClick={() => setCounterFormOpenForId(null)}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
+                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => void handleSendCounterOffer(request.id)}
                             disabled={isSubmittingCounter}
-                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                           >
                             {isSubmittingCounter ? 'Sending...' : 'Send Counter Offer'}
                           </button>
@@ -1075,7 +1078,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 ))}
 
                 {filteredRequests.length === 0 && (
-                  <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg text-gray-600">
+                  <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg text-gray-600">
                     No requests match these filters.
                   </div>
                 )}
@@ -1092,7 +1095,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             </div>
 
             {bookingCards.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+              <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg">
                 <p className="text-sm text-gray-500">No bookings yet.</p>
               </div>
             ) : (
@@ -1101,7 +1104,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   <button
                     key={booking.id}
                     onClick={() => navigate(`/freelancer-booking/${booking.id}`)}
-                    className="w-full rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-lg transition-all hover:border-gray-900 hover:shadow-2xl"
+                    className="w-full rounded-2xl border border-sky-100 bg-white p-5 text-left shadow-lg transition-all hover:border-sky-300 hover:shadow-[0_12px_36px_rgba(56,189,248,0.25)]"
                   >
                     <div className="mb-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -1109,7 +1112,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           src={booking.clientImage}
                           alt={booking.clientName}
                           gender={booking.clientGender}
-                          sizeClassName="h-14 w-14 flex-shrink-0 rounded-full ring-2 ring-gray-200"
+                          sizeClassName="h-14 w-14 flex-shrink-0 rounded-full ring-2 ring-sky-100"
                         />
                         <div>
                           <h3 className="font-bold text-gray-900">{booking.clientName}</h3>
@@ -1119,7 +1122,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       <ChevronRight className="h-5 w-5 text-gray-400" />
                     </div>
 
-                    <div className="mb-4 space-y-1 rounded-xl bg-gray-50 p-4">
+                    <div className="mb-4 space-y-1 rounded-xl bg-sky-50/60 p-4">
                       <div className="flex items-center gap-2 text-xs text-gray-600">
                         <Calendar className="h-3 w-3" />
                         <span>{booking.date}</span>
@@ -1149,12 +1152,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     </div>
 
                     {booking.deletedNote ? (
-                      <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 text-xs font-semibold text-red-700">
+                      <div className="mt-3 flex items-center gap-2 border-t border-sky-100 pt-3 text-xs font-semibold text-red-700">
                         <X className="h-3 w-3" />
                         <span>{booking.deletedNote}</span>
                       </div>
                     ) : booking.countdown ? (
-                      <div className="mt-3 flex items-center gap-2 border-t border-gray-200 pt-3 text-xs font-semibold text-amber-700">
+                      <div className="mt-3 flex items-center gap-2 border-t border-sky-100 pt-3 text-xs font-semibold text-amber-700">
                         <Clock className="h-3 w-3" />
                         <span>{booking.countdown}</span>
                       </div>
@@ -1193,9 +1196,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   icon: TrendingUp,
                 },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
-                  <div className="mb-3 inline-flex rounded-xl bg-gray-100 p-3">
-                    <stat.icon className="h-5 w-5 text-gray-900" />
+                <div key={stat.label} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
+                  <div className="mb-3 inline-flex rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 p-3">
+                    <stat.icon className="h-5 w-5 text-sky-600" />
                   </div>
                   <p className="text-sm text-gray-600">{stat.label}</p>
                   <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
@@ -1211,13 +1214,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             </div>
 
             {reviews.length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+              <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg">
                 <p className="text-sm text-gray-500">No reviews yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {reviews.map((review) => (
-                  <div key={review.id} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+                  <div key={review.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg md:p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
                         <Avatar
@@ -1240,7 +1243,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     {review.comment && <p className="mt-3 text-sm text-gray-700">{review.comment}</p>}
 
                     {review.reply ? (
-                      <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3">
+                      <div className="mt-4 rounded-xl bg-sky-50/60 px-4 py-3">
                         <p className="text-xs font-semibold text-gray-900">Your reply</p>
                         <p className="mt-1 text-sm text-gray-700">{review.reply}</p>
                       </div>
@@ -1252,12 +1255,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             setReplyDraftByReviewId((current) => ({ ...current, [review.id]: event.target.value }))
                           }
                           placeholder="Write a reply..."
-                          className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                          className="min-w-0 flex-1 rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                         />
                         <button
                           onClick={() => void handleSubmitReviewReply(review.id)}
                           disabled={isSubmittingReplyForId === review.id}
-                          className="flex-shrink-0 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                          className="flex-shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                         >
                           {isSubmittingReplyForId === review.id ? 'Posting...' : 'Reply'}
                         </button>
@@ -1279,7 +1282,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 <select
                   value={earningsMonthFilter}
                   onChange={(event) => setEarningsMonthFilter(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-auto"
+                  className="w-full rounded-xl border border-sky-100 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm outline-none focus:ring-2 focus:ring-sky-400 sm:w-auto"
                 >
                   <option value="all">All time</option>
                   {earningsMonthOptions.map((month) => (
@@ -1312,9 +1315,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 { label: 'Total bookings', value: earningsStats.bookingCount, icon: Layers },
                 { label: 'Total completed projects', value: earningsStats.completedProjectCount, icon: Check },
               ].map((stat) => (
-                <div key={stat.label} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
-                  <div className="mb-3 inline-flex rounded-xl bg-gray-100 p-3">
-                    <stat.icon className="h-5 w-5 text-gray-900" />
+                <div key={stat.label} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
+                  <div className="mb-3 inline-flex rounded-xl bg-gradient-to-br from-sky-100 to-blue-100 p-3">
+                    <stat.icon className="h-5 w-5 text-sky-600" />
                   </div>
                   <p className="text-sm text-gray-600">{stat.label}</p>
                   <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
@@ -1323,7 +1326,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             </div>
 
             {monthFilteredBookings.filter((booking) => booking.payment_status !== 'unpaid').length === 0 ? (
-              <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+              <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg">
                 <p className="text-sm text-gray-500">No earnings yet — this fills in once a client pays their booking deposit.</p>
               </div>
             ) : (
@@ -1342,7 +1345,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   return (
                     <div
                       key={booking.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between md:p-5"
+                      className="flex flex-col gap-3 rounded-2xl border border-sky-100 bg-white p-4 shadow-lg sm:flex-row sm:items-center sm:justify-between md:p-5"
                     >
                       <div>
                         <p className="font-semibold text-gray-900">{booking.project_name}</p>
@@ -1367,7 +1370,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             Refunded
                           </span>
                         ) : (
-                          <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
+                          <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-700">
                             {PAYMENT_STATUS_LABEL[booking.payment_status] || booking.payment_status} {booking.payment_status === 'paid' ? '✓' : ''}
                           </span>
                         )}
@@ -1375,7 +1378,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           <button
                             onClick={() => void handleAdvancePaymentStatus(booking)}
                             disabled={isUpdatingPaymentForId === booking.id}
-                            className="flex-shrink-0 rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                            className="flex-shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
                           >
                             {isUpdatingPaymentForId === booking.id ? 'Updating...' : `Mark as ${PAYMENT_STATUS_LABEL[nextStatus]}`}
                           </button>
@@ -1392,7 +1395,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 <h3 className="mb-3 text-lg font-bold text-gray-900">Team Earnings</h3>
                 <div className="space-y-2">
                   {teamEarnings.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between rounded-2xl border border-gray-200 bg-white p-4 shadow-lg">
+                    <div key={entry.id} className="flex items-center justify-between rounded-2xl border border-sky-100 bg-white p-4 shadow-lg">
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{entry.projectName}</p>
                         <p className="text-xs text-gray-500">{entry.teamName}</p>
@@ -1418,12 +1421,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             </div>
 
             {freelancerProfile && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+              <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg md:p-6">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <h3 className="text-lg font-bold text-gray-900">Your Profile Settings</h3>
                   <button
                     onClick={() => navigate('/edit-profile')}
-                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                   >
                     <Edit className="h-4 w-4" />
                     Edit Profile
@@ -1447,7 +1450,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {(freelancerProfile.skills || []).length > 0 ? (
                         freelancerProfile.skills.map((skill: string) => (
-                          <span key={skill} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                          <span key={skill} className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-gray-700">
                             {skill}
                           </span>
                         ))
@@ -1461,7 +1464,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {(freelancerProfile.styles || []).length > 0 ? (
                         freelancerProfile.styles.map((style: string) => (
-                          <span key={style} className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                          <span key={style} className="rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold text-gray-700">
                             {style}
                           </span>
                         ))
@@ -1488,7 +1491,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </div>
             )}
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+            <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg md:p-6">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">Billing Information</h3>
@@ -1497,7 +1500,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 {!isEditingBilling && (
                   <button
                     onClick={() => setIsEditingBilling(true)}
-                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                   >
                     <Edit className="h-4 w-4" />
                     {billingAccountNumber ? 'Edit' : 'Add'}
@@ -1513,7 +1516,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       value={billingBankName}
                       onChange={(event) => setBillingBankName(event.target.value)}
                       placeholder="e.g. Kasikorn Bank"
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                   <div>
@@ -1522,7 +1525,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       value={billingAccountHolderName}
                       onChange={(event) => setBillingAccountHolderName(event.target.value)}
                       placeholder="Name on the bank account"
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                   <div>
@@ -1532,7 +1535,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                       onChange={(event) => setBillingAccountNumber(event.target.value)}
                       placeholder="Bank account number"
                       inputMode="numeric"
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                   <div className="flex justify-end gap-2 pt-1">
@@ -1543,21 +1546,21 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                         setBillingAccountHolderName(freelancerProfile?.billing_account_holder_name || '');
                         setBillingAccountNumber(freelancerProfile?.billing_account_number || '');
                       }}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                      className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={() => void handleSaveBilling()}
                       disabled={isSavingBilling}
-                      className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+                      className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                     >
                       {isSavingBilling ? 'Saving...' : 'Save'}
                     </button>
                   </div>
                 </div>
               ) : billingAccountNumber ? (
-                <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-4 py-3">
+                <div className="flex items-center gap-3 rounded-xl bg-sky-50/60 px-4 py-3">
                   <CreditCard className="h-5 w-5 flex-shrink-0 text-gray-500" />
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{billingBankName || 'Bank account'}</p>
@@ -1573,14 +1576,14 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               )}
             </div>
 
-            <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+            <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg md:p-6">
               <h3 className="mb-1 text-lg font-bold text-gray-900">Blocked Dates</h3>
               <p className="mb-4 text-sm text-gray-600">Block off specific dates you're not available, with an optional reason.</p>
 
               {blockedDates.length > 0 && (
                 <div className="mb-4 space-y-2">
                   {blockedDates.map((blocked) => (
-                    <div key={blocked.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                    <div key={blocked.id} className="flex items-center justify-between rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
                       <div>
                         <p className="text-sm font-semibold text-gray-900">
                           {new Date(blocked.blocked_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1604,18 +1607,18 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   type="date"
                   value={newBlockedDate}
                   onChange={(event) => setNewBlockedDate(event.target.value)}
-                  className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-48"
+                  className="rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400 sm:w-48"
                 />
                 <input
                   value={newBlockedReason}
                   onChange={(event) => setNewBlockedReason(event.target.value)}
                   placeholder="Reason (optional)"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="min-w-0 flex-1 rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   onClick={() => void handleAddBlockedDate()}
                   disabled={isSavingBlockedDate}
-                  className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+                  className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   <Plus className="h-4 w-4" />
                   Block Date
@@ -1685,6 +1688,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           }}
         />
       )}
+      </div>
     </div>
   );
 }

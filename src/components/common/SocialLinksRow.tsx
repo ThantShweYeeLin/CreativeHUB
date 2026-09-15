@@ -20,7 +20,7 @@ export function SocialLinksRow({ links, className }: SocialLinksRowProps) {
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-100 px-3 py-2 text-xs font-bold text-gray-700 hover:bg-sky-50"
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
             {link.platform}

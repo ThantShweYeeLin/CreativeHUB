@@ -87,7 +87,7 @@ export function ReportAttendanceProblem({
           </button>
         </div>
 
-        <div className="mb-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-600 space-y-0.5">
+        <div className="mb-4 rounded-xl bg-sky-50/50 p-3 text-sm text-gray-600 space-y-0.5">
           <p className="font-semibold text-gray-900">{booking.project_name}</p>
           {booking.start_date && (
             <p>
@@ -106,7 +106,7 @@ export function ReportAttendanceProblem({
             setReason(e.target.value);
             setFiles([]);
           }}
-          className="mb-4 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          className="mb-4 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
         >
           {reasonOptions.map((option) => (
             <option key={option.value} value={option.value}>
@@ -144,7 +144,7 @@ export function ReportAttendanceProblem({
             {files.length > 0 && (
               <div className="mt-2 grid grid-cols-4 gap-2">
                 {files.map((file, index) => (
-                  <div key={`${file.name}-${index}`} className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                  <div key={`${file.name}-${index}`} className="aspect-square overflow-hidden rounded-lg border border-sky-100 bg-sky-50/50">
                     {isPreviewableImage(file) ? (
                       <img src={URL.createObjectURL(file)} alt={file.name} className="h-full w-full object-cover" />
                     ) : (
@@ -171,27 +171,27 @@ export function ReportAttendanceProblem({
           value={explanation}
           onChange={(e) => setExplanation(e.target.value)}
           placeholder="Describe what happened..."
-          className="mb-4 w-full min-h-[90px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          className="mb-4 w-full min-h-[90px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
         />
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
         {showConfirm ? (
-          <div className="rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+          <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
             <p className="mb-3 text-sm text-gray-800">
               Are you sure you want to submit this attendance report? False reports may result in account penalties.
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowConfirm(false)}
-                className="flex-1 rounded-xl border border-gray-300 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+                className="flex-1 rounded-xl border border-sky-200 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-100"
               >
                 Go Back
               </button>
               <button
                 onClick={() => void handleSubmit()}
                 disabled={isSubmitting}
-                className="flex-1 rounded-xl bg-gray-900 py-2.5 text-sm font-bold text-white hover:bg-black disabled:opacity-60"
+                className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 text-sm font-bold text-white hover:shadow-lg disabled:opacity-60"
               >
                 {isSubmitting ? 'Submitting...' : 'Yes, Submit Report'}
               </button>
@@ -199,13 +199,13 @@ export function ReportAttendanceProblem({
           </div>
         ) : (
           <div className="flex gap-2">
-            <button onClick={onCancel} className="flex-1 rounded-xl border border-gray-300 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-100">
+            <button onClick={onCancel} className="flex-1 rounded-xl border border-sky-200 py-3 text-sm font-semibold text-gray-700 hover:bg-sky-100">
               Cancel
             </button>
             <button
               onClick={() => setShowConfirm(true)}
               disabled={!canSubmit}
-              className="flex-1 rounded-xl bg-gray-900 py-3 text-sm font-bold text-white hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-bold text-white hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Submit Report
             </button>

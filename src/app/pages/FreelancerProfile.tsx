@@ -27,6 +27,8 @@ import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
+import { AuthPromptModal } from '../components/AuthPromptModal';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 
@@ -101,6 +103,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showBidTip, setShowBidTip] = useState(false);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     projectName: '',
     customPurpose: '',
@@ -428,7 +431,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const showMessageButton = Boolean(user?.id && targetFreelancerUserId && (isFollowing || isFollowedByTarget));
 
   const handleFavoriteToggle = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
+    if (!targetFreelancerUserId || user?.id === targetFreelancerUserId) {
+      return;
+    }
+
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to save your favorite freelancers.');
       return;
     }
 
@@ -447,7 +455,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   };
 
   const handleFollowToggle = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) return;
+    if (!targetFreelancerUserId || user?.id === targetFreelancerUserId) return;
+
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to follow freelancers and see their updates.');
+      return;
+    }
 
     setError(null);
     setIsFollowLoading(true);
@@ -478,7 +491,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   };
 
   const handleBlockUser = async () => {
-    if (!user?.id || !targetFreelancerUserId || user.id === targetFreelancerUserId) {
+    if (!targetFreelancerUserId || user?.id === targetFreelancerUserId) {
+      return;
+    }
+
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to block or report other users.');
       return;
     }
 
@@ -770,6 +788,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   };
 
   const togglePostLike = async (postId: string) => {
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to like and save creative work.');
+      return;
+    }
+
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
     setPostEngagement((current) => {
@@ -783,10 +806,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         },
       };
     });
-
-    if (!user?.id) {
-      return;
-    }
 
     const engagement = postEngagement[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     const response = await DataService.toggleClientPostLike(user.id, apiPostId, engagement.liked);
@@ -810,6 +829,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   };
 
   const togglePostSave = async (postId: string) => {
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to like and save creative work.');
+      return;
+    }
+
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
     setPostEngagement((current) => {
@@ -823,10 +847,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         },
       };
     });
-
-    if (!user?.id) {
-      return;
-    }
 
     const engagement = postEngagement[stateKey] || { likes: 0, comments: 0, shares: 0, saves: 0, liked: false, saved: false };
     const response = await DataService.toggleClientPostSave(user.id, apiPostId, engagement.saved);
@@ -984,7 +1004,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
     const draft = (commentDraftByPostId[stateKey] || '').trim();
-    if (!draft || !user?.id) {
+    if (!draft) {
+      return;
+    }
+
+    if (!user?.id) {
+      setAuthPromptMessage('Sign up to join the conversation.');
       return;
     }
 
@@ -1038,6 +1063,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
     if (!user?.id) {
+      setAuthPromptMessage('Sign up to join the conversation.');
       return;
     }
 
@@ -1080,16 +1106,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-white to-sky-50">
+        <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
       </div>
     );
   }
 
   if (isBlockedProfile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
-        <div className="mx-auto max-w-[960px] rounded-3xl bg-white p-6 shadow-xl border border-gray-200">
+      <div className="min-h-screen bg-gradient-to-b from-white to-sky-50 p-6">
+        <div className="mx-auto max-w-[960px] rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100">
           <button onClick={onBack} className="mb-4 flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors">
             <ArrowLeft className="w-5 h-5" />
             Back
@@ -1102,8 +1128,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
   if (error && !profile) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
-        <div className="mx-auto max-w-[960px] rounded-3xl bg-white p-6 shadow-xl border border-red-200">
+      <div className="min-h-screen bg-gradient-to-b from-white to-sky-50 p-6">
+        <div className="mx-auto max-w-[960px] rounded-3xl bg-white/80 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-red-200">
           <button onClick={onBack} className="mb-4 flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors">
             <ArrowLeft className="w-5 h-5" />
             Back
@@ -1115,15 +1141,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
-      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-lg border-b border-gray-200">
+    <div className="relative min-h-screen pb-20 md:pb-0">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <header className="sticky top-0 z-40 bg-white/70 backdrop-blur-xl border-b border-sky-100">
         <div className="max-w-[1400px] mx-auto px-4 md:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             <div className="flex items-center gap-3 md:gap-6">
-              <button onClick={onBack} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <button onClick={onBack} className="p-2 hover:bg-sky-50 rounded-full transition-colors">
                 <ArrowLeft className="w-5 h-5 md:w-6 md:h-6 text-gray-700" />
               </button>
-              <img src={logoImage} alt="CreativeHUB" className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover" />
+              <img src={logoImage} alt="CreativeHUB" className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover shadow-sm ring-2 ring-white" />
             </div>
             {successMessage && <span className="hidden md:block text-sm text-green-700">{successMessage}</span>}
           </div>
@@ -1142,7 +1170,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
         )}
 
-        <section className="mb-8 overflow-hidden rounded-3xl bg-white shadow-xl">
+        <section className="mb-8 overflow-hidden rounded-3xl bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           {/* Desktop header — unchanged from before. Hidden below md; the
               mobile-only header right after this block replaces it there
               because this overlay-on-cover layout, when the button row
@@ -1150,7 +1178,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               the cover's fixed height and gets clipped by this section's
               overflow-hidden (that's the "can't see my profile picture on
               phone" bug). */}
-          <div className="relative hidden h-64 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900 md:block">
+          <div className="relative hidden h-64 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500 md:block">
             {coverUrl ? (
               <ImageWithFallback src={coverUrl} alt={`${displayName} background`} className="h-full w-full object-cover" />
             ) : null}
@@ -1177,7 +1205,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   {isOwner ? (
                     <button
                       onClick={() => navigate('/edit-profile')}
-                      className="flex items-center gap-2 rounded-xl border border-white/30 bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:bg-black hover:shadow-lg"
+                      className="flex items-center gap-2 rounded-xl border border-white/30 bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
                     >
                       <Edit className="h-5 w-5" />
                       Edit Profile
@@ -1186,7 +1214,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <>
                       <button
                         onClick={handleFavoriteToggle}
-                        className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
+                        className={`rounded-full p-3 transition-all ${isFavorited ? 'bg-blue-50 text-blue-500 hover:bg-blue-100' : 'bg-white/90 text-gray-700 hover:bg-white'}`}
                       >
                         <Heart className={`h-6 w-6 ${isFavorited ? 'fill-current' : ''}`} />
                       </button>
@@ -1202,6 +1230,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
                       <button
                         onClick={() => {
+                          if (!user?.id) {
+                            setAuthPromptMessage('Create an account to block or report other users.');
+                            return;
+                          }
                           setReportSubmitted(false);
                           setShowReportModal(true);
                         }}
@@ -1214,7 +1246,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       {showMessageButton && (
                         <button
                           onClick={() => targetFreelancerUserId && onOpenChat?.(targetFreelancerUserId)}
-                          className="flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:shadow-lg"
+                          className="flex items-center gap-2 rounded-xl bg-white/90 backdrop-blur-xl px-6 py-3 text-base font-semibold text-gray-900 shadow-sm transition-all hover:shadow-lg"
                         >
                           <MessageCircle className="h-5 w-5" />
                           Message
@@ -1224,6 +1256,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       {isBookableFreelancer && (
                         <button
                           onClick={() => {
+                            if (!user?.id) {
+                              setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                              return;
+                            }
                             // Pre-fill with the minimum so the field never
                             // starts empty behind a placeholder that reads
                             // like a real value ("Minimum THB 1,510") -
@@ -1235,7 +1271,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                             }));
                             setShowBookingForm(true);
                           }}
-                          className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg"
+                          className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
                         >
                           Request Booking
                         </button>
@@ -1247,8 +1283,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                           disabled={isFollowLoading}
                           className={
                             isFollowing
-                              ? 'rounded-xl border border-gray-300 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
-                              : 'rounded-xl bg-gray-900 px-6 py-3 text-base font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
+                              ? 'rounded-xl border border-sky-200 bg-white px-6 py-3 text-base font-semibold text-gray-900 transition-all hover:bg-sky-50 disabled:opacity-60'
+                              : 'rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60'
                           }
                         >
                           {isFollowLoading
@@ -1274,7 +1310,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               never get clipped no matter how many action buttons wrap
               below the name. Desktop block above is untouched. */}
           <div className="md:hidden">
-            <div className="relative h-28 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900">
+            <div className="relative h-28 bg-gradient-to-r from-sky-500 via-blue-500 to-indigo-500">
               {coverUrl ? (
                 <ImageWithFallback src={coverUrl} alt={`${displayName} background`} className="h-full w-full object-cover" />
               ) : null}
@@ -1298,7 +1334,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 {isOwner ? (
                   <button
                     onClick={() => navigate('/edit-profile')}
-                    className="flex items-center gap-2 rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:bg-black"
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
                   >
                     <Edit className="h-4 w-4" />
                     Edit Profile
@@ -1307,7 +1343,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <>
                     <button
                       onClick={handleFavoriteToggle}
-                      className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+                      className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-blue-50 text-blue-500 hover:bg-blue-100' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'}`}
                     >
                       <Heart className={`h-5 w-5 ${isFavorited ? 'fill-current' : ''}`} />
                     </button>
@@ -1315,7 +1351,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <button
                       onClick={() => void handleBlockUser()}
                       disabled={isBlockingUser}
-                      className="rounded-full bg-gray-100 p-2.5 text-gray-700 transition-all hover:bg-gray-200 disabled:opacity-60"
+                      className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100 disabled:opacity-60"
                       title="Block this user"
                     >
                       <Ban className="h-5 w-5" />
@@ -1323,10 +1359,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
                     <button
                       onClick={() => {
+                        if (!user?.id) {
+                          setAuthPromptMessage('Create an account to block or report other users.');
+                          return;
+                        }
                         setReportSubmitted(false);
                         setShowReportModal(true);
                       }}
-                      className="rounded-full bg-gray-100 p-2.5 text-gray-700 transition-all hover:bg-gray-200"
+                      className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100"
                       title="Report this user"
                     >
                       <Flag className="h-5 w-5" />
@@ -1335,7 +1375,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     {showMessageButton && (
                       <button
                         onClick={() => targetFreelancerUserId && onOpenChat?.(targetFreelancerUserId)}
-                        className="flex items-center gap-2 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-gray-200"
+                        className="flex items-center gap-2 rounded-xl bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-100"
                       >
                         <MessageCircle className="h-4 w-4" />
                         Message
@@ -1345,13 +1385,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     {isBookableFreelancer && (
                       <button
                         onClick={() => {
+                          if (!user?.id) {
+                            setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                            return;
+                          }
                           setFormData((current) => ({
                             ...current,
                             offerAmount: current.offerAmount || (minimumOffer > 0 ? String(minimumOffer) : ''),
                           }));
                           setShowBookingForm(true);
                         }}
-                        className="rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
+                        className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
                       >
                         Request Booking
                       </button>
@@ -1362,8 +1406,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       disabled={isFollowLoading}
                       className={
                         isFollowing
-                          ? 'rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-gray-50 disabled:opacity-60'
-                          : 'rounded-xl bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60'
+                          ? 'rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-50 disabled:opacity-60'
+                          : 'rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60'
                       }
                     >
                       {isFollowLoading
@@ -1423,35 +1467,35 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
             {isBookableFreelancer && (
             <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
-              <div className="rounded-xl bg-gray-100 p-4">
+              <div className="rounded-xl bg-sky-50 p-4">
                 <p className="text-sm text-gray-500">{totalReviews} reviews</p>
                 <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 md:h-5 md:w-5" />
                   <span className="font-semibold">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
                 </div>
               </div>
-              <div className="rounded-xl bg-gray-100 p-4">
+              <div className="rounded-xl bg-sky-50 p-4">
                 <p className="text-sm text-gray-500">experience level</p>
                 <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Briefcase className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="font-semibold">{majorSkillExperienceLevel || 'New'}</span>
                 </div>
               </div>
-              <div className="rounded-xl bg-gray-100 p-4">
+              <div className="rounded-xl bg-sky-50 p-4">
                 <p className="text-sm text-gray-500">{rateCaption}</p>
                 <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Sparkles className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="font-semibold">{formattedRate}</span>
                 </div>
               </div>
-              <div className="rounded-xl bg-gray-100 p-4">
+              <div className="rounded-xl bg-sky-50 p-4">
                 <p className="text-sm text-gray-500">active projects</p>
                 <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Users className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="font-semibold">{activeProjects}</span>
                 </div>
               </div>
-              <div className="rounded-xl bg-gray-100 p-4">
+              <div className="rounded-xl bg-sky-50 p-4">
                 <p className="text-sm text-gray-500">completed projects</p>
                 <div className="mt-1 flex items-center gap-2 text-gray-900">
                   <Users className="h-4 w-4 md:h-5 md:w-5" />
@@ -1466,7 +1510,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         {isBookableFreelancer && (
         <section className="grid items-start gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
-            <div className="rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <h2 className="text-2xl font-bold text-gray-900">Social Links</h2>
               {socialLinks.length === 0 ? (
                 <p className="mt-4 text-gray-600">No social links added yet.</p>
@@ -1475,7 +1519,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               )}
             </div>
 
-            <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <h2 className="text-xl font-bold text-gray-900">Working Details</h2>
               <div className="mt-4 space-y-3 text-sm text-gray-700">
                 <p><span className="font-semibold text-gray-900">Availability:</span> {availability}</p>
@@ -1497,22 +1541,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
 
           <aside className="space-y-6">
-            <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <h2 className="text-xl font-bold text-gray-900">Skills</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {skills.length > 0 ? skills.map((skill: string) => (
-                  <span key={skill} className="rounded-full border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
+                  <span key={skill} className="rounded-full border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
                     {skill}
                   </span>
                 )) : <p className="text-sm text-gray-600">No skills listed yet.</p>}
               </div>
             </div>
 
-            <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <h2 className="text-xl font-bold text-gray-900">Styles</h2>
               <div className="mt-4 flex flex-wrap gap-2">
                 {styles.length > 0 ? styles.map((style: string) => (
-                  <span key={style} className="rounded-full bg-gray-900 px-3 py-2 text-sm font-semibold text-white">
+                  <span key={style} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
                     {style}
                   </span>
                 )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
@@ -1520,7 +1564,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             {(minorSkills.length > 0 || majorSkillExperienceLevel) && (
-              <div className="rounded-3xl bg-white p-6 shadow-xl">
+              <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
                 <p className="mt-1 text-base font-bold text-gray-900">
                   {title}
@@ -1531,7 +1575,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {minorSkills.map((skill) => (
-                        <span key={skill.name} className="rounded-full border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600">
+                        <span key={skill.name} className="rounded-full border border-sky-100 px-3 py-1.5 text-sm font-medium text-gray-600">
                           {skill.name}
                           {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
                         </span>
@@ -1546,14 +1590,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         )}
 
         {isBookableFreelancer && services.length > 0 && (
-          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="text-2xl font-bold text-gray-900">Services</h2>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
               {services.map((service) => (
-                <div key={service.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                <div key={service.id} className="rounded-2xl border border-sky-100 bg-sky-50/50 p-5">
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-bold text-gray-900">{service.name}</h3>
-                    <span className="flex-shrink-0 whitespace-nowrap rounded-full bg-gray-900 px-3 py-1 text-xs font-semibold text-white">
+                    <span className="flex-shrink-0 whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1 text-xs font-semibold text-white">
                       {service.pricing_type === 'custom_quote'
                         ? 'Custom quote'
                         : service.starting_price != null
@@ -1586,7 +1630,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         )}
 
         {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
-          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
             <div className="mt-4 space-y-3 text-sm text-gray-700">
               {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
@@ -1601,14 +1645,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         )}
 
         {(isBookableFreelancer || canViewClientReviews) && reviews.length > 0 && (
-          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="text-2xl font-bold text-gray-900">{canViewClientReviews ? 'Reviews from Freelancers' : 'Reviews'}</h2>
             {canViewClientReviews && (
               <p className="mt-1 text-sm text-gray-500">Only visible to freelancers — {displayName} can't see these.</p>
             )}
             <div className="mt-5 space-y-4">
               {reviews.map((review) => (
-                <div key={review.id} className="rounded-2xl border border-gray-200 bg-gray-50 p-5">
+                <div key={review.id} className="rounded-2xl border border-sky-100 bg-sky-50/50 p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <Avatar
@@ -1629,7 +1673,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   </div>
                   {review.comment && <p className="mt-3 text-sm text-gray-700">{review.comment}</p>}
                   {review.reply && (
-                    <div className="mt-3 rounded-r-xl border-l-4 border-gray-900 bg-gray-100 p-4">
+                    <div className="mt-3 rounded-r-xl border-l-4 border-sky-400 bg-sky-50 p-4">
                       <p className="text-xs font-semibold text-gray-900">Response from {profile?.full_name || 'the freelancer'}</p>
                       <p className="mt-1 text-sm text-gray-700">{review.reply}</p>
                     </div>
@@ -1641,7 +1685,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         )}
 
         {profilePosts.length > 0 && (
-          <section className="mt-8 rounded-3xl bg-white p-6 md:p-8 shadow-xl">
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="text-2xl font-bold text-gray-900">Recent Posts</h2>
             <p className="mt-1 text-sm text-gray-600">Posts from this profile also visible in For You feed.</p>
             <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -1683,14 +1727,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       {showReportModal && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_8px_30px_rgba(56,189,248,0.2)]">
             {reportSubmitted ? (
               <>
                 <h3 className="mb-2 text-lg font-bold text-gray-900">Report submitted</h3>
                 <p className="mb-4 text-sm text-gray-600">Thanks — our team will review this report.</p>
                 <button
                   onClick={() => setShowReportModal(false)}
-                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black"
+                  className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-semibold text-white hover:shadow-lg"
                 >
                   Close
                 </button>
@@ -1707,7 +1751,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <select
                   value={reportReason}
                   onChange={(e) => setReportReason(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="harassment">Harassment</option>
                   <option value="scam_fraud">Scam / Fraud</option>
@@ -1721,7 +1765,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   value={reportDescription}
                   onChange={(e) => setReportDescription(e.target.value)}
                   placeholder="Describe the issue in detail..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence (optional)</label>
                 <input
@@ -1734,7 +1778,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <button
                   onClick={() => void handleSubmitReport()}
                   disabled={isSubmittingReport}
-                  className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                  className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
                 </button>
@@ -1815,19 +1859,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       {isShareSheetOpen && sharingPost && (
         <div className="fixed inset-0 z-[1400] animate-in fade-in-0 bg-black/50 backdrop-blur-sm">
-          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-gray-200 bg-white p-5 shadow-2xl md:top-24 md:p-6">
+          <div className="fixed inset-x-4 top-20 mx-auto max-w-xl rounded-3xl border border-sky-100 bg-white p-5 shadow-[0_20px_60px_rgba(56,189,248,0.25)] md:top-24 md:p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share post</p>
                 <h3 className="mt-1 text-xl font-bold text-gray-950">Send this post</h3>
                 <p className="mt-1 text-sm text-gray-600">Choose specific mutuals, copy a link, or send to selected users in messages.</p>
               </div>
-              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-gray-100">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-sky-50">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+            <div className="mt-5 rounded-2xl border border-sky-100 bg-sky-50/50 p-4">
               <div className="flex items-center gap-3">
                 <div className="relative h-12 w-12 flex-shrink-0">
                   <div className="h-full w-full overflow-hidden rounded-xl">
@@ -1845,7 +1889,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <button
                 type="button"
                 onClick={() => void copyShareLink()}
-                className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-left transition-colors hover:bg-gray-50"
+                className="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-left transition-colors hover:bg-sky-50"
               >
                 <p className="text-sm font-semibold text-gray-900">Copy link</p>
                 <p className="mt-1 text-xs text-gray-500">Copies the post link so you can paste it anywhere.</p>
@@ -1855,7 +1899,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 type="button"
                 onClick={() => void sendShareToMutuals()}
                 disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
-                className="rounded-2xl bg-gray-900 px-4 py-3 text-left text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-left text-white transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <p className="text-sm font-semibold">Send in messages</p>
                 <p className="mt-1 text-xs text-white/75">
@@ -1878,19 +1922,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   readOnly
                   value={`${window.location.origin}/profile/${targetFreelancerUserId || id}`}
                   onFocus={(event) => event.target.select()}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2 text-xs text-gray-700"
                 />
               </div>
             )}
 
-            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-gray-200 bg-white">
+            <div className="mt-4 max-h-56 overflow-y-auto rounded-2xl border border-sky-100 bg-white">
               {isLoadingMutualUsers ? (
                 <p className="px-4 py-3 text-sm text-gray-500">Finding mutual connections...</p>
               ) : mutualUsers.length === 0 ? (
                 <p className="px-4 py-3 text-sm text-gray-500">You do not have any mutual connections yet.</p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-sky-100 px-4 py-3">
                     <button
                       type="button"
                       onClick={() => setSelectedShareRecipientIds(mutualUsers.map((mutual) => mutual.id))}
@@ -1920,12 +1964,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                               : [...current, mutual.id]
                           )
                         }
-                        className={`flex w-full items-center gap-3 border-b border-gray-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
+                        className={`flex w-full items-center gap-3 border-b border-sky-100 px-4 py-3 text-left transition-colors last:border-b-0 ${isSelected ? 'bg-sky-50' : 'hover:bg-sky-50'}`}
                       >
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-transparent'}`}>
+                        <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-200 bg-white text-transparent'}`}>
                           <Check className="h-3 w-3" />
                         </div>
-                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
+                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-gray-900">{mutual.full_name || mutual.email}</p>
                           <p className="truncate text-xs text-gray-500">{mutual.email}</p>
@@ -1938,7 +1982,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             </div>
 
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+              <button onClick={() => setIsShareSheetOpen(false)} className="rounded-xl border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">
                 Close
               </button>
               <button
@@ -1956,18 +2000,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       {showBookingForm && isBookableFreelancer && (
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white shadow-2xl">
-            <div className="sticky top-0 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-4 md:px-8 md:py-6 rounded-t-3xl">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+            <div className="sticky top-0 flex items-center justify-between border-b border-sky-100 bg-white/90 backdrop-blur-xl px-4 py-4 md:px-8 md:py-6 rounded-t-3xl">
               <h2 className="text-2xl font-bold text-gray-900">Request Booking</h2>
-              <button onClick={() => setShowBookingForm(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+              <button onClick={() => setShowBookingForm(false)} className="p-2 hover:bg-sky-50 rounded-full transition-colors">
                 <X className="w-5 h-5 text-gray-600" />
               </button>
             </div>
 
             <form onSubmit={handleSubmitRequest} className="p-4 md:p-8 space-y-6">
-              <div className="rounded-2xl bg-gray-50 p-5">
+              <div className="rounded-2xl bg-sky-50/60 p-5">
                 <div className="flex items-center gap-4">
-                  <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-16 w-16 ring-2 ring-gray-200 rounded-full" />
+                  <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-16 w-16 ring-2 ring-sky-100 rounded-full" />
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">{displayName}</h3>
                     <p className="text-gray-600">{title}</p>
@@ -1982,7 +2026,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   required
                   value={formData.projectName}
                   onChange={(event) => setFormData((current) => ({ ...current, projectName: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="" disabled>Select a purpose</option>
                   {skills.map((skill: string) => (
@@ -1995,7 +2039,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     required
                     value={formData.customPurpose}
                     onChange={(event) => setFormData((current) => ({ ...current, customPurpose: event.target.value }))}
-                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="mt-3 w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     placeholder="Type the purpose of this booking"
                   />
                 )}
@@ -2008,7 +2052,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   required
                   value={formData.location}
                   onChange={(event) => setFormData((current) => ({ ...current, location: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="" disabled>Select a location</option>
                   {bookingLocations.map((option: string) => (
@@ -2021,7 +2065,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     required
                     value={formData.customLocation}
                     onChange={(event) => setFormData((current) => ({ ...current, customLocation: event.target.value }))}
-                    className="mt-3 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="mt-3 w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     placeholder="Type the location for this booking"
                   />
                 )}
@@ -2034,7 +2078,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   rows={4}
                   value={formData.notes}
                   onChange={(event) => setFormData((current) => ({ ...current, notes: event.target.value }))}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                   placeholder="Anything else the freelancer should know?"
                 />
               </div>
@@ -2049,7 +2093,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       min={todayDateString}
                       value={formData.scheduleDate}
                       onChange={(event) => setFormData((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '', scheduleEndTime: '' }))}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                   <div>
@@ -2058,7 +2102,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       disabled={!formData.scheduleDate || isSelectedDateBlocked}
                       value={formData.scheduleTime}
                       onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value, scheduleEndTime: '' }))}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
                     >
                       <option value="" disabled>
                         {!formData.scheduleDate ? 'Choose a date first' : isSelectedDateBlocked ? 'Not available this day' : 'Start time'}
@@ -2076,7 +2120,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       disabled={!formData.scheduleTime}
                       value={formData.scheduleEndTime}
                       onChange={(event) => setFormData((current) => ({ ...current, scheduleEndTime: event.target.value }))}
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
                     >
                       <option value="" disabled>
                         {!formData.scheduleTime ? 'Choose a start time first' : 'End time'}
@@ -2106,7 +2150,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       value={formData.currency}
                       onChange={(event) => setFormData((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
                       list="booking-currency-suggestions"
-                      className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                       placeholder="Type any currency code"
                     />
                     <datalist id="booking-currency-suggestions">
@@ -2117,7 +2161,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       ))}
                     </datalist>
                   </div>
-                  <div className="rounded-xl border border-gray-200 bg-gray-100 px-4 py-3">
+                  <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
                     <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Minimum</span>
                     <span className="font-semibold text-gray-900">{formatCurrencyAmount(minimumOffer, formData.currency)}</span>
                   </div>
@@ -2138,7 +2182,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       {showBidTip && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowBidTip(false)} />
-                          <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-gray-800 bg-gray-900 px-3 py-2 text-xs text-white shadow-xl">
+                          <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-sky-800 bg-gray-900/90 px-3 py-2 text-xs text-white shadow-xl">
                             Suggestion: Bid Higher for High Acceptance
                           </div>
                         </>
@@ -2151,7 +2195,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     inputMode="decimal"
                     value={formData.offerAmount}
                     onChange={(event) => setFormData((current) => ({ ...current, offerAmount: event.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     placeholder={`Minimum ${formatCurrencyAmount(minimumOffer, formData.currency)}`}
                   />
                   {formData.offerAmount && Number(formData.offerAmount) < minimumOffer && (
@@ -2165,17 +2209,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <button
                 type="button"
                 onClick={handleAddMoreFreelancer}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-gray-200 px-4 py-3 font-semibold text-gray-700 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-sky-100 px-4 py-3 font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:bg-sky-50"
               >
                 <Users className="h-4 w-4" />
                 Add More Freelancer
               </button>
 
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowBookingForm(false)} className="flex-1 rounded-xl bg-gray-100 px-4 py-3 font-semibold text-gray-700 hover:bg-gray-200 transition-colors">
+                <button type="button" onClick={() => setShowBookingForm(false)} className="flex-1 rounded-xl bg-sky-50 px-4 py-3 font-semibold text-gray-700 hover:bg-sky-100 transition-colors">
                   Cancel
                 </button>
-                <button type="submit" disabled={isSubmittingRequest} className="flex-1 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3 font-semibold text-white hover:shadow-lg transition-all disabled:opacity-60">
+                <button type="submit" disabled={isSubmittingRequest} className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 font-semibold text-white shadow-md shadow-sky-500/30 hover:shadow-lg transition-all disabled:opacity-60">
                   {isSubmittingRequest ? 'Sending...' : 'Send Request'}
                 </button>
               </div>
@@ -2183,6 +2227,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
         </div>
       )}
+
+      {authPromptMessage && (
+        <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
+      </div>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import logoImage from '../../../imports/logo.png';
 import { useAuth } from '../../../contexts/AuthContext';
 import { Avatar } from '../../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
+import { PageBackdrop } from '../../../components/common/PageBackdrop';
 
 export type AdminSection = 'overview' | 'users' | 'bookings' | 'disputes' | 'attendance' | 'reports' | 'audit-logs';
 
@@ -68,11 +69,13 @@ export function AdminLayout({
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gray-50 lg:flex">
+    <div className="relative min-h-screen">
+      <PageBackdrop />
+      <div className="relative z-10 lg:flex">
       {/* Sidebar — desktop only; admin work is desktop-first, and a real
           sidebar needs the width a phone/tablet viewport doesn't have. */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-shrink-0 lg:flex-col lg:border-r lg:border-gray-200 lg:bg-white">
-        <div className="flex items-center gap-2.5 border-b border-gray-100 px-5 py-5">
+      <aside className="hidden lg:flex lg:w-64 lg:flex-shrink-0 lg:flex-col lg:border-r lg:border-sky-100 lg:bg-white">
+        <div className="flex items-center gap-2.5 border-b border-sky-100 px-5 py-5">
           <img src={logoImage} alt="CreativeHUB" className="h-9 w-9 rounded-full object-cover" />
           <div>
             <p className="text-sm font-bold leading-tight text-gray-900">CreativeHUB</p>
@@ -97,7 +100,7 @@ export function AdminLayout({
                       key={item.id}
                       onClick={() => navigate(item.path)}
                       className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors ${
-                        isActive ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        isActive ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'text-gray-600 hover:bg-sky-50 hover:text-gray-900'
                       }`}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0" />
@@ -110,7 +113,7 @@ export function AdminLayout({
           ))}
         </nav>
 
-        <div className="border-t border-gray-100 p-3">
+        <div className="border-t border-sky-100 p-3">
           <div className="mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-2">
             <Avatar src={user?.avatar_url || DEFAULT_AVATAR_URL} alt={user?.fullName || 'Admin'} sizeClassName="w-8 h-8" />
             <div className="min-w-0">
@@ -120,7 +123,7 @@ export function AdminLayout({
           </div>
           <button
             onClick={() => navigate('/explore')}
-            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+            className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-600 hover:bg-sky-50 hover:text-gray-900"
           >
             <LogOut className="h-4 w-4 flex-shrink-0" />
             Back to CreativeHUB
@@ -130,7 +133,7 @@ export function AdminLayout({
 
       <div className="flex min-h-screen flex-1 flex-col lg:min-h-0">
         {/* Mobile/tablet topbar — the sidebar's content, laid out horizontally. */}
-        <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-lg lg:hidden">
+        <div className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg lg:hidden">
           <div className="px-4 py-3">
             <button
               onClick={() => navigate('/explore')}
@@ -150,7 +153,7 @@ export function AdminLayout({
                 key={item.id}
                 onClick={() => navigate(item.path)}
                 className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-semibold transition-colors ${
-                  section === item.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  section === item.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                 }`}
               >
                 {item.label}
@@ -180,6 +183,7 @@ export function AdminLayout({
             {children}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

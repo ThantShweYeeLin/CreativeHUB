@@ -20,9 +20,9 @@ export function LocationChipList({ locations, onRemove, onAddFromMap, presetLabe
   return (
     <div>
       {locations.length > 0 && (
-        <ul className="mb-2 divide-y divide-gray-100 overflow-hidden rounded-lg border border-gray-200">
+        <ul className="mb-2 divide-y divide-sky-100 overflow-hidden rounded-lg border border-sky-100">
           {locations.map((loc) => (
-            <li key={loc.formattedAddress} className="flex items-center justify-between gap-3 bg-gray-50 px-3 py-2.5 text-sm">
+            <li key={loc.formattedAddress} className="flex items-center justify-between gap-3 bg-sky-50/50 px-3 py-2.5 text-sm">
               <span className="flex items-center gap-2 text-gray-800">
                 <span aria-hidden>📍</span>
                 {loc.formattedAddress}
@@ -42,7 +42,7 @@ export function LocationChipList({ locations, onRemove, onAddFromMap, presetLabe
         <button
           type="button"
           onClick={onAddFromMap}
-          className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+          className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50"
         >
           + Add from Map
         </button>
@@ -51,7 +51,7 @@ export function LocationChipList({ locations, onRemove, onAddFromMap, presetLabe
             type="button"
             onClick={onAddPreset}
             disabled={presetDisabled}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             + {presetLabel}
           </button>

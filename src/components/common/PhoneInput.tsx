@@ -37,7 +37,7 @@ export function PhoneInput({ countryIsoCode, value, onChange, placeholder = '81 
   return (
     <div className="flex gap-2">
       <div
-        className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm font-semibold text-gray-700"
+        className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-3 text-sm font-semibold text-gray-700"
         title={country ? `${country.name} calling code` : 'Select a country first'}
       >
         {country ? (
@@ -55,7 +55,7 @@ export function PhoneInput({ countryIsoCode, value, onChange, placeholder = '81 
         required={required}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full min-w-0 flex-1 rounded-xl border border-gray-200 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+        className="w-full min-w-0 flex-1 rounded-xl border border-sky-100 px-4 py-3 text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
       />
     </div>
   );

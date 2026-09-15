@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -511,9 +512,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
+    <div className="relative min-h-screen pb-20 md:pb-12">
+      <PageBackdrop />
+      <div className="relative z-10">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200 mb-6 md:mb-8">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-sky-100 mb-6 md:mb-8">
         <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-4 md:py-6">
           <button
             onClick={onBack}
@@ -539,7 +542,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
         {isLoading ? (
           <div className="flex justify-center py-12">
-            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+            <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         ) : (
         <div className="space-y-4">
@@ -547,7 +550,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             <div
               key={request.id}
               onClick={() => request.status === 'accepted' && void handleOpenAcceptedRequest(request)}
-              className={`bg-white rounded-xl md:rounded-2xl shadow-lg border border-gray-200 overflow-hidden hover:shadow-xl transition-shadow ${
+              className={`bg-white/90 backdrop-blur-xl rounded-xl md:rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden hover:shadow-[0_12px_36px_rgba(56,189,248,0.25)] transition-shadow ${
                 request.status === 'accepted' ? 'cursor-pointer' : ''
               }`}
             >
@@ -628,7 +631,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       {request.status === 'pending' && (
                         <button
                           onClick={() => openEditRequest(request)}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-105 transition-all"
                         >
                           <Edit className="w-4 h-4" />
                           Edit Request
@@ -646,7 +649,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           {Number(request.counterRound || 1) < MAX_NEGOTIATION_ROUNDS && (
                             <button
                               onClick={() => openCounterForm(request)}
-                              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
+                              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all"
                             >
                               <DollarSign className="w-4 h-4" />
                               Counter Again
@@ -654,14 +657,14 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           )}
                           <button
                             onClick={() => setConfirmAction({ type: 'reject', request })}
-                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-200 transition-colors"
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-50 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-sky-100 transition-colors"
                           >
                             <X className="w-4 h-4" />
                             Reject
                           </button>
                           <button
                             onClick={() => setHistoryModalRequestId(request.id)}
-                            className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-gray-50"
+                            className="rounded-lg border border-sky-200 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             View Details
                           </button>
@@ -674,7 +677,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           </div>
                           <button
                             onClick={() => setHistoryModalRequestId(request.id)}
-                            className="rounded-lg border border-gray-300 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-gray-50"
+                            className="rounded-lg border border-sky-200 px-4 py-2.5 text-sm md:text-base font-semibold text-gray-700 hover:bg-sky-50"
                           >
                             View Details
                           </button>
@@ -686,14 +689,14 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             event.stopPropagation();
                             onOpenMessages?.(request.freelancer.id);
                           }}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-105 transition-all"
                         >
                           <MessageCircle className="w-4 h-4" />
                           Message
                         </button>
                       )}
                       {request.status === 'rejected' && (
-                        <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-gray-200 transition-colors">
+                        <button className="flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-50 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-sky-100 transition-colors">
                           <AlertCircle className="w-4 h-4" />
                           View Reason
                         </button>
@@ -704,7 +707,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             event.stopPropagation();
                             openAddReplacement(request);
                           }}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-900 text-white rounded-lg text-sm md:text-base font-semibold hover:bg-black transition-colors"
+                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all"
                         >
                           <UserPlus className="w-4 h-4" />
                           Add Another Freelancer
@@ -715,14 +718,14 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           event.stopPropagation();
                           onViewProfile?.(request.freelancer.id);
                         }}
-                        className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg text-sm md:text-base font-semibold transition-colors text-center"
+                        className="px-4 py-2.5 text-gray-600 hover:bg-sky-50 rounded-lg text-sm md:text-base font-semibold transition-colors text-center"
                       >
                         View Profile
                       </button>
                     </div>
 
                     {request.status === 'countered' && (
-                      <div className="mt-3 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-700">
+                      <div className="mt-3 rounded-xl bg-sky-50/60 px-4 py-3 text-sm text-gray-700">
                         <span className="font-semibold text-gray-900">
                           {request.counterBy === 'freelancer' ? "Freelancer's counter offer: " : 'Your counter offer: '}
                         </span>
@@ -733,7 +736,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     )}
 
                     {counterFormOpenForId === request.id && (
-                      <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                      <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4">
                         <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <div>
@@ -744,7 +747,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                               value={counterPriceInput}
                               onChange={(event) => setCounterPriceInput(event.target.value)}
                               placeholder="e.g. 6000"
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                           <div>
@@ -753,7 +756,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                               value={counterMessageInput}
                               onChange={(event) => setCounterMessageInput(event.target.value)}
                               placeholder="Message (optional)"
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                         </div>
@@ -764,7 +767,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                               type="date"
                               value={counterDateInput}
                               onChange={(event) => setCounterDateInput(event.target.value)}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                           <div>
@@ -773,7 +776,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                               type="time"
                               value={counterTimeInput}
                               onChange={(event) => setCounterTimeInput(event.target.value)}
-                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
                         </div>
@@ -784,20 +787,20 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             onChange={(event) => setCounterIncludesInput(event.target.value)}
                             rows={3}
                             placeholder={'8 hours photography\nEdited photos\nOnline gallery'}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                            className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                           />
                         </div>
                         <div className="mt-3 flex justify-end gap-2">
                           <button
                             onClick={() => setCounterFormOpenForId(null)}
-                            className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
+                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => void handleSendCounterOffer(request.id)}
                             disabled={isSubmittingCounter}
-                            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                           >
                             {isSubmittingCounter ? 'Sending...' : 'Send Counter Offer'}
                           </button>
@@ -815,8 +818,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         {/* Empty State */}
         {!isLoading && normalizedRequests.length === 0 && (
           <div className="text-center py-16">
-            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-12 h-12 text-gray-900" />
+            <div className="w-24 h-24 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-12 h-12 text-sky-400" />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No Requests Yet</h3>
             <p className="text-gray-600">Start exploring and send booking requests to freelancers!</p>
@@ -826,13 +829,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
       {editingRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
             <h3 className="text-xl font-bold text-gray-900">Edit Pending Request</h3>
             <div className="mt-4 space-y-4">
               <input
                 value={editForm.projectName}
                 onChange={(event) => setEditForm((current) => ({ ...current, projectName: event.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                 placeholder="Project name"
               />
 
@@ -840,19 +843,19 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 <input
                   value={editForm.currency}
                   onChange={(event) => setEditForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                   placeholder="Currency"
                 />
                 <input
                   value={editForm.budgetMin}
                   onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                   placeholder="Min budget"
                 />
                 <input
                   value={editForm.budgetMax}
                   onChange={(event) => setEditForm((current) => ({ ...current, budgetMax: event.target.value }))}
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                   placeholder="Max budget"
                 />
               </div>
@@ -861,7 +864,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 rows={4}
                 value={editForm.description}
                 onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                 placeholder="Description"
               />
 
@@ -873,7 +876,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     min={new Date().toISOString().slice(0, 10)}
                     value={editForm.scheduleDate}
                     onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                   />
                 </div>
                 <div>
@@ -882,7 +885,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     type="time"
                     value={editForm.scheduleTime}
                     onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
-                    className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2"
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
                   />
                 </div>
               </div>
@@ -890,7 +893,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
               {editingRequest.groupMeta && (
                 <div>
                   <p className="mb-2 text-sm font-semibold text-gray-900">Recipients</p>
-                  <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-2">
+                  <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-sky-100 bg-sky-50/50 p-2">
                     {availableFreelancers.map((freelancer) => {
                       const checked = editForm.recipientIds.includes(freelancer.id);
                       return (
@@ -918,8 +921,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             </div>
 
             <div className="mt-5 flex gap-3">
-              <button onClick={() => setEditingRequest(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2 font-semibold text-gray-700">Cancel</button>
-              <button onClick={() => void saveRequestEdits()} className="flex-1 rounded-xl bg-gray-900 px-4 py-2 font-semibold text-white">Save changes</button>
+              <button onClick={() => setEditingRequest(null)} className="flex-1 rounded-xl bg-sky-50 px-4 py-2 font-semibold text-gray-700">Cancel</button>
+              <button onClick={() => void saveRequestEdits()} className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 font-semibold text-white">Save changes</button>
             </div>
           </div>
         </div>
@@ -927,7 +930,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
       {addReplacementFor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
             <h3 className="text-xl font-bold text-gray-900">Add Another Freelancer</h3>
             <p className="mt-1 text-sm text-gray-600">
               They'll join this group request with the same location and schedule — everyone else's status is untouched.
@@ -944,10 +947,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     value={replacementSearch}
                     onChange={(event) => setReplacementSearch(event.target.value)}
                     placeholder="Search freelancer by name..."
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                    className="w-full rounded-xl border border-sky-100 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-sky-300"
                   />
                 </div>
-                <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+                <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-sky-100 bg-sky-50/50 p-3">
                   {availableFreelancers
                     .filter((item) => item.id !== addReplacementFor.freelancer?.id)
                     .filter((item) => item.full_name.toLowerCase().includes(replacementSearch.trim().toLowerCase()))
@@ -956,13 +959,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         key={freelancer.id}
                         type="button"
                         onClick={() => setReplacementFreelancerId(freelancer.id)}
-                        className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-gray-100"
+                        className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-sky-50"
                       >
                         <div>
                           <p className="text-sm font-semibold text-gray-900">{freelancer.full_name}</p>
                           <p className="text-xs text-gray-500">{freelancer.title}</p>
                         </div>
-                        <span className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white">Select</span>
+                        <span className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-bold text-white">Select</span>
                       </button>
                     ))}
                 </div>
@@ -974,7 +977,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 const minimum = replacementMinimum(freelancer);
                 return (
                   <div className="mt-4 space-y-4">
-                    <div className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+                    <div className="flex items-center justify-between rounded-xl bg-sky-50/50 px-4 py-3">
                       <div>
                         <p className="text-sm font-bold text-gray-900">{freelancer.full_name}</p>
                         <p className="text-xs text-gray-500">{freelancer.title}</p>
@@ -993,7 +996,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       <select
                         value={replacementPurpose}
                         onChange={(event) => setReplacementPurpose(event.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                       >
                         <option value="" disabled>Select a purpose</option>
                         {freelancer.skills.map((skill) => (
@@ -1006,7 +1009,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           value={replacementCustomPurpose}
                           onChange={(event) => setReplacementCustomPurpose(event.target.value)}
                           placeholder="Type the purpose"
-                          className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                          className="mt-2 w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                         />
                       )}
                     </div>
@@ -1020,7 +1023,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         value={replacementBudget}
                         onChange={(event) => setReplacementBudget(event.target.value)}
                         placeholder={`Minimum ${formatCurrencyAmount(minimum, 'THB')}`}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                       />
                       {replacementBudget && Number(replacementBudget) < minimum && (
                         <p className="mt-1.5 text-xs font-semibold text-red-600">Must be at least {formatCurrencyAmount(minimum, 'THB')}.</p>
@@ -1032,13 +1035,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             )}
 
             <div className="mt-5 flex gap-3">
-              <button onClick={() => setAddReplacementFor(null)} className="flex-1 rounded-xl bg-gray-100 px-4 py-2 font-semibold text-gray-700">
+              <button onClick={() => setAddReplacementFor(null)} className="flex-1 rounded-xl bg-sky-50 px-4 py-2 font-semibold text-gray-700">
                 Cancel
               </button>
               <button
                 onClick={() => void submitAddReplacement()}
                 disabled={!replacementFreelancerId || isSubmittingReplacement}
-                className="flex-1 rounded-xl bg-gray-900 px-4 py-2 font-semibold text-white disabled:opacity-60"
+                className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-60"
               >
                 {isSubmittingReplacement ? 'Sending...' : 'Send Request'}
               </button>
@@ -1100,6 +1103,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           }}
         />
       )}
+      </div>
     </div>
   );
 }

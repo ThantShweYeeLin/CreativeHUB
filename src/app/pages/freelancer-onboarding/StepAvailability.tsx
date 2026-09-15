@@ -39,8 +39,8 @@ export function StepAvailability({
               onClick={() => onAvailabilityChange(option)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                 availability === option
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               {AVAILABILITY_DOT[option]} {option}
@@ -59,8 +59,8 @@ export function StepAvailability({
               onClick={() => onWorkingDaysChange(toggle(workingDays, day))}
               className={`rounded-xl border-2 px-3 py-2.5 text-sm font-semibold transition-all ${
                 workingDays.includes(day)
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               {day}
@@ -78,7 +78,7 @@ export function StepAvailability({
               type="time"
               value={workingHoursStart}
               onChange={(event) => onWorkingHoursStartChange(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
           <div>
@@ -87,7 +87,7 @@ export function StepAvailability({
               type="time"
               value={workingHoursEnd}
               onChange={(event) => onWorkingHoursEndChange(event.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
         </div>

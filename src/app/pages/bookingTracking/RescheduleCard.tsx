@@ -130,7 +130,7 @@ export function RescheduleCard({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
       <div className="mb-3 flex items-center gap-2">
         <CalendarClock className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Reschedule</h2>
@@ -154,7 +154,7 @@ export function RescheduleCard({
             </button>
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-900 bg-gray-50 p-4">
+          <div className="rounded-xl border border-sky-400 bg-sky-50/50 p-4">
             <p className="text-sm font-semibold text-gray-900">
               The {otherLabel} proposed moving this to {formatBangkokRange(booking.reschedule_proposed_start_at, booking.reschedule_proposed_end_at)}.
             </p>
@@ -165,14 +165,14 @@ export function RescheduleCard({
               <button
                 onClick={() => void handleAccept()}
                 disabled={isSubmitting}
-                className="flex-1 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                className="flex-1 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
               >
                 {isSubmitting ? 'Accepting...' : 'Accept new time'}
               </button>
               <button
                 onClick={() => void handleDecline()}
                 disabled={isSubmitting}
-                className="flex-1 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200 disabled:opacity-60"
+                className="flex-1 rounded-lg bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
               >
                 Decline
               </button>
@@ -182,12 +182,12 @@ export function RescheduleCard({
       ) : !showForm ? (
         <button
           onClick={() => setShowForm(true)}
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-sky-100"
         >
           Propose a new time
         </button>
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-gray-900">Propose a new time</p>
             <button onClick={resetForm} className="text-gray-400 hover:text-gray-900">
@@ -204,7 +204,7 @@ export function RescheduleCard({
                 setStartTime('');
                 setEndTime('');
               }}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
             <select
               disabled={!date}
@@ -213,7 +213,7 @@ export function RescheduleCard({
                 setStartTime(event.target.value);
                 setEndTime('');
               }}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
             >
               <option value="" disabled>{!date ? 'Choose a date first' : 'Start time'}</option>
               {START_TIME_SLOTS.map((slot) => (
@@ -224,7 +224,7 @@ export function RescheduleCard({
               disabled={!startTime}
               value={endTime}
               onChange={(event) => setEndTime(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
             >
               <option value="" disabled>{!startTime ? 'Choose a start time first' : 'End time'}</option>
               {endTimeSlots.map((slot) => (
@@ -236,7 +236,7 @@ export function RescheduleCard({
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             placeholder="Why are you proposing this change? (optional)"
-            className="mt-3 w-full min-h-[60px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+            className="mt-3 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
           />
           <p className="mt-2 text-xs text-gray-500">
             The {otherLabel} will need to accept before this takes effect — nothing changes until then.
@@ -244,7 +244,7 @@ export function RescheduleCard({
           <button
             onClick={() => void handlePropose()}
             disabled={isSubmitting || !date || !startTime || !endTime}
-            className="mt-3 w-full rounded-xl bg-gray-900 py-2.5 px-4 text-sm font-bold text-white hover:bg-black transition-all disabled:opacity-60"
+            className="mt-3 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
           >
             {isSubmitting ? 'Sending...' : 'Send proposal'}
           </button>

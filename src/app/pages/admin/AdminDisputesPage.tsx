@@ -62,7 +62,7 @@ export function AdminDisputesPage() {
               key={option.id}
               onClick={() => setSubTab(option.id)}
               className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                subTab === option.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                subTab === option.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
               }`}
             >
               {option.label} ({option.count})
@@ -85,7 +85,7 @@ export function AdminDisputesPage() {
                 <button
                   key={b.id}
                   onClick={() => navigate(`/admin/disputes/${b.id}`)}
-                  className="w-full rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm hover:bg-gray-50"
+                  className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>

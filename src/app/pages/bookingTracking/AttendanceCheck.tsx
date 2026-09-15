@@ -97,7 +97,7 @@ export function AttendanceCheck({
 
   if (state === 'upcoming') {
     return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
         <div className="flex items-center gap-2 mb-2">
           <ShieldCheck className="w-5 h-5 text-gray-900" />
           <h2 className="font-bold text-gray-900">Attendance Check</h2>
@@ -116,7 +116,7 @@ export function AttendanceCheck({
   // final recorded state without offering further actions.
   if (state === 'partially_verified' && (!window_ || Date.now() > window_.closesAt.getTime())) {
     return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
         <div className="flex items-center gap-2 mb-2">
           <ShieldCheck className="w-5 h-5 text-gray-900" />
           <h2 className="font-bold text-gray-900">Attendance Check</h2>
@@ -136,7 +136,7 @@ export function AttendanceCheck({
 
   // check_available / waiting_client / waiting_freelancer / partially_verified (window still open)
   return (
-    <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-900 p-5 mb-6">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border-2 border-sky-400 p-5 mb-6">
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Attendance Check</h2>
@@ -154,14 +154,14 @@ export function AttendanceCheck({
             <button
               onClick={() => void handleConfirm()}
               disabled={isConfirming}
-              className="flex items-center justify-center gap-2 rounded-xl bg-gray-900 py-3 px-4 text-sm font-bold text-white hover:bg-black transition-all disabled:opacity-60"
+              className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
             >
               <CheckCircle2 className="w-4 h-4" />
               {isConfirming ? 'Confirming...' : `Confirm ${otherRoleLabel} Presence`}
             </button>
             <button
               onClick={() => setShowReportForm(true)}
-              className="flex items-center justify-center gap-2 rounded-xl bg-gray-100 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-all"
+              className="flex items-center justify-center gap-2 rounded-xl bg-sky-50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-sky-100 transition-all"
             >
               <AlertTriangle className="w-4 h-4" />
               Report Attendance Problem
@@ -170,7 +170,7 @@ export function AttendanceCheck({
         </>
       )}
 
-      <div className="mt-3 flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3">
+      <div className="mt-3 flex items-center justify-between rounded-xl bg-sky-50/50 px-4 py-3">
         <span className="text-sm text-gray-600">{otherRoleLabel}</span>
         <span className={`text-sm font-semibold ${otherConfirmation ? 'text-green-700' : 'text-gray-400'}`}>
           {otherConfirmation ? `✓ Confirmed you` : 'Waiting to confirm you'}
@@ -180,7 +180,7 @@ export function AttendanceCheck({
       {selfConfirmation && (
         <button
           onClick={() => setShowReportForm(true)}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 py-2.5 px-4 text-xs font-semibold text-gray-600 hover:bg-gray-200 transition-all"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-50 py-2.5 px-4 text-xs font-semibold text-gray-600 hover:bg-sky-100 transition-all"
         >
           <AlertTriangle className="w-3.5 h-3.5" />
           Report Attendance Problem

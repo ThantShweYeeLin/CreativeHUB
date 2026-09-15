@@ -266,7 +266,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
     // and MobileBottomNav) — otherwise this panel's own header renders
     // underneath the persistent nav bar instead of replacing it.
     <div className="fixed inset-0 z-[1300] overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100">
-      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-lg">
+      <div className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg">
         <div className="mx-auto max-w-4xl px-4 py-4">
           <button
             onClick={onClose}
@@ -276,7 +276,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
             Back
           </button>
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gray-900 text-white">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
               <SlidersHorizontal className="h-5 w-5" />
             </div>
             <div>
@@ -345,7 +345,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                 <select
                   value={filters.currency}
                   onChange={(event) => handleCurrencyChange(event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   {SUPPORTED_CURRENCIES.map((item) => (
                     <option key={item.code} value={item.code}>
@@ -430,7 +430,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     className={`${CHIP_BASE_CLASS} flex items-center gap-2 ${
                       isSelected
                         ? CHIP_SELECTED_CLASS
-                        : 'border-2 border-dashed border-gray-300 bg-white font-medium text-gray-600 hover:border-gray-500 hover:bg-gray-50'
+                        : 'border-2 border-dashed border-sky-200 bg-white font-medium text-gray-600 hover:border-sky-400 hover:bg-sky-50'
                     }`}
                   >
                     <MapPin className="h-4 w-4" /> Use my area: {userLocation}
@@ -440,7 +440,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
             </div>
 
             {filters.nearMe && (
-              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-gray-50 px-4 py-3">
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-sky-50/50 px-4 py-3">
                 <span className="text-sm font-semibold text-gray-700">Within</span>
                 {NEAR_ME_RADIUS_OPTIONS_KM.map((km) => (
                   <button
@@ -485,7 +485,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               {!showOtherInput ? (
                 <button
                   onClick={() => setShowOtherInput(true)}
-                  className={`${CHIP_BASE_CLASS} border-2 border-dashed border-gray-300 font-medium text-gray-600 hover:border-gray-500 hover:bg-gray-50`}
+                  className={`${CHIP_BASE_CLASS} border-2 border-dashed border-sky-200 font-medium text-gray-600 hover:border-sky-400 hover:bg-sky-50`}
                 >
                   + Other
                 </button>
@@ -497,9 +497,9 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     onChange={(event) => setOtherLocationDraft(event.target.value)}
                     onKeyDown={(event) => event.key === 'Enter' && applyOtherLocation()}
                     placeholder="e.g. Krabi"
-                    className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-gray-900"
+                    className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-sm text-gray-900 outline-none focus:border-transparent focus:ring-2 focus:ring-sky-400"
                   />
-                  <button onClick={applyOtherLocation} className="rounded-xl border-2 border-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white">
+                  <button onClick={applyOtherLocation} className="rounded-xl border-2 border-sky-400 px-4 py-2.5 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent">
                     Add
                   </button>
                   <button onClick={() => { setShowOtherInput(false); setOtherLocationDraft(''); }} className="p-2 text-gray-400 hover:text-gray-900">
@@ -512,7 +512,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         </div>
 
         {/* Footer */}
-        <div className="mt-8 flex items-center justify-between border-t border-gray-200 pt-6">
+        <div className="mt-8 flex items-center justify-between border-t border-sky-100 pt-6">
           <button
             onClick={() => {
               setFilters({
@@ -527,13 +527,13 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               setOtherLocationDraft('');
               setLocateError(null);
             }}
-            className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-gray-100"
+            className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-sky-50"
           >
             Clear All
           </button>
           <button
             onClick={handleSearch}
-            className="flex items-center gap-2 rounded-xl bg-gray-900 px-8 py-3.5 font-semibold text-white transition-colors hover:bg-black"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-8 py-3.5 font-semibold text-white transition-colors hover:shadow-lg"
           >
             <Sparkles className="w-5 h-5" />
             <span>Apply Filters</span>

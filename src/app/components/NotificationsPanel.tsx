@@ -151,14 +151,14 @@ export function NotificationsPanel({
           edge off-screen. `fixed inset-x-0` instead anchors to the actual
           viewport on mobile, independent of the bell icon's position;
           desktop keeps the original icon-anchored `absolute` positioning. */}
-      <div className="fixed inset-x-0 top-16 md:absolute md:inset-x-auto md:right-32 z-50 bg-white md:rounded-2xl shadow-2xl border-t md:border border-gray-200 overflow-hidden animate-fadeIn max-h-[calc(100vh-4rem)] md:max-h-[600px] md:w-96 flex flex-col">
+      <div className="fixed inset-x-0 top-16 md:absolute md:inset-x-auto md:right-32 z-50 bg-white md:rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] border-t md:border border-sky-100 overflow-hidden animate-fadeIn max-h-[calc(100vh-4rem)] md:max-h-[600px] md:w-96 flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
+        <div className="px-6 py-4 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-blue-50">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-gray-900 text-lg">Notifications</h3>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
-                <span className="px-3 py-1 bg-gradient-to-r from-gray-900 to-black text-white text-xs font-bold rounded-full">
+                <span className="px-3 py-1 bg-gradient-to-r from-sky-500 to-blue-600 text-white text-xs font-bold rounded-full">
                   {unreadCount} new
                 </span>
               )}
@@ -229,8 +229,8 @@ export function NotificationsPanel({
                     onClose();
                   }
                 }}
-                className={`px-6 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  !notification.read ? 'bg-gray-50/50' : ''
+                className={`px-6 py-4 border-b border-sky-100 hover:bg-sky-50 transition-colors cursor-pointer ${
+                  !notification.read ? 'bg-sky-50/50' : ''
                 }`}
               >
                 <div className="flex items-start gap-3">
@@ -260,7 +260,7 @@ export function NotificationsPanel({
 
                   {/* Unread Indicator */}
                   {!notification.read && (
-                    <div className="w-2 h-2 bg-gray-900 rounded-full flex-shrink-0 mt-2" />
+                    <div className="w-2 h-2 bg-sky-500 rounded-full flex-shrink-0 mt-2" />
                   )}
                 </div>
               </div>
@@ -269,7 +269,7 @@ export function NotificationsPanel({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-200 bg-gray-50">
+        <div className="px-6 py-3 border-t border-sky-100 bg-sky-50/60">
           <p className="w-full text-center text-xs font-medium text-gray-500">Realtime updates enabled</p>
         </div>
       </div>

@@ -98,9 +98,9 @@ export function PlatformRecordsPanel({ category, booking, events, confirmations,
   }
 
   return (
-    <div className="mb-3 rounded-lg border border-gray-200 bg-white p-3">
+    <div className="mb-3 rounded-lg border border-sky-100 bg-white p-3">
       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Platform records</p>
-      <div className="divide-y divide-gray-100">{rows}</div>
+      <div className="divide-y divide-sky-100">{rows}</div>
     </div>
   );
 }

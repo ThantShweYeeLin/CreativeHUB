@@ -7,6 +7,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
+import { AuthPromptModal } from '../components/AuthPromptModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -29,70 +30,83 @@ interface ProfileCardProps {
 }
 
 function ProfileCard({ id, name, specialty, minorSkills, rating, reviews, image, location, isFavorited, onToggleFavorite }: ProfileCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const cardRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
 
+  const handleMouseMove = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / rect.width - 0.5;
+    const py = (event.clientY - rect.top) / rect.height - 0.5;
+    setTilt({ rx: py * -10, ry: px * 12 });
+  };
+
   return (
-    <div
-      className="flex-shrink-0 w-[240px] sm:w-[280px] group cursor-pointer"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="relative overflow-hidden rounded-2xl bg-white shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-2">
-        <div className="relative h-[280px] sm:h-[320px] overflow-hidden">
+    <div className="flex-shrink-0 w-[240px] sm:w-[280px] explore-card-perspective">
+      <button
+        type="button"
+        ref={cardRef}
+        onClick={() => navigate(`/profile/${id}`)}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setTilt({ rx: 0, ry: 0 })}
+        style={{
+          transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+          transition: 'transform 120ms ease-out',
+        }}
+        className="group relative block w-full overflow-hidden rounded-[28px] text-left shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)]"
+      >
+        <div className="relative h-[320px] sm:h-[360px] w-full">
           <ImageWithFallback
             src={image}
             alt={name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-          {onToggleFavorite && (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onToggleFavorite(id);
-              }}
-              aria-label={isFavorited ? 'Remove from favorites' : 'Save to favorites'}
-              className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-lg backdrop-blur-sm transition-transform hover:scale-110"
-            >
-              <Heart className={`h-4 w-4 ${isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
-            </button>
-          )}
-          <div className={`absolute bottom-4 left-4 right-4 transform transition-all duration-300 ${isHovered ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}>
-            <button
-              onClick={() => navigate(`/profile/${id}`)}
-              className="w-full bg-white text-gray-900 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-            >
-              View Profile
-            </button>
-          </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
         </div>
-        <div className="p-4 sm:p-5">
-          <h3 className="font-bold text-base sm:text-lg text-gray-900 mb-1">{name}</h3>
-          <p className={`text-sm text-gray-600 ${minorSkills && minorSkills.length > 0 ? '' : 'mb-3'}`}>{specialty}</p>
+
+        {onToggleFavorite && (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleFavorite(id);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.stopPropagation();
+                event.preventDefault();
+                onToggleFavorite(id);
+              }
+            }}
+            aria-label={isFavorited ? 'Remove from favorites' : 'Save to favorites'}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
+          >
+            <Heart className={`h-4 w-4 ${isFavorited ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
+          </span>
+        )}
+
+        <div className="absolute inset-x-0 bottom-0 p-5 text-left text-white">
+          <p className="text-lg font-bold">{name}</p>
+          <p className="text-sm text-white/80">
+            {specialty}
+            {location ? ` · ${location}` : ''}
+          </p>
           {minorSkills && minorSkills.length > 0 && (
-            <p className="mb-3 mt-0.5 truncate text-xs text-gray-500">
+            <p className="mt-0.5 truncate text-xs text-white/70">
               Also: {minorSkills.slice(0, 2).join(' • ')}
               {minorSkills.length > 2 ? ` +${minorSkills.length - 2} more` : ''}
             </p>
           )}
-          {location && <p className="text-xs text-gray-500 mb-3">{location}</p>}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-              <span className="font-semibold text-sm text-gray-900">{rating > 0 ? rating.toFixed(1) : 'New'}</span>
-              <span className="text-xs text-gray-500">({reviews})</span>
-            </div>
-            <button
-              onClick={() => navigate(`/profile/${id}`)}
-              className="text-sm text-gray-900 font-semibold hover:text-black transition-colors"
-            >
-              Book Now
-            </button>
-          </div>
+          <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
+            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            {rating > 0 ? rating.toFixed(1) : 'New'}
+            <span className="font-normal text-white/70">({reviews})</span>
+          </p>
         </div>
-      </div>
+      </button>
     </div>
   );
 }
@@ -108,7 +122,13 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
   return (
     <div className="mb-12 md:mb-16">
       <div className="flex items-center justify-between mb-4 md:mb-6">
-        <h2 className="text-xl md:text-3xl font-bold text-gray-900">{title}</h2>
+        <div>
+          <h2 className="flex items-center gap-2 text-xl md:text-3xl font-bold text-gray-900">
+            <Sparkles className="h-5 w-5 md:h-6 md:w-6 text-sky-400 explore-twinkle" />
+            {title}
+          </h2>
+          <div className="mt-2 h-1 w-16 rounded-full bg-gradient-to-r from-sky-400 via-cyan-400 to-blue-500 explore-underline-glow" />
+        </div>
       </div>
       <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 scrollbar-hide">
         {profiles.map((profile, index) => (
@@ -140,6 +160,20 @@ function pluralizeCategory(label: string) {
     .join('/');
 }
 
+// Rounds down to a truthful "N+" (e.g. an actual count of 63 becomes "60+",
+// never inflated) rather than always dressing real counts up to look like
+// marketing copy - small/dev datasets show their real number plainly.
+function formatHeroStat(count: number) {
+  if (count >= 1000) {
+    const thousands = count / 1000;
+    return `${thousands >= 10 ? Math.floor(thousands) : thousands.toFixed(1).replace(/\.0$/, '')}k+`;
+  }
+  if (count >= 20) {
+    return `${Math.floor(count / 10) * 10}+`;
+  }
+  return `${count}`;
+}
+
 export function ExplorePage() {
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
@@ -155,6 +189,10 @@ export function ExplorePage() {
   const [clientCoords, setClientCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [userLocation, setUserLocation] = useState<string | null>(null);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
+  const [heroData, setHeroData] = useState<{ freelancerCount: number; bookingCount: number | null; avgRating: number; featured: { id: string; name: string; avatarUrl: string | null; title: string | null; rating: number; totalReviews: number; location: string | null } | null } | null>(null);
+  const [heroCategoryIndex, setHeroCategoryIndex] = useState(0);
+  const heroCategoryLabels = useMemo(() => FREELANCER_CATEGORIES.map((category) => category.label), []);
   // "Popular X in Thailand" used to be hardcoded regardless of who was
   // looking, even for viewers whose own country (from signup/onboarding) is
   // known and available right here. `userLocation` is a geocoded
@@ -181,6 +219,23 @@ export function ExplorePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    DataService.getExploreHeroData().then(({ data }) => {
+      if (isMounted && data) setHeroData(data);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setHeroCategoryIndex((current) => (current + 1) % heroCategoryLabels.length);
+    }, 2600);
+    return () => clearInterval(timer);
+  }, [heroCategoryLabels.length]);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,7 +352,7 @@ export function ExplorePage() {
 
   const handleToggleFavorite = async (freelancerId: string) => {
     if (!user?.id) {
-      navigate('/login');
+      setAuthPromptMessage('Create an account to save your favorite freelancers.');
       return;
     }
 
@@ -471,6 +526,8 @@ export function ExplorePage() {
             description: source?.description || null,
             location: profile.location || null,
             fullName: profile.name || null,
+            rating: profile.rating,
+            totalReviews: profile.reviews,
           },
           interpretedQuery,
           clientInterests
@@ -634,11 +691,303 @@ export function ExplorePage() {
   }, [filters]);
 
   return (
-    <>
+    <div className="relative">
+      {/* Decorative light-blue backdrop: absolutely positioned to span the
+          whole scrollable page (not just one viewport), so it reads as
+          "surface at the top, deeper water further down" rather than a
+          band that follows the viewport as you scroll. Purely decorative —
+          inert to clicks and screen readers. */}
+      <div
+        className="absolute inset-y-0 left-0 z-0 w-screen overflow-hidden"
+        style={{
+          // Breaks out of MainLayout's max-w/padded <main> to bleed the full
+          // viewport width, instead of being confined to the padded content
+          // column (which showed as a white margin down both sides).
+          marginLeft: 'calc(50% - 50vw)',
+          // Pixel-based stops (not %) so the color arrives at the same
+          // physical spot regardless of how tall the page ends up being -
+          // reaches its deepest, still-pale tone by ~1800px (shortly after
+          // the wave) and holds there. Kept deliberately subtle/light the
+          // whole way down (never past a soft periwinkle) so cards, icons
+          // and buttons that lean on blue accents keep contrast against it
+          // instead of blending into a saturated backdrop.
+          background: 'linear-gradient(to bottom, #ffffff 0px, #ffffff 320px, #f0f9ff 560px, #e0f2fe 820px, #dbeafe 1100px, #dce6fb 1500px, #dfe1fa 1800px, #dfe1fa 100%)',
+        }}
+        aria-hidden="true"
+      >
+        {/* Soft spotlight glow behind the header */}
+        <div
+          className="absolute inset-x-0 top-0 h-[32rem]"
+          style={{ background: 'radial-gradient(60% 100% at 50% 0%, rgba(125,211,252,0.35), transparent 70%)' }}
+        />
+        <div className="explore-orb absolute top-0 -left-28 h-[26rem] w-[26rem] rounded-full bg-gradient-to-br from-sky-300/45 to-cyan-200/30 blur-3xl" />
+        <div className="explore-orb explore-orb-delay-1 absolute top-[20%] -right-36 h-[30rem] w-[30rem] rounded-full bg-gradient-to-br from-indigo-300/35 to-blue-200/25 blur-3xl" />
+        <div className="explore-orb explore-orb-delay-2 absolute top-[45%] left-[15%] h-96 w-96 rounded-full bg-gradient-to-br from-teal-200/40 to-sky-300/25 blur-3xl" />
+        <div className="explore-orb explore-orb-delay-1 absolute top-[65%] right-[20%] h-64 w-64 rounded-full bg-gradient-to-br from-cyan-200/35 to-white/10 blur-3xl" />
+        <div className="explore-orb explore-orb-delay-2 absolute top-[85%] left-[8%] h-72 w-72 rounded-full bg-gradient-to-br from-indigo-300/40 to-violet-200/25 blur-3xl" />
+        <div className="explore-orb explore-orb-delay-1 absolute top-[105%] right-[10%] h-80 w-80 rounded-full bg-gradient-to-br from-violet-300/35 to-blue-300/25 blur-3xl" />
+        <div
+          className="absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: 'radial-gradient(circle, #0ea5e9 1px, transparent 1px)',
+            backgroundSize: '32px 32px',
+          }}
+        />
+
+        {/* Sparkle stars, echoing the logo's paint-splash accents - spread
+            down the full page so they keep drifting by as you scroll, like
+            light/bubbles the deeper you go. */}
+        {[
+          { top: '4%', left: '8%', size: 14, delay: '0s' },
+          { top: '10%', left: '70%', size: 10, delay: '-1.8s' },
+          { top: '22%', left: '92%', size: 10, delay: '-1.2s' },
+          { top: '30%', left: '5%', size: 12, delay: '-2.6s' },
+          { top: '40%', left: '55%', size: 16, delay: '-2.4s' },
+          { top: '50%', left: '85%', size: 11, delay: '-0.6s' },
+          { top: '58%', left: '12%', size: 13, delay: '-3.2s' },
+          { top: '68%', left: '45%', size: 10, delay: '-1.5s' },
+          { top: '78%', left: '90%', size: 14, delay: '-2.1s' },
+          { top: '88%', left: '20%', size: 12, delay: '-0.9s' },
+          { top: '98%', left: '65%', size: 15, delay: '-3.5s' },
+        ].map((star, index) => (
+          <Sparkles
+            key={index}
+            className="explore-bg-sparkle absolute text-sky-300"
+            style={{ top: star.top, left: star.left, width: star.size, height: star.size, animationDelay: star.delay }}
+          />
+        ))}
+      </div>
+      <style>{`
+        @keyframes exploreOrbFloat {
+          0%, 100% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(20px, -30px) scale(1.08); }
+          66% { transform: translate(-15px, 15px) scale(0.95); }
+        }
+        .explore-orb { animation: exploreOrbFloat 14s ease-in-out infinite; }
+        .explore-orb-delay-1 { animation-delay: -4s; }
+        .explore-orb-delay-2 { animation-delay: -9s; }
+
+        @keyframes exploreTwinkle {
+          0%, 100% { opacity: 1; transform: scale(1) rotate(0deg); }
+          50% { opacity: 0.5; transform: scale(1.25) rotate(15deg); }
+        }
+        .explore-twinkle { animation: exploreTwinkle 2.4s ease-in-out infinite; }
+
+        @keyframes exploreUnderlineGlow {
+          0%, 100% { box-shadow: 0 0 6px 0 rgba(56,189,248,0.6); }
+          50% { box-shadow: 0 0 14px 2px rgba(56,189,248,0.9); }
+        }
+        .explore-underline-glow { animation: exploreUnderlineGlow 2.6s ease-in-out infinite; }
+
+        .explore-card-perspective { perspective: 1200px; }
+
+        @keyframes exploreWaveDrift {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        .explore-wave-drift-slow { animation: exploreWaveDrift 22s linear infinite; }
+        .explore-wave-drift-fast { animation: exploreWaveDrift 14s linear infinite reverse; }
+
+        @keyframes exploreBgSparkle {
+          0%, 100% { opacity: 0.25; transform: scale(0.85) rotate(0deg); }
+          50% { opacity: 0.9; transform: scale(1.15) rotate(20deg); }
+        }
+        .explore-bg-sparkle { animation: exploreBgSparkle 3.5s ease-in-out infinite; }
+
+        @keyframes heroHeartFloat {
+          0%, 100% { transform: translateY(0) rotate(-8deg); opacity: 0.35; }
+          50% { transform: translateY(-14px) rotate(4deg); opacity: 0.6; }
+        }
+        .hero-heart-float { animation: heroHeartFloat 6s ease-in-out infinite; }
+        .hero-heart-float-delay { animation-delay: -3s; }
+
+        @keyframes heroWordIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .hero-word-in { animation: heroWordIn 0.5s ease-out; }
+
+        @keyframes heroRingSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .hero-ring-spin { animation: heroRingSpin 18s linear infinite; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .explore-orb, .explore-twinkle, .explore-underline-glow,
+          .hero-heart-float, .hero-word-in, .hero-ring-spin,
+          .explore-wave-drift-slow, .explore-wave-drift-fast, .explore-bg-sparkle {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
+      <div className="relative z-10">
+      {/* Hero */}
+      <section className="relative mb-12 overflow-hidden rounded-[32px] border border-sky-100 bg-white/50 px-6 py-10 backdrop-blur-sm sm:px-10 md:mb-16 md:py-14">
+        <Heart className="hero-heart-float pointer-events-none absolute left-6 top-8 h-6 w-6 fill-sky-200 text-sky-300" aria-hidden="true" />
+        <Heart className="hero-heart-float hero-heart-float-delay pointer-events-none absolute left-16 top-24 h-4 w-4 fill-sky-200 text-sky-300" aria-hidden="true" />
+        <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full border border-sky-200/60" aria-hidden="true" />
+
+        <div className="relative grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              Thailand's Creative Marketplace
+            </span>
+
+            <h1 className="mt-5 font-serif text-4xl font-bold leading-[1.1] text-gray-900 sm:text-5xl md:text-6xl">
+              Discover
+              {/* Reserves a constant 2-line-tall box (in em, so it scales
+                  with the h1's own font-size at each breakpoint) - short
+                  words like "Photographers" sit on one line, long ones like
+                  "Musician/Live Entertainments" wrap to two, but either way
+                  the hero's total height (and everything below it) never
+                  shifts between rotations. */}
+              <div className="flex min-h-[2.2em] items-center">
+                <span
+                  key={heroCategoryIndex}
+                  className="hero-word-in bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text text-transparent"
+                >
+                  {heroCategoryLabels[heroCategoryIndex]}s
+                </span>
+              </div>
+              That Move You
+            </h1>
+
+            <p className="mt-5 max-w-md text-base text-gray-600 sm:text-lg">
+              Book top-tier photographers, makeup artists, videographers and more across Thailand — in minutes.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3">
+              <div>
+                <div className="text-2xl font-bold text-gray-900">
+                  {heroData ? formatHeroStat(heroData.freelancerCount) : '—'}
+                </div>
+                <div className="text-xs font-medium text-gray-500">Freelancers</div>
+              </div>
+              {heroData?.bookingCount != null && (
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">{formatHeroStat(heroData.bookingCount)}</div>
+                  <div className="text-xs font-medium text-gray-500">Bookings</div>
+                </div>
+              )}
+              <div>
+                <div className="flex items-center gap-1 text-2xl font-bold text-gray-900">
+                  {heroData && heroData.avgRating > 0 ? heroData.avgRating.toFixed(1) : '—'}
+                  <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                </div>
+                <div className="text-xs font-medium text-gray-500">Rating</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Featured freelancer */}
+          <div className="relative mx-auto w-full max-w-sm lg:max-w-none">
+            <div className="hero-ring-spin pointer-events-none absolute -inset-4 rounded-[36px] border-2 border-dashed border-sky-200/70" aria-hidden="true" />
+            {heroData?.featured ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/profile/${heroData.featured!.id}`)}
+                className="group relative block w-full overflow-hidden rounded-[28px] shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)]"
+              >
+                <div className="relative h-[380px] w-full sm:h-[440px]">
+                  <ImageWithFallback
+                    src={heroData.featured.avatarUrl || DEFAULT_AVATAR_URL}
+                    alt={heroData.featured.name}
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
+                </div>
+                <span className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm backdrop-blur-sm">
+                  <Star className="h-3.5 w-3.5 fill-sky-500 text-sky-500" />
+                  Featured
+                </span>
+                <span
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleToggleFavorite(heroData.featured!.id);
+                  }}
+                  role="button"
+                  aria-label={favoritedIds.has(heroData.featured.id) ? 'Remove from favorites' : 'Save to favorites'}
+                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
+                >
+                  <Heart className={`h-4 w-4 ${favoritedIds.has(heroData.featured.id) ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
+                </span>
+                <div className="absolute inset-x-0 bottom-0 p-5 text-left text-white">
+                  <p className="text-lg font-bold">{heroData.featured.name}</p>
+                  <p className="text-sm text-white/80">
+                    {heroData.featured.title}
+                    {heroData.featured.location ? ` · ${heroData.featured.location}` : ''}
+                  </p>
+                  {heroData.featured.rating > 0 && (
+                    <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
+                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      {heroData.featured.rating.toFixed(1)}
+                      <span className="font-normal text-white/70">({heroData.featured.totalReviews})</span>
+                    </p>
+                  )}
+                </div>
+              </button>
+            ) : (
+              <div className="h-[380px] w-full animate-pulse rounded-[28px] bg-sky-100/70 sm:h-[440px]" />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Wave divider — in the logo's cyan -> blue -> purple paint-splash
+          gradient. Sits once, right under the hero, like the surface of
+          water — its own fill fades out toward the bottom (mask) so it
+          blends into the page backdrop's colors below (which pick up the
+          same blue/violet family right around here) instead of ending in a
+          hard-edged box. Scrolling further down is just that deepening
+          gradient + sparkles, not a repeating wave. */}
+      <div
+        className="relative -mt-20 mb-6 h-48 w-screen overflow-hidden sm:-mt-24 sm:h-64 md:mb-10"
+        style={{
+          // Same full-bleed breakout as the backdrop above, so the wave
+          // spans edge-to-edge instead of stopping at the padded content
+          // column's width.
+          marginLeft: 'calc(50% - 50vw)',
+          maskImage: 'linear-gradient(to bottom, black 45%, transparent 92%)',
+          WebkitMaskImage: 'linear-gradient(to bottom, black 45%, transparent 92%)',
+        }}
+      >
+        <svg className="explore-wave-drift-slow absolute bottom-0 left-0 h-full w-[200%]" viewBox="0 0 2880 200" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="exploreWaveGradA" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#67e8f9" />
+              <stop offset="50%" stopColor="#3b82f6" />
+              <stop offset="100%" stopColor="#a78bfa" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0,90 C240,150 480,30 720,90 C960,150 1200,30 1440,90 L1440,200 L0,200 Z M1440,90 C1680,150 1920,30 2160,90 C2400,150 2640,30 2880,90 L2880,200 L1440,200 Z"
+            fill="url(#exploreWaveGradA)"
+            opacity="0.6"
+          />
+        </svg>
+        <svg className="explore-wave-drift-fast absolute bottom-0 left-0 h-full w-[200%]" viewBox="0 0 2880 200" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="exploreWaveGradB" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#a78bfa" />
+              <stop offset="50%" stopColor="#38bdf8" />
+              <stop offset="100%" stopColor="#67e8f9" />
+            </linearGradient>
+          </defs>
+          <path
+            d="M0,120 C260,60 500,170 760,120 C1020,70 1200,150 1440,120 L1440,200 L0,200 Z M1440,120 C1700,60 1940,170 2200,120 C2460,70 2640,150 2880,120 L2880,200 L1440,200 Z"
+            fill="url(#exploreWaveGradB)"
+            opacity="0.7"
+          />
+        </svg>
+      </div>
+
       {/* Search and AI Matcher */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 mb-8 md:mb-12">
         <div className="flex-1 relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-400" />
           <input
             type="text"
             ref={inputRef}
@@ -646,12 +995,12 @@ export function ExplorePage() {
             onChange={(event) => setSearchQuery(event.target.value)}
             onFocus={() => setShowSuggestions(suggestions.length > 0)}
             placeholder="Search by name, email, or specialty — e.g. photographer, makeup, wedding"
-            className="w-full pl-12 pr-4 py-3 md:py-4 bg-white rounded-2xl shadow-lg border border-gray-200 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all"
+            className="w-full pl-12 pr-4 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.18)] border border-sky-100 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all"
           />
           {showSuggestions && suggestions.length > 0 && (
             <div
               ref={suggestionsRef}
-              className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden"
+              className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl border border-sky-100 rounded-2xl shadow-[0_12px_40px_rgba(56,189,248,0.2)] z-50 overflow-hidden"
             >
               {suggestions.map((s, idx) => {
                 // DataService.searchUsers returns flat rows (full_name/email
@@ -671,7 +1020,7 @@ export function ExplorePage() {
                       setShowSuggestions(false);
                       navigate(`/profile/${id}`);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3"
+                    className="w-full text-left px-3 py-2 hover:bg-sky-50 flex items-center gap-3"
                   >
                     <Avatar src={avatar} alt={name} gender={suggestionGender} sizeClassName="w-8 h-8" />
                     <div className="flex flex-col">
@@ -687,9 +1036,9 @@ export function ExplorePage() {
         <div className="flex gap-3">
           <button
             onClick={() => setShowSearchFilter(true)}
-            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
+            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:-rotate-6 transition-transform">
               <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
@@ -697,7 +1046,7 @@ export function ExplorePage() {
               <div className="text-xs text-gray-500 hidden md:block">Refine Your Search</div>
             </div>
             {activeAdvancedFilterCount > 0 && (
-              <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-gray-900 px-1.5 text-xs font-bold text-white shadow-md">
+              <span className="absolute -right-2 -top-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-1.5 text-xs font-bold text-white shadow-md shadow-sky-500/50">
                 {activeAdvancedFilterCount}
               </span>
             )}
@@ -705,9 +1054,9 @@ export function ExplorePage() {
           <button
             type="button"
             onClick={() => navigate('/event-matcher')}
-            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all group border border-gray-200"
+            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-800 to-gray-900 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-cyan-400 to-indigo-500 shadow-lg shadow-cyan-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
@@ -723,8 +1072,10 @@ export function ExplorePage() {
         <button
           type="button"
           onClick={() => setSelectedCategory('All')}
-          className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-            selectedCategory === 'All' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+          className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 ${
+            selectedCategory === 'All'
+              ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/40'
+              : 'bg-white/70 backdrop-blur-md text-gray-700 border border-sky-100 hover:border-sky-300 shadow-sm'
           }`}
         >
           All
@@ -734,8 +1085,10 @@ export function ExplorePage() {
             key={category.id}
             type="button"
             onClick={() => setSelectedCategory((current) => (current === category.label ? 'All' : category.label))}
-            className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-              selectedCategory === category.label ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-200 hover:border-gray-400'
+            className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all hover:-translate-y-0.5 ${
+              selectedCategory === category.label
+                ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/40'
+                : 'bg-white/70 backdrop-blur-md text-gray-700 border border-sky-100 hover:border-sky-300 shadow-sm'
             }`}
           >
             {category.label}
@@ -751,12 +1104,12 @@ export function ExplorePage() {
 
       {isLoading && (
         <div className="flex justify-center py-16">
-          <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin shadow-lg shadow-sky-500/20" />
         </div>
       )}
 
       {!isLoading && profiles.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+        <div className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-10 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancers found</h2>
           <p className="text-gray-600">Available freelancer profiles from the database will appear here.</p>
         </div>
@@ -772,7 +1125,7 @@ export function ExplorePage() {
       )}
 
       {!isLoading && profiles.length > 0 && filteredProfiles.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+        <div className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-10 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h2 className="mb-2 text-xl font-bold text-gray-900">
             {hasActiveSearch ? 'No matching freelancers' : 'No freelancers match these filters'}
           </h2>
@@ -816,6 +1169,11 @@ export function ExplorePage() {
           onSearch={(nextFilters) => setFilters(nextFilters)}
         />
       )}
-    </>
+
+      {authPromptMessage && (
+        <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
+      </div>
+    </div>
   );
 }

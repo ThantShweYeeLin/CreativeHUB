@@ -40,8 +40,8 @@ export function SearchResults({ onViewProfile }: SearchResultsProps) {
             onClick={() => setSelectedCategory(category)}
             className={`px-4 md:px-6 py-2 md:py-3 rounded-xl text-sm md:text-base font-semibold transition-all whitespace-nowrap ${
               selectedCategory === category
-                ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg'
-                : 'text-gray-700 hover:bg-gray-100'
+                ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg'
+                : 'text-gray-700 hover:bg-sky-50'
             }`}
           >
             {category}
@@ -62,7 +62,7 @@ export function SearchResults({ onViewProfile }: SearchResultsProps) {
             onClick={onViewProfile}
             className="group cursor-pointer"
           >
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 mb-3">
+            <div className="relative aspect-square rounded-2xl overflow-hidden bg-sky-50 mb-3">
               <ImageWithFallback
                 src={result.image}
                 alt={result.name}
@@ -88,7 +88,7 @@ export function SearchResults({ onViewProfile }: SearchResultsProps) {
 
       {/* Load More */}
       <div className="flex justify-center pt-8">
-        <button className="px-8 py-3 bg-white border-2 border-gray-200 rounded-xl font-semibold text-gray-700 hover:border-gray-900 hover:text-gray-900 transition-all">
+        <button className="px-8 py-3 bg-white border-2 border-sky-100 rounded-xl font-semibold text-gray-700 hover:border-sky-400 hover:text-gray-900 transition-all">
           Load More Results
         </button>
       </div>

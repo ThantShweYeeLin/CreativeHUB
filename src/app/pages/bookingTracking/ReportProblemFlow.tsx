@@ -127,7 +127,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
 
   if (step === 'category') {
     return (
-      <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+      <div className="mt-2 rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
         <div className="mb-3 flex items-center justify-between">
           <p className="font-bold text-gray-900">What happened?</p>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-900">
@@ -139,7 +139,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
             <button
               key={option.id}
               onClick={() => selectCategory(option.id, option.routesTo)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left text-sm hover:border-gray-900 hover:bg-gray-50"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2.5 text-left text-sm hover:border-sky-400 hover:bg-sky-50"
             >
               <span className="block font-semibold text-gray-900">{option.label}</span>
               <span className="mt-0.5 block text-xs text-gray-500">{option.hint}</span>
@@ -152,7 +152,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
 
   if (step === 'review_redirect') {
     return (
-      <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+      <div className="mt-2 rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
         <div className="mb-3 flex items-center justify-between">
           <button onClick={() => setStep('category')} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
             <ChevronLeft className="h-3.5 w-3.5" /> Back
@@ -176,7 +176,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
 
   if (step === 'details' && category && config) {
     return (
-      <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+      <div className="mt-2 rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
         <div className="mb-3 flex items-center justify-between">
           {initialCategory ? (
             <p className="font-bold text-gray-900">Report a Problem</p>
@@ -201,7 +201,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
                 <input
                   value={quickAnswers[q.id] || ''}
                   onChange={(e) => setQuickAnswers((current) => ({ ...current, [q.id]: e.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
             ))}
@@ -215,7 +215,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
           value={explanation}
           onChange={(e) => setExplanation(e.target.value)}
           placeholder="Describe the issue in detail..."
-          className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
         />
 
         <EvidenceItemEditor
@@ -229,7 +229,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
 
         <button
           onClick={proceedToSummary}
-          className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all"
+          className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all"
         >
           Review Report
         </button>
@@ -239,7 +239,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
 
   if (step === 'summary' && category && categoryDef) {
     return (
-      <div className="mt-2 rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+      <div className="mt-2 rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
         <div className="mb-3 flex items-center justify-between">
           <button onClick={() => setStep('details')} className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-900">
             <ChevronLeft className="h-3.5 w-3.5" /> Back
@@ -265,7 +265,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
           <div className="mb-3 space-y-1.5">
             <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Evidence ({evidenceItems.filter((i) => i.file).length})</p>
             {evidenceItems.filter((i) => i.file).map((item) => (
-              <div key={item.id} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs">
+              <div key={item.id} className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-xs">
                 <span className="font-semibold text-gray-900">{EVIDENCE_TYPE_OPTIONS.find((o) => o.value === item.evidenceType)?.label}</span>
                 <span className="text-gray-500"> — {item.file?.name}</span>
                 {item.description && <p className="mt-0.5 text-gray-600">{item.description}</p>}
@@ -284,7 +284,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
         <button
           onClick={() => void handleSubmit()}
           disabled={isSubmitting}
-          className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
+          className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
         >
           {isSubmitting ? 'Submitting...' : 'Submit Report'}
         </button>

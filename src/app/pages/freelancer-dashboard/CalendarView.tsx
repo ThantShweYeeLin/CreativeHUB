@@ -143,7 +143,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-            className="rounded-lg border border-gray-200 bg-white p-2 hover:bg-gray-100"
+            className="rounded-lg border border-sky-100 bg-white p-2 hover:bg-sky-50"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -151,7 +151,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
           <span className="min-w-[9rem] text-center text-sm font-semibold text-gray-900">{monthLabel}</span>
           <button
             onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-            className="rounded-lg border border-gray-200 bg-white p-2 hover:bg-gray-100"
+            className="rounded-lg border border-sky-100 bg-white p-2 hover:bg-sky-50"
             aria-label="Next month"
           >
             <ChevronRight className="h-4 w-4" />
@@ -159,7 +159,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-lg md:p-5">
+      <div className="rounded-2xl border border-sky-100 bg-white p-3 shadow-lg md:p-5">
         <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-gray-500 md:text-sm">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label) => (
             <div key={label} className="py-2">
@@ -190,7 +190,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
               ? 'border-red-200 bg-red-50 hover:border-red-300'
               : topEntry
                 ? KIND_STYLES[topEntry.kind as 'confirmed' | 'deposit_pending' | 'pending_request'].cellActive
-                : 'border-gray-100 hover:border-gray-300';
+                : 'border-sky-100 hover:border-sky-300';
 
             // Show up to 3 markers, most important first (confirmed, then
             // deposit-pending, then every pending request individually —
@@ -208,7 +208,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
                 key={cell.key}
                 onClick={() => handleSelectDate(cell.key as string)}
                 className={`min-h-20 rounded-lg border p-1.5 text-left align-top text-xs transition-colors md:min-h-28 md:p-2 ${
-                  isSelected ? 'border-gray-900 bg-gray-50' : cellActiveClass
+                  isSelected ? 'border-sky-500 bg-sky-50' : cellActiveClass
                 }`}
               >
                 <div className={`mb-1 font-semibold ${isToday ? 'text-black underline' : 'text-gray-700'}`}>
@@ -242,12 +242,12 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> Deposit pending</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-rose-600" /> Confirmed — unavailable</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-red-400" /> Blocked</span>
-          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full border border-gray-300" /> Available</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full border border-sky-200" /> Available</span>
         </div>
       </div>
 
       {selectedDateKey && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-6">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg md:p-6">
           <h3 className="mb-3 text-lg font-bold text-gray-900">
             {new Date(selectedDateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
           </h3>
@@ -259,7 +259,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
               {selectedEntries.map((entry) => {
                 const isPast = entry.kind === 'past';
                 const badgeClass = isPast
-                  ? 'border-gray-200 bg-gray-50 text-gray-600'
+                  ? 'border-sky-100 bg-sky-50/50 text-gray-600'
                   : `border-transparent ${KIND_STYLES[entry.kind as 'confirmed' | 'deposit_pending' | 'pending_request'].chip}`;
                 const badgeLabel = isPast
                   ? entry.status.charAt(0).toUpperCase() + entry.status.slice(1)
@@ -269,7 +269,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
                       ? 'Deposit pending'
                       : 'Pending request';
                 return (
-                  <div key={`${entry.kind}-${entry.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                  <div key={`${entry.kind}-${entry.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-gray-900">{entry.label}</p>
                       {entry.kind !== 'past' && entry.time && (
@@ -287,7 +287,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
             </div>
           )}
 
-          <div className="mt-4 border-t border-gray-100 pt-4">
+          <div className="mt-4 border-t border-sky-100 pt-4">
             {selectedBlocked ? (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -297,7 +297,7 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
                 <button
                   onClick={() => void onUnblockDate(selectedBlocked.id)}
                   disabled={isSavingBlockedDate}
-                  className="flex-shrink-0 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  className="flex-shrink-0 rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                 >
                   Unblock this date
                 </button>
@@ -310,12 +310,12 @@ export function CalendarView({ bookings, pendingRequests, blockedDates, onBlockD
                   value={blockReasonDraft}
                   onChange={(event) => setBlockReasonDraft(event.target.value)}
                   placeholder="Reason (optional)"
-                  className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="min-w-0 flex-1 rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   onClick={() => void onBlockDate(selectedDateKey, blockReasonDraft)}
                   disabled={isSavingBlockedDate}
-                  className="flex-shrink-0 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                  className="flex-shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   {isSavingBlockedDate ? 'Blocking...' : 'Block this date'}
                 </button>

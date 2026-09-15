@@ -17,7 +17,7 @@ export function StepVerification({
 }: StepVerificationProps) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-4">
+      <div className="flex items-center justify-between rounded-xl border border-sky-100 px-4 py-4">
         <div className="flex items-center gap-3">
           {emailVerified ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <Circle className="h-5 w-5 text-gray-300" />}
           <div>
@@ -27,7 +27,7 @@ export function StepVerification({
         </div>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-4">
+      <div className="flex items-center justify-between rounded-xl border border-sky-100 px-4 py-4">
         <div className="flex items-center gap-3">
           {phoneVerified ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : <Circle className="h-5 w-5 text-gray-300" />}
           <div>
@@ -39,14 +39,14 @@ export function StepVerification({
           <button
             type="button"
             onClick={() => onPhoneVerifiedChange(true)}
-            className="rounded-xl border-2 border-gray-900 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+            className="rounded-xl border-2 border-sky-400 px-4 py-2 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
           >
             Simulate verification
           </button>
         )}
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-gray-200 px-4 py-4">
+      <div className="flex items-center justify-between rounded-xl border border-sky-100 px-4 py-4">
         <div className="flex items-center gap-3">
           <ShieldCheck className={`h-5 w-5 ${identityStatus === 'verified' ? 'text-green-600' : 'text-gray-300'}`} />
           <div>
@@ -58,7 +58,7 @@ export function StepVerification({
           <button
             type="button"
             onClick={() => onIdentityStatusChange('pending')}
-            className="rounded-xl border-2 border-gray-900 px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+            className="rounded-xl border-2 border-sky-400 px-4 py-2 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
           >
             Submit
           </button>

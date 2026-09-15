@@ -98,6 +98,14 @@ export interface AuthShowcaseData {
   spotlights: AuthShowcaseSpotlight[];
 }
 
+export interface ExploreHeroData {
+  freelancerCount: number;
+  /** null when get_platform_stats() (supabase/add_platform_stats_rpc.sql) hasn't been deployed yet - bookings RLS means there's no client-side fallback for this one. */
+  bookingCount: number | null;
+  avgRating: number;
+  featured: AuthShowcaseSpotlight | null;
+}
+
 export class DataService {
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
@@ -123,6 +131,17 @@ export class DataService {
       .eq('is_available', true)
       .neq('visibility', 'limited')
       .eq('users.account_status', 'active')
+      // Without an explicit order Postgres/PostgREST returns rows in
+      // whatever order the query planner happens to produce — not "newest
+      // first" or "best-reviewed first," just unpredictable. Every caller of
+      // getAllFreelancers ends up showing this order somewhere (Explore
+      // re-ranks it further client-side, but Group Request, Map, and the
+      // portfolios grid all just display it as-is), so defaulting to
+      // best-reviewed-first here means a well-reviewed, frequently-booked
+      // freelancer surfaces before a brand-new zero-review profile everywhere,
+      // not only on Explore.
+      .order('rating', { referencedTable: 'users', ascending: false })
+      .order('total_reviews', { referencedTable: 'users', ascending: false })
       .limit(limit)
       .range(offset, offset + limit - 1);
   }
@@ -661,6 +680,67 @@ export class DataService {
         spotlights,
       },
       error: freelancerCountResp.error || memberCountResp.error || reviewStatsResp.error || null,
+    };
+  }
+
+  // Explore page hero: real platform stats + one featured freelancer to
+  // showcase in the large photo card. Public-safe - no auth required.
+  static async getExploreHeroData(): Promise<{ data: ExploreHeroData; error: unknown }> {
+    const [statsRpcResp, featuredRowsResp] = await Promise.all([
+      supabase.rpc('get_platform_stats' as any),
+      (supabase as any).from('freelancer_profiles')
+        .select('user_id, title, skills, users:user_id!inner(full_name, avatar_url, rating, total_reviews, location, account_status)')
+        .neq('visibility', 'limited')
+        .eq('is_available', true)
+        .eq('users.account_status', 'active')
+        .not('users.avatar_url', 'is', null)
+        .order('total_reviews', { foreignTable: 'users', ascending: false })
+        .limit(1),
+    ]);
+
+    let freelancerCount = 0;
+    let bookingCount: number | null = null;
+    let avgRating = 0;
+
+    const statsRow = Array.isArray(statsRpcResp.data) ? statsRpcResp.data[0] : statsRpcResp.data;
+    if (!statsRpcResp.error && statsRow) {
+      freelancerCount = Number(statsRow.freelancer_count) || 0;
+      bookingCount = Number(statsRow.booking_count) || 0;
+      avgRating = Number(statsRow.avg_rating) || 0;
+    } else {
+      // get_platform_stats() hasn't been deployed yet (see
+      // supabase/add_platform_stats_rpc.sql) - fall back to the same
+      // anon-readable queries getAuthShowcaseData() uses, minus bookings
+      // (no RLS-safe client-side way to count those platform-wide).
+      const [freelancerCountResp, reviewStatsResp] = await Promise.all([
+        supabase.from('users').select('id', { count: 'exact', head: true })
+          .eq('role', 'freelancer').eq('account_status', 'active'),
+        (supabase as any).from('reviews').select('rating', { count: 'exact' }).limit(1000),
+      ]);
+      freelancerCount = freelancerCountResp.count || 0;
+      const reviewRows = (reviewStatsResp.data || []) as Array<{ rating: number | null }>;
+      avgRating = reviewRows.length > 0
+        ? reviewRows.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewRows.length
+        : 0;
+    }
+
+    const featuredRow = ((featuredRowsResp.data || []) as Array<any>)[0];
+    const featured: AuthShowcaseSpotlight | null = featuredRow?.users?.avatar_url
+      ? {
+          id: featuredRow.user_id,
+          name: featuredRow.users?.full_name || 'Freelancer',
+          avatarUrl: featuredRow.users?.avatar_url || null,
+          title: featuredRow.title || null,
+          skills: Array.isArray(featuredRow.skills) ? featuredRow.skills.slice(0, 3) : [],
+          rating: Number(featuredRow.users?.rating) || 0,
+          totalReviews: Number(featuredRow.users?.total_reviews) || 0,
+          location: featuredRow.users?.location || null,
+        }
+      : null;
+
+    return {
+      data: { freelancerCount, bookingCount, avgRating, featured },
+      error: null,
     };
   }
 

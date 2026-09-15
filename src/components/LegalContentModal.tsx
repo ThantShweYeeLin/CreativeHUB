@@ -22,14 +22,14 @@ export function LegalContentModal({ initialTab, onClose }: LegalContentModalProp
 
   return (
     <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4">
-      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-200 px-5 py-3">
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+        <div className="flex flex-shrink-0 items-center justify-between border-b border-sky-100 px-5 py-3">
           <div className="flex gap-1.5">
             <button
               type="button"
               onClick={() => setActiveTab('terms')}
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                activeTab === 'terms' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                activeTab === 'terms' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'text-gray-600 hover:bg-sky-50'
               }`}
             >
               Terms of Service
@@ -38,7 +38,7 @@ export function LegalContentModal({ initialTab, onClose }: LegalContentModalProp
               type="button"
               onClick={() => setActiveTab('privacy')}
               className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
-                activeTab === 'privacy' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+                activeTab === 'privacy' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'text-gray-600 hover:bg-sky-50'
               }`}
             >
               Privacy Policy
@@ -48,7 +48,7 @@ export function LegalContentModal({ initialTab, onClose }: LegalContentModalProp
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex-shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="flex-shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-sky-50 hover:text-gray-700"
           >
             <X className="h-5 w-5" />
           </button>
@@ -65,11 +65,11 @@ export function LegalContentModal({ initialTab, onClose }: LegalContentModalProp
           </div>
         </div>
 
-        <div className="flex-shrink-0 border-t border-gray-200 px-6 py-3 text-right">
+        <div className="flex-shrink-0 border-t border-sky-100 px-6 py-3 text-right">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
           >
             Done
           </button>

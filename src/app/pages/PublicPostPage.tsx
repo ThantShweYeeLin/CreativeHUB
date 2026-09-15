@@ -7,6 +7,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { PostShareMenu } from '../../components/PostShareMenu';
 
 type LoadState = 'loading' | 'ready' | 'not_found' | 'error';
@@ -93,8 +94,10 @@ export function PublicPostPage() {
   const shareTitle = `CreativeHUB post by @${(post?.client?.email || 'creativehub').split('@')[0]}`;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-16">
-      <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 backdrop-blur-lg">
+    <div className="relative min-h-screen pb-16">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <header className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg">
         <div className="mx-auto flex max-w-[600px] items-center justify-between px-4 py-3">
           <button onClick={() => navigate(isAuthenticated ? '/explore' : '/signup')} className="flex items-center gap-2">
             <img src={logoImage} alt="CreativeHUB" className="h-9 w-9 rounded-full object-cover" />
@@ -103,14 +106,14 @@ export function PublicPostPage() {
           {isAuthenticated ? (
             <button
               onClick={() => navigate('/explore')}
-              className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+              className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
             >
               Open CreativeHUB
             </button>
           ) : (
             <button
               onClick={() => navigate('/login')}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+              className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
             >
               Log In
             </button>
@@ -121,7 +124,7 @@ export function PublicPostPage() {
       <div className="mx-auto max-w-[600px] px-4 py-6">
         {state === 'loading' && (
           <div className="flex justify-center py-20">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-black" />
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
           </div>
         )}
 
@@ -133,14 +136,14 @@ export function PublicPostPage() {
         )}
 
         {state === 'not_found' && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-lg">
+          <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <p className="text-lg font-bold text-gray-900">This post is no longer available</p>
             <p className="mt-2 text-sm text-gray-600">
               It may have been removed, made private, or the link may be incorrect.
             </p>
             <button
               onClick={() => navigate(isAuthenticated ? '/explore' : '/signup')}
-              className="mt-5 rounded-xl bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-black"
+              className="mt-5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
             >
               Explore CreativeHUB
             </button>
@@ -148,12 +151,12 @@ export function PublicPostPage() {
         )}
 
         {state === 'ready' && post && (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+          <div className="overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <button
               onClick={() => navigate(`/profile/${post.client_id}`)}
-              className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-gray-50"
+              className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-sky-50"
             >
-              <Avatar src={post.client?.avatar_url || DEFAULT_AVATAR_URL} alt={authorName} gender={post.client?.gender} sizeClassName="h-12 w-12 ring-2 ring-gray-200 rounded-full" />
+              <Avatar src={post.client?.avatar_url || DEFAULT_AVATAR_URL} alt={authorName} gender={post.client?.gender} sizeClassName="h-12 w-12 ring-2 ring-sky-100 rounded-full" />
               <div className="min-w-0">
                 <p className="truncate font-bold text-gray-900">{authorName}</p>
                 <p className="text-xs text-gray-500">{authorRole} on CreativeHUB</p>
@@ -161,7 +164,7 @@ export function PublicPostPage() {
             </button>
 
             {isUsableImageUrl(post.image_url) && (
-              <div className="aspect-square w-full bg-gray-100">
+              <div className="aspect-square w-full bg-sky-50">
                 <ImageWithFallback src={post.image_url} alt="" className="h-full w-full object-cover" />
               </div>
             )}
@@ -178,12 +181,12 @@ export function PublicPostPage() {
                   onClick={() => void handleToggleLike()}
                   disabled={isLiking}
                   aria-label={post.liked_by_me ? 'Unlike post' : 'Like post'}
-                  className="flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-2 text-gray-600 transition-all hover:bg-gray-100 disabled:opacity-60"
+                  className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-2 text-gray-600 transition-all hover:bg-sky-100 disabled:opacity-60"
                 >
                   <Heart className={`h-5 w-5 ${post.liked_by_me ? 'fill-red-500 text-red-500' : ''}`} />
                   <span className="text-sm font-semibold">{Math.max(0, Number(post.likes_count || 0))}</span>
                 </button>
-                <div className="flex items-center gap-1.5 rounded-full bg-gray-50 px-3 py-2 text-gray-600">
+                <div className="flex items-center gap-1.5 rounded-full bg-sky-50 px-3 py-2 text-gray-600">
                   <MessageCircle className="h-5 w-5" />
                   <span className="text-sm font-semibold">{Math.max(0, Number(post.comments_count || 0))}</span>
                 </div>
@@ -202,16 +205,17 @@ export function PublicPostPage() {
               <p className="border-t border-gray-100 bg-amber-50 px-5 py-3 text-sm font-medium text-amber-800">{actionNotice}</p>
             )}
 
-            <div className="border-t border-gray-100 bg-gray-50 px-5 py-4">
+            <div className="border-t border-sky-100 bg-sky-50/60 px-5 py-4">
               <button
                 onClick={() => navigate(`/profile/${post.client_id}`)}
-                className="w-full rounded-xl bg-gray-900 py-3 text-sm font-semibold text-white hover:bg-black"
+                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-semibold text-white hover:shadow-lg"
               >
                 View {authorName}'s Profile
               </button>
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

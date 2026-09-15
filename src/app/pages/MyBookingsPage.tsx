@@ -1,5 +1,6 @@
 import { ChevronLeft, Clock, ChevronRight, Calendar, MapPin } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -139,9 +140,11 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
+    <div className="relative min-h-screen pb-20">
+      <PageBackdrop />
+      <div className="relative z-10">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-gray-200">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-sky-100">
         <div className="max-w-[600px] mx-auto px-4 py-4">
           <button
             onClick={onBack}
@@ -164,7 +167,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
 
         {isLoading && (
           <div className="flex justify-center py-12">
-            <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+            <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         )}
 
@@ -175,7 +178,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             <button
               key={booking.id}
               onClick={() => onSelectBooking(booking.id)}
-              className="w-full bg-white rounded-2xl shadow-lg border border-gray-200 p-5 hover:shadow-2xl hover:border-gray-900 transition-all text-left"
+              className="w-full bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 hover:shadow-[0_12px_36px_rgba(56,189,248,0.25)] hover:border-sky-300 transition-all text-left"
             >
               {/* Booking Header */}
               <div className="flex items-center justify-between mb-4">
@@ -184,7 +187,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
                     src={booking.image}
                     alt={booking.name}
                     gender={booking.gender}
-                    sizeClassName="w-14 h-14 ring-2 ring-gray-200 rounded-full flex-shrink-0"
+                    sizeClassName="w-14 h-14 ring-2 ring-sky-100 rounded-full flex-shrink-0"
                   />
                   <div>
                     <h2 className="font-bold text-gray-900">{booking.name}</h2>
@@ -195,7 +198,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
               </div>
 
               {/* Service Details */}
-              <div className="bg-gray-50 rounded-xl p-4 mb-4">
+              <div className="bg-sky-50/60 rounded-xl p-4 mb-4">
                 <h3 className="font-bold text-gray-900 mb-2 text-sm">{booking.specialty}</h3>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -224,7 +227,7 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
               </div>
 
               {/* Deposit Info */}
-              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+              <div className="mt-3 pt-3 border-t border-sky-100 flex items-center justify-between">
                 <span className="text-xs text-gray-600">Deposit</span>
                 <span className="text-xs font-semibold text-gray-900">{formatMoney(booking.deposit)}</span>
               </div>
@@ -235,9 +238,9 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
 
         {/* Empty State - if no bookings */}
         {!isLoading && normalizedBookings.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-12 text-center">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="w-10 h-10 text-gray-400" />
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-12 text-center">
+            <div className="w-20 h-20 bg-sky-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-10 h-10 text-sky-400" />
             </div>
             <h3 className="text-xl font-bold text-gray-900 mb-2">No Bookings Yet</h3>
             <p className="text-gray-600 mb-6">
@@ -245,12 +248,13 @@ export function MyBookingsPage({ onBack, onSelectBooking }: MyBookingsPageProps)
             </p>
             <button
               onClick={onBack}
-              className="px-8 py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+              className="px-8 py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-xl font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all"
             >
               Explore Freelancers
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

@@ -247,8 +247,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
 
   if (isLoadingExisting) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-300 border-t-gray-900" />
+      <div className="flex min-h-screen items-center justify-center bg-sky-50">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
       </div>
     );
   }
@@ -291,7 +291,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 placeholder="Your name"
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
             </div>
           </div>
@@ -310,13 +310,13 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                     setLocationPlaceId(null);
                   }}
                   placeholder="Bangkok, Thailand"
-                  className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => setIsLocationPickerOpen(true)}
-                className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+                className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-sky-400 px-4 py-3 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
               >
                 <MapPinned className="h-4 w-4" /> Pin on map
               </button>
@@ -355,8 +355,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                 onClick={() => setClientType(toggle(clientType, option))}
                 className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                   clientType.includes(option)
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                    : 'border-sky-100 text-gray-600 hover:border-sky-300'
                 }`}
               >
                 {option}
@@ -367,8 +367,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
               onClick={() => setShowOtherClientType((current) => !current)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                 showOtherClientType || customClientTypes.length > 0
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               Other
@@ -390,7 +390,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                     }
                   }}
                   placeholder="Describe your client type"
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="flex-1 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   type="button"
@@ -399,7 +399,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                     if (value && !clientType.includes(value)) setClientType([...clientType, value]);
                     setOtherClientTypeDraft('');
                   }}
-                  className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+                  className="inline-flex items-center gap-1 rounded-xl border-2 border-sky-400 px-4 py-3 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
@@ -407,7 +407,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
               {customClientTypes.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {customClientTypes.map((value) => (
-                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-sm font-semibold text-white">
+                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white">
                       {value}
                       <button type="button" onClick={() => setClientType(clientType.filter((item) => item !== value))} aria-label={`Remove ${value}`} className="text-white/70 hover:text-white">
                         <X className="h-3.5 w-3.5" />
@@ -431,8 +431,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                 onClick={() => setInterests(toggle(interests, group.label))}
                 className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                   interests.includes(group.label)
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                    : 'border-sky-100 text-gray-600 hover:border-sky-300'
                 }`}
               >
                 {group.label}
@@ -443,8 +443,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
               onClick={() => setShowOtherInterest((current) => !current)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                 showOtherInterest || customInterests.length > 0
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               Other
@@ -466,7 +466,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                     }
                   }}
                   placeholder="What service are you looking for?"
-                  className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="flex-1 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   type="button"
@@ -475,7 +475,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
                     if (value && !interests.includes(value)) setInterests([...interests, value]);
                     setOtherInterestDraft('');
                   }}
-                  className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+                  className="inline-flex items-center gap-1 rounded-xl border-2 border-sky-400 px-4 py-3 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
                 >
                   <Plus className="h-4 w-4" /> Add
                 </button>
@@ -483,7 +483,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
               {customInterests.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {customInterests.map((value) => (
-                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 px-3.5 py-1.5 text-sm font-semibold text-white">
+                    <span key={value} className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3.5 py-1.5 text-sm font-semibold text-white">
                       {value}
                       <button type="button" onClick={() => setInterests(interests.filter((item) => item !== value))} aria-label={`Remove ${value}`} className="text-white/70 hover:text-white">
                         <X className="h-3.5 w-3.5" />
@@ -506,8 +506,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
               onClick={() => setBudgetPreference(band)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                 budgetPreference === band
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               {band}
@@ -518,8 +518,8 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
             onClick={() => setBudgetPreference('Depends on project')}
             className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
               budgetPreference === 'Depends on project'
-                ? 'border-gray-900 bg-gray-900 text-white'
-                : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                : 'border-sky-100 text-gray-600 hover:border-sky-300'
             }`}
           >
             Depends on project
@@ -532,13 +532,13 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
           {CLIENT_PREFERENCE_OPTIONS.map((option) => (
             <label
               key={option.value}
-              className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 hover:border-gray-400"
+              className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-sky-100 px-4 py-3 hover:border-sky-300"
             >
               <input
                 type="checkbox"
                 checked={preferences.includes(option.value)}
                 onChange={() => setPreferences(toggle(preferences, option.value))}
-                className="h-4 w-4 rounded border-gray-300"
+                className="h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-400"
               />
               <span className="text-sm font-semibold text-gray-800">{option.label}</span>
             </label>
