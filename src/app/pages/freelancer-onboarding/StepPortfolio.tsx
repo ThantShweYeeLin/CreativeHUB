@@ -27,7 +27,7 @@ export function StepPortfolio({ links, onLinksChange }: StepPortfolioProps) {
 
         return (
           <div key={platform}>
-            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3">
+            <div className="flex items-center gap-2 rounded-xl border border-sky-100 bg-sky-50/50 px-3">
               <Icon className="h-4 w-4 flex-shrink-0 text-gray-400" />
               <span className="w-20 flex-shrink-0 text-sm font-semibold text-gray-600">{platform}</span>
               <input

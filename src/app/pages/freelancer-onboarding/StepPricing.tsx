@@ -38,8 +38,8 @@ export function StepPricing({
               onClick={() => onPricingTypeChange(option.value)}
               className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                 pricingType === option.value
-                  ? 'border-gray-900 bg-gray-900 text-white'
-                  : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                  : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               {option.label}
@@ -54,7 +54,7 @@ export function StepPricing({
           <select
             value={currency}
             onChange={(event) => onCurrencyChange(event.target.value)}
-            className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           >
             {getSupportedCurrencyCodes().map((code) => (
               <option key={code} value={code}>
@@ -68,7 +68,7 @@ export function StepPricing({
             value={startingPrice}
             onChange={(event) => onStartingPriceChange(event.target.value)}
             placeholder="e.g. 3000"
-            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="flex-1 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
       </div>
@@ -82,7 +82,7 @@ export function StepPricing({
             value={minPrice}
             onChange={(event) => onMinPriceChange(event.target.value)}
             placeholder="e.g. 1000"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
         <div>
@@ -93,7 +93,7 @@ export function StepPricing({
             value={maxPrice}
             onChange={(event) => onMaxPriceChange(event.target.value)}
             placeholder="e.g. 8000"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
       </div>

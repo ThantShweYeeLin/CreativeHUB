@@ -66,14 +66,14 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
   if (error || !report) return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Report not found.'}</div>;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <button onClick={() => navigate(`/admin/users/${report.reported_user_id}`)} className="font-bold text-gray-900 hover:underline text-left">
           {report.reported_post_id
             ? `${report.reporter?.full_name || 'Someone'} reported a post by ${report.reported?.full_name || 'a user'}`
             : `${report.reporter?.full_name || 'Someone'} reported ${report.reported?.full_name || 'a user'}`}
         </button>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${report.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-gray-200 text-gray-700'}`}>
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${report.status === 'open' ? 'bg-amber-100 text-amber-700' : 'bg-sky-50 text-gray-700'}`}>
           {REPORT_REASON_LABEL[report.reason] || report.reason}
         </span>
       </div>
@@ -83,7 +83,7 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
           href={`/post/${report.reported_post_id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="mb-3 flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm hover:bg-gray-100"
+          className="mb-3 flex items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/50 p-3 text-sm hover:bg-sky-100"
         >
           {report.reported_post?.image_url && !String(report.reported_post.image_url).startsWith('blob:') && (
             <img src={report.reported_post.image_url} alt="Reported post" className="h-12 w-12 flex-shrink-0 rounded-lg object-cover" />
@@ -98,7 +98,7 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
       {(report.evidence_photo_paths || []).length > 0 && (
         <div className="mb-3 grid grid-cols-4 gap-2 max-w-md">
           {report.evidence_photo_paths.map((path: string) => (
-            <div key={path} className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+            <div key={path} className="aspect-square overflow-hidden rounded-lg bg-sky-50">
               {signedUrls[path] && <img src={signedUrls[path]} alt="Evidence" className="h-full w-full object-cover" />}
             </div>
           ))}
@@ -114,8 +114,8 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
       )}
 
       {report.status === 'open' ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-gray-100 pt-3">
-          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-sky-100 pt-3">
+          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="rounded-lg border border-sky-100 px-3 py-2 text-sm">
             <option value="">Choose a decision...</option>
             <option value="no_action">No action</option>
             <option value="warning">Warning</option>
@@ -126,18 +126,18 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason (optional)"
-            className="min-w-[200px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            className="min-w-[200px] flex-1 rounded-lg border border-sky-100 px-3 py-2 text-sm"
           />
           <button
             disabled={!decision || isSaving}
             onClick={() => void handleResolve()}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
           >
             {isSaving ? 'Saving...' : 'Confirm Decision'}
           </button>
         </div>
       ) : (
-        <div className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600 border-t border-gray-100 pt-3">
+        <div className="mt-3 rounded-lg bg-sky-50/50 px-3 py-2 text-sm text-gray-600 border-t border-sky-100 pt-3">
           Decision: <span className="font-semibold">{report.decision}</span>
           {report.decision_reason && <span> — "{report.decision_reason}"</span>}
         </div>

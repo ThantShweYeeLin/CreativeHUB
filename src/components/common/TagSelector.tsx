@@ -80,8 +80,8 @@ export function TagSelector({
           // uniform grid, purely cosmetic — doesn't affect selection state.
           const sizeClass = isMoodboard && index % 2 === 1 ? 'px-5 py-2.5' : 'px-4 py-2';
           const selectedClass = isMoodboard
-            ? 'border-2 border-gray-900 bg-white text-gray-900 font-bold'
-            : 'border-2 border-gray-900 bg-gray-900 text-white';
+            ? 'border-2 border-sky-500 bg-white text-sky-700 font-bold'
+            : 'border-2 border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white';
           return (
             <button
               key={suggestion}
@@ -92,8 +92,8 @@ export function TagSelector({
                 isSelected
                   ? selectedClass
                   : isDisabled
-                    ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                    ? 'cursor-not-allowed border-sky-100 bg-sky-50 text-gray-300'
+                    : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'
               }`}
             >
               {suggestion}
@@ -105,17 +105,17 @@ export function TagSelector({
           isMoodboard ? (
             <span
               key={tag}
-              className="inline-flex items-center gap-1.5 rounded-full border-2 border-gray-900 bg-white py-2 pl-4 pr-2.5 text-sm font-bold text-gray-900"
+              className="inline-flex items-center gap-1.5 rounded-full border-2 border-sky-500 bg-white py-2 pl-4 pr-2.5 text-sm font-bold text-sky-700"
             >
               {tag}
-              <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="text-gray-900/60 hover:text-gray-900">
+              <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="text-sky-700/60 hover:text-sky-700">
                 <X className="h-3.5 w-3.5" />
               </button>
             </span>
           ) : (
             <span
               key={tag}
-              className="inline-flex items-center gap-1.5 rounded-full border-2 border-gray-900 bg-gray-900 py-2 pl-4 pr-2.5 text-sm font-semibold text-white"
+              className="inline-flex items-center gap-1.5 rounded-full border-2 border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 py-2 pl-4 pr-2.5 text-sm font-semibold text-white"
             >
               {tag}
               <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove ${tag}`} className="text-white/70 hover:text-white">
@@ -134,9 +134,9 @@ export function TagSelector({
             } ${
               showOtherInput
                 ? isMoodboard
-                  ? 'border-gray-900 bg-white font-bold text-gray-900'
-                  : 'border-gray-900 bg-gray-900 text-white'
-                : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                  ? 'border-sky-500 bg-white font-bold text-sky-700'
+                  : 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'
             }`}
           >
             <Plus className="h-3.5 w-3.5" /> Other
@@ -157,12 +157,12 @@ export function TagSelector({
             }}
             placeholder={otherPlaceholder}
             autoFocus
-            className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="flex-1 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-sm focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
           <button
             type="button"
             onClick={addCustomTag}
-            className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-900 px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+            className="inline-flex items-center gap-1 rounded-xl border-2 border-sky-400 px-4 py-2.5 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
           >
             <Plus className="h-4 w-4" /> Add
           </button>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +17,8 @@ interface MainLayoutProps {
 
 export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const location = useLocation();
+  const { signOut, user, isAuthenticated } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState<NotificationPanelItem[]>([]);
@@ -70,7 +71,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       }
 
       if (type === 'request') {
-        return `${finalActorName}: A new booking request - ${projectName}.`;
+        return `${finalActorName} requested a booking for '${projectName}.'`;
       }
 
       if (type === 'message' || type === 'group_message') {
@@ -296,6 +297,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 'attendance_window_open',
                 'deposit_payment_required',
                 'booking_completion_submitted',
+                'attendance_remaining_balance',
               ].includes(String(row.type || ''))) {
                 const bookingResponse = await supabase
                   .from('bookings')
@@ -578,38 +580,45 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
+    <div className="min-h-screen bg-white pb-20 md:pb-0">
       {/* Header */}
-      <header className="sticky top-0 z-[1200] bg-white/80 backdrop-blur-lg border-b border-gray-200">
+      <header className="sticky top-0 z-[1200] bg-white/70 backdrop-blur-xl border-b border-sky-100">
         <div className="max-w-[1680px] mx-auto px-4 md:px-8">
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
             <button
               onClick={() => navigate('/explore')}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              className="flex items-center gap-2 transition-transform hover:scale-105"
             >
               <img
                 src={logoImage}
                 alt="CreativeHUB"
-                className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover"
+                className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover shadow-sm ring-2 ring-white"
               />
             </button>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-8">
+            <nav className="hidden md:flex items-center gap-1 rounded-full border border-sky-100 bg-white/60 p-1">
               {[
                 { label: 'Explore', path: '/explore' },
                 { label: 'Map', path: '/map' },
                 { label: 'For You', path: '/for-you' },
-              ].map((tab) => (
-                <button
-                  key={tab.path}
-                  onClick={() => navigate(tab.path)}
-                  className="relative py-2 font-semibold transition-colors text-gray-600 hover:text-gray-900"
-                >
-                  {tab.label}
-                </button>
-              ))}
+              ].map((tab) => {
+                const isActive = location.pathname === tab.path;
+                return (
+                  <button
+                    key={tab.path}
+                    onClick={() => navigate(tab.path)}
+                    className={`relative rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+                      isActive
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                        : 'text-gray-600 hover:bg-sky-50 hover:text-sky-700'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
             </nav>
 
             {/* Right Actions */}
@@ -617,25 +626,33 @@ export function MainLayout({ children }: MainLayoutProps) {
               <button
                 onClick={() =>
                   navigate(
-                    user?.role === 'admin'
+                    !isAuthenticated
+                      ? '/signup'
+                      : user?.role === 'admin'
                       ? '/admin'
                       : canAccessFreelancerDashboard
                       ? '/freelancer-dashboard/requests'
                       : '/become-freelancer'
                   )
                 }
-                className="hidden md:block px-6 py-2.5 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg font-semibold hover:shadow-lg hover:scale-105 transition-all"
+                className="hidden md:block rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105"
               >
-                {user?.role === 'admin' ? 'Admin Dashboard' : canAccessFreelancerDashboard ? 'Freelancer Dashboard' : 'Become a Freelancer'}
+                {!isAuthenticated
+                  ? 'Get Started'
+                  : user?.role === 'admin'
+                  ? 'Admin Dashboard'
+                  : canAccessFreelancerDashboard
+                  ? 'Freelancer Dashboard'
+                  : 'Become a Freelancer'}
               </button>
               <div className="relative">
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
-                  className="relative p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="relative p-2 hover:bg-sky-50 rounded-full transition-colors"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
                   {unreadNotificationsCount > 0 && (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
                   )}
                 </button>
                 {showNotifications && (
@@ -719,21 +736,23 @@ export function MainLayout({ children }: MainLayoutProps) {
                   />
                 )}
               </div>
-              <button
-                onClick={() => navigate('/client-profile')}
-                className="w-8 h-8 md:w-10 md:h-10 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-gray-200"
-              >
-                <Avatar
-                  src={profileAvatarUrl || DEFAULT_AVATAR_URL}
-                  alt="Profile picture"
-                  gender={user?.gender}
-                  sizeClassName="w-full h-full"
-                />
-              </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => navigate('/client-profile')}
+                  className="w-8 h-8 md:w-10 md:h-10 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-sky-100"
+                >
+                  <Avatar
+                    src={profileAvatarUrl || DEFAULT_AVATAR_URL}
+                    alt="Profile picture"
+                    gender={user?.gender}
+                    sizeClassName="w-full h-full"
+                  />
+                </button>
+              )}
               <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-2 hover:bg-sky-50 rounded-full transition-colors"
                 >
                   <Menu className="w-5 h-5 text-gray-600" />
                 </button>

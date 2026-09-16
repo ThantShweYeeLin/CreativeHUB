@@ -54,13 +54,13 @@ export function StepServiceLocations({
               value={location}
               onChange={(event) => onLocationChange(event.target.value)}
               placeholder="Bangkok, Thailand"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
           <button
             type="button"
             onClick={onOpenBaseLocationPicker}
-            className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-gray-900 px-4 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-900 hover:text-white"
+            className="inline-flex flex-shrink-0 items-center gap-2 rounded-xl border-2 border-sky-400 px-4 py-3 text-sm font-semibold text-sky-600 hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
           >
             <MapPinned className="h-4 w-4" /> Pin on map
           </button>
@@ -91,7 +91,7 @@ export function StepServiceLocations({
           value={studioName}
           onChange={(event) => onStudioNameChange(event.target.value)}
           placeholder="e.g. Vipa Creative Studio"
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3.5 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3.5 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
         />
       </div>
 

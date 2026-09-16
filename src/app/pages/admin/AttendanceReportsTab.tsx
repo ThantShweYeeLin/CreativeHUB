@@ -109,7 +109,7 @@ export function AttendanceReportsTab() {
     return (
       <div className="grid grid-cols-4 gap-2">
         {paths.map((path) => (
-          <div key={path} className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+          <div key={path} className="aspect-square overflow-hidden rounded-lg border border-sky-100 bg-sky-50/50">
             {signedUrls[path] && !path.toLowerCase().endsWith('.pdf') && !path.toLowerCase().endsWith('.heic') ? (
               <img src={signedUrls[path]} alt="Evidence" className="h-full w-full object-cover" />
             ) : (
@@ -131,10 +131,10 @@ export function AttendanceReportsTab() {
     const isExpanded = expandedId === report.id;
 
     return (
-      <div key={report.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div key={report.id} className="rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)] overflow-hidden">
         <button
           onClick={() => setExpandedId(isExpanded ? null : report.id)}
-          className="w-full flex flex-wrap items-center justify-between gap-2 p-4 text-left hover:bg-gray-50"
+          className="w-full flex flex-wrap items-center justify-between gap-2 p-4 text-left hover:bg-sky-50"
         >
           <div>
             <p className="font-bold text-gray-900">
@@ -146,7 +146,7 @@ export function AttendanceReportsTab() {
           </div>
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              report.status === 'resolved' ? 'bg-gray-100 text-gray-700' : report.status === 'under_review' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+              report.status === 'resolved' ? 'bg-sky-50 text-gray-700' : report.status === 'under_review' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
             }`}
           >
             {ATTENDANCE_STATE_LABEL[(report.status === 'open' ? 'disputed' : report.status) as keyof typeof ATTENDANCE_STATE_LABEL]}
@@ -154,8 +154,8 @@ export function AttendanceReportsTab() {
         </button>
 
         {isExpanded && (
-          <div className="border-t border-gray-100 p-5 space-y-4">
-            <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700 space-y-1">
+          <div className="border-t border-sky-100 p-5 space-y-4">
+            <div className="rounded-xl bg-sky-50/50 p-4 text-sm text-gray-700 space-y-1">
               <p className="font-semibold text-gray-900">Booking</p>
               <p>Deposit: {formatCurrencyAmount(Math.round(Number(b.budget || 0) * 0.3), 'THB')}</p>
               {b.start_date && <p>Scheduled: {b.start_date} {b.start_time ? String(b.start_time).slice(0, 5) : ''}</p>}
@@ -163,13 +163,13 @@ export function AttendanceReportsTab() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-xl bg-gray-50 p-4">
+              <div className="rounded-xl bg-sky-50/50 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Client Confirmation</p>
                 <p className="text-sm text-gray-700">
                   {clientConfirmation ? `✓ Confirmed at ${new Date(clientConfirmation.confirmed_at).toLocaleString()}` : 'Not confirmed'}
                 </p>
               </div>
-              <div className="rounded-xl bg-gray-50 p-4">
+              <div className="rounded-xl bg-sky-50/50 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Freelancer Confirmation</p>
                 <p className="text-sm text-gray-700">
                   {freelancerConfirmation ? `✓ Confirmed at ${new Date(freelancerConfirmation.confirmed_at).toLocaleString()}` : 'Not confirmed'}
@@ -177,7 +177,7 @@ export function AttendanceReportsTab() {
               </div>
             </div>
 
-            <div className="rounded-xl bg-gray-50 p-4">
+            <div className="rounded-xl bg-sky-50/50 p-4">
               <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Report</p>
               <p className="text-sm text-gray-700 mb-2">{getReportReasonLabel(report.reason)}</p>
               {report.explanation && <p className="text-sm text-gray-600 mb-2">"{report.explanation}"</p>}
@@ -185,7 +185,7 @@ export function AttendanceReportsTab() {
             </div>
 
             {report.status === 'resolved' && (
-              <div className="rounded-xl bg-gray-50 p-4">
+              <div className="rounded-xl bg-sky-50/50 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Final Decision</p>
                 <p className="text-sm text-gray-700">{DECISION_LABEL[report.admin_decision as AttendanceReportDecision] || report.admin_decision}</p>
                 {report.admin_decision_reason && <p className="mt-1 text-sm text-gray-600">{report.admin_decision_reason}</p>}
@@ -193,13 +193,13 @@ export function AttendanceReportsTab() {
             )}
 
             {report.status !== 'resolved' && (
-              <div className="border-t border-gray-100 pt-4">
+              <div className="border-t border-sky-100 pt-4">
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Decision reason (optional)</label>
                 <textarea
                   value={decisionReason}
                   onChange={(e) => setDecisionReason(e.target.value)}
                   placeholder="Notes for this decision..."
-                  className="mb-3 w-full min-h-[70px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full min-h-[70px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -219,21 +219,21 @@ export function AttendanceReportsTab() {
                   <button
                     disabled={pendingId === report.id}
                     onClick={() => void handleDecision(report.id, 'reject_report')}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     Reject Report
                   </button>
                   <button
                     disabled={pendingId === report.id}
                     onClick={() => void handleDecision(report.id, 'mark_mutual_dispute')}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     Mark as Mutual Dispute
                   </button>
                   <button
                     disabled={pendingId === report.id}
                     onClick={() => void handleDecision(report.id, 'resolve_without_penalty')}
-                    className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     <CheckCircle className="h-3.5 w-3.5" /> Resolve Without Penalty
                   </button>
@@ -241,7 +241,7 @@ export function AttendanceReportsTab() {
                     <button
                       disabled={pendingId === report.id}
                       onClick={() => void handleRequestEvidence(report.id)}
-                      className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                      className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                     >
                       <AlertCircle className="h-3.5 w-3.5" /> Request Additional Evidence
                     </button>
@@ -265,7 +265,7 @@ export function AttendanceReportsTab() {
             key={option.id}
             onClick={() => setSubTab(option.id)}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              subTab === option.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              subTab === option.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
             }`}
           >
             {option.label} ({option.count})
@@ -277,7 +277,7 @@ export function AttendanceReportsTab() {
 
       {isLoading ? (
         <div className="flex justify-center py-12">
-          <div className="h-8 w-8 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          <div className="h-8 w-8 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
         </div>
       ) : listForSubTab.length === 0 ? (
         <p className="py-12 text-center text-sm text-gray-500">No attendance reports here.</p>

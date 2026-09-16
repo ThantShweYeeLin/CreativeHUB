@@ -5,6 +5,7 @@ import { Filter, Layers, Navigation, Search, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMapper';
@@ -121,14 +122,22 @@ function freelancerMarkerIcon(freelancer: FreelancerMapProfile) {
   const status = availabilityStatus(freelancer);
   const color = statusColor(status);
   const visual = professionVisual(freelancer);
+  // Unique per marker so multiple pins on the same map don't clash on the
+  // same <clipPath> id (SVG ids are global to the document once inlined).
+  const clipId = `marker-clip-${freelancer.id}`;
 
   return divIcon({
     className: '',
     html: `
       <svg width="38" height="48" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 6px 10px rgba(0,0,0,.28));">
+        <defs>
+          <clipPath id="${clipId}">
+            <circle cx="19" cy="20" r="8.2" />
+          </clipPath>
+        </defs>
         <path d="M19 46C19 46 34 31.8 34 20.4C34 12.14 27.06 5.4 19 5.4C10.94 5.4 4 12.14 4 20.4C4 31.8 19 46 19 46Z" fill="#111827" stroke="${color}" stroke-width="3"/>
-        <circle cx="19" cy="20" r="8.4" fill="${visual.accent}"/>
-        <text x="19" y="23" text-anchor="middle" font-size="6.4" font-weight="700" fill="#ffffff" font-family="system-ui, -apple-system, Segoe UI, sans-serif">${visual.glyph}</text>
+        <circle cx="19" cy="20" r="9.2" fill="${visual.accent}"/>
+        <image href="${freelancer.profileImage}" x="10.8" y="11.8" width="16.4" height="16.4" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>
       </svg>
     `,
     iconSize: [38, 48],
@@ -533,17 +542,19 @@ export function MapView({ onViewProfile }: MapViewProps) {
   };
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-xl md:p-6">
+    <div className="relative">
+      <PageBackdrop />
+      <div className="relative z-10 space-y-6 md:space-y-8">
+      <div className="rounded-3xl border border-sky-100 bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Filter className="h-5 w-5 text-gray-900" />
+            <Filter className="h-5 w-5 text-sky-500" />
             <h2 className="text-lg font-bold text-gray-900">{mapText.filters}</h2>
           </div>
           <button
             type="button"
             onClick={() => setFiltersExpanded((current) => !current)}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            className="rounded-lg border border-sky-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-sky-50"
           >
             {filtersExpanded ? mapText.hideFilters : mapText.showFilters}
           </button>
@@ -563,12 +574,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
               value={locationSearchQuery}
               onChange={(event) => setLocationSearchQuery(event.target.value)}
               placeholder={mapText.locationSearchPlaceholder}
-              className="min-w-[200px] flex-1 rounded-xl border border-gray-300 px-4 py-2 text-sm focus:border-gray-900 focus:outline-none"
+              className="min-w-[200px] flex-1 rounded-xl border border-sky-200 px-4 py-2 text-sm focus:border-sky-400 focus:outline-none"
             />
             <button
               type="submit"
               disabled={isSearchingLocation || !locationSearchQuery.trim()}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Search className="h-4 w-4" />
               {isSearchingLocation ? mapText.locationSearchSearching : mapText.locationSearchButton}
@@ -597,8 +608,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
                     onClick={() => toggleProfession(profession)}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                       isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                        : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                     }`}
                   >
                     {profession}
@@ -620,8 +631,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
                     onClick={() => toggleAvailability(availability.key)}
                     className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                       isSelected
-                        ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                        : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                     }`}
                   >
                     {availability.dot} {availability.label}
@@ -647,8 +658,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   onClick={() => setBudgetBand(band.key)}
                   className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                     budgetBand === band.key
-                      ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                      : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                   }`}
                 >
                   {band.label}
@@ -665,8 +676,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
                 onClick={() => setDistanceLimitKm(null)}
                 className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                   distanceLimitKm === null
-                    ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                    : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                 }`}
               >
                 {mapText.anyDistance}
@@ -679,8 +690,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   disabled={!clientLocation}
                   className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all ${
                     distanceLimitKm === distance
-                      ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                      : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {mapText.withinDistance(distance)}
@@ -701,7 +712,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                 setBudgetBand('all');
                 setDistanceLimitKm(null);
               }}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
             >
               {mapText.reset}
             </button>
@@ -710,7 +721,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
         )}
       </div>
 
-      <div className="relative z-0 h-[460px] overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-xl md:h-[calc(100vh-240px)]">
+      <div className="relative z-0 h-[460px] overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:h-[calc(100vh-240px)]">
         <MapContainer center={center} zoom={12} className="h-full w-full">
           <RecenterMapView center={center} zoom={clientLocation ? 13 : 12} />
           <TileLayer
@@ -749,7 +760,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
             >
               <Popup>
                 <div className="w-56">
-                  <div className="mb-2 h-24 overflow-hidden rounded-lg border border-gray-200">
+                  <div className="mb-2 h-24 overflow-hidden rounded-lg border border-sky-100">
                     <ImageWithFallback
                       src={freelancer.coverImage || freelancer.profileImage}
                       alt={`${freelancer.fullName} preview`}
@@ -771,7 +782,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   </div>
                   <button
                     onClick={() => handleViewProfile(freelancer.id)}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black"
+                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     {mapText.viewProfile}
@@ -782,9 +793,9 @@ export function MapView({ onViewProfile }: MapViewProps) {
           ))}
         </MapContainer>
 
-        <div className="pointer-events-none absolute top-4 left-4 z-[500] rounded-xl border border-gray-200 bg-white/90 px-4 py-3 shadow-lg backdrop-blur">
+        <div className="pointer-events-none absolute top-4 left-4 z-[500] rounded-xl border border-sky-100 bg-white/90 px-4 py-3 shadow-[0_8px_30px_rgba(56,189,248,0.15)] backdrop-blur">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
-            <Navigation className="h-4 w-4" />
+            <Navigation className="h-4 w-4 text-sky-500" />
             {mapText.openStreetMap}
           </div>
           <p className="mt-1 text-xs text-gray-600">{mapText.matchingFreelancers(mapFreelancers.length)}</p>
@@ -802,10 +813,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         {(isLoading || errorMessage || (!isLoading && !errorMessage && mapFreelancers.length === 0)) && (
           <div className="absolute inset-0 z-[600] flex items-center justify-center bg-white/70 backdrop-blur-sm">
-            <div className="rounded-2xl border border-gray-200 bg-white px-6 py-5 text-center shadow-xl">
+            <div className="rounded-2xl border border-sky-100 bg-white px-6 py-5 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               {isLoading ? (
                 <>
-                  <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-black" />
+                  <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
                   <p className="font-semibold text-gray-900">{mapText.loading}</p>
                 </>
               ) : errorMessage ? (
@@ -824,13 +835,13 @@ export function MapView({ onViewProfile }: MapViewProps) {
         )}
       </div>
 
-      <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-xl md:p-6">
+      <div className="rounded-3xl border border-sky-100 bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-bold text-gray-900">{mapText.nearYou}</h2>
             <p className="text-sm text-gray-600">{mapText.previewSubtitle}</p>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-900">
+          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm font-semibold text-gray-900">
             {filteredFreelancers.length} {mapText.shown}
           </div>
         </div>
@@ -845,8 +856,8 @@ export function MapView({ onViewProfile }: MapViewProps) {
               }}
               className={`rounded-2xl border p-4 text-left transition-all ${
                 selectedId === freelancer.id
-                  ? 'border-gray-900 bg-gray-50 shadow-lg'
-                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                  ? 'border-sky-400 bg-sky-50 shadow-[0_8px_24px_rgba(56,189,248,0.25)]'
+                  : 'border-sky-100 bg-white hover:border-sky-300 hover:shadow-md'
               }`}
             >
               <div className="mb-3 flex items-start gap-3">
@@ -877,11 +888,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
         </div>
 
         {!isLoading && !errorMessage && filteredFreelancers.length === 0 && (
-          <div className="mt-4 rounded-2xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-700">
+          <div className="mt-4 rounded-2xl border border-dashed border-sky-200 bg-sky-50/60 p-4 text-sm text-gray-700">
             <p className="font-semibold text-gray-900">{mapText.noMatches}</p>
             <p className="mt-1">{mapText.noMatchesHint}</p>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

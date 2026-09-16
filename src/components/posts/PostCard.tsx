@@ -60,7 +60,7 @@ export function PostCard({
   onToggleSave,
 }: PostCardProps) {
   return (
-    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg md:rounded-3xl">
+    <article className="overflow-hidden rounded-2xl border border-sky-100 bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:rounded-3xl">
       <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4">
         <button
           type="button"
@@ -80,7 +80,7 @@ export function PostCard({
       {badges && <div className="flex flex-wrap gap-2 px-4 pb-3 md:px-6">{badges}</div>}
 
       {imageUrl && (
-        <div onClick={onOpenPost} className="relative block aspect-square w-full cursor-pointer bg-gray-100 text-left">
+        <div onClick={onOpenPost} className="relative block aspect-square w-full cursor-pointer bg-sky-50 text-left">
           {isVideo ? (
             <video src={imageUrl} className="h-full w-full object-cover" controls onClick={(event) => event.stopPropagation()} />
           ) : (
@@ -96,7 +96,7 @@ export function PostCard({
         <div className={`flex items-center justify-between ${caption || afterCaption ? 'mt-3' : ''}`}>
           <div className="flex items-center gap-4">
             <div
-              className={`group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100 ${onShowLikes ? 'cursor-pointer' : ''}`}
+              className={`group flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 transition-all hover:bg-sky-100 ${onShowLikes ? 'cursor-pointer' : ''}`}
               onClick={onShowLikes}
             >
               <button
@@ -114,14 +114,14 @@ export function PostCard({
             <button
               type="button"
               onClick={onOpenComment}
-              className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100"
+              className="group flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 transition-all hover:bg-sky-100"
             >
               <MessageCircle className="h-7 w-7 text-gray-700 transition-transform group-hover:scale-110" />
               <span className="font-semibold text-gray-900">{commentsCount}</span>
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Comment</span>
             </button>
             {shareSlot || (onShare && (
-              <button type="button" onClick={onShare} className="group flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 transition-all hover:bg-gray-100">
+              <button type="button" onClick={onShare} className="group flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 transition-all hover:bg-sky-100">
                 <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
               </button>
@@ -129,7 +129,7 @@ export function PostCard({
           </div>
           {onToggleSave && (
             <button type="button" onClick={onToggleSave} className="transition-all">
-              <Bookmark className={`h-6 w-6 transition-all ${saved ? 'fill-gray-900 text-gray-900 scale-110' : 'text-gray-700 hover:scale-110'}`} />
+              <Bookmark className={`h-6 w-6 transition-all ${saved ? 'fill-blue-500 text-blue-500 scale-110' : 'text-gray-700 hover:scale-110'}`} />
             </button>
           )}
         </div>

@@ -193,20 +193,20 @@ export function PostDetailModal({
       }}
     >
       <div
-        className={`relative flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-gray-200 bg-white shadow-2xl sm:h-auto sm:rounded-3xl ${
+        className={`relative flex h-[85dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] sm:h-auto sm:rounded-3xl ${
           showPostContent ? 'sm:max-h-[90vh] sm:w-[75vw] sm:max-w-[1100px]' : 'sm:max-h-[85vh] sm:w-full sm:max-w-lg'
         }`}
       >
         {showPostContent ? (
           <>
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 px-5 py-4">
+            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-sky-100 px-5 py-4">
               <button
                 type="button"
                 onClick={onViewAuthor}
                 disabled={!onViewAuthor}
                 className="flex items-center gap-3 text-left transition-opacity enabled:hover:opacity-80"
               >
-                <Avatar src={authorAvatarUrl} alt={authorName} sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full" />
+                <Avatar src={authorAvatarUrl} alt={authorName} sizeClassName="h-10 w-10 ring-2 ring-sky-100 rounded-full" />
                 <div>
                   <p className="font-semibold text-gray-900">{authorName}</p>
                   {authorSubtitle && <p className="text-xs text-gray-500">{authorSubtitle}</p>}
@@ -227,7 +227,7 @@ export function PostDetailModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                  className="rounded-full p-2 text-gray-500 hover:bg-sky-50 hover:text-gray-900"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -239,7 +239,7 @@ export function PostDetailModal({
               // size (capped by max-height/max-width), so a portrait photo
               // stays narrow instead of being stretched to the full card
               // width, and the visible boundary matches the photo itself.
-              <div className="mt-3 inline-flex max-h-[40vh] max-w-full shrink-0 items-center justify-center self-center bg-gray-100 sm:max-h-[58vh]">
+              <div className="mt-3 inline-flex max-h-[40vh] max-w-full shrink-0 items-center justify-center self-center bg-sky-50 sm:max-h-[58vh]">
                 {isVideo ? (
                   <video src={imageUrl} className="max-h-[40vh] max-w-full w-auto sm:max-h-[58vh]" controls />
                 ) : (
@@ -258,14 +258,14 @@ export function PostDetailModal({
             )}
           </>
         ) : (
-          <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-5 py-4">
+          <div className="flex shrink-0 items-center justify-between border-b border-sky-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-gray-900">
               {typeof commentsCount === 'number' ? `${commentsCount} comments` : 'Comments'}
             </h2>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              className="rounded-full p-1.5 text-gray-500 hover:bg-sky-50 hover:text-gray-900"
             >
               <X className="h-5 w-5" />
             </button>
@@ -275,7 +275,7 @@ export function PostDetailModal({
         <div className="flex-1 overflow-y-auto p-5">
           {showPostContent && (
             <>
-              <div className="flex flex-wrap items-center gap-4 border-y border-gray-200 py-3">
+              <div className="flex flex-wrap items-center gap-4 border-y border-sky-100 py-3">
                 <button onClick={onToggleLike} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
                   <Heart className={`h-5 w-5 ${liked ? 'fill-red-500 text-red-500' : 'text-gray-700'}`} />
                   {likesCount}
@@ -311,7 +311,7 @@ export function PostDetailModal({
               </div>
 
               {showLikedUsers && likedUsers.length > 0 ? (
-                <div className="mt-5 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="mt-5 rounded-2xl bg-sky-50/50 p-4 text-sm text-gray-700">
                   <p className="mb-2 font-semibold text-gray-900">Liked by</p>
                   <div className="flex flex-wrap gap-3">
                     {likedUsers.map((likedUser) => (
@@ -320,7 +320,7 @@ export function PostDetailModal({
                         type="button"
                         onClick={() => onViewLikedUser?.(likedUser.id)}
                         disabled={!onViewLikedUser}
-                        className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition enabled:hover:bg-gray-100"
+                        className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition enabled:hover:bg-sky-50"
                       >
                         <Avatar
                           src={likedUser.avatar_url || authorAvatarUrl}

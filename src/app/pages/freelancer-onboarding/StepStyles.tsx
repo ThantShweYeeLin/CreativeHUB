@@ -55,7 +55,7 @@ export function StepStyles({
       {minorCategory && onMinorCategoryStylesChange && (
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Styles for {minorCategory}</p>
-          <p className="mb-4 text-xs text-gray-500">Your minor category — select the styles that apply here too.</p>
+          <p className="mb-4 text-xs text-gray-500">The specialty you're also skilled in — select the styles that apply here too.</p>
           <TagSelector
             suggestions={suggestedStylesForCategory(minorCategory)}
             selected={minorCategoryStyles}
@@ -68,7 +68,7 @@ export function StepStyles({
       {minorCategory === MUSICIAN_CATEGORY_LABEL && onMinorCategoryPerformerTypeChange && (
         <div>
           <p className="mb-1 text-sm font-semibold text-gray-700">Performer type for {minorCategory}</p>
-          <p className="mb-4 text-xs text-gray-500">How you perform in this minor category.</p>
+          <p className="mb-4 text-xs text-gray-500">How you perform in this specialty.</p>
           <TagSelector
             suggestions={suggestedPerformerTypesForCategory(minorCategory)}
             selected={minorCategoryPerformerType}

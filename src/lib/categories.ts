@@ -72,7 +72,7 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
   {
     id: 'musician-live-entertainment',
     label: 'Musician/Live Entertainment',
-    skills: ['Live Performance', 'Wedding Ceremony Music', 'Reception Entertainment', 'MC Hosting', 'Sound Equipment', 'Song Requests', 'Custom Setlists'],
+    skills: ['Live Performance', 'Acoustic Set', 'Wedding Ceremony Music', 'Cover Songs', 'Song Requests', 'Custom Setlists', 'Sound Equipment', 'Vocals/Singing', 'Guitar', 'Piano/Keyboard', 'Violin'],
     styles: ['Pop', 'Acoustic', 'Romantic', 'Jazz', 'Classical', 'R&B', 'Rock'],
     performerType: ['Solo Artist', 'Band', 'Singer/Vocalist', 'Acoustic Duo', 'Instrumentalist', 'DJ'],
   },

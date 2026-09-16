@@ -64,19 +64,19 @@ export function NegotiationHistoryModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm md:items-center md:p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-2xl md:rounded-3xl">
-        <div className="sticky top-0 flex items-center justify-between rounded-t-3xl border-b border-gray-200 bg-white px-4 py-4 md:px-8 md:py-6">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] md:rounded-3xl">
+        <div className="sticky top-0 flex items-center justify-between rounded-t-3xl border-b border-sky-100 bg-white px-4 py-4 md:px-8 md:py-6">
           <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Counter Offer Details</h2>
-          <button onClick={onClose} className="rounded-full p-2 transition-colors hover:bg-gray-100">
+          <button onClick={onClose} className="rounded-full p-2 transition-colors hover:bg-sky-50">
             <X className="h-5 w-5 text-gray-600" />
           </button>
         </div>
 
         <div className="space-y-6 p-4 md:p-8">
-          <div className="overflow-hidden rounded-2xl border border-gray-200">
+          <div className="overflow-hidden rounded-2xl border border-sky-100">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <tr className="bg-sky-50/60 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                   <th className="px-4 py-3">Details</th>
                   <th className="px-4 py-3">Original Request</th>
                   <th className="px-4 py-3">
@@ -89,7 +89,7 @@ export function NegotiationHistoryModal({
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-sky-100">
                 <tr>
                   <td className="px-4 py-3 font-semibold text-gray-700">Service</td>
                   <td className="px-4 py-3 text-gray-900" colSpan={2}>{request.project_name}</td>
@@ -128,7 +128,7 @@ export function NegotiationHistoryModal({
           </div>
 
           {request.counter_message && (
-            <div className="rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="rounded-2xl bg-sky-50/60 p-4 text-sm text-gray-700">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Message</p>
               "{request.counter_message}"
             </div>
@@ -141,7 +141,7 @@ export function NegotiationHistoryModal({
             ) : offers.length === 0 ? (
               <p className="text-sm text-gray-500">No history yet.</p>
             ) : (
-              <div className="space-y-3 border-l-2 border-gray-200 pl-4">
+              <div className="space-y-3 border-l-2 border-sky-100 pl-4">
                 {offers.map((offer) => (
                   <div key={offer.id} className={`relative ${offer.action === 'accept' ? 'rounded-xl bg-green-50 p-3' : ''}`}>
                     <div className="absolute -left-[21px] top-1.5 h-2.5 w-2.5 rounded-full bg-gray-400" />
@@ -169,7 +169,7 @@ export function NegotiationHistoryModal({
           </div>
         </div>
 
-        <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-gray-200 bg-white px-4 py-4 md:px-8">
+        <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-sky-100 bg-white px-4 py-4 md:px-8">
           {canAccept && (
             <button
               onClick={onAccept}
@@ -179,16 +179,16 @@ export function NegotiationHistoryModal({
             </button>
           )}
           {canCounter && (
-            <button onClick={onCounter} className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black">
+            <button onClick={onCounter} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg">
               Counter Offer
             </button>
           )}
           {canReject && (
-            <button onClick={onReject} className="flex items-center gap-1.5 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200">
+            <button onClick={onReject} className="flex items-center gap-1.5 rounded-lg bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-100">
               <X className="h-4 w-4" /> Reject
             </button>
           )}
-          <button onClick={onMessage} className="ml-auto flex items-center gap-1.5 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+          <button onClick={onMessage} className="ml-auto flex items-center gap-1.5 rounded-lg border border-sky-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-50">
             <MessageCircle className="h-4 w-4" /> Message
           </button>
         </div>

@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { PageBackdrop } from './PageBackdrop';
 
 interface OnboardingStepShellProps {
   eyebrow: string;
@@ -37,8 +38,9 @@ export function OnboardingStepShell({
   const isLastStep = stepIndex === totalSteps;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 py-8">
-      <div className={`mx-auto w-full px-4 ${maxWidthClassName}`}>
+    <div className="relative min-h-screen py-8">
+      <PageBackdrop />
+      <div className={`relative z-10 mx-auto w-full px-4 ${maxWidthClassName}`}>
         {onBack ? (
           <button
             onClick={onBack}
@@ -51,14 +53,14 @@ export function OnboardingStepShell({
           <div className="mb-6 h-[22px]" />
         )}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-xl md:p-8">
+        <div className="rounded-2xl border border-sky-100 bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)] md:p-8">
           <p className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">{eyebrow}</p>
           <h1 className="mb-2 text-3xl font-bold text-gray-900">{title}</h1>
           <p className="mb-8 text-sm text-gray-600">{description}</p>
 
           <div className="mb-8 flex items-center gap-2">
             {Array.from({ length: totalSteps }, (_, index) => (
-              <div key={index} className={`h-2 w-full rounded-full ${stepIndex >= index + 1 ? 'bg-gray-900' : 'bg-gray-200'}`} />
+              <div key={index} className={`h-2 w-full rounded-full ${stepIndex >= index + 1 ? 'bg-gradient-to-r from-sky-500 to-blue-600' : 'bg-sky-100'}`} />
             ))}
           </div>
 
@@ -83,7 +85,7 @@ export function OnboardingStepShell({
               type="button"
               onClick={onContinue}
               disabled={isContinueLoading}
-              className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-black disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60"
             >
               {isContinueLoading ? (
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

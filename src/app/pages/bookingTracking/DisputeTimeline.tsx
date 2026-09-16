@@ -39,7 +39,7 @@ export function DisputeTimeline({ events, signedUrls, disputeEvidence = [] }: Di
   const actorLabel = (actor: string) => (actor === 'client' ? 'Client' : actor === 'freelancer' ? 'Freelancer' : actor === 'admin' ? 'Admin' : 'System');
 
   return (
-    <div className="mb-4 space-y-3 border-l-2 border-gray-200 pl-4">
+    <div className="mb-4 space-y-3 border-l-2 border-sky-100 pl-4">
       {disputeEvents.map((event) => {
         const itemsForEvent =
           event.round != null && (event.actor === 'client' || event.actor === 'freelancer')
@@ -66,7 +66,7 @@ export function DisputeTimeline({ events, signedUrls, disputeEvidence = [] }: Di
             {(event.evidence_photos || []).length > 0 && (
               <div className="mt-2 grid grid-cols-4 gap-1.5">
                 {(event.evidence_photos as string[]).map((path) => (
-                  <div key={path} className="aspect-square overflow-hidden rounded bg-gray-100">
+                  <div key={path} className="aspect-square overflow-hidden rounded bg-sky-50">
                     {signedUrls[path] ? (
                       <img src={signedUrls[path]} alt="Evidence" className="h-full w-full object-cover" />
                     ) : (
@@ -81,11 +81,11 @@ export function DisputeTimeline({ events, signedUrls, disputeEvidence = [] }: Di
             {itemsForEvent.length > 0 && (
               <div className="mt-2 space-y-1.5">
                 {itemsForEvent.map((item) => (
-                  <div key={item.id} className="flex gap-2 rounded-lg border border-gray-200 bg-white p-2">
+                  <div key={item.id} className="flex gap-2 rounded-lg border border-sky-100 bg-white p-2">
                     {item.storage_path && signedUrls[item.storage_path] ? (
                       <img src={signedUrls[item.storage_path]} alt={item.evidence_type} className="h-12 w-12 flex-shrink-0 rounded object-cover" />
                     ) : (
-                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-gray-100">
+                      <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded bg-sky-50">
                         <FileText className="h-4 w-4 text-gray-300" />
                       </div>
                     )}

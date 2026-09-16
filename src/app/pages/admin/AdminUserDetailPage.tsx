@@ -119,7 +119,7 @@ export function AdminUserDetailPage() {
   return (
     <AdminLayout section="users" breadcrumb={[{ label: 'Users', to: '/admin/users' }, { label: profile.full_name || 'Unnamed' }]}>
       <div className="space-y-6">
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <img src={profile.avatar_url || DEFAULT_AVATAR_URL} alt="" className="h-16 w-16 rounded-full object-cover" />
@@ -131,7 +131,7 @@ export function AdminUserDetailPage() {
             <AccountStatusActions userId={profile.id} currentStatus={profile.account_status} role={profile.role} onChanged={load} size="md" />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-4 border-t border-sky-100 pt-4 sm:grid-cols-4">
             <div>
               <p className="text-xs font-semibold uppercase text-gray-500">Role</p>
               <p className="mt-1 capitalize text-gray-900">{profile.role}</p>
@@ -151,12 +151,12 @@ export function AdminUserDetailPage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h3 className="mb-3 text-lg font-bold text-gray-900">Change role</h3>
           {isSelf && <p className="text-xs text-gray-500">You can't change your own role.</p>}
           {!isSelf && (
             roleDraft ? (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
                 <p className="mb-1 font-semibold text-gray-900">
                   Change role: <span className="capitalize">{profile.role}</span> → <span className="capitalize">{roleDraft}</span>
                 </p>
@@ -172,14 +172,14 @@ export function AdminUserDetailPage() {
                   value={roleReason}
                   onChange={(e) => setRoleReason(e.target.value)}
                   placeholder="Reason (optional)"
-                  className="mb-3 w-full min-h-[60px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 {roleError && <p className="mb-3 text-xs text-red-600">{roleError}</p>}
                 <div className="flex gap-2">
                   <button
                     disabled={isSavingRole || isLastAdmin}
                     onClick={() => void handleConfirmRole()}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                    className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                   >
                     {isSavingRole ? 'Saving...' : 'Confirm'}
                   </button>
@@ -190,7 +190,7 @@ export function AdminUserDetailPage() {
                       setRoleReason('');
                       setRoleError(null);
                     }}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                    className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                   >
                     Cancel
                   </button>
@@ -204,7 +204,7 @@ export function AdminUserDetailPage() {
                     <button
                       key={r}
                       onClick={() => void openRoleConfirm(r)}
-                      className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold capitalize text-gray-700 hover:bg-gray-50"
+                      className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold capitalize text-gray-700 hover:bg-sky-50"
                     >
                       Make {r}
                     </button>
@@ -215,7 +215,7 @@ export function AdminUserDetailPage() {
         </div>
 
         {profile.role === 'freelancer' && freelancerProfile && (
-          <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h3 className="mb-3 text-lg font-bold text-gray-900">Freelancer profile</h3>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
@@ -243,7 +243,7 @@ export function AdminUserDetailPage() {
             <button
               key={b.id}
               onClick={() => navigate(`/admin/bookings/${b.id}`)}
-              className="flex w-full items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-left hover:bg-gray-100"
+              className="flex w-full items-center justify-between gap-2 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-left hover:bg-sky-100"
             >
               <div className="min-w-0">
                 <p className="truncate font-semibold text-gray-900">{b.project_name}</p>
@@ -251,7 +251,7 @@ export function AdminUserDetailPage() {
                   {b.client?.full_name || 'Client'} ↔ {b.freelancer?.full_name || 'Freelancer'} · {new Date(b.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <span className="flex-shrink-0 rounded-full bg-gray-200 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">{b.status}</span>
+              <span className="flex-shrink-0 rounded-full bg-sky-50 px-2.5 py-1 text-xs font-semibold capitalize text-gray-700">{b.status}</span>
               <ChevronRight className="h-4 w-4 flex-shrink-0 text-gray-400" />
             </button>
           ))}
@@ -259,7 +259,7 @@ export function AdminUserDetailPage() {
 
         <ActivitySection title="Reports (filed or received)" emptyLabel="No reports involving this user.">
           {reports.map((r) => (
-            <div key={r.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <div key={r.id} className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
               <p className="text-sm text-gray-900">
                 {r.reporter?.full_name || 'Someone'} reported {r.reported?.full_name || 'a user'} — <span className="font-semibold">{r.reason}</span>
               </p>
@@ -270,7 +270,7 @@ export function AdminUserDetailPage() {
 
         <ActivitySection title="Support tickets" emptyLabel="No support tickets.">
           {tickets.map((t) => (
-            <div key={t.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <div key={t.id} className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
               <p className="text-sm text-gray-900">#{t.id.slice(0, 8).toUpperCase()} — {t.category}</p>
               <p className="mt-0.5 text-xs text-gray-500">{new Date(t.created_at).toLocaleString()} · {t.status}</p>
             </div>
@@ -279,7 +279,7 @@ export function AdminUserDetailPage() {
 
         <ActivitySection title="Reviews received" emptyLabel="No reviews yet.">
           {reviews.map((r) => (
-            <div key={r.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+            <div key={r.id} className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
               <p className="text-sm font-semibold text-gray-900">★ {r.rating} — {r.reviewer?.full_name || 'Someone'}</p>
               {r.comment && <p className="mt-1 text-sm text-gray-700">{r.comment}</p>}
             </div>
@@ -294,7 +294,7 @@ function ActivitySection({ title, emptyLabel, children }: { title: string; empty
   const items = Array.isArray(children) ? children : [children];
   const hasItems = items.some(Boolean);
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
       <h3 className="mb-3 text-lg font-bold text-gray-900">{title}</h3>
       {hasItems ? <div className="space-y-2">{children}</div> : <p className="text-sm text-gray-500">{emptyLabel}</p>}
     </div>

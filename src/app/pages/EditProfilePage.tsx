@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import { Camera, ChevronLeft, ImagePlus, Plus, Save, Trash2 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LocationChipList } from '../../components/common/LocationChipList';
 import { TagSelector } from '../../components/common/TagSelector';
@@ -397,7 +398,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     if (!user?.id) return;
 
     if (isFreelancer && !isFreelancerCategory(freelancerForm.title)) {
-      setError('Select a freelancer category before saving.');
+      setError('Select a specialty before saving.');
       return;
     }
     if (isFreelancer && freelancerForm.skills.length === 0) {
@@ -533,15 +534,17 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+      <div className="flex min-h-screen items-center justify-center bg-sky-50">
+        <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
-      <div className="sticky top-0 z-10 mb-6 border-b border-gray-200 bg-white/80 backdrop-blur-lg md:mb-8">
+    <div className="relative min-h-screen pb-20 md:pb-12">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 mb-6 border-b border-sky-100 bg-white/80 backdrop-blur-lg md:mb-8">
         <div className="mx-auto max-w-[900px] px-4 py-4 md:px-8 md:py-6">
           <button onClick={onBack} className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 hover:text-black md:mb-4 md:text-base">
             <ChevronLeft className="h-4 w-4 md:h-5 md:w-5" />
@@ -552,7 +555,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
             <button
               onClick={() => void handleSave()}
               disabled={isSaving}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60 md:px-6 md:py-3"
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60 md:px-6 md:py-3"
             >
               <Save className="h-4 w-4" />
               {isSaving ? 'Saving...' : 'Save'}
@@ -566,7 +569,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       <div className="mx-auto max-w-[900px] space-y-6 px-4 md:space-y-8 md:px-8">
 
         {/* Basic Profile */}
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-lg">
+        <section className="overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <div className="relative h-32 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900 md:h-40">
             {coverUrl && <ImageWithFallback src={coverUrl} alt="Cover" className="h-full w-full object-cover" />}
             <div className="absolute inset-0 bg-black/20" />
@@ -592,7 +595,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
                 disabled={uploadingImageType !== null}
-                className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-gray-900 text-white shadow-lg hover:bg-black md:bottom-2 md:right-2"
+                className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-4 border-white bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg hover:shadow-xl md:bottom-2 md:right-2"
                 aria-label="Upload profile picture"
               >
                 <Camera className="h-4 w-4" />
@@ -606,7 +609,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 <input
                   value={basicForm.full_name}
                   onChange={(event) => setBasicForm((current) => ({ ...current, full_name: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
               <div>
@@ -614,7 +617,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 <select
                   value={basicForm.pronouns}
                   onChange={(event) => setBasicForm((current) => ({ ...current, pronouns: event.target.value }))}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="">Not set</option>
                   {PRONOUN_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
@@ -624,7 +627,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     value={basicForm.pronounsCustom}
                     onChange={(event) => setBasicForm((current) => ({ ...current, pronounsCustom: event.target.value }))}
                     placeholder="e.g. ze/zir"
-                    className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    className="mt-2 w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 )}
               </div>
@@ -633,7 +636,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 <select
                   value={basicForm.gender}
                   onChange={(event) => setBasicForm((current) => ({ ...current, gender: event.target.value as Gender }))}
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="">Not set</option>
                   {GENDER_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -644,7 +647,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 <textarea
                   value={basicForm.bio}
                   onChange={(event) => setBasicForm((current) => ({ ...current, bio: event.target.value }))}
-                  className="min-h-28 w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="min-h-28 w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
               <div>
@@ -653,13 +656,13 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   value={basicForm.location}
                   onChange={(event) => setBasicForm((current) => ({ ...current, location: event.target.value, location_latitude: null, location_longitude: null, location_place_id: null }))}
                   placeholder="Street address, district, city, country"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setLocationPickerTarget('basic')} className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                  <button type="button" onClick={() => setLocationPickerTarget('basic')} className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50">
                     Pick Exact Point
                   </button>
-                  <button type="button" onClick={() => void handleResolveLocation()} disabled={isResolvingLocation} className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-60">
+                  <button type="button" onClick={() => void handleResolveLocation()} disabled={isResolvingLocation} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60">
                     {isResolvingLocation ? 'Resolving...' : 'Resolve Address'}
                   </button>
                 </div>
@@ -671,23 +674,23 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         {isFreelancer && (
           <>
             {/* Freelancer Profile */}
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-8">
+            <section className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-8">
               <h2 className="mb-4 text-lg font-bold text-gray-900 md:text-xl">Freelancer Profile</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Category</label>
+                  <label className="mb-2 block text-sm font-semibold text-gray-700">Specialty</label>
                   <select
                     value={freelancerForm.title}
                     onChange={(event) => applyCategoryChange(event.target.value)}
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   >
-                    <option value="" disabled>Select a category</option>
+                    <option value="" disabled>Select a specialty</option>
                     {FREELANCER_CATEGORIES.map((category) => (
                       <option key={category.id} value={category.label}>{category.label}</option>
                     ))}
                   </select>
                   <p className="mt-1.5 text-xs text-gray-500">
-                    Your category determines which clients find you in Explore, search, and the AI Matcher.
+                    Your specialty determines which clients find you in Explore, search, and the AI Matcher.
                   </p>
                   {freelancerForm.title && (
                     <div className="mt-3">
@@ -702,33 +705,33 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   {pendingCategoryChange && (
                     <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                       <p className="text-sm font-semibold text-amber-900">
-                        Changing your freelancer category will require you to update your Skills and Styles.
+                        Changing your specialty will require you to update your Skills and Styles.
                       </p>
                       <p className="mt-1 text-xs text-amber-700">
                         Your current Skills and Styles don't apply to {pendingCategoryChange} and will be cleared.
                       </p>
                       <p className="mt-2 text-xs text-amber-700">
-                        Would you like to keep {freelancerForm.title || 'your current category'} as an additional skill instead of losing it?
+                        Would you like to keep {freelancerForm.title || 'your current specialty'} as an additional skill instead of losing it?
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => confirmCategoryChange(true)}
-                          className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black"
+                          className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-semibold text-white hover:shadow-lg"
                         >
                           Move to minor skills
                         </button>
                         <button
                           type="button"
                           onClick={() => confirmCategoryChange(false)}
-                          className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                          className="rounded-lg border border-sky-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50"
                         >
                           Remove {freelancerForm.title}
                         </button>
                         <button
                           type="button"
                           onClick={() => setPendingCategoryChange(null)}
-                          className="rounded-lg border border-transparent px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-gray-50"
+                          className="rounded-lg border border-transparent px-4 py-2 text-xs font-semibold text-gray-500 hover:bg-sky-50"
                         >
                           Cancel
                         </button>
@@ -744,7 +747,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       value={freelancerForm.hourly_rate}
                       onChange={(event) => setFreelancerForm((current) => ({ ...current, hourly_rate: Number(event.target.value) }))}
                       placeholder="e.g. 800"
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                 </div>
@@ -810,13 +813,13 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       {socialLinks.map((link) => {
                         const Icon = SOCIAL_PLATFORM_ICONS[link.platform];
                         return (
-                          <div key={link.platform} className="flex items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                          <div key={link.platform} className="flex items-center gap-3 rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3">
                             <Icon className="h-4 w-4 flex-shrink-0 text-gray-700" />
                             <span className="w-24 flex-shrink-0 text-sm font-semibold text-gray-900">{link.platform}</span>
                             <input
                               value={link.url}
                               onChange={(event) => handleSocialLinkUrlChange(link.platform, event.target.value)}
-                              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                              className="min-w-0 flex-1 rounded-lg border border-sky-100 bg-white px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                             <button onClick={() => handleRemoveSocialLink(link.platform)} className="flex-shrink-0 rounded-lg p-2 text-gray-500 hover:bg-red-100 hover:text-red-600" aria-label={`Remove ${link.platform} link`}>
                               <Trash2 className="h-4 w-4" />
@@ -831,7 +834,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     <select
                       value={newSocialPlatform}
                       onChange={(event) => setNewSocialPlatform(event.target.value as SocialPlatform)}
-                      className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900 sm:w-40"
+                      className="rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400 sm:w-40"
                     >
                       {SOCIAL_PLATFORMS.map((platform) => (
                         <option key={platform} value={platform} disabled={socialLinks.some((link) => link.platform === platform)}>{platform}</option>
@@ -841,9 +844,9 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       value={newSocialUrl}
                       onChange={(event) => setNewSocialUrl(event.target.value)}
                       placeholder={`https://${newSocialPlatform.toLowerCase()}.com/username`}
-                      className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                      className="min-w-0 flex-1 rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                     />
-                    <button onClick={handleAddSocialLink} className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg">
+                    <button onClick={handleAddSocialLink} className="flex flex-shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white hover:shadow-lg">
                       <Plus className="h-4 w-4" />
                       Add
                     </button>
@@ -853,7 +856,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
             </section>
 
             {/* Working Information */}
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg md:p-8">
+            <section className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-8">
               <h2 className="mb-4 text-lg font-bold text-gray-900 md:text-xl">Working Information</h2>
               <div className="space-y-4">
                 <div>
@@ -862,7 +865,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     value={workingForm.studio_name}
                     onChange={(event) => setWorkingForm((current) => ({ ...current, studio_name: event.target.value }))}
                     placeholder="e.g. Vipa Creative Studio"
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>
                 <div>
@@ -899,7 +902,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       type="time"
                       value={workingForm.working_hours_start}
                       onChange={(event) => setWorkingForm((current) => ({ ...current, working_hours_start: event.target.value }))}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                   <div>
@@ -908,7 +911,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       type="time"
                       value={workingForm.working_hours_end}
                       onChange={(event) => setWorkingForm((current) => ({ ...current, working_hours_end: event.target.value }))}
-                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                     />
                   </div>
                 </div>
@@ -921,7 +924,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                         type="button"
                         onClick={() => setWorkingForm((current) => ({ ...current, working_days: toggle(current.working_days, day) }))}
                         className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-all md:text-sm ${
-                          workingForm.working_days.includes(day) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                          workingForm.working_days.includes(day) ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 text-gray-600 hover:border-sky-300'
                         }`}
                       >
                         {day}
@@ -935,8 +938,8 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     value={workingForm.requirements}
                     onChange={(event) => setWorkingForm((current) => ({ ...current, requirements: event.target.value }))}
                     rows={3}
-                    placeholder="Minimum 3 days advance booking. 30% deposit required."
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    placeholder="Minimum 3 days advance booking. 50% deposit required."
+                    className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>
                 <div>
@@ -948,7 +951,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                         type="button"
                         onClick={() => setWorkingForm((current) => ({ ...current, limitation_days: toggle(current.limitation_days, option) }))}
                         className={`rounded-lg border-2 px-3 py-2 text-xs font-semibold transition-all md:text-sm ${
-                          workingForm.limitation_days.includes(option) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                          workingForm.limitation_days.includes(option) ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 text-gray-600 hover:border-sky-300'
                         }`}
                       >
                         {option}
@@ -962,7 +965,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     value={workingForm.limitation_note}
                     onChange={(event) => setWorkingForm((current) => ({ ...current, limitation_note: event.target.value }))}
                     placeholder="I only accept outdoor shoots within Bangkok."
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                    className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                   />
                 </div>
               </div>
@@ -982,6 +985,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
           onConfirm={handleLocationPicked}
         />
       )}
+      </div>
     </div>
   );
 }

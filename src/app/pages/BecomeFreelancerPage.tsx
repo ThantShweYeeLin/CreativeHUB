@@ -44,7 +44,7 @@ const isUsablePhotoUrl = (url: string | null | undefined): url is string => !!ur
 
 const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Profile', description: 'Tell clients who you are.' },
-  { title: 'Freelancer category', description: 'What service do you provide? You can add a minor category too.' },
+  { title: 'Specialty', description: "What's your specialty? You can add one you're also skilled in." },
   { title: 'Skills', description: 'What you can do.' },
   { title: 'Styles', description: 'What your work looks like.' },
   { title: 'Portfolio links', description: 'Show off your best work (optional — add more later).' },
@@ -572,14 +572,14 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
                 <button
                   type="button"
                   onClick={confirmCategoryChange}
-                  className="rounded-lg bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-black"
+                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-semibold text-white hover:shadow-lg"
                 >
                   Change category
                 </button>
                 <button
                   type="button"
                   onClick={() => setPendingCategoryChange(null)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                  className="rounded-lg border border-sky-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50"
                 >
                   Cancel
                 </button>

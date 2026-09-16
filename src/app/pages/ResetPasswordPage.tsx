@@ -85,8 +85,8 @@ export function ResetPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-sky-50 p-4">
+      <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100">
         <h2 className="text-2xl font-bold mb-4">Reset your password</h2>
         <p className="text-sm text-gray-600 mb-4">Enter a new password for your account.</p>
         {error && <div className="mb-4 text-sm text-red-700">{error}</div>}
@@ -96,20 +96,20 @@ export function ResetPasswordPage() {
             placeholder="New password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+            className="w-full rounded-xl border border-sky-100 px-3 py-2"
           />
           <input
             type="password"
             placeholder="Confirm password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full rounded-xl border border-gray-200 px-3 py-2"
+            className="w-full rounded-xl border border-sky-100 px-3 py-2"
           />
           <div className="flex items-center justify-between gap-2">
             <button
               type="submit"
               disabled={loading}
-              className="flex-1 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-2 text-white font-semibold"
+              className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-white font-semibold"
             >
               {loading ? 'Updating...' : 'Set password'}
             </button>
@@ -125,7 +125,7 @@ export function ResetPasswordPage() {
                 placeholder="Your email"
                 value={resendEmail}
                 onChange={(e) => setResendEmail(e.target.value)}
-                className="flex-1 rounded-xl border border-gray-200 px-3 py-2"
+                className="flex-1 rounded-xl border border-sky-100 px-3 py-2"
               />
               <button
                 onClick={async () => {

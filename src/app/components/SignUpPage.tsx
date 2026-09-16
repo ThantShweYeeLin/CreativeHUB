@@ -77,7 +77,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
   const handleStep2 = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name.'); return; }
+    if (!firstName.trim()) { setError('Please enter your first name.'); return; }
     if (!email || !/\S+@\S+\.\S+/.test(email)) { setError('Please enter a valid email.'); return; }
     if (!countryIsoCode) { setError('Please select your country.'); return; }
     if (!city || !city.trim()) { setError('Please select your city.'); return; }
@@ -196,11 +196,11 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
             {[1, 2, 3].map(s => (
               <div key={s} className="flex items-center gap-2">
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  step >= s ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-400'
+                  step >= s ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-400'
                 }`}>
                   {step > s ? <Check className="w-3.5 h-3.5" /> : s}
                 </div>
-                {s < 3 && <div className={`w-8 h-0.5 ${step > s ? 'bg-gray-900' : 'bg-gray-200'}`} />}
+                {s < 3 && <div className={`w-8 h-0.5 ${step > s ? 'bg-gradient-to-r from-sky-500 to-blue-600' : 'bg-sky-100'}`} />}
               </div>
             ))}
             <span className="ml-2 text-xs text-gray-500">{stepLabels[step - 1]}</span>
@@ -221,10 +221,10 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 <button
                   type="button"
                   onClick={() => handleSelectRole('client')}
-                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-gray-200 p-5 text-left transition-all hover:border-gray-900 hover:shadow-md"
+                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-sky-100 p-5 text-left transition-all hover:border-sky-400 hover:shadow-md"
                 >
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
-                    <Search className="h-6 w-6 text-gray-900" />
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-100">
+                    <Search className="h-6 w-6 text-sky-600" />
                   </div>
                   <div>
                     <p className="font-bold text-gray-900">I'm looking for creative professionals</p>
@@ -235,10 +235,10 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 <button
                   type="button"
                   onClick={() => handleSelectRole('freelancer')}
-                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-gray-200 p-5 text-left transition-all hover:border-gray-900 hover:shadow-md"
+                  className="w-full flex items-start gap-4 rounded-2xl border-2 border-sky-100 p-5 text-left transition-all hover:border-sky-400 hover:shadow-md"
                 >
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
-                    <Briefcase className="h-6 w-6 text-gray-900" />
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-sky-100 to-blue-100">
+                    <Briefcase className="h-6 w-6 text-sky-600" />
                   </div>
                   <div>
                     <p className="font-bold text-gray-900">I'm offering creative services</p>
@@ -248,7 +248,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
               </div>
 
               <div className="relative mt-8">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-sky-100" /></div>
                 <div className="relative flex justify-center text-xs text-gray-400 bg-white px-3">or sign up with</div>
               </div>
 
@@ -260,10 +260,10 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     onClick={() => void handleOAuthSignUp(name.toLowerCase() as 'google' | 'facebook')}
                     disabled={oauthLoadingProvider !== null || !accountType}
                     title={!accountType ? 'Choose an account type above first' : undefined}
-                    className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 py-3 border border-sky-100 rounded-xl hover:bg-sky-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-40"
                   >
                     {oauthLoadingProvider === name.toLowerCase() ? (
-                      <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                      <div className="w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
                     ) : (
                       <span className="font-bold">{icon}</span>
                     )}
@@ -282,7 +282,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-gray-400 hover:text-gray-900"
+                  className="inline-flex items-center gap-1 rounded-full border border-sky-100 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:border-sky-300 hover:text-gray-900"
                 >
                   <ArrowLeft className="w-3 h-3" /> {accountType === 'client' ? 'Client' : 'Freelancer'}
                 </button>
@@ -303,7 +303,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     }
                   }}
                   className={`relative flex h-16 w-16 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed transition-all ${
-                    isDraggingAvatar ? 'border-gray-900 bg-gray-100' : 'border-gray-300 bg-gray-50 hover:border-gray-500'
+                    isDraggingAvatar ? 'border-sky-400 bg-sky-100' : 'border-sky-200 bg-sky-50 hover:border-sky-400'
                   }`}
                 >
                   <input
@@ -348,17 +348,17 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     value={firstName}
                     onChange={e => setFirstName(e.target.value)}
                     placeholder="Jane"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 py-3 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Name <span className="font-normal text-gray-400">(Optional)</span></label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={e => setLastName(e.target.value)}
                     placeholder="Smith"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full px-4 py-3 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                 </div>
               </div>
@@ -372,7 +372,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full pl-11 pr-4 py-3 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                 </div>
               </div>
@@ -411,8 +411,8 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                       onClick={() => setGender(option.value)}
                       className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
                         gender === option.value
-                          ? 'border-gray-900 bg-gray-900 text-white'
-                          : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                          ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                          : 'border-sky-100 text-gray-600 hover:border-sky-300'
                       }`}
                     >
                       {option.label}
@@ -424,7 +424,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
               <button
                 type="submit"
                 disabled={isCheckingEmail}
-                className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-black transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isCheckingEmail ? (
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -451,7 +451,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Min. 6 characters"
-                    className="w-full pl-11 pr-12 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full pl-11 pr-12 py-3.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                   <button type="button" onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -462,7 +462,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                   <div className="mt-2 flex items-center gap-2">
                     <div className="flex gap-1 flex-1">
                       {[1,2,3].map(i => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${passwordStrength >= i ? strengthColors[passwordStrength] : 'bg-gray-200'}`} />
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${passwordStrength >= i ? strengthColors[passwordStrength] : 'bg-sky-100'}`} />
                       ))}
                     </div>
                     <span className={`text-xs font-semibold ${passwordStrength === 1 ? 'text-red-400' : passwordStrength === 2 ? 'text-yellow-500' : 'text-green-500'}`}>
@@ -481,7 +481,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     placeholder="Repeat password"
-                    className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                    className="w-full pl-11 pr-4 py-3.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                   />
                   {confirmPassword && (
                     <div className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full flex items-center justify-center ${password === confirmPassword ? 'bg-green-500' : 'bg-red-400'}`}>
@@ -494,7 +494,7 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
               <label className="flex items-start gap-3 cursor-pointer mt-2">
                 <div
                   onClick={() => setAgreed(!agreed)}
-                  className={`w-5 h-5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all mt-0.5 cursor-pointer ${agreed ? 'bg-gray-900 border-gray-900' : 'border-gray-300'}`}
+                  className={`w-5 h-5 rounded flex-shrink-0 border-2 flex items-center justify-center transition-all mt-0.5 cursor-pointer ${agreed ? 'bg-gradient-to-r from-sky-500 to-blue-600 border-sky-500' : 'border-sky-200'}`}
                 >
                   {agreed && <Check className="w-3 h-3 text-white" />}
                 </div>
@@ -526,11 +526,11 @@ export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSign
 
               <div className="flex gap-3 mt-2">
                 <button type="button" onClick={() => { setStep(2); setError(''); }}
-                  className="flex-1 py-3.5 border border-gray-200 rounded-xl font-semibold text-gray-700 hover:bg-gray-50 transition-all">
+                  className="flex-1 py-3.5 border border-sky-100 rounded-xl font-semibold text-gray-700 hover:bg-sky-50 transition-all">
                   Back
                 </button>
                 <button type="submit" disabled={loading}
-                  className="flex-1 bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-70">
+                  className="flex-1 bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70">
                   {loading
                     ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     : <><Check className="w-4 h-4" /> Create Account</>

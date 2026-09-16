@@ -1,5 +1,6 @@
 import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Clock, FileText, Shield, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -175,16 +176,18 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+      <div className="relative min-h-screen flex items-center justify-center">
+        <PageBackdrop />
+        <div className="relative z-10 h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
       </div>
     );
   }
 
   if (error && !bookingData) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 p-6">
-        <div className="mx-auto max-w-[600px] rounded-2xl border border-red-200 bg-white p-6 shadow-lg">
+      <div className="relative min-h-screen p-6">
+        <PageBackdrop />
+        <div className="relative z-10 mx-auto max-w-[600px] rounded-2xl border border-red-200 bg-white p-6 shadow-lg">
           <button onClick={onBack} className="mb-4 flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors">
             <ChevronLeft className="w-5 h-5" />
             Back
@@ -200,8 +203,10 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-gray-200">
+    <div className="relative min-h-screen pb-20">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-sky-100">
         <div className="max-w-[600px] mx-auto px-4 py-4">
           <button onClick={onBack} className="flex items-center gap-2 text-gray-900 hover:text-black font-semibold transition-colors mb-3">
             <ChevronLeft className="w-5 h-5" />
@@ -216,13 +221,13 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
         {/* Freelancer Profile Preview */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
           <div className="flex items-center gap-4 mb-4">
             <Avatar
               src={bookingData.freelancer.image}
               alt={bookingData.freelancer.name}
               gender={bookingData.freelancer.gender}
-              sizeClassName="w-16 h-16 ring-2 ring-gray-200 rounded-full flex-shrink-0"
+              sizeClassName="w-16 h-16 ring-2 ring-sky-100 rounded-full flex-shrink-0"
             />
             <div className="flex-1">
               <h2 className="font-bold text-gray-900 text-lg">{bookingData.freelancer.name}</h2>
@@ -235,7 +240,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             <ChevronRight className="w-5 h-5 text-gray-400" />
           </div>
 
-          <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+          <div className="bg-sky-50/60 rounded-xl p-4 space-y-2">
             <h3 className="font-bold text-gray-900 mb-2">{bookingData.service.title}</h3>
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Clock className="w-4 h-4" />
@@ -303,7 +308,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {/* Awaiting deposit — 24-hour payment window */}
         {escrowState === 'awaiting_deposit' && (
-          <div id="deposit-section" className="rounded-2xl shadow-lg border-2 border-gray-900 bg-gradient-to-br from-gray-900 to-black text-white p-5 mb-6">
+          <div id="deposit-section" className="rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border-2 border-sky-400 bg-gradient-to-br from-sky-500 to-blue-600 text-white p-5 mb-6">
             <div className="flex items-center gap-2 mb-3">
               <Shield className="w-6 h-6 text-white" />
               <h2 className="font-bold text-lg text-white">Deposit Transfer Required</h2>
@@ -345,7 +350,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             <button
               onClick={() => void handleTransferDeposit()}
               disabled={isPayingDeposit || !selectedPaymentMethodId}
-              className="w-full bg-white text-gray-900 py-3 px-4 rounded-xl font-bold hover:bg-gray-100 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-white text-gray-900 py-3 px-4 rounded-xl font-bold hover:bg-sky-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPayingDeposit ? 'Transferring...' : `Transfer ${formatMoney(bookingData.pricing.deposit)} Deposit Now`}
             </button>
@@ -354,9 +359,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {/* Deposit secured, freelancer hasn't marked complete yet */}
         {escrowState === 'deposit_secured' && (
-          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
+          <div className="rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border-2 border-sky-400 bg-white p-5 mb-6">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-gray-900 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-blue-600 rounded-full flex items-center justify-center">
                 <CheckCircle className="w-5 h-5 text-white" />
               </div>
               <div>
@@ -369,7 +374,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             {hasScheduledTimePassed && !showDisputeForm && (
               <button
                 onClick={() => setShowDisputeForm(true)}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gray-100 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-gray-200 transition-all"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-sky-100 transition-all"
               >
                 <AlertCircle className="w-4 h-4" />
                 Report a Problem
@@ -381,9 +386,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {/* Awaiting client confirmation */}
         {escrowState === 'awaiting_client_confirmation' && (
-          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
+          <div className="rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border-2 border-sky-400 bg-white p-5 mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <CheckCircle className="w-6 h-6 text-gray-900" />
+              <CheckCircle className="w-6 h-6 text-sky-600" />
               <h2 className="font-bold text-lg text-gray-900">Work Marked Complete</h2>
             </div>
             {formatCountdown(booking.client_response_deadline) && (
@@ -395,7 +400,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             {(booking.completion_evidence_photos || []).length > 0 && (
               <div className="mb-4 grid grid-cols-3 gap-2">
                 {(booking.completion_evidence_photos as string[]).map((path) => (
-                  <div key={path} className="aspect-square overflow-hidden rounded-lg bg-gray-100">
+                  <div key={path} className="aspect-square overflow-hidden rounded-lg bg-sky-50">
                     {signedUrls[path] && <img src={signedUrls[path]} alt="Evidence" className="h-full w-full object-cover" />}
                   </div>
                 ))}
@@ -407,7 +412,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                 <button
                   onClick={() => void handleConfirmCompletion()}
                   disabled={isConfirming}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-60"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3 px-4 rounded-xl font-semibold hover:shadow-lg transition-all disabled:opacity-60"
                 >
                   <CheckCircle className="w-5 h-5" />
                   {isConfirming ? 'Confirming...' : 'Confirm Completion'}
@@ -415,7 +420,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                 <button
                   id="report-a-problem-button"
                   onClick={() => setShowDisputeForm(true)}
-                  className="flex-1 flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 px-4 rounded-xl font-semibold hover:bg-gray-200 transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 bg-sky-50 text-gray-700 py-3 px-4 rounded-xl font-semibold hover:bg-sky-100 transition-all"
                 >
                   <AlertCircle className="w-5 h-5" />
                   Report a Problem
@@ -453,7 +458,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                 </button>
                 <button
                   onClick={() => setShowRespondForm(true)}
-                  className="rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black"
+                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
                 >
                   Still Not Satisfied
                 </button>
@@ -461,7 +466,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             )}
 
             {canRespondToDispute && showRespondForm && (
-              <div className="rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+              <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="font-bold text-gray-900">Explain why you still want a refund</p>
                   <button onClick={() => setShowRespondForm(false)} className="text-gray-400 hover:text-gray-900">
@@ -475,12 +480,12 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                   value={respondReason}
                   onChange={(e) => setRespondReason(e.target.value)}
                   placeholder="Explain your side..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <button
                   onClick={() => void handleStillNotSatisfied()}
                   disabled={isResponding}
-                  className="w-full bg-gradient-to-r from-gray-900 to-black text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
+                  className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
                 >
                   {isResponding ? 'Submitting...' : 'Submit to Support'}
                 </button>
@@ -497,12 +502,12 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
         {/* Under admin review */}
         {escrowState === 'under_admin_review' && (
-          <div className="rounded-2xl shadow-lg border-2 border-gray-900 bg-white p-5 mb-6">
+          <div className="rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border-2 border-sky-400 bg-white p-5 mb-6">
             <div className="mb-3 flex items-center gap-2">
               <Shield className="w-6 h-6 text-gray-900" />
               <h2 className="font-bold text-lg text-gray-900">Report Submitted</h2>
             </div>
-            <p className="text-sm text-gray-600">Please wait for a response from the admins.</p>
+            <p className="text-sm text-gray-600">Your report has been submitted. Our team will review it and follow up within 5 business days.</p>
           </div>
         )}
 
@@ -546,7 +551,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         )}
 
         {/* Booking Fee Summary */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
           <h2 className="font-bold text-gray-900 mb-4">Payment Summary</h2>
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
@@ -561,14 +566,14 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
               <span className="font-semibold text-gray-900">{formatMoney(bookingData.pricing.deposit)}</span>
             </div>
-            <div className="border-t border-gray-200 pt-3 mt-3 flex justify-between">
+            <div className="border-t border-sky-100 pt-3 mt-3 flex justify-between">
               <span className="font-bold text-gray-900">Total Booking Cost</span>
               <span className="font-bold text-gray-900 text-xl">{formatMoney(bookingData.pricing.total)}</span>
             </div>
           </div>
 
           {escrowState !== 'released' && escrowState !== 'refunded' && escrowState !== 'annulled' && (
-            <div className="mt-4 bg-gray-50 rounded-xl p-4">
+            <div className="mt-4 bg-sky-50/60 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <Shield className="w-5 h-5 text-gray-700 flex-shrink-0 mt-0.5" />
                 <div>
@@ -585,7 +590,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         </div>
 
         {/* Deposit Protection Info */}
-        <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-lg p-5 text-white">
+        <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl shadow-lg p-5 text-white">
           <h3 className="font-bold text-white mb-3 flex items-center gap-2">
             <Shield className="w-5 h-5" />
             Deposit Protection
@@ -609,6 +614,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

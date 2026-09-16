@@ -42,7 +42,7 @@ export function AccountStatusActions({
   if (confirming) {
     const labels: Record<AccountStatus, string> = { active: 'reactivate', paused: 'pause', suspended: 'suspend', banned: 'ban' };
     return (
-      <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+      <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3">
         <p className="mb-2 text-sm font-semibold text-gray-900">
           {labels[confirming].charAt(0).toUpperCase() + labels[confirming].slice(1)} this account?
         </p>
@@ -51,7 +51,7 @@ export function AccountStatusActions({
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason (optional)"
-            className="mb-2 w-full min-h-[60px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+            className="mb-2 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
           />
         )}
         {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
@@ -59,7 +59,7 @@ export function AccountStatusActions({
           <button
             disabled={isPending}
             onClick={() => void handleConfirm()}
-            className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
           >
             {isPending ? 'Saving...' : 'Confirm'}
           </button>
@@ -70,7 +70,7 @@ export function AccountStatusActions({
               setReason('');
               setError(null);
             }}
-            className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+            className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-100"
           >
             Cancel
           </button>
@@ -84,7 +84,7 @@ export function AccountStatusActions({
       {status !== 'active' && (
         <button
           onClick={() => setConfirming('active')}
-          className={`rounded-lg border border-gray-300 font-semibold text-gray-700 hover:bg-gray-50 ${buttonClass}`}
+          className={`rounded-lg border border-sky-200 font-semibold text-gray-700 hover:bg-sky-50 ${buttonClass}`}
         >
           Reactivate
         </button>

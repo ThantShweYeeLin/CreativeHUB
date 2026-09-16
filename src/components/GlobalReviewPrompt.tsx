@@ -89,7 +89,7 @@ export function GlobalReviewPrompt() {
             onClick={() => void handleCancel()}
             disabled={isDismissing}
             aria-label="Dismiss"
-            className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+            className="rounded-full p-1 text-gray-400 hover:bg-sky-50 hover:text-gray-700 disabled:opacity-50"
           >
             <X className="h-5 w-5" />
           </button>
@@ -123,7 +123,7 @@ export function GlobalReviewPrompt() {
           value={comment}
           onChange={(event) => setComment(event.target.value)}
           placeholder={`Write a short review of ${otherPartyName}... (optional)`}
-          className="mt-4 min-h-[80px] w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+          className="mt-4 min-h-[80px] w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
         />
 
         <div className="mt-4 flex gap-2">
@@ -131,7 +131,7 @@ export function GlobalReviewPrompt() {
             type="button"
             onClick={() => void handleCancel()}
             disabled={isDismissing}
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            className="flex-1 rounded-xl border border-sky-100 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
           >
             Cancel
           </button>
@@ -139,7 +139,7 @@ export function GlobalReviewPrompt() {
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting}
-            className="flex-1 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3 text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+            className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-sm font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
           >
             {isSubmitting ? 'Submitting...' : 'Submit'}
           </button>

@@ -33,7 +33,7 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
       />
 
       {/* Menu Dropdown */}
-      <div className="absolute top-16 right-6 z-[1210] w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden animate-fadeIn">
+      <div className="absolute top-16 right-6 z-[1210] w-56 bg-white rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] border border-sky-100 overflow-hidden animate-fadeIn">
         <div className="py-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -52,7 +52,7 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
           })}
 
           {/* Divider */}
-          <div className="my-2 border-t border-gray-200" />
+          <div className="my-2 border-t border-sky-100" />
 
           {/* Log Out */}
           <button

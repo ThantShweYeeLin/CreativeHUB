@@ -102,14 +102,31 @@ export interface FreelancerSearchable {
   description: string | null;
   location: string | null;
   fullName: string | null;
+  /** 0-5 average rating — used to rank "just browsing" results by quality. */
+  rating?: number;
+  /** Total review count — a high rating from a handful of reviews shouldn't outrank a slightly lower one backed by dozens. */
+  totalReviews?: number;
+}
+
+// Diminishing returns on review count (log scale) so going from 1 to 10
+// reviews matters a lot more than going from 100 to 109 — a handful of great
+// reviews shouldn't be drowned out by one freelancer who simply has more
+// volume. Capped implicitly by the log curve rather than a hard ceiling.
+function qualityScore(rating?: number, totalReviews?: number): number {
+  const safeRating = Number.isFinite(rating) ? (rating as number) : 0;
+  const safeReviews = Number.isFinite(totalReviews) ? (totalReviews as number) : 0;
+  if (safeReviews <= 0) return 0;
+  return safeRating * Math.log10(safeReviews + 1);
 }
 
 /**
  * Scores a freelancer against an interpreted query plus the client's
  * onboarding interests. 0 means "exclude"; higher is more relevant. When the
- * query is empty (browsing, no category selected) everyone passes with a
- * neutral score, nudged up for interest matches so personalization still
- * shapes the default ordering without a search actually filtering anyone out.
+ * query is empty (browsing, no category selected) everyone still passes, but
+ * the ranking is driven by review quality (rating x review volume) rather
+ * than an arbitrary/insertion order — so a well-reviewed, frequently-booked
+ * freelancer surfaces above a brand-new profile with zero reviews in
+ * "Popular" sections. Interest matches still nudge the order on top of that.
  */
 export function scoreFreelancerMatch(
   freelancer: FreelancerSearchable,
@@ -127,13 +144,17 @@ export function scoreFreelancerMatch(
   const normName = (freelancer.fullName || '').toLowerCase();
 
   const interestBonus = freelancer.title && clientInterests.includes(freelancer.title) ? 1.5 : 0;
+  const quality = qualityScore(freelancer.rating, freelancer.totalReviews);
 
   const hasQuery = Boolean(category) || styleTerms.length > 0 || remainingTerms.length > 0;
   if (!hasQuery) {
-    return 1 + interestBonus;
+    return 1 + interestBonus + quality;
   }
 
-  let score = interestBonus;
+  // Actively searching: relevance (below) stays the primary signal, so
+  // quality only breaks ties between similarly-relevant results instead of
+  // being able to outrank a much better keyword/category match.
+  let score = interestBonus + quality * 0.2;
 
   if (category) {
     // A detected category (from a pill, or a word like "photographer") is a

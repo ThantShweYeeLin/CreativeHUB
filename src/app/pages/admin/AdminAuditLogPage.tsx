@@ -61,9 +61,9 @@ export function AdminAuditLogPage() {
         ) : actions.length === 0 ? (
           <p className="text-sm text-gray-500">No admin actions recorded yet.</p>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             {actions.map((a) => (
-              <div key={a.id} className="border-b border-gray-100 px-4 py-3 last:border-0">
+              <div key={a.id} className="border-b border-sky-100 px-4 py-3 last:border-0">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-gray-900">{actionLabel(a.action_type)}</p>
                   <p className="text-xs text-gray-500">{new Date(a.created_at).toLocaleString()}</p>

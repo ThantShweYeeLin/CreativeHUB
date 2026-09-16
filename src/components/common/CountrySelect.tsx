@@ -110,7 +110,7 @@ export function CountrySelect({ value, onChange, placeholder = 'Search for your 
           onFocus={() => setIsOpen(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className={`w-full rounded-xl border border-gray-200 py-3 pr-9 ${selected ? 'pl-10' : 'pl-4'} text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900`}
+          className={`w-full rounded-xl border border-sky-100 py-3 pr-9 ${selected ? 'pl-10' : 'pl-4'} text-gray-900 placeholder-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400`}
         />
         {selected && (
           <button
@@ -125,11 +125,11 @@ export function CountrySelect({ value, onChange, placeholder = 'Search for your 
       </div>
 
       {isOpen && isLoading && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 shadow-lg">Loading countries…</div>
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-sky-100 bg-white p-3 text-sm text-gray-500 shadow-lg">Loading countries…</div>
       )}
 
       {isOpen && !isLoading && results.length > 0 && (
-        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+        <ul className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-sky-100 bg-white shadow-lg">
           {results.map((country, index) => (
             <li key={country.isoCode}>
               <button
@@ -137,7 +137,7 @@ export function CountrySelect({ value, onChange, placeholder = 'Search for your 
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => selectCountry(country)}
                 className={`flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm ${
-                  index === highlightedIndex ? 'bg-gray-100' : 'hover:bg-gray-50'
+                  index === highlightedIndex ? 'bg-sky-100' : 'hover:bg-sky-50'
                 }`}
               >
                 <span className="text-base">{country.flag}</span>
@@ -149,7 +149,7 @@ export function CountrySelect({ value, onChange, placeholder = 'Search for your 
       )}
 
       {isOpen && !isLoading && query.trim() && results.length === 0 && (
-        <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 shadow-lg">
+        <div className="absolute z-20 mt-1 w-full rounded-xl border border-sky-100 bg-white p-3 text-sm text-gray-500 shadow-lg">
           No matching countries.
         </div>
       )}

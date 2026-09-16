@@ -58,7 +58,7 @@ export function MinorSkillsPicker({ majorSkill, selected, onChange }: MinorSkill
         <div className="mt-5 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Your experience level in each (optional)</p>
           {selected.map((entry) => (
-            <div key={entry.name} className="rounded-xl border border-gray-200 p-3">
+            <div key={entry.name} className="rounded-xl border border-sky-100 p-3">
               <p className="mb-2 text-sm font-semibold text-gray-800">{entry.name}</p>
               <ExperienceLevelPicker value={entry.experienceLevel} onChange={(level) => setLevel(entry.name, level)} />
             </div>

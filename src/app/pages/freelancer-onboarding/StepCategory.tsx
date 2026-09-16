@@ -20,7 +20,7 @@ export function StepCategory({
 }: StepCategoryProps) {
   return (
     <div>
-      <p className="mb-3 text-sm font-semibold text-gray-700">What's your freelancer category?</p>
+      <p className="mb-3 text-sm font-semibold text-gray-700">What's your specialty?</p>
       <p className="mb-4 text-xs text-gray-500">Pick the one that best describes your services — this determines the Skills and Styles you'll choose next.</p>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         {FREELANCER_CATEGORIES.map((category) => (
@@ -30,8 +30,8 @@ export function StepCategory({
             onClick={() => onSelectCategory(category.label)}
             className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
               selectedCategory === category.label
-                ? 'border-gray-900 bg-gray-900 text-white'
-                : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                : 'border-sky-100 text-gray-600 hover:border-sky-300'
             }`}
           >
             {category.label}
@@ -51,7 +51,7 @@ export function StepCategory({
 
       {selectedCategory && (
         <div className="mt-6">
-          <p className="mb-1 text-sm font-semibold text-gray-700">Minor category (optional)</p>
+          <p className="mb-1 text-sm font-semibold text-gray-700">Also skilled in (optional)</p>
           <p className="mb-3 text-xs text-gray-500">
             Also provide services in a second area? We'll include its Skills and Styles as suggestions too.
           </p>
@@ -63,8 +63,8 @@ export function StepCategory({
                 onClick={() => onSelectMinorCategory(selectedMinorCategory === category.label ? null : category.label)}
                 className={`rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
                   selectedMinorCategory === category.label
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                    : 'border-sky-100 text-gray-600 hover:border-sky-300'
                 }`}
               >
                 {category.label}

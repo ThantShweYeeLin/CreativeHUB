@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { TagSelector } from '../../components/common/TagSelector';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
@@ -352,7 +353,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       const budgetMeta: BudgetMeta = { currency, min: item.price, max: item.price };
       const description = appendLocationMeta(
         appendScheduleMeta(
-          appendBudgetMeta(`Matched by CreativeHUB's Event Matcher for a ${eventType}.`, budgetMeta),
+          appendBudgetMeta(`Matched by CreativeHUB's Event Assistant for a ${eventType}.`, budgetMeta),
           { date, time: categoryTimes[item.category] || eventTime }
         ),
         location.formattedAddress
@@ -384,12 +385,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
+    <div className="relative min-h-screen pb-20">
+      <PageBackdrop />
+      <div className="relative z-10">
       {isLocationPickerOpen && (
         <LeafletLocationPicker initialPoint={location} onCancel={() => setIsLocationPickerOpen(false)} onConfirm={handleLocationPicked} />
       )}
 
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-gray-200">
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-sky-100">
         <div className="mx-auto max-w-2xl px-4 py-4">
           <button
             onClick={() => (step === 'input' ? onBack() : setStep(step === 'plan' ? 'recommendations' : 'input'))}
@@ -399,11 +402,11 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             Back
           </button>
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gray-900 text-white">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Event Matcher</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Event Assistant</h1>
               <p className="text-sm text-gray-600">Plan your event and get matched with real providers within your budget.</p>
             </div>
           </div>
@@ -427,7 +430,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                       type="button"
                       onClick={() => setEventType(type)}
                       className={`flex flex-row items-center gap-2 rounded-xl bg-white px-3 py-2.5 text-left transition-all ${
-                        isSelected ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+                        isSelected ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
                       }`}
                     >
                       <Icon className="h-4 w-4 flex-shrink-0 text-gray-700" />
@@ -440,7 +443,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
             <div>
               <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Event date</label>
-              <div className="flex justify-center rounded-2xl border border-gray-200 bg-white">
+              <div className="flex justify-center rounded-2xl border border-sky-100 bg-white">
                 <Calendar
                   mode="single"
                   selected={parseDateInputValue(date)}
@@ -457,7 +460,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
               <select
                 value={eventTime}
                 onChange={(event) => setEventTime(event.target.value)}
-                className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3.5 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full rounded-2xl border border-sky-100 bg-white px-4 py-3.5 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
               >
                 {EVENT_TIME_SLOTS.map((slot) => (
                   <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
@@ -471,7 +474,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                 <select
                   value={currency}
                   onChange={(event) => setCurrency(normalizeCurrencyCode(event.target.value))}
-                  className="flex-shrink-0 rounded-lg bg-gray-50 px-2 py-1 text-sm font-semibold text-gray-600 focus:outline-none"
+                  className="flex-shrink-0 rounded-lg bg-sky-50 px-2 py-1 text-sm font-semibold text-gray-600 focus:outline-none"
                 >
                   {SUPPORTED_CURRENCIES.map((item) => (
                     <option key={item.code} value={item.code}>{item.code}</option>
@@ -521,7 +524,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                       type="button"
                       onClick={() => setSetting((current) => (current === option ? '' : option))}
                       className={`flex w-[92px] flex-shrink-0 flex-col items-center gap-2 rounded-2xl bg-white p-4 transition-all ${
-                        isSelected ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+                        isSelected ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
                       }`}
                     >
                       <Icon className="h-5 w-5 text-gray-700" />
@@ -538,7 +541,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                 type="button"
                 onClick={() => setIsLocationPickerOpen(true)}
                 className={`w-full overflow-hidden rounded-2xl bg-white text-left transition-all ${
-                  location ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+                  location ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
                 }`}
               >
                 {location ? (
@@ -546,7 +549,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                     <LeafletLocationPreview latitude={location.latitude} longitude={location.longitude} title={location.formattedAddress} interactive={false} />
                   </div>
                 ) : (
-                  <div className="flex h-36 w-full items-center justify-center bg-gray-50">
+                  <div className="flex h-36 w-full items-center justify-center bg-sky-50">
                     <MapPin className="h-6 w-6 text-gray-400" />
                   </div>
                 )}
@@ -562,7 +565,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             <button
               type="button"
               onClick={handleGetRecommendations}
-              className="w-full rounded-xl bg-gray-900 px-4 py-3.5 font-semibold text-white transition-colors hover:bg-black"
+              className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3.5 font-semibold text-white transition-colors hover:shadow-lg"
             >
               Get Recommendations
             </button>
@@ -587,14 +590,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                     {categoriesForTier.map((category) => (
                       <label
                         key={category}
-                        className="flex cursor-pointer items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-gray-400"
+                        className="flex cursor-pointer items-center justify-between rounded-xl border border-sky-100 bg-white px-4 py-3 hover:border-sky-300"
                       >
                         <span className="font-medium text-gray-900">{category}</span>
                         <input
                           type="checkbox"
                           checked={selectedCategories.has(category)}
                           onChange={() => toggleCategory(category)}
-                          className="h-5 w-5 rounded border-gray-300 text-gray-900 focus:ring-gray-900"
+                          className="h-5 w-5 rounded border-sky-300 text-sky-600 focus:ring-sky-400"
                         />
                       </label>
                     ))}
@@ -616,7 +619,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                         type="button"
                         onClick={() => toggleCategory(category)}
                         className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
-                          selectedCategories.has(category) ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400'
+                          selectedCategories.has(category) ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 bg-white text-gray-700 hover:border-sky-300'
                         }`}
                       >
                         {category}
@@ -630,7 +633,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             <button
               type="button"
               onClick={handleFindEventTeam}
-              className="w-full rounded-xl bg-gray-900 px-4 py-3.5 font-semibold text-white transition-colors hover:bg-black"
+              className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3.5 font-semibold text-white transition-colors hover:shadow-lg"
             >
               Find My Event Team
             </button>
@@ -641,7 +644,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
           <div className="space-y-6">
             {isMatching && (
               <div className="flex flex-col items-center gap-3 py-16">
-                <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+                <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
                 <p className="text-sm text-gray-600">Matching you with real providers...</p>
               </div>
             )}
@@ -657,7 +660,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
+                <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-600">Total budget</span>
                     <span className="font-bold text-gray-900">{formatCurrencyAmount(budgetNumber, currency)}</span>
@@ -696,12 +699,12 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                         </p>
 
                         {!candidate ? (
-                          <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white/60 p-6 text-center">
+                          <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-sky-200 bg-white/60 p-6 text-center">
                             <PackageX className="h-6 w-6 text-gray-400" />
                             <p className="text-sm text-gray-500">No providers available for this service yet.</p>
                           </div>
                         ) : (
-                          <div className={`relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-gray-200'}`}>
+                          <div className={`relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-sky-100'}`}>
                             {match.candidates.length > 1 && (
                               <button
                                 type="button"
@@ -709,7 +712,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                                 title="See all options"
                                 aria-label="See all options"
                                 aria-expanded={isExpanded}
-                                className="absolute right-3 top-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-gray-200 text-gray-600 hover:border-gray-400 hover:text-gray-900"
+                                className="absolute right-3 top-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-sky-100 text-gray-600 hover:border-sky-300 hover:text-gray-900"
                               >
                                 <List className="h-4 w-4" />
                               </button>
@@ -737,7 +740,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                                 onChange={(event) =>
                                   setCategoryTimes((current) => ({ ...current, [match.category]: event.target.value }))
                                 }
-                                className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5 text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                                className="rounded-lg border border-sky-100 bg-sky-50/50 px-2 py-1.5 text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                               >
                                 {EVENT_TIME_SLOTS.map((slot) => (
                                   <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
@@ -760,14 +763,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                                         </p>
                                       </div>
                                       {isSelected ? (
-                                        <span className="flex-shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                        <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
                                           Selected
                                         </span>
                                       ) : (
                                         <button
                                           type="button"
                                           onClick={() => selectCandidate(match.category, index)}
-                                          className="flex-shrink-0 rounded-full border-2 border-gray-900 px-3 py-1.5 text-xs font-semibold text-gray-900 transition-colors hover:bg-gray-900 hover:text-white"
+                                          className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
                                         >
                                           Select
                                         </button>
@@ -788,7 +791,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   type="button"
                   disabled={isSubmitting || budgetFit.kept.length === 0}
                   onClick={handleSendRequests}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-4 py-3.5 font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3.5 font-semibold text-white transition-colors hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Users className="h-4 w-4" />
                   {isSubmitting ? 'Sending requests...' : 'Send Requests to My Event Team'}
@@ -800,6 +803,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

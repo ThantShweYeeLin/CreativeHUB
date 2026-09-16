@@ -3,6 +3,7 @@ import { ChevronLeft, Bookmark } from 'lucide-react';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated } from '../../lib/clientPostSync';
@@ -323,8 +324,10 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-12">
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200 mb-6 md:mb-8">
+    <div className="relative min-h-screen pb-20 md:pb-12">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-sky-100 mb-6 md:mb-8">
         <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-4 md:py-6">
           <button
             onClick={onBack}
@@ -334,7 +337,7 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
             Back to Home
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-gray-700 to-gray-800 rounded-xl flex items-center justify-center">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center">
               <Bookmark className="w-5 h-5 md:w-6 md:h-6 text-white fill-white" />
             </div>
             <div>
@@ -360,11 +363,11 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
 
         {isLoading ? (
           <div className="flex justify-center py-16">
-            <div className="h-10 w-10 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+            <div className="h-10 w-10 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         ) : posts.length === 0 ? (
-          <div className="rounded-3xl bg-white p-10 text-center shadow-xl">
-            <Bookmark className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+          <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-10 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+            <Bookmark className="mx-auto mb-3 h-10 w-10 text-sky-300" />
             <h2 className="mb-1 text-lg font-bold text-gray-900">No saved posts yet</h2>
             <p className="text-sm text-gray-600">Tap the bookmark icon on any post to save it here.</p>
           </div>
@@ -456,6 +459,7 @@ export function SavedPostsPage({ onBack }: SavedPostsPageProps) {
       {viewingPhoto && (
         <PhotoViewerModal url={viewingPhoto.url} alt={viewingPhoto.alt} onClose={() => setViewingPhoto(null)} />
       )}
+      </div>
     </div>
   );
 }

@@ -200,7 +200,7 @@ export function PostShareMenu({
         aria-expanded={isOpen}
         className={
           triggerClassName ||
-          'flex items-center gap-2 rounded-full bg-gray-50 px-3 py-2 text-gray-600 transition-all hover:bg-gray-100 hover:text-gray-900'
+          'flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 text-gray-600 transition-all hover:bg-sky-100 hover:text-gray-900'
         }
       >
         {children || (
@@ -217,7 +217,7 @@ export function PostShareMenu({
           role="menu"
           aria-label="Share this post"
           style={{ top: menuPosition.top, bottom: menuPosition.bottom, left: menuPosition.left, maxHeight: menuPosition.maxHeight }}
-          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-gray-200 bg-white p-2 shadow-2xl"
+          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border border-sky-100 bg-white p-2 shadow-[0_20px_60px_rgba(56,189,248,0.25)]"
         >
           <p className="px-2 pb-1.5 pt-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Share this post</p>
 
@@ -228,7 +228,7 @@ export function PostShareMenu({
               event.stopPropagation();
               void handleCopyLink();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-gray-700`}>
               <Link2 className="h-4 w-4" />
@@ -243,9 +243,9 @@ export function PostShareMenu({
               event.stopPropagation();
               void handleNativeShare();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
-            <span className={`${PLATFORM_BADGE_CLASS} bg-gray-900`}>
+            <span className={`${PLATFORM_BADGE_CLASS} bg-gradient-to-br from-sky-500 to-blue-600`}>
               <Share2 className="h-4 w-4" />
             </span>
             Share
@@ -258,7 +258,7 @@ export function PostShareMenu({
               event.stopPropagation();
               handleWhatsApp();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-[#25D366]`}>W</span>
             WhatsApp
@@ -271,7 +271,7 @@ export function PostShareMenu({
               event.stopPropagation();
               handleFacebook();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-[#1877F2]`}>f</span>
             Facebook
@@ -284,7 +284,7 @@ export function PostShareMenu({
               event.stopPropagation();
               void handleInstagram();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-gradient-to-br from-[#f09433] via-[#dc2743] to-[#bc1888]`}>
               <Instagram className="h-4 w-4" />
@@ -299,7 +299,7 @@ export function PostShareMenu({
               event.stopPropagation();
               handleX();
             }}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-gray-50"
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
           >
             <span className={`${PLATFORM_BADGE_CLASS} bg-black`}>X</span>
             X

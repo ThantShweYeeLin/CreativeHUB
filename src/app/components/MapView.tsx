@@ -59,7 +59,7 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
     >
       {isSelected && (
         <div className="absolute inset-0 -m-4">
-          <div className="w-24 h-24 rounded-full bg-gray-500/30 animate-ping" />
+          <div className="w-24 h-24 rounded-full bg-sky-400/30 animate-ping" />
         </div>
       )}
 
@@ -74,7 +74,7 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
 
         <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 px-1.5 md:px-2 py-0.5 rounded-full text-[10px] md:text-xs font-bold whitespace-nowrap transition-all ${
           isSelected
-            ? 'bg-gradient-to-r from-gray-900 to-black text-white'
+            ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white'
             : 'bg-white text-gray-700 shadow-md'
         }`}>
           {freelancer.profession.split(' ')[0]}
@@ -83,7 +83,7 @@ function MapMarker({ freelancer, isSelected, onClick }: MapMarkerProps) {
 
       {(isHovered || isSelected) && (
         <div className="absolute top-full left-1/2 -translate-x-1/2 mt-6 w-72 pointer-events-none animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl overflow-visible border-2 border-gray-100">
+          <div className="bg-white rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] overflow-visible border-2 border-sky-100">
             <div className="h-20 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 relative rounded-t-2xl">
               <ImageWithFallback
                 src={freelancer.coverImage}
@@ -272,9 +272,9 @@ export function MapView({ onViewProfile }: MapViewProps) {
     <div className="space-y-6 md:space-y-8">
     <div className="relative h-[400px] md:h-[calc(100vh-200px)]">
       {/* Main Map Container */}
-      <div className="absolute inset-0 bg-gray-100 rounded-2xl md:rounded-3xl overflow-hidden shadow-xl">
+      <div className="absolute inset-0 bg-sky-50 rounded-2xl md:rounded-3xl overflow-hidden shadow-xl">
         {/* Map Background with Streets Pattern */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gray-50 to-gray-100">
+        <div className="absolute inset-0 bg-gradient-to-br from-sky-50 to-blue-100">
           {/* Street Grid Pattern */}
           <svg className="absolute inset-0 w-full h-full opacity-30">
             <defs>
@@ -291,10 +291,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
           </svg>
 
           {/* Neighborhoods/Districts - Subtle Color Zones */}
-          <div className="absolute top-0 left-0 w-1/3 h-2/5 bg-gray-200/10 rounded-br-[100px]" />
-          <div className="absolute top-0 right-0 w-2/5 h-1/3 bg-gray-200/10 rounded-bl-[120px]" />
-          <div className="absolute bottom-0 left-0 w-2/5 h-2/5 bg-gray-200/10 rounded-tr-[110px]" />
-          <div className="absolute bottom-0 right-0 w-1/3 h-1/3 bg-gray-200/10 rounded-tl-[90px]" />
+          <div className="absolute top-0 left-0 w-1/3 h-2/5 bg-sky-200/20 rounded-br-[100px]" />
+          <div className="absolute top-0 right-0 w-2/5 h-1/3 bg-sky-200/20 rounded-bl-[120px]" />
+          <div className="absolute bottom-0 left-0 w-2/5 h-2/5 bg-sky-200/20 rounded-tr-[110px]" />
+          <div className="absolute bottom-0 right-0 w-1/3 h-1/3 bg-sky-200/20 rounded-tl-[90px]" />
 
           {/* Accent Elements - Parks/Landmarks */}
           <div className="absolute top-1/4 left-1/4 w-24 h-24 bg-green-300/20 rounded-full blur-xl" />
@@ -303,7 +303,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         {/* Top Info Bar */}
         <div className="absolute top-3 md:top-6 left-0 right-0 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 md:gap-0 px-3 md:px-6">
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg px-3 md:px-5 py-2 md:py-3 flex items-center gap-2 md:gap-3 border border-gray-200">
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg px-3 md:px-5 py-2 md:py-3 flex items-center gap-2 md:gap-3 border border-sky-100">
             <div className="w-8 h-8 md:w-10 md:h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg md:rounded-xl flex items-center justify-center">
               <Navigation className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
@@ -313,7 +313,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg px-3 md:px-5 py-2 md:py-3 flex items-center gap-2 md:gap-3 border border-gray-200">
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-lg px-3 md:px-5 py-2 md:py-3 flex items-center gap-2 md:gap-3 border border-sky-100">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
               <div>
@@ -338,10 +338,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
         {(isLoading || errorMessage || (!isLoading && !errorMessage && filteredFreelancers.length === 0)) && (
           <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-20 flex justify-center pointer-events-none">
-            <div className="bg-white rounded-xl md:rounded-2xl shadow-xl border border-gray-200 px-5 py-4 text-center max-w-sm">
+            <div className="bg-white rounded-xl md:rounded-2xl shadow-xl border border-sky-100 px-5 py-4 text-center max-w-sm">
               {isLoading ? (
                 <>
-                  <div className="mx-auto mb-3 h-8 w-8 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+                  <div className="mx-auto mb-3 h-8 w-8 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
                   <p className="font-semibold text-gray-900">Loading freelancers...</p>
                 </>
               ) : errorMessage ? (
@@ -373,7 +373,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               setShowFilterModal(true);
             }
           }}
-          className="w-16 h-16 bg-gradient-to-br from-gray-900 to-black rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-all group border-4 border-white"
+          className="w-16 h-16 bg-gradient-to-br from-sky-500 to-blue-600 rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-all group border-4 border-white"
         >
           <Filter className="w-7 h-7 text-white" />
           {filterCategory !== 'all' && (
@@ -390,7 +390,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
       {/* Mobile Filter Button */}
       <button
         onClick={() => setShowFilterModal(true)}
-        className="md:hidden absolute top-20 right-3 z-30 w-14 h-14 bg-gradient-to-br from-gray-900 to-black rounded-xl shadow-2xl flex items-center justify-center border-2 border-white"
+        className="md:hidden absolute top-20 right-3 z-30 w-14 h-14 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl shadow-2xl flex items-center justify-center border-2 border-white"
       >
         <Filter className="w-6 h-6 text-white" />
         {filterCategory !== 'all' && (
@@ -413,10 +413,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
           <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4">
             <div className="bg-white rounded-t-3xl md:rounded-3xl shadow-2xl max-w-lg w-full animate-fadeIn max-h-[85vh] md:max-h-[90vh] overflow-hidden flex flex-col">
               {/* Header */}
-              <div className="px-4 md:px-8 py-4 md:py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 rounded-t-3xl flex-shrink-0">
+              <div className="px-4 md:px-8 py-4 md:py-6 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-blue-50 rounded-t-3xl flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-gray-900 to-black rounded-xl flex items-center justify-center">
+                    <div className="w-12 h-12 bg-gradient-to-br from-sky-500 to-blue-600 rounded-xl flex items-center justify-center">
                       <Filter className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -448,18 +448,18 @@ export function MapView({ onViewProfile }: MapViewProps) {
                       }}
                       className={`w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl font-semibold transition-all ${
                         isActive
-                          ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-xl scale-[1.02]'
-                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:scale-[1.01]'
+                          ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl scale-[1.02]'
+                          : 'bg-sky-50 text-gray-700 hover:bg-sky-100 hover:scale-[1.01]'
                       }`}
                     >
                       <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center ${
-                        isActive ? 'bg-white/20' : 'bg-gray-100'
+                        isActive ? 'bg-white/20' : 'bg-sky-100'
                       }`}>
                         <Icon className={`w-5 h-5 md:w-6 md:h-6 ${isActive ? 'text-white' : 'text-gray-900'}`} />
                       </div>
                       <span className="capitalize flex-1 text-left text-base md:text-lg">{category}</span>
                       <div className={`px-2.5 md:px-3 py-1 rounded-full text-xs md:text-sm font-bold ${
-                        isActive ? 'bg-white/20' : 'bg-gray-100 text-black'
+                        isActive ? 'bg-white/20' : 'bg-sky-100 text-black'
                       }`}>
                         {count}
                       </div>
@@ -469,13 +469,13 @@ export function MapView({ onViewProfile }: MapViewProps) {
               </div>
 
               {/* Footer */}
-              <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 bg-gray-50 rounded-b-3xl flex-shrink-0">
+              <div className="px-4 md:px-6 py-3 md:py-4 border-t border-sky-100 bg-sky-50/60 rounded-b-3xl flex-shrink-0">
                 <button
                   onClick={() => {
                     setFilterCategory('all');
                     setShowFilterModal(false);
                   }}
-                  className="w-full px-4 md:px-6 py-2.5 md:py-3 bg-white text-gray-700 rounded-lg md:rounded-xl text-sm md:text-base font-semibold hover:bg-gray-100 transition-colors border border-gray-200"
+                  className="w-full px-4 md:px-6 py-2.5 md:py-3 bg-white text-gray-700 rounded-lg md:rounded-xl text-sm md:text-base font-semibold hover:bg-sky-50 transition-colors border border-sky-100"
                 >
                   Reset Filter
                 </button>
@@ -488,14 +488,14 @@ export function MapView({ onViewProfile }: MapViewProps) {
       {/* Selected Freelancer Action Card */}
       {selectedFreelancer && (
         <div className="absolute bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 z-30 animate-fadeIn w-[calc(100%-2rem)] md:w-auto">
-          <div className="bg-white rounded-xl md:rounded-2xl shadow-2xl p-4 md:p-5 border-2 border-gray-500">
+          <div className="bg-white rounded-xl md:rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] p-4 md:p-5 border-2 border-sky-400">
             <div className="mb-2 md:mb-3">
               <p className="text-xs text-gray-500 font-medium mb-1">Selected Freelancer</p>
               <p className="font-bold text-gray-900 text-base md:text-lg">{selectedFreelancer.fullName}</p>
             </div>
             <button
               onClick={() => handleViewProfile(selectedFreelancer.id)}
-              className="w-full flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-lg md:rounded-xl text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
+              className="w-full flex items-center justify-center gap-2 px-4 md:px-6 py-2.5 md:py-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg md:rounded-xl text-sm md:text-base font-semibold hover:shadow-lg hover:scale-105 transition-all"
             >
               <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
               <span>View Profile</span>
@@ -506,26 +506,26 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       {/* Zoom Controls - Desktop Only */}
       <div className="hidden md:flex absolute bottom-6 right-6 flex-col gap-2 z-20">
-        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-gray-200 flex items-center justify-center hover:scale-110 group">
+        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-sky-100 flex items-center justify-center hover:scale-110 group">
           <span className="text-2xl font-bold text-gray-600 group-hover:text-gray-900">+</span>
         </button>
-        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-gray-200 flex items-center justify-center hover:scale-110 group">
+        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-sky-100 flex items-center justify-center hover:scale-110 group">
           <span className="text-2xl font-bold text-gray-600 group-hover:text-gray-900">−</span>
         </button>
-        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-gray-200 flex items-center justify-center hover:scale-110 group mt-2">
+        <button className="w-12 h-12 bg-white rounded-xl shadow-lg hover:shadow-xl transition-all border border-sky-100 flex items-center justify-center hover:scale-110 group mt-2">
           <Navigation className="w-5 h-5 text-gray-600 group-hover:text-gray-900" />
         </button>
       </div>
     </div>
 
     {/* Freelancers Near You Section */}
-    <div className="bg-white rounded-2xl md:rounded-3xl shadow-xl border border-gray-200 p-4 md:p-8">
+    <div className="bg-white rounded-2xl md:rounded-3xl shadow-xl border border-sky-100 p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 md:gap-0 mb-4 md:mb-6">
         <div>
           <h2 className="text-xl md:text-2xl font-bold text-gray-900 mb-1 md:mb-2">Freelancers Near You</h2>
           <p className="text-sm md:text-base text-gray-600">Top-rated professionals in your area</p>
         </div>
-        <div className="px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border-2 border-gray-200 self-start md:self-auto">
+        <div className="px-4 py-2 bg-gradient-to-r from-sky-50 to-blue-50 rounded-xl border-2 border-sky-100 self-start md:self-auto">
           <p className="text-sm font-semibold text-gray-900">{filteredFreelancers.length} nearby</p>
         </div>
       </div>
@@ -535,7 +535,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           <div
             key={freelancer.id}
             onClick={() => handleViewProfile(freelancer.id)}
-            className="group cursor-pointer bg-gradient-to-br from-gray-50 to-white rounded-xl md:rounded-2xl p-4 md:p-5 border-2 border-gray-200 hover:border-gray-300 transition-all hover:shadow-xl"
+            className="group cursor-pointer bg-gradient-to-br from-sky-50 to-white rounded-xl md:rounded-2xl p-4 md:p-5 border-2 border-sky-100 hover:border-sky-300 transition-all hover:shadow-xl"
           >
             <div className="flex items-start gap-3 md:gap-4 mb-3 md:mb-4">
               <div className="w-14 h-14 md:w-16 md:h-16 rounded-xl overflow-hidden ring-2 ring-white shadow-lg flex-shrink-0">
@@ -557,7 +557,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between pt-4 border-t border-sky-100">
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-1">
                   <span className="text-yellow-500 text-sm">★</span>
@@ -568,7 +568,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
                   <span className="text-sm">{freelancer.totalProjects}</span>
                 </div>
               </div>
-              <button className="px-4 py-2 bg-gradient-to-r from-gray-900 to-black text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all">
+              <button className="px-4 py-2 bg-gradient-to-r from-sky-500 to-blue-600 text-white text-sm font-semibold rounded-lg hover:shadow-lg hover:scale-105 transition-all">
                 View
               </button>
             </div>

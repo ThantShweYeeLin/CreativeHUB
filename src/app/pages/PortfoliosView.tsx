@@ -20,7 +20,7 @@ function FreelancerCard({ item, onViewProfile }: FreelancerCardProps) {
   return (
     <button
       type="button"
-      className="group rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl"
+      className="group rounded-2xl border border-sky-100 bg-white p-5 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] transition-all hover:-translate-y-1 hover:shadow-[0_12px_36px_rgba(56,189,248,0.25)]"
       onClick={() => onViewProfile(item.userId || item.id)}
     >
       <div className="mb-4 flex items-start gap-4">
@@ -52,17 +52,17 @@ function FreelancerCard({ item, onViewProfile }: FreelancerCardProps) {
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
-        <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-semibold text-gray-700">
+        <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-xs font-semibold text-gray-700">
           {item.category}
         </span>
         {item.skills.slice(0, 2).map((skill) => (
-          <span key={skill} className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600">
+          <span key={skill} className="rounded-full border border-sky-100 bg-white px-3 py-1 text-xs text-gray-600">
             {skill}
           </span>
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-gray-100">
+      <div className="overflow-hidden rounded-xl bg-sky-50">
         <ImageWithFallback
           src={latestWork?.imageUrl || item.coverImage}
           alt={latestWork?.title || `${item.fullName} portfolio cover`}
@@ -150,7 +150,7 @@ export function PortfoliosView({ onViewProfile }: PortfoliosViewProps) {
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-lg border border-gray-200">
+        <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100">
           <Search className="w-5 h-5 text-gray-400" />
           <input
             value={searchQuery}
@@ -160,7 +160,7 @@ export function PortfoliosView({ onViewProfile }: PortfoliosViewProps) {
           />
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm">
+        <div className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm font-medium text-gray-600 shadow-sm">
           {filteredItems.length} profiles
         </div>
       </div>
@@ -175,7 +175,7 @@ export function PortfoliosView({ onViewProfile }: PortfoliosViewProps) {
             <button
               key={category}
               onClick={() => setSelectedCategory(category.toLowerCase())}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${selectedCategory === category.toLowerCase() ? 'bg-gradient-to-r from-gray-900 to-black text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'}`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${selectedCategory === category.toLowerCase() ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg' : 'bg-white text-gray-700 hover:bg-sky-50 border border-sky-100'}`}
             >
               {category}
             </button>
@@ -187,12 +187,12 @@ export function PortfoliosView({ onViewProfile }: PortfoliosViewProps) {
 
       {isLoading && (
         <div className="flex justify-center py-16">
-          <div className="h-12 w-12 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+          <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
         </div>
       )}
 
       {!isLoading && filteredItems.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center shadow-lg">
+        <div className="rounded-2xl border border-sky-100 bg-white p-10 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <h2 className="mb-2 text-xl font-bold text-gray-900">No freelancer profiles found</h2>
           <p className="text-gray-600">Try changing category/search filters or add available freelancers in your database.</p>
         </div>

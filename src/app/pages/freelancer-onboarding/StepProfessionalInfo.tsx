@@ -55,7 +55,7 @@ export function StepProfessionalInfo({
             value={displayName}
             onChange={(event) => onDisplayNameChange(event.target.value)}
             placeholder="Luna Photography"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full rounded-xl border border-sky-100 bg-sky-50/50 py-3.5 pl-11 pr-4 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
         <p className="mt-1 text-xs text-gray-500">Shown publicly instead of your legal name.</p>
@@ -70,7 +70,7 @@ export function StepProfessionalInfo({
               type="button"
               onClick={() => onPronounsChange(option)}
               className={`rounded-full border-2 px-4 py-2 text-sm font-semibold transition-all ${
-                pronouns === option ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                pronouns === option ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
               {option}
@@ -82,7 +82,7 @@ export function StepProfessionalInfo({
             value={pronounsCustom}
             onChange={(event) => onPronounsCustomChange(event.target.value)}
             placeholder="e.g. ze/zir"
-            className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="mt-2 w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         )}
       </div>
@@ -117,7 +117,7 @@ export function StepProfessionalInfo({
           onChange={(event) => onBioChange(event.target.value)}
           rows={4}
           placeholder="Professional wedding photographer specializing in outdoor and cinematic-style photography."
-          className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
         />
       </div>
     </div>

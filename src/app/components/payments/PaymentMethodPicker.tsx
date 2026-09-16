@@ -126,7 +126,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
               key={method.id}
               onClick={() => selectable && onSelectedIdChange?.(method.id)}
               className={`flex items-center justify-between rounded-xl border-2 px-4 py-3 transition-colors ${
-                selectable && selectedId === method.id ? 'border-gray-900 bg-gray-50' : 'border-gray-200'
+                selectable && selectedId === method.id ? 'border-sky-500 bg-sky-50' : 'border-sky-100'
               } ${selectable ? 'cursor-pointer' : ''}`}
             >
               <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
               </div>
               <div className="flex items-center gap-2">
                 {method.is_default ? (
-                  <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-bold text-white">DEFAULT</span>
+                  <span className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">DEFAULT</span>
                 ) : (
                   <button
                     type="button"
@@ -182,12 +182,12 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
         <button
           type="button"
           onClick={() => setShowAddForm(true)}
-          className="flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          className="flex items-center gap-2 rounded-lg border border-dashed border-sky-200 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-50"
         >
           <Plus className="h-4 w-4" /> Add new card
         </button>
       ) : (
-        <div className="rounded-xl border-2 border-gray-900 bg-gray-50 p-4">
+        <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
           <div className="mb-3 flex items-center justify-between">
             <p className="font-bold text-gray-900">Add a card</p>
             <button
@@ -205,7 +205,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
               value={cardholderName}
               onChange={(e) => setCardholderName(e.target.value)}
               placeholder="e.g. Jane Doe"
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
             />
             <input
               value={cardNumber}
@@ -213,7 +213,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
               placeholder="e.g. 4242 4242 4242 4242"
               inputMode="numeric"
               maxLength={23}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
             />
             <div className="grid grid-cols-3 gap-2">
               <div>
@@ -223,7 +223,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
                   onChange={(e) => setExpMonth(e.target.value.replace(/\D/g, '').slice(0, 2))}
                   placeholder="e.g. 04"
                   inputMode="numeric"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
               <div>
@@ -233,7 +233,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
                   onChange={(e) => setExpYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="e.g. 2028"
                   inputMode="numeric"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
               <div>
@@ -243,7 +243,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
                   onChange={(e) => setCvc(e.target.value.replace(/\D/g, '').slice(0, 4))}
                   placeholder="e.g. 123"
                   inputMode="numeric"
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-gray-900"
+                  className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 />
               </div>
             </div>
@@ -252,7 +252,7 @@ export function PaymentMethodPicker({ userId, selectable = false, selectedId, on
               type="button"
               onClick={() => void handleAddCard()}
               disabled={isSaving}
-              className="w-full rounded-lg bg-gray-900 py-2.5 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+              className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
             >
               {isSaving ? 'Saving...' : 'Save Card'}
             </button>

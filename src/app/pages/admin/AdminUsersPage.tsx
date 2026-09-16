@@ -79,7 +79,7 @@ export function AdminUsersPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or email..."
-              className="w-full rounded-lg border border-gray-300 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-lg border border-sky-100 pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
           <div className="flex gap-1.5">
@@ -88,7 +88,7 @@ export function AdminUsersPage() {
                 key={option.id}
                 onClick={() => setFilter(option.id)}
                 className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${
-                  filter === option.id ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  filter === option.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                 }`}
               >
                 {option.label}
@@ -99,10 +99,10 @@ export function AdminUsersPage() {
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-        <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto rounded-2xl border border-sky-100 bg-white shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left text-xs font-semibold uppercase text-gray-500">
+              <tr className="border-b border-sky-100 text-left text-xs font-semibold uppercase text-gray-500">
                 <th className="px-4 py-3">User</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Status</th>
@@ -117,7 +117,7 @@ export function AdminUsersPage() {
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">No users found.</td></tr>
               ) : (
                 users.map((u) => (
-                  <tr key={u.id} className="border-b border-gray-100 last:border-0">
+                  <tr key={u.id} className="border-b border-sky-100 last:border-0">
                     <td className="px-4 py-3">
                       <button onClick={() => navigate(`/admin/users/${u.id}`)} className="flex items-center gap-2 text-left hover:underline">
                         <img src={u.avatar_url || DEFAULT_AVATAR_URL} alt="" className="h-8 w-8 rounded-full object-cover" />
@@ -147,7 +147,7 @@ export function AdminUsersPage() {
                         <AccountStatusActions userId={u.id} currentStatus={u.account_status} role={u.role} onChanged={load} />
                         <button
                           onClick={() => navigate(`/admin/users/${u.id}`)}
-                          className="rounded-lg bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-black"
+                          className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:shadow-lg"
                         >
                           View
                         </button>
@@ -166,14 +166,14 @@ export function AdminUsersPage() {
             <button
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-40"
             >
               Prev
             </button>
             <button
               disabled={offset + PAGE_SIZE >= count}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+              className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-40"
             >
               Next
             </button>

@@ -20,6 +20,7 @@ import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
 import { LegalContentModal } from '../../components/LegalContentModal';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 
 type Role = 'freelancer' | 'client';
 
@@ -417,14 +418,16 @@ export function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-gray-300 border-t-black" />
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-white to-sky-50">
+        <div className="h-12 w-12 animate-spin rounded-full border-4 border-sky-100 border-t-sky-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-10">
+    <div className="relative min-h-screen pb-20 md:pb-10">
+      <PageBackdrop />
+      <div className="relative z-10">
       <div className="mx-auto max-w-[1280px] px-4 py-6 md:px-8 md:py-8">
         <h1 className="mb-1 text-3xl font-bold text-gray-900">Settings</h1>
         <p className="mb-6 text-sm text-gray-600">Customize account, privacy, notifications, and role-specific preferences.</p>
@@ -437,21 +440,21 @@ export function SettingsPage() {
         )}
 
         <div className="space-y-5">
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <User className="h-5 w-5" />
               <h2 className="text-lg font-bold">Account Settings</h2>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. jane@example.com" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
-              <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +66 81 234 5678" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
-              <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
-              <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="At least 6 characters" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
-              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Re-enter new password" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-900" />
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. jane@example.com" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +66 81 234 5678" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="At least 6 characters" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Re-enter new password" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
             </div>
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Save Account</button>
-              <button onClick={handleLogout} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Log out</button>
+              <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg">Save Account</button>
+              <button onClick={handleLogout} className="rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Log out</button>
               {role === 'freelancer' && (
                 <button
                   onClick={() => void handleTogglePause()}
@@ -477,7 +480,7 @@ export function SettingsPage() {
 
           {showDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
                 <h3 className="mb-2 text-lg font-bold text-gray-900">Delete your account?</h3>
                 <p className="mb-4 text-sm text-gray-600">
                   This permanently deletes your account, profile, portfolio, and bookings. This can't be undone.
@@ -489,14 +492,14 @@ export function SettingsPage() {
                   value={deleteConfirmText}
                   onChange={(e) => setDeleteConfirmText(e.target.value)}
                   placeholder={email}
-                  className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="mb-3 w-full rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                 />
                 {deleteError && <p className="mb-3 text-sm text-red-600">{deleteError}</p>}
                 <div className="flex items-center justify-end gap-3">
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
                     disabled={isDeletingAccount}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    className="rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     Cancel
                   </button>
@@ -512,7 +515,7 @@ export function SettingsPage() {
             </div>
           )}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <Shield className="h-5 w-5" />
               <h2 className="text-lg font-bold">Privacy & Security</h2>
@@ -530,7 +533,7 @@ export function SettingsPage() {
                   <select
                     value={profileVisibility}
                     onChange={(e) => setProfileVisibility(e.target.value as 'public' | 'limited')}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    className="rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                   >
                     <option value="public">Public — visible in search & Explore</option>
                     <option value="limited">Limited — hidden from search & Explore</option>
@@ -538,7 +541,7 @@ export function SettingsPage() {
                   <button
                     onClick={() => void handleSaveVisibility()}
                     disabled={isSavingVisibility}
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                    className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                   >
                     {isSavingVisibility ? 'Saving…' : 'Save'}
                   </button>
@@ -547,7 +550,7 @@ export function SettingsPage() {
             )}
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <UserX className="h-5 w-5" />
               <h2 className="text-lg font-bold">Blocked Accounts</h2>
@@ -559,7 +562,7 @@ export function SettingsPage() {
             ) : (
               <div className="space-y-2">
                 {blockedUsers.map((row) => (
-                  <div key={row.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2">
+                  <div key={row.id} className="flex items-center justify-between rounded-lg border border-sky-100 px-3 py-2">
                     <div className="flex items-center gap-3">
                       <img
                         src={row.blocked?.avatar_url || DEFAULT_AVATAR_URL}
@@ -571,7 +574,7 @@ export function SettingsPage() {
                     <button
                       onClick={() => void handleUnblock(row.blocked_id)}
                       disabled={unblockingId === row.blocked_id}
-                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                      className="rounded-lg border border-sky-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                     >
                       {unblockingId === row.blocked_id ? 'Unblocking…' : 'Unblock'}
                     </button>
@@ -581,7 +584,7 @@ export function SettingsPage() {
             )}
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <Bell className="h-5 w-5" />
               <h2 className="text-lg font-bold">Notifications</h2>
@@ -599,34 +602,34 @@ export function SettingsPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <Globe className="h-5 w-5" />
               <h2 className="text-lg font-bold">Preferences</h2>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <select value={preferences.language} onChange={(e) => setPreferences((c) => ({ ...c, language: e.target.value }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">
+              <select value={preferences.language} onChange={(e) => setPreferences((c) => ({ ...c, language: e.target.value }))} className="rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300">
                 <option value="English">English</option>
                 <option value="Thai">ไทย</option>
               </select>
-              <select value={preferences.theme} onChange={(e) => setPreferences((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="light">Light</option><option value="dark">Dark</option></select>
-              <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="e.g. Asia/Bangkok" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900" />
-              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="e.g. USD" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900" />
-              <select value={preferences.distanceUnit} onChange={(e) => setPreferences((c) => ({ ...c, distanceUnit: e.target.value as 'km' | 'miles' }))} className="rounded-lg border border-gray-300 px-3 py-2 text-sm"><option value="km">Kilometers</option><option value="miles">Miles</option></select>
+              <select value={preferences.theme} onChange={(e) => setPreferences((c) => ({ ...c, theme: e.target.value as 'light' | 'dark' }))} className="rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"><option value="light">Light</option><option value="dark">Dark</option></select>
+              <input value={preferences.timezone} onChange={(e) => setPreferences((c) => ({ ...c, timezone: e.target.value }))} placeholder="e.g. Asia/Bangkok" className="rounded-lg border border-sky-100 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="e.g. USD" className="rounded-lg border border-sky-100 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
+              <select value={preferences.distanceUnit} onChange={(e) => setPreferences((c) => ({ ...c, distanceUnit: e.target.value as 'km' | 'miles' }))} className="rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"><option value="km">Kilometers</option><option value="miles">Miles</option></select>
             </div>
           </section>
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-2 flex items-center gap-2 text-gray-900">
               <Star className="h-5 w-5" />
               <h2 className="text-lg font-bold">Membership</h2>
             </div>
             <p className="text-sm text-gray-700">Current Plan: <span className="font-semibold">{planLabel}</span></p>
-            <button onClick={() => navigate('/premium')} className="mt-3 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black">Upgrade / Manage Plan</button>
+            <button onClick={() => navigate('/premium')} className="mt-3 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg">Upgrade / Manage Plan</button>
           </section>
 
           {role === 'client' && user?.id && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <div className="mb-3 flex items-center gap-2 text-gray-900">
                 <CreditCard className="h-5 w-5" />
                 <h2 className="text-lg font-bold">Payment Methods</h2>
@@ -637,7 +640,7 @@ export function SettingsPage() {
           )}
 
           {role === 'client' && (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+            <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <div className="mb-3 flex items-center gap-2 text-gray-900">
                 <ClipboardList className="h-5 w-5" />
                 <h2 className="text-lg font-bold">Profile Setup</h2>
@@ -648,29 +651,29 @@ export function SettingsPage() {
               </p>
               <button
                 onClick={() => navigate('/onboarding/client')}
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
               >
                 Complete your profile
               </button>
             </section>
           )}
 
-          <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="mb-4 flex items-center gap-2 text-gray-900">
               <Lock className="h-5 w-5" />
               <h2 className="text-lg font-bold">Terms & Support</h2>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
-              <button type="button" onClick={() => setLegalModalTab('privacy')} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Privacy Policy</button>
-              <button type="button" onClick={() => setLegalModalTab('terms')} className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Terms of Service</button>
-              <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">FAQ</a>
-              <a href="#" className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50">Contact Support</a>
+              <button type="button" onClick={() => setLegalModalTab('privacy')} className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Privacy Policy</button>
+              <button type="button" onClick={() => setLegalModalTab('terms')} className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Terms of Service</button>
+              <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">FAQ</a>
+              <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Contact Support</a>
               <button
                 onClick={() => {
                   setTicketSubmitted(false);
                   setShowTicketModal(true);
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-gray-700 hover:bg-gray-50"
+                className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50"
               >
                 Report an Issue
               </button>
@@ -678,8 +681,8 @@ export function SettingsPage() {
           </section>
 
           <div className="flex items-center justify-between">
-            <button onClick={() => void handleSavePreferences()} className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Save Global Preferences</button>
-            <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"><LogOut className="h-4 w-4" /> Log out</button>
+            <button onClick={() => void handleSavePreferences()} className="rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Save Global Preferences</button>
+            <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"><LogOut className="h-4 w-4" /> Log out</button>
           </div>
         </div>
       </div>
@@ -688,14 +691,14 @@ export function SettingsPage() {
 
       {showTicketModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
             {ticketSubmitted ? (
               <>
                 <h3 className="mb-2 text-lg font-bold text-gray-900">Thanks for letting us know</h3>
                 <p className="mb-4 text-sm text-gray-600">Our team will look into it.</p>
                 <button
                   onClick={() => setShowTicketModal(false)}
-                  className="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
                 >
                   Close
                 </button>
@@ -710,7 +713,7 @@ export function SettingsPage() {
                 <select
                   value={ticketCategory}
                   onChange={(e) => setTicketCategory(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="mb-3 w-full rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                 >
                   <option value="technical">Technical problem</option>
                   <option value="payment">Payment problem</option>
@@ -724,7 +727,7 @@ export function SettingsPage() {
                   value={ticketDescription}
                   onChange={(e) => setTicketDescription(e.target.value)}
                   placeholder="Describe the issue..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                 />
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Attach screenshot (optional)</label>
                 <input
@@ -736,7 +739,7 @@ export function SettingsPage() {
                 <button
                   onClick={() => void handleSubmitTicket()}
                   disabled={isSubmittingTicket}
-                  className="w-full rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-60"
+                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   {isSubmittingTicket ? 'Submitting...' : 'Submit'}
                 </button>
@@ -745,6 +748,7 @@ export function SettingsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

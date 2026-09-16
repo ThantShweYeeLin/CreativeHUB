@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MapPin, Search, Users, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { useAuth } from '../../contexts/AuthContext';
@@ -338,15 +339,17 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20">
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-gray-200">
+    <div className="relative min-h-screen pb-20">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-sky-100">
         <div className="mx-auto max-w-2xl px-4 py-4">
           <button onClick={onBack} className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black">
             <ChevronLeft className="h-5 w-5" />
             Back
           </button>
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gray-900 text-white">
+            <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
               <Users className="h-5 w-5" />
             </div>
             <div>
@@ -368,7 +371,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
             value={projectName}
             onChange={(event) => setProjectName(event.target.value)}
             placeholder="e.g. Jane's Wedding, Company Photoshoot 2026"
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
 
@@ -381,10 +384,10 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search freelancer by name or specialty..."
-              className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+              className="w-full rounded-xl border border-sky-100 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-sky-300"
             />
           </div>
-          <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-gray-200 bg-gray-50 p-3">
+          <div className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-sky-100 bg-sky-50/50 p-3">
             {isLoadingFreelancers && <p className="rounded-lg bg-white px-3 py-3 text-sm text-gray-500">Loading freelancers...</p>}
             {!isLoadingFreelancers && searchResults.length === 0 && (
               <p className="rounded-lg bg-white px-3 py-3 text-sm text-gray-500">No freelancers match that search.</p>
@@ -394,7 +397,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                 type="button"
                 key={freelancer.userId}
                 onClick={() => addFreelancer(freelancer.userId)}
-                className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-gray-100"
+                className="flex w-full items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 text-left hover:bg-sky-50"
               >
                 <div className="flex items-center gap-3">
                   <Avatar src={freelancer.avatarUrl || ''} alt={freelancer.fullName} gender={freelancer.gender} sizeClassName="h-9 w-9" />
@@ -403,7 +406,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                     <p className="text-xs text-gray-500">{freelancer.title}</p>
                   </div>
                 </div>
-                <span className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-white">Add</span>
+                <span className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-bold text-white">Add</span>
               </button>
             ))}
           </div>
@@ -418,7 +421,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               const form = perFreelancerForm[freelancer.userId] || { purpose: '', customPurpose: '', budget: '' };
               const minimum = minimumFor(freelancer);
               return (
-                <div key={freelancer.userId} className="rounded-2xl border border-gray-200 bg-white p-5">
+                <div key={freelancer.userId} className="rounded-2xl border border-sky-100 bg-white p-5">
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <Avatar src={freelancer.avatarUrl || ''} alt={freelancer.fullName} gender={freelancer.gender} sizeClassName="h-12 w-12" />
@@ -430,7 +433,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                     <button
                       type="button"
                       onClick={() => removeFreelancer(freelancer.userId)}
-                      className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      className="grid h-8 w-8 place-items-center rounded-full text-gray-400 hover:bg-sky-50 hover:text-gray-700"
                       aria-label={`Remove ${freelancer.fullName}`}
                     >
                       <X className="h-4 w-4" />
@@ -444,7 +447,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                         required
                         value={form.purpose}
                         onChange={(event) => updatePerFreelancer(freelancer.userId, { purpose: event.target.value })}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                       >
                         <option value="" disabled>Select a purpose</option>
                         {freelancer.skills.map((skill) => (
@@ -458,7 +461,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                           value={form.customPurpose}
                           onChange={(event) => updatePerFreelancer(freelancer.userId, { customPurpose: event.target.value })}
                           placeholder="Type the purpose"
-                          className="mt-2 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                          className="mt-2 w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                         />
                       )}
                     </div>
@@ -473,7 +476,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                         value={form.budget}
                         onChange={(event) => updatePerFreelancer(freelancer.userId, { budget: event.target.value })}
                         placeholder={`Minimum ${formatCurrencyAmount(minimum, currency)}`}
-                        className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
                       />
                       {form.budget && Number(form.budget) < minimum && (
                         <p className="mt-1.5 text-xs font-semibold text-red-600">
@@ -488,7 +491,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
           </div>
         )}
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 space-y-5">
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 space-y-5">
           <p className="text-sm font-semibold text-gray-900">Shared for the whole group</p>
 
           <div>
@@ -496,8 +499,8 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
             <button
               type="button"
               onClick={() => setIsLocationPickerOpen(true)}
-              className={`w-full overflow-hidden rounded-2xl bg-gray-50 text-left transition-all ${
-                location ? 'border-2 border-gray-900' : 'border border-gray-200 hover:border-gray-400'
+              className={`w-full overflow-hidden rounded-2xl bg-sky-50/50 text-left transition-all ${
+                location ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
               }`}
             >
               {location ? (
@@ -505,7 +508,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                   <LeafletLocationPreview latitude={location.latitude} longitude={location.longitude} title={location.formattedAddress} interactive={false} />
                 </div>
               ) : (
-                <div className="flex h-36 w-full items-center justify-center bg-gray-100">
+                <div className="flex h-36 w-full items-center justify-center bg-sky-50">
                   <MapPin className="h-6 w-6 text-gray-400" />
                 </div>
               )}
@@ -526,7 +529,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Anything the whole group should know?"
-              className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
             />
           </div>
 
@@ -539,13 +542,13 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                 min={todayDateString}
                 value={scheduleDate}
                 onChange={(event) => { setScheduleDate(event.target.value); setScheduleTime(''); setScheduleEndTime(''); }}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
               <select
                 required
                 value={scheduleTime}
                 onChange={(event) => { setScheduleTime(event.target.value); setScheduleEndTime(''); }}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
               >
                 <option value="" disabled>Start time</option>
                 {timeSlots.map((slot) => (
@@ -557,7 +560,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                 disabled={!scheduleTime}
                 value={scheduleEndTime}
                 onChange={(event) => setScheduleEndTime(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:opacity-60"
+                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
               >
                 <option value="" disabled>{!scheduleTime ? 'Choose a start time first' : 'End time'}</option>
                 {endTimeSlots.map((slot) => (
@@ -571,7 +574,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
         <button
           type="submit"
           disabled={isSubmitting || selectedFreelancers.length === 0}
-          className="w-full rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3.5 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+          className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3.5 font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60"
         >
           {isSubmitting ? 'Sending...' : selectedFreelancers.length > 0 ? `Send Request to ${selectedFreelancers.length} Freelancer${selectedFreelancers.length === 1 ? '' : 's'}` : 'Select freelancers to continue'}
         </button>
@@ -580,6 +583,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       {isLocationPickerOpen && (
         <LeafletLocationPicker initialPoint={location} onCancel={() => setIsLocationPickerOpen(false)} onConfirm={handleLocationPicked} />
       )}
+      </div>
     </div>
   );
 }

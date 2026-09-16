@@ -18,7 +18,7 @@ export function ExperienceLevelPicker({ value, onChange, label }: ExperienceLeve
             type="button"
             onClick={() => onChange(level)}
             className={`rounded-full border px-3 py-1 text-xs font-semibold transition-all ${
-              value === level ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-400'
+              value === level ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-100 bg-white text-gray-600 hover:border-sky-300'
             }`}
           >
             {level}

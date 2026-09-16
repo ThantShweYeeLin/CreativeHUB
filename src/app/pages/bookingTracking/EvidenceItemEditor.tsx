@@ -25,12 +25,12 @@ export function EvidenceItemEditor({ items, onAdd, onUpdate, onRemove, label, he
       </div>
       <p className="mb-2 text-xs text-gray-500">{helperText}</p>
       {items.map((item) => (
-        <div key={item.id} className="mb-2 rounded-lg border border-gray-200 bg-white p-2.5">
+        <div key={item.id} className="mb-2 rounded-lg border border-sky-100 bg-white p-2.5">
           <div className="mb-2 flex items-center gap-2">
             <select
               value={item.evidenceType}
               onChange={(e) => onUpdate(item.id, { evidenceType: e.target.value as EvidenceType })}
-              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-gray-900"
+              className="rounded-lg border border-sky-100 bg-white px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-400"
             >
               {EVIDENCE_TYPE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -52,7 +52,7 @@ export function EvidenceItemEditor({ items, onAdd, onUpdate, onRemove, label, he
             value={item.description}
             onChange={(e) => onUpdate(item.id, { description: e.target.value })}
             placeholder="What does this show? (optional)"
-            className="w-full rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-gray-900"
+            className="w-full rounded-lg border border-sky-100 bg-white px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-400"
           />
         </div>
       ))}

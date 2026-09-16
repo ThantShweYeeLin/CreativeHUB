@@ -3,6 +3,7 @@ import { useLocation } from 'react-router';
 import { ChevronLeft, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
@@ -987,8 +988,10 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100 pb-20 md:pb-0">
-      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-lg border-b border-gray-200">
+    <div className="relative min-h-screen pb-20 md:pb-0">
+      <PageBackdrop />
+      <div className="relative z-10">
+      <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-sky-100">
         <div className="max-w-[1680px] mx-auto px-4 md:px-8 py-4 md:py-6">
           <button
             onClick={onBack}
@@ -1017,20 +1020,20 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               chat panel below (with its own Back button). Desktop shows
               both side by side regardless, unchanged. */}
           <div
-            className={`bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex-col ${
+            className={`bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden flex-col ${
               selectedConversationId ? 'hidden md:flex' : 'flex'
             }`}
           >
-            <div className="p-4 border-b border-gray-200">
+            <div className="p-4 border-b border-sky-100">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search conversations..."
-                    className="w-full pl-10 pr-4 py-2 bg-gray-50 rounded-lg border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-2 bg-sky-50/50 rounded-lg border border-sky-100 focus:ring-2 focus:ring-sky-300 focus:border-sky-300 outline-none transition-all"
                   />
                 </div>
                 <button
@@ -1041,7 +1044,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   }}
                   title="New group chat"
                   aria-label="New group chat"
-                  className="flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-gray-700 hover:bg-gray-100"
+                  className="flex-shrink-0 rounded-lg border border-sky-100 bg-sky-50/50 p-2.5 text-gray-700 hover:bg-sky-100"
                 >
                   <Users className="h-5 w-5" />
                 </button>
@@ -1051,7 +1054,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             <div className="flex-1 overflow-y-auto">
               {isLoadingConversations && (
                 <div className="flex justify-center py-10">
-                  <div className="h-10 w-10 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+                  <div className="h-10 w-10 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
                 </div>
               )}
 
@@ -1060,7 +1063,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               )}
 
               {filteredRequests.length > 0 && (
-                <div className="border-b border-gray-200">
+                <div className="border-b border-sky-100">
                   <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
                     Message Requests
                   </div>
@@ -1068,8 +1071,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     <button
                       key={conversation.id}
                       onClick={() => setSelectedConversationId(conversation.id)}
-                      className={`w-full p-4 flex items-center gap-3 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                        selectedConversationId === conversation.id ? 'bg-gray-50' : ''
+                      className={`w-full p-4 flex items-center gap-3 text-left border-b border-sky-50 hover:bg-sky-50 transition-colors ${
+                        selectedConversationId === conversation.id ? 'bg-sky-50' : ''
                       }`}
                     >
                       <Avatar
@@ -1091,8 +1094,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 <button
                   key={conversation.id}
                   onClick={() => setSelectedConversationId(conversation.id)}
-                  className={`w-full p-4 flex items-center gap-3 text-left border-b border-gray-100 hover:bg-gray-50 transition-colors ${
-                    selectedConversationId === conversation.id ? 'bg-gray-50' : ''
+                  className={`w-full p-4 flex items-center gap-3 text-left border-b border-sky-50 hover:bg-sky-50 transition-colors ${
+                    selectedConversationId === conversation.id ? 'bg-sky-50 border-l-4 border-l-sky-500' : ''
                   }`}
                 >
                   <Avatar
@@ -1113,14 +1116,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               ))}
 
               {!searchQuery.trim() && mutualUsers.length > 0 && (
-                <div className="border-t border-gray-200">
+                <div className="border-t border-sky-100">
                   <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Mutuals</div>
                   {mutualUsers.map((mutual) => (
                     <button
                       key={mutual.id}
                       type="button"
                       onClick={() => void openMutualConversation(mutual.id)}
-                      className="w-full border-b border-gray-100 px-4 py-3 text-left hover:bg-gray-50"
+                      className="w-full border-b border-sky-50 px-4 py-3 text-left hover:bg-sky-50"
                     >
                       <div className="flex items-center gap-3">
                         <Avatar
@@ -1142,15 +1145,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           </div>
 
           <div
-            className={`bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden flex-col ${
+            className={`bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden flex-col ${
               selectedConversationId ? 'flex' : 'hidden md:flex'
             }`}
           >
             {!activeConversation ? (
               <div className="flex-1 flex items-center justify-center p-10 text-center">
                 <div>
-                  <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <MessageCircle className="w-12 h-12 text-gray-700" />
+                  <div className="w-24 h-24 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <MessageCircle className="w-12 h-12 text-sky-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-gray-900 mb-3">Select a Conversation</h3>
                   <p className="text-gray-600">Choose a conversation to read or send messages.</p>
@@ -1158,7 +1161,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               </div>
             ) : (
               <>
-                <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100 flex items-center gap-4">
+                <div className="px-6 py-4 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-blue-50 flex items-center gap-4">
                   <button
                     type="button"
                     onClick={() => setSelectedConversationId(null)}
@@ -1207,7 +1210,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       type="button"
                       onClick={() => void handleBlockContact()}
                       disabled={isBlockingContact}
-                      className="ml-auto rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                      className="ml-auto rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-sky-50 disabled:opacity-60"
                     >
                       {isBlockingContact ? 'Blocking...' : 'Block'}
                     </button>
@@ -1224,7 +1227,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         type="button"
                         onClick={() => void handleAcceptRequest()}
                         disabled={isHandlingRequest}
-                        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                        className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
                       >
                         {isHandlingRequest ? 'Working...' : 'Accept'}
                       </button>
@@ -1240,7 +1243,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         type="button"
                         onClick={() => void handleBlockContact()}
                         disabled={isBlockingContact}
-                        className="rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 disabled:opacity-60"
+                        className="rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-sky-50 disabled:opacity-60"
                       >
                         {isBlockingContact ? 'Blocking...' : 'Block'}
                       </button>
@@ -1255,17 +1258,17 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 ) : null}
 
                 {activeConversation?.isGroup ? (
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
+                  <div className="border-b border-sky-100 bg-sky-50/60 px-6 py-3 text-sm text-gray-700">
                     Group members can chat and coordinate here.
                   </div>
                 ) : !bookingSession && !activeConversation?.isRequestForMe ? (
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-3 text-sm text-gray-700">
+                  <div className="border-b border-sky-100 bg-sky-50/60 px-6 py-3 text-sm text-gray-700">
                     Mutuals can chat directly here.
                   </div>
                 ) : null}
 
                 {!activeConversation?.isGroup && bookingSession?.status === 'completed' && (
-                  <div className="border-b border-gray-200 bg-gray-50 px-6 py-4">
+                  <div className="border-b border-sky-100 bg-sky-50/60 px-6 py-4">
                     <p className="text-sm font-semibold text-gray-900">Session completed</p>
                     {!hasSubmittedReview ? (
                       <div className="mt-3 space-y-3">
@@ -1274,7 +1277,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           <select
                             value={reviewRating}
                             onChange={(event) => setReviewRating(Number(event.target.value))}
-                            className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                            className="rounded-lg border border-sky-100 px-2 py-1 text-sm"
                           >
                             {[5, 4, 3, 2, 1].map((value) => (
                               <option key={value} value={value}>{value} stars</option>
@@ -1285,13 +1288,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           value={reviewComment}
                           onChange={(event) => setReviewComment(event.target.value)}
                           placeholder="Write a short review"
-                          className="min-h-20 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                          className="min-h-20 w-full rounded-lg border border-sky-100 px-3 py-2 text-sm"
                         />
                         <button
                           type="button"
                           onClick={() => void handleSubmitReview()}
                           disabled={isSubmittingReview}
-                          className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                          className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
                         >
                           {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
                         </button>
@@ -1302,10 +1305,10 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   </div>
                 )}
 
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-4">
+                <div className="flex-1 overflow-y-auto p-6 bg-sky-50/40 space-y-4">
                   {isLoadingMessages && (
                     <div className="flex justify-center py-10">
-                      <div className="h-10 w-10 rounded-full border-4 border-gray-300 border-t-black animate-spin" />
+                      <div className="h-10 w-10 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
                     </div>
                   )}
 
@@ -1348,18 +1351,18 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                             // Both "white", but a shade apart so sent vs received bubbles
                             // are still distinguishable next to each other.
                             isMine
-                              ? 'bg-gray-100 text-gray-900 rounded-tr-none shadow-sm'
-                              : 'bg-white text-gray-900 border border-gray-200 rounded-tl-none shadow-sm'
+                              ? 'bg-gradient-to-br from-sky-500 to-blue-600 text-white rounded-tr-none shadow-sm'
+                              : 'bg-white text-gray-900 border border-sky-100 rounded-tl-none shadow-sm'
                           }`}
                         >
                           {sharedPost && (
-                            <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-gray-300 bg-white text-gray-900' : 'border-gray-200 bg-white text-gray-900'}`}>
+                            <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-sky-200 bg-white text-gray-900' : 'border-sky-100 bg-white text-gray-900'}`}>
                               <div className="flex items-start justify-between gap-3 px-4 py-3">
                                 <div className="flex items-center gap-3 min-w-0">
                                   <button
                                     type="button"
                                     onClick={() => sharedPost.authorId && onViewProfile?.(sharedPost.authorId as string)}
-                                    className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold bg-gray-100 text-gray-700 transition-opacity hover:opacity-80"
+                                    className="h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold bg-sky-50 text-gray-700 transition-opacity hover:opacity-80"
                                   >
                                     <Avatar
                                       src={resolvedAuthorAvatar}
@@ -1412,7 +1415,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                       caption: resolvedCaption,
                                     });
                                   }}
-                                  className="rounded-full px-4 py-2 text-xs font-semibold transition bg-gray-900 text-white hover:bg-gray-800"
+                                  className="rounded-full px-4 py-2 text-xs font-semibold transition bg-gradient-to-r from-sky-500 to-blue-600 text-white hover:shadow-lg"
                                 >
                                   Open post
                                 </button>
@@ -1420,7 +1423,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                                   <button
                                     type="button"
                                     onClick={() => onViewProfile(sharedPost.authorId as string)}
-                                    className="rounded-full px-4 py-2 text-xs font-semibold transition bg-gray-100 text-gray-900 hover:bg-gray-200"
+                                    className="rounded-full px-4 py-2 text-xs font-semibold transition bg-sky-50 text-gray-900 hover:bg-sky-100"
                                   >
                                     View profile
                                   </button>
@@ -1431,7 +1434,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                           {!sharedPost ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           ) : null}
-                          <p className="mt-2 text-xs text-gray-500">
+                          <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
                             {message.created_at
                               ? new Date(message.created_at).toLocaleTimeString([], {
                                   hour: 'numeric',
@@ -1446,7 +1449,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   <div ref={messagesEndRef} />
                 </div>
 
-                <div className="p-4 border-t border-gray-200 bg-white">
+                <div className="p-4 border-t border-sky-100 bg-white">
                   <div className="flex items-center gap-3">
                     <input
                       type="text"
@@ -1460,12 +1463,12 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       }}
                       placeholder="Type a message..."
                       disabled={!activeConversation}
-                      className="flex-1 px-4 py-3 bg-gray-50 rounded-xl border border-gray-200 focus:ring-2 focus:ring-gray-400 focus:border-gray-400 outline-none transition-all disabled:cursor-not-allowed disabled:bg-gray-100"
+                      className="flex-1 px-4 py-3 bg-sky-50/50 rounded-xl border border-sky-100 focus:ring-2 focus:ring-sky-300 focus:border-sky-300 outline-none transition-all disabled:cursor-not-allowed disabled:bg-sky-100"
                     />
                     <button
                       onClick={() => void handleSendMessage()}
                       disabled={!activeConversation || !messageInput.trim() || isSending}
-                      className="p-3 bg-gradient-to-r from-gray-900 to-black text-white rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="p-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full shadow-md shadow-sky-500/30 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-5 h-5" />
                     </button>
@@ -1473,7 +1476,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
           {zoomedSharedPost && (
             <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-              <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-2xl">
+              <div className="relative w-full max-w-3xl overflow-hidden rounded-3xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
                 <button
                   type="button"
                   onClick={() => setZoomedSharedPost(null)}
@@ -1482,7 +1485,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   <X className="h-5 w-5" />
                 </button>
 
-                <div className="max-h-[60vh] overflow-hidden bg-gray-100">
+                <div className="max-h-[60vh] overflow-hidden bg-sky-50">
                   {zoomedSharedPost.imageUrl ? (
                     <ImageWithFallback
                       src={zoomedSharedPost.imageUrl}
@@ -1490,7 +1493,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       className="max-h-[60vh] w-full object-contain"
                     />
                   ) : (
-                    <div className="flex min-h-[320px] items-center justify-center bg-gray-100 px-6 text-center text-gray-500">
+                    <div className="flex min-h-[320px] items-center justify-center bg-sky-50 px-6 text-center text-gray-500">
                       No preview available for this post.
                     </div>
                   )}
@@ -1511,7 +1514,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         src={zoomedSharedPost.authorAvatar}
                         alt={zoomedSharedPost.authorName}
                         gender={zoomedSharedPost.authorGender}
-                        sizeClassName="h-10 w-10 ring-2 ring-gray-200 rounded-full"
+                        sizeClassName="h-10 w-10 ring-2 ring-sky-100 rounded-full"
                       />
                       <div>
                         <p className="font-semibold text-gray-900">{zoomedSharedPost.authorName}</p>
@@ -1522,7 +1525,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
                   <p className="whitespace-pre-line text-sm text-gray-800">{zoomedSharedPost.caption}</p>
 
-                  <div className="mt-4 flex items-center gap-4 border-y border-gray-200 py-3">
+                  <div className="mt-4 flex items-center gap-4 border-y border-sky-100 py-3">
                     <button
                       type="button"
                       onClick={() => setShowSharedPostLikes((current) => !current)}
@@ -1538,7 +1541,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   </div>
 
                   {showSharedPostLikes ? (
-                    <div className="mt-4 rounded-2xl bg-gray-50 p-4 text-sm text-gray-700">
+                    <div className="mt-4 rounded-2xl bg-sky-50/50 p-4 text-sm text-gray-700">
                       <p className="mb-2 font-semibold text-gray-900">Liked by</p>
                       {sharedPostLikeUsers.length > 0 ? (
                         <div className="flex flex-wrap gap-3">
@@ -1547,7 +1550,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               key={likedUser.id}
                               type="button"
                               onClick={() => onViewProfile?.(String(likedUser.id))}
-                              className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-gray-50"
+                              className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-sky-50"
                             >
                               <Avatar
                                 src={likedUser.avatar_url || fallbackProfileImage}
@@ -1576,7 +1579,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       <p className="text-sm text-gray-500">No comments yet.</p>
                     ) : (
                       sharedPostComments.map((comment) => (
-                        <div key={comment.id} className="rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800">
+                        <div key={comment.id} className="rounded-2xl border border-sky-100 bg-sky-50/50 px-3 py-2 text-sm text-gray-800">
                           <div className="mb-1 flex items-center gap-2 text-xs text-gray-500">
                             <Avatar
                               src={comment.user?.avatar_url || fallbackProfileImage}
@@ -1600,13 +1603,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       value={sharedPostCommentDraft}
                       onChange={(event) => setSharedPostCommentDraft(event.target.value)}
                       placeholder="Write a comment..."
-                      className="flex-1 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-300"
+                      className="flex-1 rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-300"
                     />
                     <button
                       type="button"
                       onClick={() => void handleSharedPostCommentSubmit()}
                       disabled={isSubmittingSharedPostComment}
-                      className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
                     >
                       {isSubmittingSharedPostComment ? 'Sending...' : 'Comment'}
                     </button>
@@ -1624,7 +1627,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
       {showNewGroupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">New Group Chat</h3>
               <button
@@ -1641,13 +1644,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               value={newGroupTitle}
               onChange={(event) => setNewGroupTitle(event.target.value)}
               placeholder="e.g. Wedding shoot team"
-              className="mb-4 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="mb-4 w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
 
             <label className="mb-2 block text-xs font-semibold text-gray-600">
               Add mutuals ({newGroupMemberIds.length} selected — pick at least 2)
             </label>
-            <div className="mb-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-gray-200 p-2">
+            <div className="mb-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-sky-100 p-2">
               {mutualUsers.length === 0 && (
                 <p className="px-2 py-4 text-center text-sm text-gray-500">You don't have any mutuals yet.</p>
               )}
@@ -1659,7 +1662,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     type="button"
                     onClick={() => toggleNewGroupMember(mutual.id)}
                     className={`flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors ${
-                      isSelected ? 'bg-gray-900 text-white' : 'hover:bg-gray-50'
+                      isSelected ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'hover:bg-sky-50'
                     }`}
                   >
                     <Avatar
@@ -1682,7 +1685,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               type="button"
               onClick={() => void handleCreateGroupChat()}
               disabled={isCreatingGroup}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
               {isCreatingGroup ? 'Creating...' : 'Create Group Chat'}
@@ -1690,6 +1693,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

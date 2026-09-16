@@ -124,7 +124,7 @@ export function DeliveryCard({
     if (!status || status === 'not_applicable') return null;
 
     return (
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
         <div className="mb-3 flex items-center gap-2">
           <Package className="w-5 h-5 text-gray-900" />
           <h2 className="font-bold text-gray-900">Result Delivery</h2>
@@ -141,7 +141,7 @@ export function DeliveryCard({
             {booking.delivery_notes && <p className="mt-1 text-sm text-green-800">{booking.delivery_notes}</p>}
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
             <p className="text-sm font-semibold text-gray-900">
               {status === 'in_progress' ? 'Results being prepared' : 'Results pending'}
             </p>
@@ -162,7 +162,7 @@ export function DeliveryCard({
                   {canReportDeliveryIssue && onReportDeliveryIssue ? (
                     <button
                       onClick={onReportDeliveryIssue}
-                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-black"
+                      className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg"
                     >
                       No, report a delivery issue
                     </button>
@@ -180,7 +180,7 @@ export function DeliveryCard({
 
   // Freelancer view.
   return (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-5 mb-6">
+    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
       <div className="mb-3 flex items-center gap-2">
         <Package className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Result Delivery</h2>
@@ -197,21 +197,21 @@ export function DeliveryCard({
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setShowEstimateForm(true)}
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-black"
+                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
               >
                 Yes, deliverables included
               </button>
               <button
                 disabled={isSubmitting}
                 onClick={() => void handleDecideNo()}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
               >
                 No further items
               </button>
             </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm font-semibold text-gray-900">Estimated result delivery</p>
               <button onClick={() => setShowEstimateForm(false)} className="text-gray-400 hover:text-gray-900">
@@ -223,19 +223,19 @@ export function DeliveryCard({
               min={todayDateString()}
               value={dateDraft}
               onChange={(e) => setDateDraft(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="mb-3 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
             <textarea
               value={notesDraft}
               onChange={(e) => setNotesDraft(e.target.value)}
               placeholder="Delivery notes (optional) — e.g. how results will be delivered"
-              className="mb-3 w-full min-h-[60px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+              className="mb-3 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
             <p className="mb-3 text-xs text-gray-500">This is an estimate, not a guarantee — you can update it later if plans change.</p>
             <button
               disabled={isSubmitting || !dateDraft}
               onClick={() => void handleDecideYes()}
-              className="w-full rounded-xl bg-gray-900 py-2.5 px-4 text-sm font-bold text-white hover:bg-black transition-all disabled:opacity-60"
+              className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
             >
               {isSubmitting ? 'Saving...' : 'Save estimate'}
             </button>
@@ -244,7 +244,7 @@ export function DeliveryCard({
       ) : status === 'not_applicable' ? (
         <p className="text-sm text-gray-500">No deliverables after this booking.</p>
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
           <p className="text-sm font-semibold text-gray-900">
             {status === 'delivered' ? 'Delivered' : status === 'in_progress' ? 'In progress' : 'Pending'}
           </p>
@@ -254,13 +254,13 @@ export function DeliveryCard({
           {booking.delivery_notes && <p className="mt-1 text-sm text-gray-600">{booking.delivery_notes}</p>}
 
           {status !== 'delivered' && !showUpdateForm && (
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-gray-200 pt-3">
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-sky-100 pt-3">
               <button
                 onClick={() => {
                   setUpdateDateDraft(booking.estimated_delivery_at ? booking.estimated_delivery_at.slice(0, 10) : '');
                   setShowUpdateForm(true);
                 }}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100"
+                className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100"
               >
                 Update estimate
               </button>
@@ -268,7 +268,7 @@ export function DeliveryCard({
                 <button
                   disabled={isSubmitting}
                   onClick={() => void handleMarkStatus('in_progress')}
-                  className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+                  className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
                 >
                   Mark in progress
                 </button>
@@ -276,7 +276,7 @@ export function DeliveryCard({
               <button
                 disabled={isSubmitting}
                 onClick={() => void handleMarkStatus('delivered')}
-                className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
               >
                 Mark delivered
               </button>
@@ -284,29 +284,29 @@ export function DeliveryCard({
           )}
 
           {status !== 'delivered' && showUpdateForm && (
-            <div className="mt-3 border-t border-gray-200 pt-3">
+            <div className="mt-3 border-t border-sky-100 pt-3">
               <input
                 type="date"
                 min={todayDateString()}
                 value={updateDateDraft}
                 onChange={(e) => setUpdateDateDraft(e.target.value)}
-                className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
               />
               <input
                 value={updateReasonDraft}
                 onChange={(e) => setUpdateReasonDraft(e.target.value)}
                 placeholder="Reason for the change (optional)"
-                className="mb-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+                className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
               />
               <div className="flex gap-2">
                 <button
                   disabled={isSubmitting || !updateDateDraft}
                   onClick={() => void handleUpdateEstimate()}
-                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-black disabled:opacity-60"
+                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
                 >
                   Save
                 </button>
-                <button onClick={() => setShowUpdateForm(false)} className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                <button onClick={() => setShowUpdateForm(false)} className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50">
                   Cancel
                 </button>
               </div>

@@ -114,7 +114,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@example.com"
-                  className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full pl-11 pr-4 py-3.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                 />
               </div>
             </div>
@@ -138,7 +138,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-11 pr-12 py-3.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
+                  className="w-full pl-11 pr-12 py-3.5 border border-sky-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-transparent transition-all text-gray-900 placeholder-gray-400"
                 />
                 <button
                   type="button"
@@ -153,7 +153,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gray-900 text-white py-3.5 rounded-xl font-semibold hover:bg-black transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+              className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3.5 rounded-xl font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed mt-2"
             >
               {loading ? (
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -164,7 +164,7 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
           </form>
 
           <div className="mt-6 relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200" /></div>
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-sky-100" /></div>
             <div className="relative flex justify-center text-xs text-gray-400 bg-white px-3">or continue with</div>
           </div>
 
@@ -178,10 +178,10 @@ export function LoginPage({ onLogin, onGoToSignUp, onForgotPassword, onOAuthLogi
                 type="button"
                 onClick={() => void handleOAuthLogin(name.toLowerCase() as 'google' | 'facebook')}
                 disabled={oauthLoadingProvider !== null}
-                className="flex items-center justify-center gap-2 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-60"
+                className="flex items-center justify-center gap-2 py-3 border border-sky-100 rounded-xl hover:bg-sky-50 transition-all text-sm font-semibold text-gray-700 disabled:opacity-60"
               >
                 {oauthLoadingProvider === name.toLowerCase() ? (
-                  <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <span className="font-bold">{icon}</span>
                 )}

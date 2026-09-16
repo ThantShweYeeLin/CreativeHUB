@@ -77,7 +77,7 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-            className="rounded-lg border border-gray-200 bg-white p-1.5 hover:bg-gray-100"
+            className="rounded-lg border border-sky-100 bg-white p-1.5 hover:bg-sky-50"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
@@ -85,7 +85,7 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
           <span className="min-w-[8rem] text-center text-sm font-semibold text-gray-900">{monthLabel}</span>
           <button
             onClick={() => setMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
-            className="rounded-lg border border-gray-200 bg-white p-1.5 hover:bg-gray-100"
+            className="rounded-lg border border-sky-100 bg-white p-1.5 hover:bg-sky-50"
             aria-label="Next month"
           >
             <ChevronRight className="h-4 w-4" />
@@ -117,11 +117,11 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
               onClick={() => setSelectedDateKey(cell.key)}
               className={`h-11 rounded-lg border text-xs font-semibold transition-colors ${
                 blocked
-                  ? 'border-gray-900 bg-gray-900 text-white'
+                  ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
                   : dayBookings.length > 0
-                  ? 'border-gray-300 bg-gray-200 text-gray-700 hover:border-gray-400'
-                  : 'border-gray-100 text-gray-700 hover:border-gray-300'
-              } ${isSelected ? 'ring-2 ring-gray-900 ring-offset-1' : ''} ${isToday && !isSelected ? 'ring-1 ring-gray-400' : ''}`}
+                  ? 'border-sky-200 bg-sky-100 text-gray-700 hover:border-sky-300'
+                  : 'border-sky-50 text-gray-700 hover:border-sky-300'
+              } ${isSelected ? 'ring-2 ring-sky-500 ring-offset-1' : ''} ${isToday && !isSelected ? 'ring-1 ring-sky-300' : ''}`}
             >
               {cell.date.getDate()}
             </button>
@@ -130,13 +130,13 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
       </div>
 
       <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-gray-500">
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gray-300" /> Partially booked</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gray-900" /> Unavailable</span>
-        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full border border-gray-300" /> Open</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-sky-200" /> Partially booked</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600" /> Unavailable</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full border border-sky-200" /> Open</span>
       </div>
 
       {selectedDateKey && (
-        <div className="mt-4 rounded-xl bg-gray-50 p-4 text-sm">
+        <div className="mt-4 rounded-xl bg-sky-50/60 p-4 text-sm">
           <p className="mb-2 font-semibold text-gray-900">
             {new Date(selectedDateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
@@ -151,7 +151,7 @@ export function AvailabilityCalendar({ bookings, blockedDates }: AvailabilityCal
               <p className="mb-1 text-gray-600">Already booked at:</p>
               <div className="flex flex-wrap gap-1.5">
                 {selectedBookings.map((booking) => (
-                  <span key={booking.id} className="rounded-full border border-gray-300 bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700">
+                  <span key={booking.id} className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-gray-700">
                     {formatTimeLabel(booking.start_time?.slice(0, 5) || '00:00')}
                     {booking.end_time ? `–${formatTimeLabel(booking.end_time.slice(0, 5))}` : ''}
                   </span>

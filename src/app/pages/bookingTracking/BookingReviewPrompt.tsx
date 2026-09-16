@@ -62,7 +62,7 @@ export function BookingReviewPrompt({ bookingId, viewerId, revieweeId, revieweeN
   if (isChecking) return null;
 
   return (
-    <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-lg">
+    <div className="mb-6 rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
       <h2 className="mb-3 font-bold text-gray-900">
         {hasReviewed ? 'Your Review' : `Rate your experience with ${revieweeName}`}
       </h2>
@@ -88,13 +88,13 @@ export function BookingReviewPrompt({ bookingId, viewerId, revieweeId, revieweeN
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             placeholder={`Write a short review of ${revieweeName}...`}
-            className="min-h-[80px] w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-gray-900"
+            className="min-h-[80px] w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
           />
           <button
             type="button"
             onClick={() => void handleSubmit()}
             disabled={isSubmitting}
-            className="w-full rounded-xl bg-gradient-to-r from-gray-900 to-black px-4 py-3 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
+            className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 font-semibold text-white transition-all hover:shadow-lg disabled:opacity-60"
           >
             {isSubmitting ? 'Submitting...' : 'Submit Review'}
           </button>
