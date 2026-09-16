@@ -2069,10 +2069,15 @@ export class DataService {
       openDisputesResponse, underReviewDisputesResponse,
       openReportsResponse, openTicketsResponse, reviewsResponse,
       overdueDeliveriesResponse,
+      completedBookingsResponse, activeBookingsResponse, complaintsResponse,
     ] = await Promise.all([
       supabase.from('users').select('id', { count: 'exact', head: true }),
-      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'freelancer').eq('account_status', 'active'),
-      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'client').eq('account_status', 'active'),
+      // Every freelancer/client account regardless of status — the
+      // dashboard's headline count is "how many are there," not "how many
+      // are currently active" (account_status has its own breakdown on the
+      // Users page for anyone who needs that instead).
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'freelancer'),
+      supabase.from('users').select('id', { count: 'exact', head: true }).eq('role', 'client'),
       supabase.from('bookings').select('id', { count: 'exact', head: true }),
       (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).eq('dispute_status', 'open'),
       (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).eq('dispute_status', 'under_admin_review'),
@@ -2087,13 +2092,23 @@ export class DataService {
         .select('id', { count: 'exact', head: true })
         .lt('estimated_delivery_at', new Date().toISOString())
         .in('delivery_status', ['pending', 'in_progress']),
+      supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'completed'),
+      // "Active" = still live/ongoing — not yet completed, cancelled, or annulled.
+      supabase.from('bookings').select('id', { count: 'exact', head: true }).in('status', ['pending', 'confirmed', 'in_progress']),
+      // Complaints — bookings a client has ever raised a deposit dispute
+      // on, regardless of whether it's since been resolved (open/under
+      // review disputes above are the still-unresolved subset of these).
+      (supabase as any).from('bookings').select('id', { count: 'exact', head: true }).neq('dispute_status', 'none'),
     ]);
 
     return {
       totalUsers: usersResponse.count || 0,
-      activeFreelancers: freelancersResponse.count || 0,
-      activeClients: clientsResponse.count || 0,
+      totalFreelancers: freelancersResponse.count || 0,
+      totalClients: clientsResponse.count || 0,
       totalBookings: bookingsResponse.count || 0,
+      completedBookings: completedBookingsResponse.count || 0,
+      activeBookings: activeBookingsResponse.count || 0,
+      complaints: complaintsResponse.count || 0,
       // Kept for back-compat with anything still reading the old combined
       // field; disputesAwaitingResponse/disputesNeedingDecision are the
       // new, more specific breakdown used by the dashboard's "Needs
@@ -2109,7 +2124,7 @@ export class DataService {
         usersResponse, freelancersResponse, clientsResponse, bookingsResponse,
         openDisputesResponse, underReviewDisputesResponse,
         openReportsResponse, openTicketsResponse, reviewsResponse,
-        overdueDeliveriesResponse,
+        overdueDeliveriesResponse, completedBookingsResponse, activeBookingsResponse, complaintsResponse,
       ].map((r) => r.error).find(Boolean) || null,
     };
   }
@@ -4545,11 +4560,15 @@ export class DataService {
     return { data, error };
   }
 
-  static async getClientPostLikeUsers(postId: string) {
+  static async getClientPostLikeUsers(postId: string, limit = 100) {
+    // Capped — a viral post's like list is shown a page at a time (see
+    // LikesListModal), never fetched in full, so this can't turn into a
+    // multi-thousand-row query for a popular post.
     const { data, error } = await supabase
       .from('client_post_likes')
       .select('user:user_id(id, full_name, email, avatar_url, gender)')
-      .eq('post_id', postId);
+      .eq('post_id', postId)
+      .limit(limit);
 
     const uniqueUsersById = new Map<string, any>();
     (data || []).forEach((row: any) => {

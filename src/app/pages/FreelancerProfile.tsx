@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Briefcase, Check, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import type { PostShareMethod } from '../../lib/database.types';
+import { PostShareMenu } from '../../components/PostShareMenu';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { SocialLinksRow } from '../../components/common/SocialLinksRow';
@@ -26,6 +28,7 @@ import { isDateBlocked, isRangeAvailable, isTimeSlotTaken } from '../../lib/avai
 import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
+import { LikesListModal } from '../../components/posts/LikesListModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { AuthPromptModal } from '../components/AuthPromptModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -60,7 +63,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, any[]>>({});
   const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
-  const [showLikedUsersByPostId, setShowLikedUsersByPostId] = useState<Record<string, boolean>>({});
+  const [likesModalPostId, setLikesModalPostId] = useState<string | null>(null);
   const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
@@ -752,7 +755,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const loadFreelancerPostLikes = async (postId: string) => {
     const stateKey = String(postId);
     const apiPostId = stateKey.replace(/^client-post-/, '');
-    setShowLikedUsersByPostId((current) => ({ ...current, [stateKey]: true }));
+    setLikesModalPostId(stateKey);
     setLoadingLikesByPostId((current) => ({ ...current, [stateKey]: true }));
     const response = await DataService.getClientPostLikeUsers(apiPostId);
     if (response.error) {
@@ -1730,7 +1733,40 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     onToggleLike={() => void togglePostLike(post.id)}
                     commentsCount={engagement.comments}
                     onOpenComment={() => void openPostFocus(post.id, { focusComment: true })}
-                    onShare={() => void handleShare(post.id)}
+                    shareSlot={
+                      <PostShareMenu
+                        postId={String(post.id).replace(/^client-post-/, '')}
+                        title={`CreativeHUB post by @${displayName}`}
+                        description={post.caption || undefined}
+                        align="right"
+                        triggerClassName="group flex items-center gap-2 rounded-full bg-sky-50 px-3 py-2 transition-all hover:bg-sky-100"
+                        onShared={(method: PostShareMethod) => {
+                          if (user?.id) {
+                            void DataService.recordClientPostShare(user.id, String(post.id).replace(/^client-post-/, ''), method);
+                          }
+                        }}
+                        extraItems={(close) => (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              close();
+                              void handleShare(post.id);
+                            }}
+                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-gray-800 transition-colors hover:bg-sky-50"
+                          >
+                            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gray-700 text-white">
+                              <Send className="h-4 w-4" />
+                            </span>
+                            Send in Messages
+                          </button>
+                        )}
+                      >
+                        <Share2 className="h-6 w-6 text-gray-700 transition-transform group-hover:scale-110" />
+                        <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">Share</span>
+                      </PostShareMenu>
+                    }
                     saved={engagement.saved}
                     onToggleSave={() => void togglePostSave(post.id)}
                   />
@@ -1830,9 +1866,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           saved={!!postEngagement[focusedPost.id]?.saved}
           onToggleSave={() => void togglePostSave(focusedPost.id)}
           onShare={() => void handleShare(focusedPost.id)}
-          likedUsers={likedUsersByPostId[focusedPost.id] || []}
-          loadingLikedUsers={!!loadingLikesByPostId[focusedPost.id]}
-          showLikedUsers={!!showLikedUsersByPostId[focusedPost.id]}
           onToggleShowLikedUsers={() => void loadFreelancerPostLikes(focusedPost.id)}
           canDelete={isOwner}
           onDelete={() => void deletePost(String(focusedPost.id))}
@@ -1874,6 +1907,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
           commentFocusToken={commentFocusToken}
+        />
+      )}
+
+      {likesModalPostId && (
+        <LikesListModal
+          totalCount={postEngagement[likesModalPostId]?.likes || 0}
+          users={likedUsersByPostId[likesModalPostId] || []}
+          isLoading={!!loadingLikesByPostId[likesModalPostId]}
+          fallbackAvatarUrl={fallbackProfileImage}
+          onClose={() => setLikesModalPostId(null)}
+          onViewUser={(userId) => navigate(`/profile/${userId}`)}
         />
       )}
 
@@ -2013,7 +2057,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 type="button"
                 onClick={() => void sendShareToMutuals()}
                 disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSendingShare ? 'Sending...' : 'Send to selected users'}
               </button>

@@ -23,9 +23,9 @@ interface MapViewProps {
 const professionFilters = FREELANCER_CATEGORY_LABELS;
 
 const availabilityFilters: { key: Availability; label: string; dot: string }[] = [
-  { key: 'available', label: 'Available', dot: '🟢' },
-  { key: 'busy', label: 'Busy', dot: '🟡' },
-  { key: 'unavailable', label: 'Unavailable', dot: '🔴' },
+  { key: 'available', label: 'Available', dot: 'bg-green-500' },
+  { key: 'busy', label: 'Busy', dot: 'bg-amber-500' },
+  { key: 'unavailable', label: 'Unavailable', dot: 'bg-red-500' },
 ];
 
 function getMapLanguagePreference(): 'en' | 'th' {
@@ -88,40 +88,18 @@ function availabilityStatus(freelancer: FreelancerMapProfile): Availability {
   return 'available';
 }
 
-function professionVisual(freelancer: FreelancerMapProfile) {
-  const label = detectProfession(freelancer);
-  switch (label) {
-    case 'Photographer':
-      return { accent: '#0ea5e9', glyph: 'PH' };
-    case 'Makeup Artist':
-      return { accent: '#db2777', glyph: 'MU' };
-    case 'Hair Stylist':
-      return { accent: '#f59e0b', glyph: 'HR' };
-    case 'Fashion Designer':
-      return { accent: '#7c3aed', glyph: 'FD' };
-    case 'Videographer':
-      return { accent: '#2563eb', glyph: 'VD' };
-    case 'Decorator/Florist':
-      return { accent: '#ec4899', glyph: 'DF' };
-    case 'Cake/Dessert Maker':
-      return { accent: '#f97316', glyph: 'CK' };
-    case 'Musician/Live Entertainment':
-      return { accent: '#8b5cf6', glyph: 'DJ' };
-    default:
-      return { accent: '#475569', glyph: 'CR' };
-  }
-}
-
 function statusColor(status: Availability) {
-  if (status === 'available') return '#16a34a';
-  if (status === 'busy') return '#ca8a04';
-  return '#dc2626';
+  if (status === 'available') return '#22c55e';
+  if (status === 'busy') return '#f59e0b';
+  return '#ef4444';
 }
 
+// A clean circular avatar pin (photo + a small availability badge, like a
+// contact card) instead of the old dark teardrop-with-initials marker —
+// the photo itself is identity enough, so no category glyph is needed here.
 function freelancerMarkerIcon(freelancer: FreelancerMapProfile) {
   const status = availabilityStatus(freelancer);
   const color = statusColor(status);
-  const visual = professionVisual(freelancer);
   // Unique per marker so multiple pins on the same map don't clash on the
   // same <clipPath> id (SVG ids are global to the document once inlined).
   const clipId = `marker-clip-${freelancer.id}`;
@@ -129,19 +107,21 @@ function freelancerMarkerIcon(freelancer: FreelancerMapProfile) {
   return divIcon({
     className: '',
     html: `
-      <svg width="38" height="48" viewBox="0 0 38 48" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 6px 10px rgba(0,0,0,.28));">
+      <svg width="40" height="52" viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 8px 12px rgba(15,23,42,.35));">
         <defs>
           <clipPath id="${clipId}">
-            <circle cx="19" cy="20" r="8.2" />
+            <circle cx="20" cy="18" r="15" />
           </clipPath>
         </defs>
-        <path d="M19 46C19 46 34 31.8 34 20.4C34 12.14 27.06 5.4 19 5.4C10.94 5.4 4 12.14 4 20.4C4 31.8 19 46 19 46Z" fill="#111827" stroke="${color}" stroke-width="3"/>
-        <circle cx="19" cy="20" r="9.2" fill="${visual.accent}"/>
-        <image href="${freelancer.profileImage}" x="10.8" y="11.8" width="16.4" height="16.4" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice"/>
+        <path d="M11 29 L20 49 L29 29 Z" fill="#ffffff" />
+        <circle cx="20" cy="18" r="17.5" fill="#ffffff" />
+        <circle cx="20" cy="18" r="15" fill="#e0f2fe" />
+        <image href="${freelancer.profileImage}" x="5" y="3" width="30" height="30" clip-path="url(#${clipId})" preserveAspectRatio="xMidYMid slice" />
+        <circle cx="32" cy="7" r="6.5" fill="${color}" stroke="#ffffff" stroke-width="2.5" />
       </svg>
     `,
-    iconSize: [38, 48],
-    iconAnchor: [19, 46],
+    iconSize: [40, 52],
+    iconAnchor: [20, 49],
   });
 }
 
@@ -544,6 +524,32 @@ export function MapView({ onViewProfile }: MapViewProps) {
   return (
     <div className="relative">
       <PageBackdrop />
+      <style>{`
+        .freelancer-map-popup .leaflet-popup-content-wrapper {
+          padding: 0;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 20px 45px rgba(15, 23, 42, 0.28);
+        }
+        .freelancer-map-popup .leaflet-popup-content {
+          margin: 0;
+        }
+        .freelancer-map-popup .leaflet-popup-tip {
+          background: #ffffff;
+        }
+        .freelancer-map-popup .leaflet-popup-close-button {
+          top: 8px !important;
+          right: 8px !important;
+          width: 22px !important;
+          height: 22px !important;
+          border-radius: 9999px;
+          background: rgba(255, 255, 255, 0.9);
+          color: #1f2937 !important;
+          font-size: 15px !important;
+          line-height: 22px !important;
+          text-align: center;
+        }
+      `}</style>
       <div className="relative z-10 space-y-6 md:space-y-8">
       <div className="rounded-3xl border border-sky-100 bg-white/80 backdrop-blur-xl p-4 shadow-[0_8px_30px_rgba(56,189,248,0.15)] md:p-6">
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -635,7 +641,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
                         : 'bg-sky-50 text-gray-700 hover:bg-sky-100'
                     }`}
                   >
-                    {availability.dot} {availability.label}
+                    <span className="inline-flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${availability.dot} ${isSelected ? 'ring-2 ring-white/60' : ''}`} />
+                      {availability.label}
+                    </span>
                   </button>
                 );
               })}
@@ -758,35 +767,52 @@ export function MapView({ onViewProfile }: MapViewProps) {
                 click: () => setSelectedId(freelancer.id),
               }}
             >
-              <Popup>
-                <div className="w-56">
-                  <div className="mb-2 h-24 overflow-hidden rounded-lg border border-sky-100">
+              <Popup className="freelancer-map-popup" minWidth={224} maxWidth={224}>
+                <div className="w-56 overflow-hidden rounded-2xl">
+                  <div className="relative h-36 w-full">
                     <ImageWithFallback
-                      src={freelancer.coverImage || freelancer.profileImage}
-                      alt={`${freelancer.fullName} preview`}
+                      src={freelancer.profileImage}
+                      alt={freelancer.fullName}
                       className="h-full w-full object-cover"
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    <span
+                      className="absolute left-2.5 top-2.5 flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-bold text-gray-800 shadow-sm backdrop-blur-sm"
+                    >
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ backgroundColor: statusColor(availabilityStatus(freelancer)) }}
+                      />
+                      {availabilityFilters.find((item) => item.key === availabilityStatus(freelancer))?.label}
+                    </span>
+                    <div className="absolute inset-x-0 bottom-0 p-3">
+                      <h4 className="text-base font-bold leading-tight text-white">{freelancer.fullName}</h4>
+                      <p className="text-xs text-white/85">{freelancer.profession}</p>
+                    </div>
                   </div>
-                  <h4 className="text-base font-bold text-gray-900">{freelancer.fullName}</h4>
-                  <p className="text-sm text-gray-600">{freelancer.profession}</p>
-                  <p className="mt-1 text-xs text-gray-500">{freelancer.location}</p>
-                  {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
-                    <p className="mt-1 text-xs font-semibold text-blue-700">
-                      {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number, mapLanguage)}
-                    </p>
-                  ) : null}
-                  <div className="mt-2 flex items-center gap-3 text-xs text-gray-700">
-                    <span>★ {freelancer.rating.toFixed(1)}</span>
-                    <span>{freelancer.totalProjects} projects</span>
-                    {Number.isFinite(freelancer.hourlyRate) ? <span>${freelancer.hourlyRate}/h</span> : null}
+
+                  <div className="bg-white p-3">
+                    <p className="truncate text-xs text-gray-500">{freelancer.location}</p>
+                    {clientLocation && Number.isFinite(distanceByFreelancerId.get(freelancer.id)) ? (
+                      <p className="mt-1 text-xs font-semibold text-sky-700">
+                        {formatDistanceAway(distanceByFreelancerId.get(freelancer.id) as number, mapLanguage)}
+                      </p>
+                    ) : null}
+                    <div className="mt-2 flex items-center gap-3 text-xs font-semibold text-gray-700">
+                      <span className="flex items-center gap-1">
+                        <span className="text-amber-500">★</span> {freelancer.rating > 0 ? freelancer.rating.toFixed(1) : 'New'}
+                      </span>
+                      <span>{freelancer.totalProjects} projects</span>
+                      {Number.isFinite(freelancer.hourlyRate) ? <span>${freelancer.hourlyRate}/h</span> : null}
+                    </div>
+                    <button
+                      onClick={() => handleViewProfile(freelancer.id)}
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      {mapText.viewProfile}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleViewProfile(freelancer.id)}
-                    className="mt-3 inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {mapText.viewProfile}
-                  </button>
                 </div>
               </Popup>
             </Marker>

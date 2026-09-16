@@ -30,7 +30,7 @@ export function AuthPromptModal({ message, onClose }: AuthPromptModalProps) {
     // the document root.
     <div className="fixed inset-0 z-[1300] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
         <button
           onClick={onClose}
           aria-label="Close"

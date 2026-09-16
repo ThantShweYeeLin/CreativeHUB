@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, CreditCard, Crown, Flag, Maximize2, MessageCircle, Minimize2, Package, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
+import { Bot, ChevronRight, CreditCard, Crown, Flag, Maximize2, Minimize2, Package, RotateCcw, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
 import { sendChatbotMessage, type ChatTurn } from '../lib/chatbotService';
 
 interface DisplayMessage extends ChatTurn {
   id: string;
   error?: boolean;
+  /** True only while a retry/regenerate for this exact message is in flight — the bubble shows "Thinking…" in place, instead of a new bubble appearing elsewhere. */
+  regenerating?: boolean;
 }
 
 const GREETING = "Hi! I'm the CreativeHUB assistant. Ask me anything about bookings, payments, or becoming a freelancer.";
@@ -57,6 +59,32 @@ export function ChatbotWidget() {
     }
   }
 
+  // Re-asks whichever user message produced this reply — used both to retry
+  // a failed ("fails to fetch") response and to regenerate one the user
+  // wasn't happy with. Replaces the reply in place rather than appending a
+  // new bubble, so the conversation doesn't fill up with duplicate attempts.
+  async function regenerate(messageId: string) {
+    const index = messages.findIndex((m) => m.id === messageId);
+    if (index <= 0 || messages[index].regenerating) return;
+    const userMessage = messages[index - 1];
+    if (userMessage.role !== 'user') return;
+
+    const history: ChatTurn[] = messages
+      .slice(0, index - 1)
+      .slice(-MAX_HISTORY_TURNS)
+      .map(({ role, text }) => ({ role, text }));
+
+    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, regenerating: true } : m)));
+
+    try {
+      const reply = await sendChatbotMessage(userMessage.text, history);
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, text: reply, error: false, regenerating: false } : m)));
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, text, error: true, regenerating: false } : m)));
+    }
+  }
+
   return (
     <>
       {isOpen && (
@@ -68,7 +96,10 @@ export function ChatbotWidget() {
           }
         >
           <div className="flex items-center justify-between border-b border-sky-100 bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-white">
-            <span className="text-sm font-semibold">CreativeHUB Assistant</span>
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <Bot className="h-4 w-4" />
+              CreativeHUB Assistant
+            </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -113,17 +144,31 @@ export function ChatbotWidget() {
               </div>
             )}
             {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                  m.role === 'user'
-                    ? 'ml-auto rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white'
-                    : m.error
-                      ? 'rounded-bl-sm bg-red-50 text-red-700'
-                      : 'rounded-bl-sm bg-sky-50 text-gray-800'
-                }`}
-              >
-                {m.text}
+              <div key={m.id} className={m.role === 'user' ? 'ml-auto max-w-[85%]' : 'max-w-[85%]'}>
+                <div
+                  className={`rounded-2xl px-3 py-2 text-sm ${
+                    m.role === 'user'
+                      ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                      : m.error
+                        ? 'rounded-bl-sm bg-red-50 text-red-700'
+                        : 'rounded-bl-sm bg-sky-50 text-gray-800'
+                  }`}
+                >
+                  {m.regenerating ? 'Thinking…' : m.text}
+                </div>
+                {m.role === 'model' && !m.regenerating && (
+                  <button
+                    type="button"
+                    onClick={() => void regenerate(m.id)}
+                    disabled={isSending}
+                    className={`mt-1 flex items-center gap-1 text-xs font-semibold transition-colors disabled:opacity-40 ${
+                      m.error ? 'text-red-600 hover:text-red-700' : 'text-gray-400 hover:text-sky-600'
+                    }`}
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    {m.error ? 'Retry' : 'Regenerate'}
+                  </button>
+                )}
               </div>
             ))}
             {isSending && <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-sky-50 px-3 py-2 text-sm text-gray-400">Thinking…</div>}
@@ -159,7 +204,7 @@ export function ChatbotWidget() {
         aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
         className="fixed bottom-24 right-4 z-[1300] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl shadow-sky-500/30 transition-transform hover:scale-105 md:bottom-6"
       >
-        {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        {isOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
       </button>
     </>
   );

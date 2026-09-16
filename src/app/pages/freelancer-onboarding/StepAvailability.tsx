@@ -1,9 +1,9 @@
 import { AVAILABILITY_OPTIONS, WORKING_DAY_OPTIONS, toggle } from './types';
 
 const AVAILABILITY_DOT: Record<string, string> = {
-  Available: '🟢',
-  Busy: '🟡',
-  Unavailable: '🔴',
+  Available: 'bg-green-500',
+  Busy: 'bg-amber-500',
+  Unavailable: 'bg-red-500',
 };
 
 interface StepAvailabilityProps {
@@ -43,7 +43,10 @@ export function StepAvailability({
                   : 'border-sky-100 text-gray-600 hover:border-sky-300'
               }`}
             >
-              {AVAILABILITY_DOT[option]} {option}
+              <span className="inline-flex items-center justify-center gap-2">
+                <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${AVAILABILITY_DOT[option]}`} />
+                {option}
+              </span>
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
+  Activity,
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
@@ -19,9 +20,12 @@ import { AdminLayout } from './AdminLayout';
 
 interface DashboardStats {
   totalUsers: number;
-  activeFreelancers: number;
-  activeClients: number;
+  totalFreelancers: number;
+  totalClients: number;
   totalBookings: number;
+  completedBookings: number;
+  activeBookings: number;
+  complaints: number;
   disputesAwaitingResponse: number;
   disputesNeedingDecision: number;
   openReports: number;
@@ -123,12 +127,15 @@ export function AdminOverviewPage() {
 
         <div>
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-gray-400">Platform</h3>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <StatCard icon={UsersIcon} label="Total Users" value={stats?.totalUsers} onClick={() => navigate('/admin/users')} />
-            <StatCard icon={UserCheck} label="Active Freelancers" value={stats?.activeFreelancers} accent="green" onClick={() => navigate('/admin/users')} />
-            <StatCard icon={UserCheck} label="Active Clients" value={stats?.activeClients} accent="green" onClick={() => navigate('/admin/users')} />
-            <StatCard icon={CalendarClock} label="Total Bookings" value={stats?.totalBookings} onClick={() => navigate('/admin/bookings')} />
+            <StatCard icon={UserCheck} label="Total Freelancers" value={stats?.totalFreelancers} onClick={() => navigate('/admin/users')} />
+            <StatCard icon={UserCheck} label="Total Clients" value={stats?.totalClients} onClick={() => navigate('/admin/users')} />
             <StatCard icon={Star} label="Total Reviews" value={stats?.totalReviews} accent="amber" />
+            <StatCard icon={CalendarClock} label="Total Bookings" value={stats?.totalBookings} onClick={() => navigate('/admin/bookings')} />
+            <StatCard icon={CheckCircle2} label="Completed Bookings" value={stats?.completedBookings} accent="green" onClick={() => navigate('/admin/bookings')} />
+            <StatCard icon={Activity} label="Active Bookings" value={stats?.activeBookings} onClick={() => navigate('/admin/bookings')} />
+            <StatCard icon={ShieldAlert} label="Complaints" value={stats?.complaints} accent="red" onClick={() => navigate('/admin/disputes')} />
           </div>
         </div>
 
@@ -157,11 +164,15 @@ function StatCard({
   icon: LucideIcon;
   label: string;
   value: number | undefined;
-  accent?: 'gray' | 'green' | 'amber';
+  accent?: 'gray' | 'green' | 'amber' | 'red';
   onClick?: () => void;
 }) {
   const Wrapper = onClick ? 'button' : 'div';
-  const iconColor = accent === 'green' ? 'bg-green-50 text-green-600' : accent === 'amber' ? 'bg-amber-50 text-amber-600' : 'bg-sky-50 text-sky-600';
+  const iconColor =
+    accent === 'green' ? 'bg-green-50 text-green-600' :
+    accent === 'amber' ? 'bg-amber-50 text-amber-600' :
+    accent === 'red' ? 'bg-red-50 text-red-600' :
+    'bg-sky-50 text-sky-600';
   return (
     <Wrapper
       onClick={onClick}
