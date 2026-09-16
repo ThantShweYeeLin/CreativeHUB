@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Search, ChevronLeft, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { DataService, type ExploreHeroData } from '../../lib/dataService';
+import { DataService, type ExploreHeroData, type AuthShowcaseSpotlight } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
@@ -61,7 +62,7 @@ function ProfileCard({ id, name, specialty, minorSkills, rating, reviews, image,
           <ImageWithFallback
             src={image}
             alt={name}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
         </div>
@@ -117,6 +118,14 @@ interface CarouselSectionProps {
   favoritedIds?: Set<string>;
   onToggleFavorite?: (id: string) => void;
 }
+
+// Which of FREELANCER_CATEGORIES' labels are long enough to wrap to a
+// second line in the hero's rotating word (checked against the raw label,
+// before the "s" the hero appends) — a fixed, known set of 8 categories,
+// so hardcoding which ones wrap is far more robust than measuring rendered
+// DOM height on every rotation (which would also need to guess how the
+// enlarged, one-line font-size affects wrapping before it's even painted).
+const TWO_LINE_HERO_CATEGORY_LABELS = new Set(['Musician/Live Entertainment']);
 
 // Module-level (not component state) so it survives ExplorePage unmounting
 // entirely when a user opens a profile — a plain useState/ref would reset
@@ -180,6 +189,133 @@ function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: Ca
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+// Card-shuffle deck for the hero's "Featured" spot — two cards visible
+// side by side up front, with up to two more peeking out behind them at
+// reduced scale/opacity. Every rotation (interval or a manual prev/next
+// click), each visible freelancer's SLOT shifts by one (front-right becomes
+// the new front-left, the nearer back card becomes the new front-right,
+// etc.) while a new candidate enters at the back and whichever one fell off
+// the front exits — since every card is keyed by its own freelancer id
+// rather than by slot, framer-motion's layout animation naturally
+// interpolates each persisting card from its old slot's position to its
+// new one, which is what actually produces the "shuffling from back to
+// front" motion rather than a plain crossfade between two static images.
+interface FeaturedShuffleProps {
+  candidates: AuthShowcaseSpotlight[];
+  index: number;
+  direction: 'next' | 'prev';
+  onOpenProfile: (id: string) => void;
+  favoritedIds: Set<string>;
+  onToggleFavorite: (id: string) => void;
+}
+
+// One constant size for every screen, not recomputed off window width —
+// each card (name/rating text included) stays the exact same size
+// regardless of viewport, rather than visibly snapping to a different
+// size whenever the window crosses a breakpoint.
+const FEATURED_CARD_WIDTH = 330;
+
+function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favoritedIds, onToggleFavorite }: FeaturedShuffleProps) {
+  const cardWidth = FEATURED_CARD_WIDTH;
+  const gap = Math.round(cardWidth * 0.09);
+  const cardHeight = Math.round(cardWidth * 1.35);
+  const slotCount = Math.min(4, candidates.length);
+
+  // Each slot's target transform — 0/1 are the clickable front pair,
+  // 2/3 peek out behind them, progressively smaller/dimmer/further back.
+  const SLOT_STYLE = [
+    { x: 0, y: gap, scale: 1, rotate: -3, zIndex: 40, opacity: 1 },
+    { x: cardWidth + gap, y: gap, scale: 1, rotate: 3, zIndex: 30, opacity: 1 },
+    { x: (cardWidth + gap) / 2, y: 0, scale: 0.88, rotate: 0, zIndex: 20, opacity: 0.55 },
+    { x: (cardWidth + gap) / 2, y: -gap, scale: 0.78, rotate: 0, zIndex: 10, opacity: 0.3 },
+  ];
+
+  // A card entering (rotating 'next': appears fresh at the back; 'prev':
+  // appears fresh at the front-left, sliding in from off-canvas) and a card
+  // leaving (the reverse of whichever end it entered from) — direction-aware
+  // so the shuffle reads as moving forward or backward, not just a generic
+  // fade either way.
+  const enterFrom = direction === 'next'
+    ? { x: (cardWidth + gap) / 2, y: -gap * 2, scale: 0.6, opacity: 0 }
+    : { x: -cardWidth * 0.6, y: gap, scale: 0.9, rotate: -10, opacity: 0 };
+  const exitTo = direction === 'next'
+    ? { x: -cardWidth * 0.7, y: gap * 0.5, scale: 0.85, rotate: -12, opacity: 0 }
+    : { x: (cardWidth + gap) / 2, y: -gap * 2.5, scale: 0.55, opacity: 0 };
+
+  const slots = Array.from({ length: slotCount }, (_, offset) => ({
+    candidate: candidates[(index + offset) % candidates.length],
+    slot: offset,
+  }));
+
+  return (
+    <div
+      className="relative mx-auto"
+      style={{ width: cardWidth * 2 + gap, height: cardHeight + gap * 2 }}
+    >
+      <AnimatePresence initial={false}>
+        {slots.map(({ candidate, slot }) => {
+          const isFront = slot < 2;
+          const style = SLOT_STYLE[slot];
+          return (
+            <motion.button
+              key={candidate.id}
+              type="button"
+              initial={enterFrom}
+              animate={style}
+              exit={exitTo}
+              transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+              onClick={isFront ? () => onOpenProfile(candidate.id) : undefined}
+              style={{ width: cardWidth, height: cardHeight }}
+              className={`group absolute left-0 top-0 overflow-hidden rounded-[24px] text-left shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)] ${
+                isFront ? 'cursor-pointer' : 'pointer-events-none'
+              }`}
+            >
+              <ImageWithFallback
+                src={candidate.avatarUrl || DEFAULT_AVATAR_URL}
+                alt={candidate.name}
+                className="h-full w-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
+              {isFront && (
+                <>
+                  {slot === 0 && (
+                    <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold text-sky-700 shadow-sm backdrop-blur-sm">
+                      <Star className="h-3 w-3 fill-sky-500 text-sky-500" />
+                      Featured
+                    </span>
+                  )}
+                  <span
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onToggleFavorite(candidate.id);
+                    }}
+                    role="button"
+                    aria-label={favoritedIds.has(candidate.id) ? 'Remove from favorites' : 'Save to favorites'}
+                    className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${favoritedIds.has(candidate.id) ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
+                  </span>
+                  <div className="absolute inset-x-0 bottom-0 p-3 text-left text-white">
+                    <p className="truncate text-sm font-bold">{candidate.name}</p>
+                    <p className="truncate text-xs text-white/80">{candidate.title}</p>
+                    {candidate.rating > 0 && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold">
+                        <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                        {candidate.rating.toFixed(1)}
+                        <span className="font-normal text-white/70">({candidate.totalReviews})</span>
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </motion.button>
+          );
+        })}
+      </AnimatePresence>
     </div>
   );
 }
@@ -985,21 +1121,6 @@ export function ExplorePage() {
         }
         .hero-word-in { animation: heroWordIn 0.5s ease-out; }
 
-        /* Featured-card rotation: slides in from whichever side the new
-           card is "coming from" (right for next, left for prev) rather
-           than just fading in place, so prev/next reads as real motion
-           in a direction, not a hard cut. */
-        @keyframes heroCardSlideNext {
-          from { opacity: 0; transform: translateX(28px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes heroCardSlidePrev {
-          from { opacity: 0; transform: translateX(-28px); }
-          to { opacity: 1; transform: translateX(0); }
-        }
-        .hero-card-slide-next { animation: heroCardSlideNext 0.45s ease-out; }
-        .hero-card-slide-prev { animation: heroCardSlidePrev 0.45s ease-out; }
-
         @keyframes heroRingSpin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -1009,7 +1130,6 @@ export function ExplorePage() {
         @media (prefers-reduced-motion: reduce) {
           .explore-orb, .explore-twinkle, .explore-underline-glow,
           .hero-heart-float, .hero-word-in, .hero-ring-spin,
-          .hero-card-slide-next, .hero-card-slide-prev,
           .explore-wave-drift-slow, .explore-wave-drift-fast, .explore-bg-sparkle {
             animation: none !important;
           }
@@ -1023,7 +1143,17 @@ export function ExplorePage() {
         <Heart className="hero-heart-float hero-heart-float-delay pointer-events-none absolute left-16 top-24 h-4 w-4 fill-sky-200 text-sky-300" aria-hidden="true" />
         <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full border border-sky-200/60" aria-hidden="true" />
 
-        <div className="relative grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        {/* minmax(680px, ...) on the card column — not a stylistic choice,
+            a correctness floor: the shuffle deck's fixed pixel width
+            (currently 2*FEATURED_CARD_WIDTH + gap ≈ 669px) would otherwise
+            shrink below what it needs on common laptop widths (a plain
+            0.9fr share can go well under 669px around 1280-1440px
+            viewports), overflowing into the section's own overflow-hidden
+            edge and getting visibly clipped. This guarantees the column
+            never shrinks past what the deck actually requires; on screens
+            too narrow for that plus a reasonable text column, the text
+            side gives up the space instead. */}
+        <div className="relative grid gap-10 lg:grid-cols-[1.1fr_minmax(680px,0.9fr)] lg:items-center">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">
               <Sparkles className="h-3.5 w-3.5" />
@@ -1032,16 +1162,33 @@ export function ExplorePage() {
 
             <h1 className="mt-5 font-serif text-4xl font-bold leading-[1.1] text-gray-900 sm:text-5xl md:text-6xl">
               Discover
-              {/* Reserves a constant 2-line-tall box (in em, so it scales
-                  with the h1's own font-size at each breakpoint) - short
-                  words like "Photographers" sit on one line, long ones like
-                  "Musician/Live Entertainments" wrap to two, but either way
-                  the hero's total height (and everything below it) never
-                  shifts between rotations. */}
+              {/* Reserves a constant 2-line-tall box (in em, at THIS h1's own
+                  base font-size — the rotating word's own font-size below
+                  doesn't affect it, so enlarging that word never overflows
+                  this reservation) - short words like "Photographers" sit
+                  on one line, long ones like "Musician/Live Entertainments"
+                  wrap to two, but either way the hero's total height (and
+                  everything below it) never shifts between rotations. */}
               <div className="flex min-h-[2.2em] items-center">
                 <span
                   key={heroCategoryIndex}
-                  className="hero-word-in bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text text-transparent"
+                  className={`hero-word-in inline-block bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text leading-[1.25] text-transparent ${
+                    // The handful of categories long enough to wrap to two
+                    // lines at the base size keep it — sizing them up too
+                    // risks wrapping even more aggressively and overflowing
+                    // the reserved box above. Every shorter, one-line label
+                    // instead renders one Tailwind step bigger than the
+                    // surrounding "Discover"/"That Move You" text, so it
+                    // actually fills the reserved two-line-tall box instead
+                    // of sitting small with empty space above and below it.
+                    // leading-[1.25] (looser than the h1's own leading-[1.1])
+                    // is required here, not cosmetic — at this larger size,
+                    // 1.1 doesn't leave enough room below the baseline and
+                    // was clipping descenders (the tails on g/y/p).
+                    TWO_LINE_HERO_CATEGORY_LABELS.has(heroCategoryLabels[heroCategoryIndex])
+                      ? ''
+                      : 'text-5xl sm:text-6xl md:text-7xl'
+                  }`}
                 >
                   {heroCategoryLabels[heroCategoryIndex]}s
                 </span>
@@ -1076,96 +1223,50 @@ export function ExplorePage() {
             </div>
           </div>
 
-          {/* Featured freelancer — cycles through featuredCandidates (the
-              same pool getExploreHeroData() randomly picked `featured` from)
-              every 3s via the interval effect above, instead of staying on
-              whichever single freelancer the initial fetch happened to land
-              on for the page's whole lifetime. Hovering reveals prev/next
-              arrows (navigateHeroFeatured) so the rotation isn't only ever
+          {/* Featured freelancers — a shuffling deck (FeaturedShuffle) that
+              cycles through featuredCandidates (the same pool
+              getExploreHeroData() randomly picked `featured` from) every 3s
+              via the interval effect above, instead of staying on whichever
+              single freelancer the initial fetch happened to land on for
+              the page's whole lifetime. Hovering reveals prev/next arrows
+              (navigateHeroFeatured) so the rotation isn't only ever
               automatic — a manual click also resets that 3s timer so it
               doesn't fight the person who just navigated. */}
-          <div className="group/hero relative mx-auto w-full max-w-sm lg:max-w-none">
+          <div className="group/hero relative mx-auto w-full max-w-2xl">
             <div className="hero-ring-spin pointer-events-none absolute -inset-4 rounded-[36px] border-2 border-dashed border-sky-200/70" aria-hidden="true" />
             {(() => {
               const candidates = heroData?.featuredCandidates;
-              const featured = candidates && candidates.length > 0
-                ? candidates[heroFeaturedIndex % candidates.length]
-                : heroData?.featured;
 
-              if (!featured) {
-                return <div className="h-[380px] w-full animate-pulse rounded-[28px] bg-sky-100/70 sm:h-[440px]" />;
+              if (!candidates || candidates.length === 0) {
+                return <div className="h-[420px] w-full max-w-md mx-auto animate-pulse rounded-[24px] bg-sky-100/70" />;
               }
 
               return (
                 <>
-                  <button
-                    key={featured.id}
-                    type="button"
-                    onClick={() => navigate(`/profile/${featured.id}`)}
-                    className={`group relative block w-full overflow-hidden rounded-[28px] shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)] ${
-                      heroFeaturedDirection === 'prev' ? 'hero-card-slide-prev' : 'hero-card-slide-next'
-                    }`}
-                  >
-                    <div className="relative h-[380px] w-full sm:h-[440px]">
-                      <ImageWithFallback
-                        src={featured.avatarUrl || DEFAULT_AVATAR_URL}
-                        alt={featured.name}
-                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
-                    </div>
-                    <span className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm backdrop-blur-sm">
-                      <Star className="h-3.5 w-3.5 fill-sky-500 text-sky-500" />
-                      Featured
-                    </span>
-                    <span
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleToggleFavorite(featured.id);
-                      }}
-                      role="button"
-                      aria-label={favoritedIds.has(featured.id) ? 'Remove from favorites' : 'Save to favorites'}
-                      className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
-                    >
-                      <Heart className={`h-4 w-4 ${favoritedIds.has(featured.id) ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
-                    </span>
-                    <div className="absolute inset-x-0 bottom-0 p-5 text-left text-white">
-                      <p className="text-lg font-bold">{featured.name}</p>
-                      <p className="text-sm text-white/80">
-                        {featured.title}
-                        {featured.location ? ` · ${featured.location}` : ''}
-                      </p>
-                      {featured.rating > 0 && (
-                        <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          {featured.rating.toFixed(1)}
-                          <span className="font-normal text-white/70">({featured.totalReviews})</span>
-                        </p>
-                      )}
-                    </div>
-                  </button>
+                  <FeaturedShuffle
+                    candidates={candidates}
+                    index={heroFeaturedIndex}
+                    direction={heroFeaturedDirection}
+                    onOpenProfile={(id) => navigate(`/profile/${id}`)}
+                    favoritedIds={favoritedIds}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
 
-                  {(candidates?.length || 0) > 1 && (
+                  {candidates.length > 1 && (
                     <>
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigateHeroFeatured('prev');
-                        }}
+                        onClick={() => navigateHeroFeatured('prev')}
                         aria-label="Previous featured freelancer"
-                        className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                        className="absolute left-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
                       <button
                         type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          navigateHeroFeatured('next');
-                        }}
+                        onClick={() => navigateHeroFeatured('next')}
                         aria-label="Next featured freelancer"
-                        className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                        className="absolute right-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>
