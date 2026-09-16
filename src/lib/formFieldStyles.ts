@@ -5,7 +5,7 @@
 // can't repeat the same drift.
 export const FIELD_LABEL_CLASS = 'text-sm font-semibold text-gray-900';
 
-export const CHIP_BASE_CLASS = 'rounded-full px-3.5 py-1.5 text-xs transition-all';
+export const CHIP_BASE_CLASS = 'rounded-full px-5 py-2.5 text-sm transition-all';
 export const CHIP_SELECTED_CLASS = 'border-2 border-gray-900 font-bold text-gray-900';
 export const CHIP_UNSELECTED_CLASS = 'border border-gray-200 font-medium text-gray-600 hover:border-gray-400';
 

@@ -145,7 +145,7 @@ begin
       -- produce.
       (v_booking.freelancer_id, v_booking.client_id, 'attendance_remaining_balance',
        'Remaining balance due',
-       format('confirmed attendance for ''%s.'' Their remaining balance of %s is now due.',
+       format('confirmed attendance for ''%s.'' The client''s remaining balance of %s is now due.',
          v_booking.project_name, v_remaining_label),
        p_booking_id, false);
   end if;

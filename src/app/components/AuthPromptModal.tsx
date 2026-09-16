@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 
 interface AuthPromptModalProps {
@@ -21,7 +22,12 @@ export function AuthPromptModal({ message, onClose }: AuthPromptModalProps) {
     navigate(path, { state: { from: `${location.pathname}${location.search}` } });
   };
 
-  return (
+  return createPortal(
+    // Portaled to document.body for the same reason as SearchFilterPanel —
+    // ExplorePage renders both from inside a `relative z-10` wrapper, which
+    // traps a "fixed" descendant's z-index inside its own stacking context
+    // instead of letting it compete with MainLayout's header (z-[1200]) at
+    // the document root.
     <div className="fixed inset-0 z-[1300] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
@@ -55,6 +61,7 @@ export function AuthPromptModal({ message, onClose }: AuthPromptModalProps) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
@@ -25,6 +25,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
 
   const unreadNotificationsCount = notifications.filter((item) => !item.read).length;
 
@@ -63,7 +64,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       const projectName = projectNameFromText || 'project';
 
       if (type === 'request_accepted') {
-        return `${finalActorName} accepted ${projectName}.`;
+        return `${finalActorName} accepted your booking for ${projectName}.`;
       }
 
       if (type === 'request_rejected') {
@@ -290,6 +291,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
               if (!resolvedActorId && row.related_id && [
                 'payment_update',
+                'deposit_secured',
                 'payment_released',
                 'booking_deposit_paid',
                 'booking_cancelled',
@@ -647,6 +649,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               </button>
               <div className="relative">
                 <button
+                  ref={bellButtonRef}
                   onClick={() => setShowNotifications(!showNotifications)}
                   className="relative p-2 hover:bg-sky-50 rounded-full transition-colors"
                 >
@@ -657,6 +660,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 </button>
                 {showNotifications && (
                   <NotificationsPanel
+                    triggerRef={bellButtonRef}
                     onClose={() => setShowNotifications(false)}
                     notifications={notifications}
                     isLoading={isNotificationsLoading}

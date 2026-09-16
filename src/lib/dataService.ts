@@ -104,6 +104,9 @@ export interface ExploreHeroData {
   bookingCount: number | null;
   avgRating: number;
   featured: AuthShowcaseSpotlight | null;
+  /** The same pool `featured` was randomly picked from — ExplorePage cycles
+   * through these on an interval instead of fetching a fresh pick each time. */
+  featuredCandidates: AuthShowcaseSpotlight[];
 }
 
 export class DataService {
@@ -688,6 +691,11 @@ export class DataService {
   static async getExploreHeroData(): Promise<{ data: ExploreHeroData; error: unknown }> {
     const [statsRpcResp, featuredRowsResp] = await Promise.all([
       supabase.rpc('get_platform_stats' as any),
+      // A pool of well-reviewed candidates, not just the single top one —
+      // .limit(1) here always returned the exact same highest-reviewed
+      // freelancer on every single page load, so the hero's "Featured"
+      // card never varied. One is picked at random from this pool below
+      // instead, so different freelancers get the spotlight over time.
       (supabase as any).from('freelancer_profiles')
         .select('user_id, title, skills, users:user_id!inner(full_name, avatar_url, rating, total_reviews, location, account_status)')
         .neq('visibility', 'limited')
@@ -695,7 +703,7 @@ export class DataService {
         .eq('users.account_status', 'active')
         .not('users.avatar_url', 'is', null)
         .order('total_reviews', { foreignTable: 'users', ascending: false })
-        .limit(1),
+        .limit(20),
     ]);
 
     let freelancerCount = 0;
@@ -724,22 +732,24 @@ export class DataService {
         : 0;
     }
 
-    const featuredRow = ((featuredRowsResp.data || []) as Array<any>)[0];
-    const featured: AuthShowcaseSpotlight | null = featuredRow?.users?.avatar_url
-      ? {
-          id: featuredRow.user_id,
-          name: featuredRow.users?.full_name || 'Freelancer',
-          avatarUrl: featuredRow.users?.avatar_url || null,
-          title: featuredRow.title || null,
-          skills: Array.isArray(featuredRow.skills) ? featuredRow.skills.slice(0, 3) : [],
-          rating: Number(featuredRow.users?.rating) || 0,
-          totalReviews: Number(featuredRow.users?.total_reviews) || 0,
-          location: featuredRow.users?.location || null,
-        }
-      : null;
+    const featuredRowCandidates = (featuredRowsResp.data || []) as Array<any>;
+    const featuredCandidates: AuthShowcaseSpotlight[] = featuredRowCandidates
+      .filter((row) => row?.users?.avatar_url)
+      .map((row) => ({
+        id: row.user_id,
+        name: row.users?.full_name || 'Freelancer',
+        avatarUrl: row.users?.avatar_url || null,
+        title: row.title || null,
+        skills: Array.isArray(row.skills) ? row.skills.slice(0, 3) : [],
+        rating: Number(row.users?.rating) || 0,
+        totalReviews: Number(row.users?.total_reviews) || 0,
+        location: row.users?.location || null,
+      }));
+    const featured: AuthShowcaseSpotlight | null =
+      featuredCandidates[Math.floor(Math.random() * featuredCandidates.length)] || null;
 
     return {
-      data: { freelancerCount, bookingCount, avgRating, featured },
+      data: { freelancerCount, bookingCount, avgRating, featured, featuredCandidates },
       error: null,
     };
   }
@@ -2202,7 +2212,11 @@ export class DataService {
       actorId: (data as any).client_id,
       type: 'booking_deposit_paid',
       title: 'Deposit received',
-      message: 'The client transferred the deposit — the booking is now confirmed.',
+      // No "The client" here — actorId above already resolves to the
+      // client, so NotificationsPanel's bold actor-name prefix already
+      // names them; repeating "the client" right after would be redundant
+      // ("<b>BabyGurl</b> The client transferred...").
+      message: 'Transferred the deposit — the booking is now confirmed.',
       relatedId: bookingId,
     });
 
@@ -2595,6 +2609,7 @@ export class DataService {
       const nextPaymentStatus = String((data as any).payment_status || '');
       const clientId = String((data as any).client_id || previous.data?.client_id || '');
       const freelancerId = String((data as any).freelancer_id || previous.data?.freelancer_id || '');
+      const projectName = String((data as any).project_name || 'booking');
 
       if (nextStatus && nextStatus !== previousStatus) {
         if (nextStatus === 'cancelled') {
@@ -2626,29 +2641,33 @@ export class DataService {
             actorId: freelancerId || null,
             type: 'booking_completed',
             title: 'Booking completion',
-            message: 'Your booking has been marked completed.',
+            message: `Your booking for '${projectName}' has been marked completed.`,
             relatedId: bookingId,
           });
         }
       }
 
       if (nextPaymentStatus && nextPaymentStatus !== previousPaymentStatus) {
-        const projectName = String((data as any).project_name || 'booking');
-
         if (clientId) {
+          // A system status confirmation, not "someone did this to you" —
+          // the client themselves paid the deposit, so attributing it to
+          // the freelancer (as actorId below still does, for any other
+          // caller relying on it) shouldn't put the freelancer's name front
+          // and center here. See NotificationsPanel.tsx's suppression of
+          // the bold actor-name prefix for 'payment_update'.
           const PAYMENT_STATUS_ACTION_LABEL: Record<string, string> = {
-            deposit_paid: 'is secured',
-            paid: 'is paid',
-            released: 'is paid',
-            refunded: 'was refunded',
+            deposit_paid: 'secured',
+            paid: 'paid',
+            released: 'released',
+            refunded: 'refunded',
           };
-          const actionLabel = PAYMENT_STATUS_ACTION_LABEL[nextPaymentStatus] || `is now ${nextPaymentStatus}`;
+          const actionLabel = PAYMENT_STATUS_ACTION_LABEL[nextPaymentStatus] || nextPaymentStatus;
           await this.notifyEvent({
             userId: clientId,
             actorId: freelancerId || null,
             type: 'payment_update',
             title: 'Payment/deposit update',
-            message: `Deposit for ${projectName} ${actionLabel}.`,
+            message: `Your deposit for '${projectName}' has been ${actionLabel}.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
@@ -2660,7 +2679,14 @@ export class DataService {
           await this.notifyEvent({
             userId: freelancerId,
             actorId: clientId || null,
-            type: 'payment_update',
+            // Deliberately its own type, not 'payment_update' — that type is
+            // the client-facing system-status confirmation above ("Your
+            // deposit... has been X"), which has its bold actor-name prefix
+            // suppressed in NotificationsPanel.tsx since it names no one.
+            // This one DOES name the client as the real subject ("Ceci
+            // transferred..."), so it needs that prefix kept — sharing a
+            // type would force both to the same suppression behavior.
+            type: 'deposit_secured',
             title: 'Deposit secured',
             message: `${clientName} transferred the deposit for your ${projectName}.`,
             relatedId: bookingId,
@@ -2674,7 +2700,7 @@ export class DataService {
             actorId: clientId || null,
             type: 'payment_released',
             title: 'Deposit released',
-            message: `Deposit was released for ${projectName}.`,
+            message: `Your deposit for '${projectName}' has been released.`,
             relatedId: bookingId,
             metadata: { payment_status: nextPaymentStatus },
           });
@@ -4880,7 +4906,7 @@ export class DataService {
             title: isGroupRequest ? 'Group Project accepted' : 'Booking accepted',
             message: isGroupRequest
               ? `${actorName} accepted your Group Project request for ${projectName}.`
-              : `${actorName} accepted ${projectName}.`,
+              : `${actorName} accepted your booking for ${projectName}.`,
             relatedId: requestId,
             metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
           });

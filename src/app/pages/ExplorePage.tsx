@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Search, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
-import { DataService } from '../../lib/dataService';
+import { DataService, type ExploreHeroData } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
@@ -127,6 +127,21 @@ interface CarouselSectionProps {
 // starting the carousels back at the left edge is expected, not a bug.
 const carouselScrollPositions = new Map<string, number>();
 
+// Same reasoning as carouselScrollPositions above, but for the page's own
+// vertical scroll — the whole ExplorePage unmounts when a user opens a
+// profile, so this can't live in component state either.
+let explorePageScrollY = 0;
+
+// Cache of the last successful freelancer fetch — without this, remounting
+// after Back always starts from an empty list + isLoading:true, so the page
+// is briefly its shortest possible height (just a spinner) before content
+// (and then the restored scroll position) appears; that's the visible
+// "flash to the top, then jump down" this exists to remove. Seeding state
+// from this cache lets the page render at (roughly) its real height on the
+// very first paint, so the scroll restore effect never has to fight a
+// too-short page.
+let cachedFreelancers: any[] | null = null;
+
 function CarouselSection({ title, profiles, favoritedIds, onToggleFavorite }: CarouselSectionProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -205,7 +220,7 @@ export function ExplorePage() {
   const navigate = useNavigate();
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
-  const [freelancers, setFreelancers] = useState<any[]>([]);
+  const [freelancers, setFreelancers] = useState<any[]>(() => cachedFreelancers || []);
   const [minorSkillsByFreelancerId, setMinorSkillsByFreelancerId] = useState<Map<string, string[]>>(new Map());
   // Both searchQuery and selectedCategory below are kept in the URL (not
   // just component state) so the exact search a user was looking at
@@ -257,7 +272,14 @@ export function ExplorePage() {
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [userLocation, setUserLocation] = useState<string | null>(null);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
-  const [heroData, setHeroData] = useState<{ freelancerCount: number; bookingCount: number | null; avgRating: number; featured: { id: string; name: string; avatarUrl: string | null; title: string | null; rating: number; totalReviews: number; location: string | null } | null } | null>(null);
+  const [heroData, setHeroData] = useState<ExploreHeroData | null>(null);
+  const [heroFeaturedIndex, setHeroFeaturedIndex] = useState(0);
+  const [heroFeaturedDirection, setHeroFeaturedDirection] = useState<'next' | 'prev'>('next');
+  // Bumped on every manual prev/next click so the auto-rotate effect below
+  // (which depends on it) tears down and restarts its interval — otherwise
+  // a manual click could get silently overwritten by the timer firing again
+  // a moment later, making the click feel like it didn't do anything.
+  const [heroAutoRotateResetKey, setHeroAutoRotateResetKey] = useState(0);
   const [heroCategoryIndex, setHeroCategoryIndex] = useState(0);
   const heroCategoryLabels = useMemo(() => FREELANCER_CATEGORIES.map((category) => category.label), []);
   // "Popular X in Thailand" used to be hardcoded regardless of who was
@@ -280,12 +302,53 @@ export function ExplorePage() {
     nearMe: null,
     minRating: null,
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(cachedFreelancers === null);
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
+  const hasRestoredScrollRef = useRef(false);
+  // Snapshot at mount, BEFORE the live-tracking listener below can touch it —
+  // otherwise a stray 'scroll' event firing while the page is still short
+  // (spinner-only, pre-content) sets the module-level value to ~0 and
+  // clobbers the real target before the restore effect ever gets to read it.
+  // Restoring always from this frozen snapshot instead of the live variable
+  // closes that race entirely.
+  const scrollYToRestoreRef = useRef(explorePageScrollY);
+
+  // Continuously track the page's own scroll position (not just at unmount)
+  // since React Router can swap this whole page out for a profile route at
+  // any moment via a plain navigate() call, with no unmount cleanup step of
+  // our own to hook into beforehand.
+  useEffect(() => {
+    const handleScroll = () => {
+      explorePageScrollY = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Restore it exactly once, right after the first load finishes — the page
+  // needs to actually be tall enough (profiles rendered) before scrolling
+  // this far down does anything, and doing it on every isLoading flip (e.g.
+  // a later filter refetch) would fight the user's own scrolling from then on.
+  // Double rAF: wait for the just-rendered cards to actually be painted
+  // (and the page to be its full height) before scrolling, not just for
+  // React to have committed the DOM update.
+  useEffect(() => {
+    if (!isLoading && !hasRestoredScrollRef.current) {
+      hasRestoredScrollRef.current = true;
+      const target = scrollYToRestoreRef.current;
+      if (target > 0) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            window.scrollTo(0, target);
+          });
+        });
+      }
+    }
+  }, [isLoading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -304,11 +367,52 @@ export function ExplorePage() {
     return () => clearInterval(timer);
   }, [heroCategoryLabels.length]);
 
+  // Rotates the hero's "Featured" card through the same pool of well-reviewed
+  // freelancers getExploreHeroData() picked one from at random — otherwise it
+  // stays on whichever single freelancer that initial fetch happened to land
+  // on for the whole time the page is open. Restarts (via
+  // heroAutoRotateResetKey) whenever the user manually navigates with the
+  // prev/next arrows, so the next automatic swap is a full 3s away from
+  // that click, not whatever was left of the previous countdown.
+  useEffect(() => {
+    const candidateCount = heroData?.featuredCandidates.length || 0;
+    if (candidateCount <= 1) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setHeroFeaturedDirection('next');
+      setHeroFeaturedIndex((current) => (current + 1) % candidateCount);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [heroData?.featuredCandidates.length, heroAutoRotateResetKey]);
+
+  const navigateHeroFeatured = (direction: 'next' | 'prev') => {
+    const candidateCount = heroData?.featuredCandidates.length || 0;
+    if (candidateCount <= 1) {
+      return;
+    }
+    setHeroFeaturedDirection(direction);
+    setHeroFeaturedIndex((current) => {
+      const delta = direction === 'next' ? 1 : -1;
+      return (current + delta + candidateCount) % candidateCount;
+    });
+    setHeroAutoRotateResetKey((current) => current + 1);
+  };
+
   useEffect(() => {
     let isMounted = true;
+    // Only show the loading spinner on a genuine cold start — a remount
+    // that already has cached data from a previous visit this session
+    // refetches quietly in the background instead, so the page never
+    // collapses back down to spinner-height and the restored scroll
+    // position (see the effect above) has real content under it the whole
+    // time, not just after this finishes.
+    const isColdStart = cachedFreelancers === null;
 
     async function loadFreelancers() {
-      setIsLoading(true);
+      if (isColdStart) {
+        setIsLoading(true);
+      }
       setError(null);
 
       const response = await DataService.getAllFreelancers(200);
@@ -323,8 +427,12 @@ export function ExplorePage() {
       }
 
       if (response.error) {
-        setError((response.error as any).message || 'Unable to load freelancers.');
-        setFreelancers([]);
+        if (isColdStart) {
+          setError((response.error as any).message || 'Unable to load freelancers.');
+          setFreelancers([]);
+        }
+        // A background refresh failing silently leaves the cached list on
+        // screen rather than wiping out a perfectly good previous view.
       } else {
         // Merge direct freelancer search and user fallback concurrently for more complete results
         const data = response.data || [];
@@ -343,11 +451,14 @@ export function ExplorePage() {
 
             // eslint-disable-next-line no-console
             console.log('[ExplorePage] mergedResultsCount=', combined.length);
+            cachedFreelancers = combined;
             setFreelancers(combined);
           } catch (err) {
+            cachedFreelancers = data;
             setFreelancers(data);
           }
         } else {
+          cachedFreelancers = data;
           setFreelancers(data);
         }
       }
@@ -874,6 +985,21 @@ export function ExplorePage() {
         }
         .hero-word-in { animation: heroWordIn 0.5s ease-out; }
 
+        /* Featured-card rotation: slides in from whichever side the new
+           card is "coming from" (right for next, left for prev) rather
+           than just fading in place, so prev/next reads as real motion
+           in a direction, not a hard cut. */
+        @keyframes heroCardSlideNext {
+          from { opacity: 0; transform: translateX(28px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes heroCardSlidePrev {
+          from { opacity: 0; transform: translateX(-28px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .hero-card-slide-next { animation: heroCardSlideNext 0.45s ease-out; }
+        .hero-card-slide-prev { animation: heroCardSlidePrev 0.45s ease-out; }
+
         @keyframes heroRingSpin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
@@ -883,6 +1009,7 @@ export function ExplorePage() {
         @media (prefers-reduced-motion: reduce) {
           .explore-orb, .explore-twinkle, .explore-underline-glow,
           .hero-heart-float, .hero-word-in, .hero-ring-spin,
+          .hero-card-slide-next, .hero-card-slide-prev,
           .explore-wave-drift-slow, .explore-wave-drift-fast, .explore-bg-sparkle {
             animation: none !important;
           }
@@ -900,7 +1027,7 @@ export function ExplorePage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">
               <Sparkles className="h-3.5 w-3.5" />
-              Thailand's Creative Marketplace
+              Global Creative Marketplace
             </span>
 
             <h1 className="mt-5 font-serif text-4xl font-bold leading-[1.1] text-gray-900 sm:text-5xl md:text-6xl">
@@ -923,7 +1050,7 @@ export function ExplorePage() {
             </h1>
 
             <p className="mt-5 max-w-md text-base text-gray-600 sm:text-lg">
-              Book top-tier photographers, makeup artists, videographers and more across Thailand — in minutes.
+              Book top-tier photographers, makeup artists, videographers and more from around the world — in minutes.
             </p>
 
             <div className="mt-6 flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -949,56 +1076,104 @@ export function ExplorePage() {
             </div>
           </div>
 
-          {/* Featured freelancer */}
-          <div className="relative mx-auto w-full max-w-sm lg:max-w-none">
+          {/* Featured freelancer — cycles through featuredCandidates (the
+              same pool getExploreHeroData() randomly picked `featured` from)
+              every 3s via the interval effect above, instead of staying on
+              whichever single freelancer the initial fetch happened to land
+              on for the page's whole lifetime. Hovering reveals prev/next
+              arrows (navigateHeroFeatured) so the rotation isn't only ever
+              automatic — a manual click also resets that 3s timer so it
+              doesn't fight the person who just navigated. */}
+          <div className="group/hero relative mx-auto w-full max-w-sm lg:max-w-none">
             <div className="hero-ring-spin pointer-events-none absolute -inset-4 rounded-[36px] border-2 border-dashed border-sky-200/70" aria-hidden="true" />
-            {heroData?.featured ? (
-              <button
-                type="button"
-                onClick={() => navigate(`/profile/${heroData.featured!.id}`)}
-                className="group relative block w-full overflow-hidden rounded-[28px] shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)]"
-              >
-                <div className="relative h-[380px] w-full sm:h-[440px]">
-                  <ImageWithFallback
-                    src={heroData.featured.avatarUrl || DEFAULT_AVATAR_URL}
-                    alt={heroData.featured.name}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
-                </div>
-                <span className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm backdrop-blur-sm">
-                  <Star className="h-3.5 w-3.5 fill-sky-500 text-sky-500" />
-                  Featured
-                </span>
-                <span
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleToggleFavorite(heroData.featured!.id);
-                  }}
-                  role="button"
-                  aria-label={favoritedIds.has(heroData.featured.id) ? 'Remove from favorites' : 'Save to favorites'}
-                  className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
-                >
-                  <Heart className={`h-4 w-4 ${favoritedIds.has(heroData.featured.id) ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
-                </span>
-                <div className="absolute inset-x-0 bottom-0 p-5 text-left text-white">
-                  <p className="text-lg font-bold">{heroData.featured.name}</p>
-                  <p className="text-sm text-white/80">
-                    {heroData.featured.title}
-                    {heroData.featured.location ? ` · ${heroData.featured.location}` : ''}
-                  </p>
-                  {heroData.featured.rating > 0 && (
-                    <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      {heroData.featured.rating.toFixed(1)}
-                      <span className="font-normal text-white/70">({heroData.featured.totalReviews})</span>
-                    </p>
+            {(() => {
+              const candidates = heroData?.featuredCandidates;
+              const featured = candidates && candidates.length > 0
+                ? candidates[heroFeaturedIndex % candidates.length]
+                : heroData?.featured;
+
+              if (!featured) {
+                return <div className="h-[380px] w-full animate-pulse rounded-[28px] bg-sky-100/70 sm:h-[440px]" />;
+              }
+
+              return (
+                <>
+                  <button
+                    key={featured.id}
+                    type="button"
+                    onClick={() => navigate(`/profile/${featured.id}`)}
+                    className={`group relative block w-full overflow-hidden rounded-[28px] shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)] ${
+                      heroFeaturedDirection === 'prev' ? 'hero-card-slide-prev' : 'hero-card-slide-next'
+                    }`}
+                  >
+                    <div className="relative h-[380px] w-full sm:h-[440px]">
+                      <ImageWithFallback
+                        src={featured.avatarUrl || DEFAULT_AVATAR_URL}
+                        alt={featured.name}
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/0 to-transparent" />
+                    </div>
+                    <span className="absolute left-4 top-4 flex items-center gap-1 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-sky-700 shadow-sm backdrop-blur-sm">
+                      <Star className="h-3.5 w-3.5 fill-sky-500 text-sky-500" />
+                      Featured
+                    </span>
+                    <span
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleToggleFavorite(featured.id);
+                      }}
+                      role="button"
+                      aria-label={favoritedIds.has(featured.id) ? 'Remove from favorites' : 'Save to favorites'}
+                      className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
+                    >
+                      <Heart className={`h-4 w-4 ${favoritedIds.has(featured.id) ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
+                    </span>
+                    <div className="absolute inset-x-0 bottom-0 p-5 text-left text-white">
+                      <p className="text-lg font-bold">{featured.name}</p>
+                      <p className="text-sm text-white/80">
+                        {featured.title}
+                        {featured.location ? ` · ${featured.location}` : ''}
+                      </p>
+                      {featured.rating > 0 && (
+                        <p className="mt-1 flex items-center gap-1 text-sm font-semibold">
+                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          {featured.rating.toFixed(1)}
+                          <span className="font-normal text-white/70">({featured.totalReviews})</span>
+                        </p>
+                      )}
+                    </div>
+                  </button>
+
+                  {(candidates?.length || 0) > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigateHeroFeatured('prev');
+                        }}
+                        aria-label="Previous featured freelancer"
+                        className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                      >
+                        <ChevronLeft className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigateHeroFeatured('next');
+                        }}
+                        aria-label="Next featured freelancer"
+                        className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                      >
+                        <ChevronRight className="h-5 w-5" />
+                      </button>
+                    </>
                   )}
-                </div>
-              </button>
-            ) : (
-              <div className="h-[380px] w-full animate-pulse rounded-[28px] bg-sky-100/70 sm:h-[440px]" />
-            )}
+                </>
+              );
+            })()}
           </div>
         </div>
       </section>

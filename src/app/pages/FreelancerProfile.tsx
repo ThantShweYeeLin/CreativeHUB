@@ -194,8 +194,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setError(null);
       setSuccessMessage(null);
 
-      let userResponse = await DataService.getUser(id);
-      let freelancerResponse = await DataService.getFreelancerProfile(id);
+      // Independent of each other — fetching them one at a time (as this
+      // used to) doubles this first round-trip for no reason.
+      let [userResponse, freelancerResponse] = await Promise.all([
+        DataService.getUser(id),
+        DataService.getFreelancerProfile(id),
+      ]);
 
       if (!userResponse.data && freelancerResponse.error) {
         const profileIdResponse = await DataService.getFreelancerById(id);
@@ -242,50 +246,60 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setProfile(userResponse.data);
       setFreelancerProfile(freelancerResponse.data || null);
 
-      if (freelancerResponse.data?.id) {
-        const [servicesResponse, blockedDatesResponse, skillsResponse] = await Promise.all([
-          DataService.getFreelancerServices(freelancerResponse.data.id),
-          DataService.getFreelancerBlockedDates(freelancerResponse.data.id),
-          DataService.getFreelancerSkills(freelancerResponse.data.id),
-        ]);
-        if (isMounted) {
-          setServices(servicesResponse.data || []);
-          setFreelancerBlockedDates(blockedDatesResponse.data || []);
-          setMinorSkills((skillsResponse.data?.minor || []).map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
-          setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
-        }
-      }
-
-      const reviewsTargetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
-      if (reviewsTargetId) {
-        const [reviewsResponse, bookingsResponse] = await Promise.all([
-          DataService.getFreelancerReviews(reviewsTargetId),
-          DataService.getFreelancerBookings(reviewsTargetId),
-        ]);
-        if (isMounted) {
-          setReviews(reviewsResponse.data || []);
-          setFreelancerBookings(bookingsResponse.data || []);
-        }
-      }
-
       const targetId = userResponse.data?.id || freelancerResponse.data?.user_id || id;
+      const shouldCheckFollowState = !!(user?.id && user.id !== targetId);
 
-      if (user?.id && user.id !== targetId) {
-        const [favoriteResponse, followResponse, followedByTargetResponse] = await Promise.all([
-          DataService.isFavorited(user.id, targetId),
-          DataService.isFollowing(user.id, targetId),
-          DataService.isFollowing(targetId, user.id),
-        ]);
+      // Every one of these ten only depends on data already resolved above
+      // (freelancerResponse.data.id / targetId / user?.id) — never on each
+      // other's results — so they run as one parallel batch instead of the
+      // ~7 sequential round trips this used to be (including one call to
+      // getFreelancerBookings fetching the exact same data a second time,
+      // further down). That serialized waterfall was the actual cause of a
+      // profile page taking noticeably longer to load than it should.
+      const [
+        servicesResponse,
+        blockedDatesResponse,
+        skillsResponse,
+        reviewsResponse,
+        bookingsResponse,
+        favoriteResponse,
+        followResponse,
+        followedByTargetResponse,
+        followCountsResponse,
+        postsResponse,
+      ] = await Promise.all([
+        freelancerResponse.data?.id ? DataService.getFreelancerServices(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
+        freelancerResponse.data?.id ? DataService.getFreelancerBlockedDates(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
+        freelancerResponse.data?.id ? DataService.getFreelancerSkills(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
+        DataService.getFreelancerReviews(targetId),
+        DataService.getFreelancerBookings(targetId),
+        user?.id && user.id !== targetId ? DataService.isFavorited(user.id, targetId) : Promise.resolve({ isFavorited: false, error: null }),
+        user?.id && user.id !== targetId ? DataService.isFollowing(user.id, targetId) : Promise.resolve({ isFollowing: false, error: null }),
+        user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),
+        DataService.getFollowCounts(targetId),
+        DataService.getClientPostsByClientId(targetId, 12, user?.id),
+      ]);
 
-        if (isMounted && !favoriteResponse.error) {
+      if (!isMounted) {
+        return;
+      }
+
+      setServices(servicesResponse.data || []);
+      setFreelancerBlockedDates(blockedDatesResponse.data || []);
+      setMinorSkills((skillsResponse.data?.minor || []).map((skill: any) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
+      setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
+
+      setReviews(reviewsResponse.data || []);
+      setFreelancerBookings(bookingsResponse.data || []);
+
+      if (shouldCheckFollowState) {
+        if (!favoriteResponse.error) {
           setIsFavorited(favoriteResponse.isFavorited);
         }
-
-        if (isMounted && !followResponse.error) {
+        if (!followResponse.error) {
           setIsFollowing(followResponse.isFollowing);
         }
-
-        if (isMounted && !followedByTargetResponse.error) {
+        if (!followedByTargetResponse.error) {
           setIsFollowedByTarget(followedByTargetResponse.isFollowing);
         }
       } else {
@@ -294,8 +308,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         setIsFollowedByTarget(false);
       }
 
-      const followCountsResponse = await DataService.getFollowCounts(targetId);
-      if (isMounted && !followCountsResponse.error) {
+      if (!followCountsResponse.error) {
         setFollowCounts({
           followers: followCountsResponse.followerCount,
           following: followCountsResponse.followingCount,
@@ -303,21 +316,17 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       }
 
       if (userResponse.data.role === 'freelancer' && freelancerResponse.data) {
-        const bookingsResponse = await DataService.getFreelancerBookings(targetId);
-        if (isMounted && !bookingsResponse.error) {
-          const bookingRows = bookingsResponse.data || [];
-          setActiveProjects(
-            bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
-          );
-          setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
-        }
-      } else if (isMounted) {
+        const bookingRows = bookingsResponse.data || [];
+        setActiveProjects(
+          bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
+        );
+        setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
+      } else {
         setActiveProjects(0);
         setCompletedProjects(0);
       }
 
-      const postsResponse = await DataService.getClientPostsByClientId(targetId, 12, user?.id);
-      if (isMounted && !postsResponse.error) {
+      if (!postsResponse.error) {
         setProfilePosts(postsResponse.data || []);
         const seed: Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }> = {};
         (postsResponse.data || []).forEach((post: any) => {

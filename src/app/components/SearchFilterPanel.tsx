@@ -1,9 +1,12 @@
-import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizontal } from 'lucide-react';
+import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizontal, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
+import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 
 interface SearchFilterPanelProps {
   onClose: () => void;
@@ -261,13 +264,30 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
     onClose();
   };
 
-  return (
-    // Above the global top nav / mobile bottom nav (z-[1200], see MainLayout
-    // and MobileBottomNav) — otherwise this panel's own header renders
-    // underneath the persistent nav bar instead of replacing it.
-    <div className="fixed inset-0 z-[1300] overflow-y-auto bg-gradient-to-br from-gray-50 via-gray-50 to-gray-100">
+  return createPortal(
+    // Portaled to document.body — ExplorePage wraps its whole page in a
+    // `relative z-10` div, which (like any positioned element with an
+    // explicit z-index) establishes its own stacking context. That traps
+    // this panel's z-[1300] inside it, so no matter how high a z-index is
+    // set here, it only ever competed within that wrapper's own slot in the
+    // page — which sits BELOW MainLayout's header (z-[1200], a sibling
+    // entirely outside that wrapper, with its own explicit stacking level).
+    // The result was exactly what showed up: the header still visible on
+    // top, this panel's own back button and title scrolled out of view
+    // underneath it. Escaping via a portal makes z-[1300] actually get
+    // compared against z-[1200] at the document root, where it wins.
+    <div className="fixed inset-0 z-[1300] overflow-y-auto bg-white">
+      {/* Same light-blue gradient + drifting orbs treatment as Event
+          Assistant and every other full-page route, instead of this
+          panel's own flat gray gradient. min-h-full (not min-h-screen) so
+          the backdrop still covers content taller than one viewport, since
+          this relative wrapper's height comes from its content, not the
+          viewport, inside this already-scrollable fixed container. */}
+      <div className="relative min-h-full">
+        <PageBackdrop />
+        <div className="relative z-10">
       <div className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg">
-        <div className="mx-auto max-w-4xl px-4 py-4">
+        <div className="mx-auto max-w-2xl px-4 py-4">
           <button
             onClick={onClose}
             className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black"
@@ -287,21 +307,28 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         </div>
       </div>
 
-      <div className="mx-auto max-w-4xl px-4 py-6">
+      <div className="mx-auto max-w-2xl px-4 py-6">
         <div className="space-y-6">
-          {/* Types of Services */}
+          {/* Types of Services — card grid matching Event Assistant's
+              Venue/Setting layout, text-only (no icon) per feedback that
+              the per-category icons read as emoji-like clutter. */}
           <div>
             <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Types of Services</h3>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {serviceOptions.map((service) => {
                 const isSelected = filters.services.includes(service);
                 return (
                   <button
                     key={service}
+                    type="button"
                     onClick={() => toggleService(service)}
-                    className={chipClass(isSelected)}
+                    className={`flex items-center justify-center rounded-2xl bg-white p-4 text-center transition-all ${
+                      isSelected ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
+                    }`}
                   >
-                    {service}
+                    <span className={`text-xs leading-tight ${isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-600'}`}>
+                      {service}
+                    </span>
                   </button>
                 );
               })}
@@ -311,10 +338,15 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
           {/* Minimum Rating */}
           <div>
             <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Minimum Rating</h3>
-            <div className="flex flex-wrap gap-3">
+            {/* Equal-width flex row (flex-1 each) instead of left-clustered
+                flex-wrap, so the 5 chips together span the same full width
+                as the page's other content boxes (Types of Services grid,
+                Price Range inputs) rather than bunching on the left with
+                empty space to the right. */}
+            <div className="flex justify-between gap-3">
               <button
                 onClick={() => setFilters((prev) => ({ ...prev, minRating: null }))}
-                className={chipClass(filters.minRating === null)}
+                className={chipClass(filters.minRating === null, 'flex-1 text-center')}
               >
                 Any
               </button>
@@ -324,8 +356,11 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                   <button
                     key={rating}
                     onClick={() => setFilters((prev) => ({ ...prev, minRating: rating }))}
-                    className={chipClass(isSelected)}
+                    className={chipClass(isSelected, 'flex-1 flex items-center justify-center gap-1')}
                   >
+                    {/* Same star icon/color used for ratings everywhere else
+                        in the app (see ExplorePage's provider cards). */}
+                    <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                     {rating}+
                   </button>
                 );
@@ -345,7 +380,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                 <select
                   value={filters.currency}
                   onChange={(event) => handleCurrencyChange(event.target.value)}
-                  className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                  className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   {SUPPORTED_CURRENCIES.map((item) => (
                     <option key={item.code} value={item.code}>
@@ -412,32 +447,43 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
           <div>
             <h3 className={`${FIELD_LABEL_CLASS} mb-2`}>Preferred Location</h3>
 
-            <div className="mb-3 flex flex-wrap gap-3">
-              <button
-                onClick={toggleNearMe}
-                disabled={isLocating}
-                className={chipClass(Boolean(filters.nearMe), 'flex items-center gap-2 disabled:opacity-70')}
-              >
-                {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <LocateFixed className="h-4 w-4" />}
-                {isLocating ? 'Locating...' : 'Near Me'}
-              </button>
-
-              {userLocation && (() => {
-                const isSelected = filters.locations.some((l) => l.toLowerCase() === userLocation.toLowerCase());
-                return (
-                  <button
-                    onClick={() => toggleLocation(userLocation)}
-                    className={`${CHIP_BASE_CLASS} flex items-center gap-2 ${
-                      isSelected
-                        ? CHIP_SELECTED_CLASS
-                        : 'border-2 border-dashed border-sky-200 bg-white font-medium text-gray-600 hover:border-sky-400 hover:bg-sky-50'
-                    }`}
-                  >
-                    <MapPin className="h-4 w-4" /> Use my area: {userLocation}
-                  </button>
-                );
-              })()}
-            </div>
+            {/* Embedded location preview — same bordered-card pattern as
+                Event Assistant's Location field (map preview + resolved
+                address line below, in one card). "Near Me" is the only
+                filter concept here with actual coordinates to preview, so
+                it's what this card previews; the map only renders once
+                Near Me is active — a MapPin placeholder fills the space
+                otherwise. "Use my area" and the city chips stay as their
+                own quick-select chips below, unchanged. */}
+            <button
+              type="button"
+              onClick={toggleNearMe}
+              disabled={isLocating}
+              className={`mb-3 w-full overflow-hidden rounded-2xl bg-white text-left transition-all disabled:opacity-70 ${
+                filters.nearMe ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
+              }`}
+            >
+              {filters.nearMe ? (
+                <div className="h-36 w-full">
+                  <LeafletLocationPreview
+                    latitude={filters.nearMe.latitude}
+                    longitude={filters.nearMe.longitude}
+                    title="Your area"
+                    interactive={false}
+                  />
+                </div>
+              ) : (
+                <div className="flex h-36 w-full items-center justify-center bg-sky-50">
+                  {isLocating ? <Loader2 className="h-6 w-6 animate-spin text-gray-400" /> : <MapPin className="h-6 w-6 text-gray-400" />}
+                </div>
+              )}
+              <div className="flex items-center gap-2 p-4">
+                <LocateFixed className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                <span className={filters.nearMe ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
+                  {isLocating ? 'Locating...' : filters.nearMe ? `Near me — within ${filters.nearMe.radiusKm} km` : 'Use my current location'}
+                </span>
+              </div>
+            </button>
 
             {filters.nearMe && (
               <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-sky-50/50 px-4 py-3">
@@ -455,6 +501,10 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
             )}
 
             {locateError && <p className="mb-3 text-sm text-red-600">{locateError}</p>}
+
+            {/* "Use my area" chip removed — redundant with the GPS "Near
+                Me" card above now that both offered an "auto-fill my
+                location" path; the card stays as the single option. */}
 
             <div className="flex flex-wrap gap-3">
               {locationOptions.map((location) => {
@@ -540,6 +590,9 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
           </button>
         </div>
       </div>
-    </div>
+        </div>
+      </div>
+    </div>,
+    document.body
   );
 }

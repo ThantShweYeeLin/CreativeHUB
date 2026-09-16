@@ -116,10 +116,12 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     // told to pay, so their name can't be the sentence's grammatical
     // subject the way NotificationsPanel's bold actor-name prefix would
     // otherwise imply ("<b>BabyGurl</b> Pay the deposit..." reads like a
-    // command directed AT her). "Booking with [Name]:" frames the name as
-    // context instead — see NotificationsPanel.tsx's per-type suppression
-    // of that bold prefix for 'deposit_payment_required'.
-    message: `Booking with ${freelancerName}: please pay the deposit for '${request.project_name}' within ${DEPOSIT_DEADLINE_HOURS} hours to confirm.`,
+    // command directed AT her). Naming her as the object of "to" instead
+    // frames it as a reminder about paying HER, not a command directed at
+    // her — see NotificationsPanel.tsx's per-type suppression of that bold
+    // prefix for 'deposit_payment_required' (needed here since the message
+    // still contains her name — without it the bold prefix would repeat it).
+    message: `Please pay the deposit for '${request.project_name}' to ${freelancerName} within ${DEPOSIT_DEADLINE_HOURS} hours to confirm your booking.`,
     related_id: bookingResponse.data.id,
     post_id: null,
     comment_id: null,

@@ -1,5 +1,5 @@
-import { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router';
+import { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
@@ -102,6 +102,20 @@ export default function App() {
   const { loading, isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
+
+  // React Router doesn't reset scroll on navigation the way a full page
+  // load would — clicking to a new route (e.g. Explore -> Event Assistant)
+  // otherwise keeps whatever scrollY the previous page was left at, landing
+  // partway down the new page instead of at its top. Skipped for 'POP'
+  // (browser back/forward) so pages with their own scroll-restoration logic
+  // — see ExplorePage's explorePageScrollY — can still put the scroll back
+  // where the user left it instead of this forcing it to 0 first.
+  useEffect(() => {
+    if (navigationType !== 'POP') {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, navigationType]);
 
   if (loading) {
     return <BootSplash />;
