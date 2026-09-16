@@ -1,3 +1,3 @@
-import defaultPfp from '../assets/images/default_pfp.jpeg';
+import defaultAvatar from '../assets/images/default_avatar.svg';
 
-export const DEFAULT_AVATAR_URL = defaultPfp;
+export const DEFAULT_AVATAR_URL = defaultAvatar;

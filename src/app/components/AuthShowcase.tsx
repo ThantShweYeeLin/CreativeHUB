@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { MapPin, Star, Users } from 'lucide-react';
+import { MapPin, Sparkles, Star, Users } from 'lucide-react';
 import logoImage from '../../imports/logo.png';
 import { DataService, type AuthShowcaseData } from '../../lib/dataService';
 
@@ -116,8 +116,8 @@ export function AuthShowcase({ variant, headline, subtitle }: AuthShowcaseProps)
   };
 
   const radialStyle = variant === 'login'
-    ? 'radial-gradient(circle at 30% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 80% 20%, #ffffff 0%, transparent 40%)'
-    : 'radial-gradient(circle at 70% 50%, #ffffff 0%, transparent 60%), radial-gradient(circle at 20% 80%, #ffffff 0%, transparent 40%)';
+    ? 'radial-gradient(circle at 30% 50%, #7dd3fc 0%, transparent 60%), radial-gradient(circle at 80% 20%, #38bdf8 0%, transparent 40%)'
+    : 'radial-gradient(circle at 70% 50%, #7dd3fc 0%, transparent 60%), radial-gradient(circle at 20% 80%, #38bdf8 0%, transparent 40%)';
 
   const slide = slides[boundedActive];
   const avatars = data?.avatars || [];
@@ -125,7 +125,7 @@ export function AuthShowcase({ variant, headline, subtitle }: AuthShowcaseProps)
 
   return (
     <div
-      className="hidden lg:flex lg:w-1/2 bg-gray-950 flex-col justify-between p-12 relative overflow-hidden"
+      className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-sky-600 via-blue-700 to-indigo-900 flex-col justify-between p-12 relative overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -134,13 +134,67 @@ export function AuthShowcase({ variant, headline, subtitle }: AuthShowcaseProps)
           from { width: 0%; }
           to { width: 100%; }
         }
+        @keyframes authShowcaseFloat {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(-16px, -24px); }
+        }
+        @keyframes authShowcaseFloatReverse {
+          0%, 100% { transform: translate(0, 0); }
+          50% { transform: translate(20px, 18px); }
+        }
+        @keyframes authShowcaseTwinkle {
+          0%, 100% { opacity: 0.15; transform: scale(0.85); }
+          50% { opacity: 0.9; transform: scale(1.1); }
+        }
+        @keyframes authShowcaseGlow {
+          0%, 100% { box-shadow: 0 0 30px 6px rgba(125, 211, 252, 0.35); }
+          50% { box-shadow: 0 0 46px 10px rgba(125, 211, 252, 0.55); }
+        }
+        .auth-showcase-orb { animation: authShowcaseFloat 10s ease-in-out infinite; }
+        .auth-showcase-orb-reverse { animation: authShowcaseFloatReverse 12s ease-in-out infinite; }
+        .auth-showcase-sparkle { animation: authShowcaseTwinkle 3.2s ease-in-out infinite; }
+        .auth-showcase-logo-glow { animation: authShowcaseGlow 4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .auth-showcase-orb, .auth-showcase-orb-reverse, .auth-showcase-sparkle, .auth-showcase-logo-glow { animation: none; }
+        }
       `}</style>
-      <div className="absolute inset-0 opacity-10" style={{ backgroundImage: radialStyle }} />
-      <img src={logoImage} alt="CreativeHUB AI" className="h-14 w-14 rounded-full object-cover relative z-10" />
+
+      {/* Soft depth: blurred color orbs hinting at the logo's cyan-blue-purple splash */}
+      <div className="auth-showcase-orb pointer-events-none absolute -top-24 -right-16 h-80 w-80 rounded-full bg-cyan-300/30 blur-3xl" />
+      <div className="auth-showcase-orb-reverse pointer-events-none absolute top-1/3 -left-24 h-72 w-72 rounded-full bg-purple-500/25 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-28 right-1/4 h-96 w-96 rounded-full bg-indigo-400/20 blur-3xl" />
+
+      {/* Faint dot grid for texture */}
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.15]"
+        style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.6) 1px, transparent 1px)', backgroundSize: '28px 28px' }}
+      />
+
+      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: radialStyle }} />
+
+      {/* Twinkling sparkles */}
+      {[
+        { top: '14%', left: '62%', size: 14, delay: '0s' },
+        { top: '58%', left: '86%', size: 10, delay: '0.9s' },
+        { top: '78%', left: '58%', size: 12, delay: '1.8s' },
+        { top: '34%', left: '12%', size: 10, delay: '1.2s' },
+      ].map((sparkle, i) => (
+        <Sparkles
+          key={i}
+          className="auth-showcase-sparkle pointer-events-none absolute text-cyan-200"
+          style={{ top: sparkle.top, left: sparkle.left, width: sparkle.size, height: sparkle.size, animationDelay: sparkle.delay }}
+        />
+      ))}
+
+      <div className="relative z-10 inline-flex w-fit rounded-full p-1">
+        <div className="auth-showcase-logo-glow rounded-full">
+          <img src={logoImage} alt="CreativeHUB AI" className="h-24 w-24 rounded-full object-cover ring-4 ring-white/25" />
+        </div>
+      </div>
 
       <div className="relative z-10">
         <h1 className="text-5xl font-bold text-white leading-tight mb-6">{headline}</h1>
-        <p className="text-gray-400 text-lg leading-relaxed max-w-sm mb-8">{subtitle}</p>
+        <p className="text-sky-100/80 text-lg leading-relaxed max-w-sm mb-8">{subtitle}</p>
 
         <div
           className="min-h-[196px] touch-pan-y select-none"
@@ -219,14 +273,14 @@ function StatsCard({ data, active }: { data: AuthShowcaseData | null; active: bo
   const totalReviews = data?.totalReviews || 0;
 
   return (
-    <div className="bg-white/5 rounded-2xl border border-white/10 divide-y divide-white/10">
+    <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/10 divide-y divide-white/10">
       <div className="flex items-center gap-3.5 px-5 py-4">
         <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
           <Users className="w-5 h-5 text-white" />
         </div>
         <div>
           <div className="text-xl font-bold text-white leading-tight">
-            {data ? formatCount(freelancers) : '—'} <span className="font-medium text-gray-400 text-sm">freelancers ready to book</span>
+            {data ? formatCount(freelancers) : '—'} <span className="font-medium text-sky-100/80 text-sm">freelancers ready to book</span>
           </div>
         </div>
       </div>
@@ -236,7 +290,7 @@ function StatsCard({ data, active }: { data: AuthShowcaseData | null; active: bo
         </div>
         <div>
           <div className="text-xl font-bold text-white leading-tight">
-            {rating > 0 ? rating.toFixed(1) : '—'} <span className="font-medium text-gray-400 text-sm">
+            {rating > 0 ? rating.toFixed(1) : '—'} <span className="font-medium text-sky-100/80 text-sm">
               {totalReviews > 0 ? `avg. rating from ${totalReviews} verified review${totalReviews === 1 ? '' : 's'}` : 'avg. rating · new platform'}
             </span>
           </div>
@@ -270,11 +324,11 @@ function SafeAvatar({ name, avatarUrl, className, ringClassName = '' }: { name: 
 
 function TestimonialCard({ t, dir }: { t: NonNullable<AuthShowcaseData['testimonials']>[number]; dir: 1 | -1 }) {
   return (
-    <div className={`bg-white/5 rounded-2xl p-5 border border-white/10 min-h-[196px] flex flex-col justify-between animate-in fade-in ${entranceClass(dir)} duration-700 ease-out`}>
+    <div className={`bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 min-h-[196px] flex flex-col justify-between animate-in fade-in ${entranceClass(dir)} duration-700 ease-out`}>
       <div>
         <div className="flex gap-0.5 mb-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Star key={i} className={`w-3.5 h-3.5 ${i < Math.round(t.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-600'}`} />
+            <Star key={i} className={`w-3.5 h-3.5 ${i < Math.round(t.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-sky-300/40'}`} />
           ))}
         </div>
         <p className="text-white text-sm italic leading-relaxed line-clamp-5">"{t.comment}"</p>
@@ -283,7 +337,7 @@ function TestimonialCard({ t, dir }: { t: NonNullable<AuthShowcaseData['testimon
         <SafeAvatar name={t.reviewerName} avatarUrl={t.reviewerAvatar} className="w-9 h-9 rounded-full" />
         <div>
           <div className="text-white text-sm font-semibold">{t.reviewerName}</div>
-          <div className="text-gray-500 text-xs">
+          <div className="text-sky-200/70 text-xs">
             {t.revieweeName ? `Verified booking · worked with ${t.revieweeName}` : 'Verified booking'}
           </div>
         </div>
@@ -294,7 +348,7 @@ function TestimonialCard({ t, dir }: { t: NonNullable<AuthShowcaseData['testimon
 
 function SpotlightCard({ s, dir }: { s: NonNullable<AuthShowcaseData['spotlights']>[number]; dir: 1 | -1 }) {
   return (
-    <div className={`bg-white/5 rounded-2xl p-5 border border-white/10 min-h-[196px] flex flex-col justify-between animate-in fade-in ${entranceClass(dir)} duration-700 ease-out`}>
+    <div className={`bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/10 min-h-[196px] flex flex-col justify-between animate-in fade-in ${entranceClass(dir)} duration-700 ease-out`}>
       <div className="flex items-start gap-4">
         <SafeAvatar name={s.name} avatarUrl={s.avatarUrl} className="w-14 h-14 rounded-2xl flex-shrink-0" ringClassName="ring-2 ring-white/10" />
         <div className="min-w-0 flex-1">
@@ -306,9 +360,9 @@ function SpotlightCard({ s, dir }: { s: NonNullable<AuthShowcaseData['spotlights
               </span>
             )}
           </div>
-          {s.title && <p className="text-gray-400 text-sm truncate mt-0.5">{s.title}</p>}
+          {s.title && <p className="text-sky-100/80 text-sm truncate mt-0.5">{s.title}</p>}
           {s.location && (
-            <p className="text-gray-500 text-xs mt-1.5 flex items-center gap-1 truncate">
+            <p className="text-sky-200/70 text-xs mt-1.5 flex items-center gap-1 truncate">
               <MapPin className="w-3 h-3 flex-shrink-0" /> {s.location}
             </p>
           )}
@@ -318,14 +372,14 @@ function SpotlightCard({ s, dir }: { s: NonNullable<AuthShowcaseData['spotlights
       {s.skills.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-4">
           {s.skills.map((skill) => (
-            <span key={skill} className="px-2.5 py-1 rounded-full bg-white/10 text-gray-200 text-xs">
+            <span key={skill} className="px-2.5 py-1 rounded-full bg-white/10 text-sky-50 text-xs">
               {skill}
             </span>
           ))}
         </div>
       )}
 
-      <p className="text-gray-500 text-xs mt-4">Open for bookings on CreativeHUB</p>
+      <p className="text-sky-200/70 text-xs mt-4">Open for bookings on CreativeHUB</p>
     </div>
   );
 }

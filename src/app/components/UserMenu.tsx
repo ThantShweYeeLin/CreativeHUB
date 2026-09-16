@@ -1,12 +1,14 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, Package, Users, Bookmark } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
   onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => void;
   onLogout: () => void;
+  isAuthenticated: boolean;
+  onGoToLogin: () => void;
 }
 
-export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
+export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onGoToLogin }: UserMenuProps) {
   const menuItems = [
     { id: 'bookings' as const, label: 'My Booked List', icon: Package },
     { id: 'requests' as const, label: 'My Requests', icon: Send },
@@ -41,7 +43,7 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
               <button
                 key={item.id}
                 onClick={() => handleClick(item.id)}
-                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 transition-all group"
+                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-sky-50 transition-all group"
               >
                 <Icon className="w-5 h-5 text-gray-600 group-hover:text-gray-900 transition-colors" />
                 <span className="font-medium text-gray-900 group-hover:text-gray-900 transition-colors">
@@ -54,19 +56,34 @@ export function UserMenu({ onClose, onSelectItem, onLogout }: UserMenuProps) {
           {/* Divider */}
           <div className="my-2 border-t border-sky-100" />
 
-          {/* Log Out */}
-          <button
-            onClick={() => {
-              onLogout();
-              onClose();
-            }}
-            className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50 transition-all group"
-          >
-            <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
-            <span className="font-medium text-gray-900 group-hover:text-red-600 transition-colors">
-              Log Out
-            </span>
-          </button>
+          {/* Log Out / Log In */}
+          {isAuthenticated ? (
+            <button
+              onClick={() => {
+                onLogout();
+                onClose();
+              }}
+              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50 transition-all group"
+            >
+              <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
+              <span className="font-medium text-gray-900 group-hover:text-red-600 transition-colors">
+                Log Out
+              </span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                onGoToLogin();
+                onClose();
+              }}
+              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-sky-50 transition-all group"
+            >
+              <LogIn className="w-5 h-5 text-gray-600 group-hover:text-sky-600 transition-colors" />
+              <span className="font-medium text-gray-900 group-hover:text-sky-600 transition-colors">
+                Log In
+              </span>
+            </button>
+          )}
         </div>
       </div>
     </>

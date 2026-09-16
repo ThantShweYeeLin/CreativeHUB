@@ -4,6 +4,7 @@ import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
 import { UserMenu } from '../app/components/UserMenu';
+import { AuthPromptModal } from '../app/components/AuthPromptModal';
 import { NotificationPanelItem, NotificationsPanel } from '../app/components/NotificationsPanel';
 import { DataService } from '../lib/dataService';
 import { FeedService } from '../lib/feedService';
@@ -21,6 +22,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { signOut, user, isAuthenticated } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationPanelItem[]>([]);
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
@@ -538,8 +540,24 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate('/messages', { state: { openGroupConversationId: notification.relatedId } });
   };
 
+  const MENU_ITEM_AUTH_MESSAGE: Record<'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest', string> = {
+    requests: 'Create an account to send and track requests.',
+    groupRequest: 'Create an account to send a group request to multiple freelancers.',
+    favorites: 'Create an account to save your favorite freelancers.',
+    savedPosts: 'Create an account to save posts you like.',
+    messages: 'Create an account to send and receive messages.',
+    bookings: 'Create an account to see your booked list.',
+    settings: 'Create an account to manage your account settings.',
+  };
+
   const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => {
     setShowUserMenu(false);
+
+    if (!isAuthenticated) {
+      setAuthPromptMessage(MENU_ITEM_AUTH_MESSAGE[item]);
+      return;
+    }
+
     switch (item) {
       case 'requests':
         navigate('/requests');
@@ -647,7 +665,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               </button>
               <div className="relative">
                 <button
-                  onClick={() => setShowNotifications(!showNotifications)}
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      setAuthPromptMessage('Create an account to receive notifications about your bookings and messages.');
+                      return;
+                    }
+                    setShowNotifications(!showNotifications);
+                  }}
                   className="relative p-2 hover:bg-sky-50 rounded-full transition-colors"
                 >
                   <Bell className="w-5 h-5 text-gray-600" />
@@ -761,6 +785,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onClose={() => setShowUserMenu(false)}
                     onSelectItem={handleMenuSelection}
                     onLogout={handleLogout}
+                    isAuthenticated={isAuthenticated}
+                    onGoToLogin={() => navigate('/login')}
                   />
                 )}
               </div>
@@ -773,6 +799,10 @@ export function MainLayout({ children }: MainLayoutProps) {
       <main className="max-w-[1680px] mx-auto px-4 md:px-8 py-4 md:py-8">
         {children}
       </main>
+
+      {authPromptMessage && (
+        <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
     </div>
   );
 }

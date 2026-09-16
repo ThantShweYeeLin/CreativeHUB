@@ -128,7 +128,6 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   const validateStep = (current: number): string | null => {
     if (current === 1) {
       if (!displayName.trim()) return 'Display name is required.';
-      if (!location.trim()) return 'Location is required.';
     }
     return null;
   };
@@ -297,7 +296,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-2 block text-sm font-semibold text-gray-700">Location</label>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">Location <span className="font-normal text-gray-500">(optional)</span></label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />

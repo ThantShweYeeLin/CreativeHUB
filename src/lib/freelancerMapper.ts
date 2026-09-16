@@ -1,3 +1,5 @@
+import { DEFAULT_AVATAR_URL } from './defaults';
+
 export interface FreelancerPortfolioItem {
   id: string;
   title: string;
@@ -31,8 +33,7 @@ export interface FreelancerMapProfile {
   isAvailable: boolean;
 }
 
-const PLACEHOLDER_IMAGE =
-  'https://images.unsplash.com/photo-1527980965255-d3b416303d12?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400';
+const PLACEHOLDER_IMAGE = DEFAULT_AVATAR_URL;
 
 const PLACEHOLDER_COVER =
   'https://images.unsplash.com/photo-1497366754035-f200968a6e72?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=1200';

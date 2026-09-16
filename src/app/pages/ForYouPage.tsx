@@ -32,6 +32,7 @@ import type { Gender, PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
 import { PostCard } from '../../components/posts/PostCard';
 import { PostDetailModal } from '../../components/posts/PostDetailModal';
+import { LikesListModal } from '../../components/posts/LikesListModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { AuthPromptModal } from '../components/AuthPromptModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -405,7 +406,7 @@ function CreatePostSheet({
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm animate-in fade-in-0">
       <div className="fixed inset-x-0 bottom-0 max-h-[96vh] overflow-hidden rounded-t-[2rem] bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] animate-in slide-in-from-bottom-8 md:bottom-auto md:left-1/2 md:top-1/2 md:w-[760px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-3xl">
         <div className="flex h-full max-h-[96vh] flex-col">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center justify-between border-b border-sky-100 px-5 py-4">
             <button onClick={onClose} className="rounded-full p-2 text-gray-500 transition-colors hover:bg-sky-50">
               <X className="h-5 w-5" />
             </button>
@@ -416,7 +417,7 @@ function CreatePostSheet({
             <button
               onClick={onPublish}
               disabled={!canPost || isPublishing}
-              className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-primary-foreground shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2 text-sm font-bold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
             >
               {isPublishing ? 'Posting...' : 'Post'}
             </button>
@@ -424,7 +425,7 @@ function CreatePostSheet({
 
           <div className="flex-1 overflow-y-auto px-5 py-5">
             <div className="mb-5 flex items-center gap-3">
-              <Avatar src={userAvatar} alt={userName} gender={userGender} sizeClassName="h-12 w-12 ring-2 ring-gray-100 rounded-full" />
+              <Avatar src={userAvatar} alt={userName} gender={userGender} sizeClassName="h-12 w-12 ring-2 ring-sky-100 rounded-full" />
               <div>
                 <h3 className="font-bold text-gray-950">{userName}</h3>
                 <p className="text-sm text-gray-500">Share with the CreativeHUB community</p>
@@ -536,7 +537,7 @@ function CreatePostSheet({
                           setActivePanel(null);
                         }}
                         className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-left text-sm font-semibold transition-colors ${
-                          composer.visibility === visibility ? 'border-gray-900 bg-white text-gray-950' : 'border-transparent bg-white/60 text-gray-600 hover:bg-white'
+                          composer.visibility === visibility ? 'border-sky-500 bg-sky-50 text-gray-950' : 'border-transparent bg-white/60 text-gray-600 hover:bg-white'
                         }`}
                       >
                         {visibility}
@@ -657,7 +658,7 @@ function CreatePostSheet({
               </div>
             )}
 
-            <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
+            <div className="mt-3 flex items-center gap-2 border-t border-sky-100 pt-3">
               <button type="button" onClick={() => mediaInputRef.current?.click()} title="Photos/Videos" className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-50 text-gray-700 transition-colors hover:bg-sky-100">
                 <ImagePlus className="h-5 w-5" />
               </button>
@@ -669,14 +670,14 @@ function CreatePostSheet({
             </div>
           </div>
 
-          <div className="flex gap-3 border-t border-gray-100 px-5 py-4">
+          <div className="flex gap-3 border-t border-sky-100 px-5 py-4">
             <button onClick={onClose} className="flex-1 rounded-2xl bg-sky-50 px-4 py-3 font-bold text-gray-700 transition-colors hover:bg-sky-100">
               Cancel
             </button>
             <button
               onClick={onPublish}
               disabled={!canPost || isPublishing}
-              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-3 font-bold text-primary-foreground shadow-md transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 font-bold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
               {isPublishing ? 'Posting...' : 'Post'}
@@ -933,7 +934,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
   const [loadingLikesByPostId, setLoadingLikesByPostId] = useState<Record<string, boolean>>({});
   const [likingByPostId, setLikingByPostId] = useState<Record<string, boolean>>({});
-  const [showLikesByPostId, setShowLikesByPostId] = useState<Record<string, boolean>>({});
+  const [likesModalPostId, setLikesModalPostId] = useState<string | null>(null);
   const [focusedPostId, setFocusedPostId] = useState<string | null>(null);
   const [commentDraftByPostId, setCommentDraftByPostId] = useState<Record<string, string>>({});
   const [isSubmittingCommentByPostId, setIsSubmittingCommentByPostId] = useState<Record<string, boolean>>({});
@@ -1547,7 +1548,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
 
   const openLikesForPost = async (postId: string) => {
     const targetPost = posts.find((item) => item.id === postId);
-    setShowLikesByPostId((current) => ({ ...current, [postId]: !current[postId] }));
+    setLikesModalPostId(postId);
 
     if (!targetPost?.isClientPost) {
       setLikedUsersByPostId((current) => ({ ...current, [postId]: [] }));
@@ -1916,7 +1917,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                       }}
                       className="flex w-full items-center gap-3 border-b border-sky-50 px-3 py-3 text-left transition-colors hover:bg-sky-50 last:border-b-0"
                     >
-                      <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
+                      <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
                         <p className="truncate text-xs text-gray-500">{result.email}</p>
@@ -1936,7 +1937,13 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               For You
             </button>
             <button
-              onClick={() => setActiveFeedTab('following')}
+              onClick={() => {
+                if (!user?.id) {
+                  setAuthPromptMessage('Create an account to follow creators and see their posts here.');
+                  return;
+                }
+                setActiveFeedTab('following');
+              }}
               className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${activeFeedTab === 'following' ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-sm' : 'text-gray-700 hover:bg-sky-50'}`}
             >
               Following
@@ -1944,7 +1951,15 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           </div>
         </div>
 
-        <ComposerLauncher onOpen={() => setIsComposerOpen(true)} />
+        <ComposerLauncher
+          onOpen={() => {
+            if (!user?.id) {
+              setAuthPromptMessage('Create an account to write and share posts.');
+              return;
+            }
+            setIsComposerOpen(true);
+          }}
+        />
 
         {error && (
           <div className="mb-6 mx-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -1977,8 +1992,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               (post.hashtags?.length ?? 0) > 0 ||
               (post.mentions?.length ?? 0) > 0 ||
               !!post.poll ||
-              (post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0 ||
-              !!showLikesByPostId[post.id];
+              (post.attachments?.filter((attachment) => !attachment.previewUrl).length ?? 0) > 0;
 
             return (
               <PostCard
@@ -2033,38 +2047,6 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                           ))}
                         </div>
                       )}
-                      {showLikesByPostId[post.id] ? (
-                        <div className="rounded-2xl bg-sky-50/50 p-4 text-sm text-gray-700">
-                          <p className="mb-2 font-semibold text-gray-900">Liked by</p>
-                          {loadingLikesByPostId[post.id] ? (
-                            <p className="text-sm text-gray-500">Loading likes...</p>
-                          ) : (likedUsersByPostId[post.id] || []).length === 0 ? (
-                            <p className="text-sm text-gray-500">No visible liker accounts for this post yet.</p>
-                          ) : (
-                            <div className="flex flex-wrap gap-3">
-                              {(likedUsersByPostId[post.id] || []).map((likedUser) => (
-                                <button
-                                  key={likedUser.id}
-                                  type="button"
-                                  onClick={() => onViewProfile?.(String(likedUser.id))}
-                                  className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition hover:bg-sky-50"
-                                >
-                                  <Avatar
-                                    src={likedUser.avatar_url || fallbackProfileImage}
-                                    alt={likedUser.full_name || likedUser.email || 'User'}
-                                    gender={likedUser.gender}
-                                    sizeClassName="h-8 w-8 rounded-full"
-                                  />
-                                  <div>
-                                    <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
-                                    <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
-                                  </div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
                     </>
                   ) : undefined
                 }
@@ -2073,7 +2055,13 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 onToggleLike={() => void handleLike(post.id)}
                 onShowLikes={() => void openLikesForPost(post.id)}
                 commentsCount={post.commentsCount}
-                onOpenComment={() => openPostFocus(post.id, { focusComment: true })}
+                onOpenComment={() => {
+                  if (!user?.id) {
+                    setAuthPromptMessage('Create an account to comment on posts.');
+                    return;
+                  }
+                  openPostFocus(post.id, { focusComment: true });
+                }}
                 shareSlot={buildShareMenu(post, 'card')}
                 saved={post.isSaved}
                 onToggleSave={() => void handleSave(post.id)}
@@ -2106,11 +2094,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           saved={focusedPost.isSaved}
           onToggleSave={() => void handleSave(focusedPost.id)}
           shareSlot={buildShareMenu(focusedPost, 'modal')}
-          likedUsers={likedUsersByPostId[focusedPost.id] || []}
-          loadingLikedUsers={!!loadingLikesByPostId[focusedPost.id]}
-          showLikedUsers={!!showLikesByPostId[focusedPost.id]}
           onToggleShowLikedUsers={() => void openLikesForPost(focusedPost.id)}
-          onViewLikedUser={(userId) => onViewProfile?.(userId)}
           commentsCount={focusedPost.commentsCount}
           comments={focusedCommentThreads.roots}
           loadingComments={!!loadingCommentsByPostId[focusedPost.id]}
@@ -2150,6 +2134,17 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           onSubmitComment={() => void submitComment(focusedPost.id)}
           isSubmittingComment={!!isSubmittingCommentByPostId[focusedPost.id]}
           commentFocusToken={commentFocusToken}
+        />
+      )}
+
+      {likesModalPostId && (
+        <LikesListModal
+          totalCount={posts.find((item) => item.id === likesModalPostId)?.likes ?? 0}
+          users={likedUsersByPostId[likesModalPostId] || []}
+          isLoading={!!loadingLikesByPostId[likesModalPostId]}
+          fallbackAvatarUrl={fallbackProfileImage}
+          onClose={() => setLikesModalPostId(null)}
+          onViewUser={(userId) => onViewProfile?.(userId)}
         />
       )}
 
@@ -2214,7 +2209,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 <p className="px-4 py-3 text-sm text-gray-500">You do not have any mutual connections yet.</p>
               ) : (
                 <>
-                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between border-b border-sky-100 px-4 py-3">
                     <button
                       type="button"
                       onClick={() => setSelectedShareRecipientIds(mutualUsers.map((mutual) => mutual.id))}
@@ -2249,7 +2244,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                         <div className={`flex h-5 w-5 items-center justify-center rounded-full border ${isSelected ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'border-sky-200 bg-white text-transparent'}`}>
                           <Check className="h-3 w-3" />
                         </div>
-                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} gender={mutual.gender} sizeClassName="h-9 w-9 ring-1 ring-gray-200 rounded-full" />
+                        <Avatar src={mutual.avatar_url || fallbackProfileImage} alt={mutual.full_name || mutual.email} gender={mutual.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-gray-900">{mutual.full_name || mutual.email}</p>
                           <p className="truncate text-xs text-gray-500">{mutual.email}</p>
@@ -2269,7 +2264,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
                 type="button"
                 onClick={() => void sendShareToMutuals()}
                 disabled={isLoadingMutualUsers || isSendingShare || selectedShareRecipientIds.length === 0}
-                className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSendingShare ? 'Sending...' : 'Send to selected users'}
               </button>

@@ -5,13 +5,6 @@ import { ImageWithFallback } from '../common/ImageWithFallback';
 import { CommentInput } from './CommentInput';
 import { CommentsList, type CommentItem } from './CommentsList';
 
-export interface LikedUser {
-  id: string;
-  full_name?: string | null;
-  email?: string | null;
-  avatar_url?: string | null;
-}
-
 interface PostDetailModalProps {
   onClose: () => void;
 
@@ -46,11 +39,8 @@ interface PostDetailModalProps {
   /** Renders in place of the plain onShare button — used to put a PostShareMenu directly here instead of routing through a separate modal. Takes priority over onShare when both are given. */
   shareSlot?: React.ReactNode;
 
-  likedUsers?: LikedUser[];
-  loadingLikedUsers?: boolean;
-  showLikedUsers?: boolean;
+  /** Opens the shared LikesListModal (rendered by the page, not this component) for this post. */
   onToggleShowLikedUsers?: () => void;
-  onViewLikedUser?: (userId: string) => void;
 
   canDelete?: boolean;
   onDelete?: () => void;
@@ -106,11 +96,7 @@ export function PostDetailModal({
   onToggleSave,
   onShare,
   shareSlot,
-  likedUsers = [],
-  loadingLikedUsers,
-  showLikedUsers,
   onToggleShowLikedUsers,
-  onViewLikedUser,
   canDelete,
   onDelete,
   comments,
@@ -282,7 +268,7 @@ export function PostDetailModal({
                 </button>
                 {onToggleShowLikedUsers && (
                   <button onClick={onToggleShowLikedUsers} className="inline-flex items-center gap-2 text-sm font-semibold text-gray-800">
-                    {loadingLikedUsers ? 'Loading...' : 'View likes'}
+                    View likes
                   </button>
                 )}
                 {onOpenComments ? (
@@ -309,33 +295,6 @@ export function PostDetailModal({
                   </button>
                 )}
               </div>
-
-              {showLikedUsers && likedUsers.length > 0 ? (
-                <div className="mt-5 rounded-2xl bg-sky-50/50 p-4 text-sm text-gray-700">
-                  <p className="mb-2 font-semibold text-gray-900">Liked by</p>
-                  <div className="flex flex-wrap gap-3">
-                    {likedUsers.map((likedUser) => (
-                      <button
-                        key={likedUser.id}
-                        type="button"
-                        onClick={() => onViewLikedUser?.(likedUser.id)}
-                        disabled={!onViewLikedUser}
-                        className="flex items-center gap-3 rounded-2xl bg-white px-3 py-2 text-left shadow-sm transition enabled:hover:bg-sky-50"
-                      >
-                        <Avatar
-                          src={likedUser.avatar_url || authorAvatarUrl}
-                          alt={likedUser.full_name || likedUser.email || 'User'}
-                          sizeClassName="h-8 w-8 rounded-full"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{likedUser.full_name || likedUser.email || 'Unknown'}</p>
-                          <p className="text-xs text-gray-500">@{String(likedUser.email || '').split('@')[0]}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
 
