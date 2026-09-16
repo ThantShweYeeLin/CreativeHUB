@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, CreditCard, Crown, Flag, Maximize2, MessageCircle, Minimize2, Package, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
+import { Bot, ChevronRight, CreditCard, Crown, Flag, Maximize2, Minimize2, Package, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
 import { sendChatbotMessage, type ChatTurn } from '../lib/chatbotService';
 
 interface DisplayMessage extends ChatTurn {
@@ -68,7 +68,10 @@ export function ChatbotWidget() {
           }
         >
           <div className="flex items-center justify-between border-b border-sky-100 bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-white">
-            <span className="text-sm font-semibold">CreativeHUB Assistant</span>
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <Bot className="h-4 w-4" />
+              CreativeHUB Assistant
+            </span>
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setIsExpanded((expanded) => !expanded)}
@@ -159,7 +162,7 @@ export function ChatbotWidget() {
         aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
         className="fixed bottom-24 right-4 z-[1300] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl shadow-sky-500/30 transition-transform hover:scale-105 md:bottom-6"
       >
-        {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
+        {isOpen ? <X className="h-6 w-6" /> : <Bot className="h-6 w-6" />}
       </button>
     </>
   );
