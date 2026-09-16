@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, CreditCard, Crown, Flag, MessageCircle, Package, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
+import { ChevronRight, CreditCard, Crown, Flag, Maximize2, MessageCircle, Minimize2, Package, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
 import { sendChatbotMessage, type ChatTurn } from '../lib/chatbotService';
 
 interface DisplayMessage extends ChatTurn {
@@ -25,6 +25,7 @@ const SUGGESTED_PROMPTS: { icon: LucideIcon; text: string }[] = [
 // every authenticated page rather than needing to be wired into each one.
 export function ChatbotWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -59,29 +60,51 @@ export function ChatbotWidget() {
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-x-4 bottom-24 z-[1300] flex h-[60vh] max-h-[520px] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-96 md:bottom-6">
-          <div className="flex items-center justify-between border-b border-gray-200 bg-gray-900 px-4 py-3 text-white">
+        <div
+          className={
+            isExpanded
+              ? 'fixed inset-0 z-[1300] flex flex-col overflow-hidden bg-white sm:inset-6 sm:rounded-2xl sm:border sm:border-sky-100 sm:shadow-2xl'
+              : 'fixed inset-x-4 bottom-24 z-[1300] flex h-[50vh] max-h-[420px] flex-col overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-2xl sm:inset-x-auto sm:right-6 sm:w-80 md:bottom-6'
+          }
+        >
+          <div className="flex items-center justify-between border-b border-sky-100 bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 text-white">
             <span className="text-sm font-semibold">CreativeHUB Assistant</span>
-            <button onClick={() => setIsOpen(false)} aria-label="Close chat" className="rounded-full p-1 hover:bg-white/10">
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setIsExpanded((expanded) => !expanded)}
+                aria-label={isExpanded ? 'Shrink chat' : 'Expand chat to full screen'}
+                className="rounded-full p-1.5 hover:bg-white/10"
+              >
+                {isExpanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+              <button
+                onClick={() => {
+                  setIsOpen(false);
+                  setIsExpanded(false);
+                }}
+                aria-label="Close chat"
+                className="rounded-full p-1.5 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
-            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-800">{GREETING}</div>
+            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-sky-50 px-3 py-2 text-sm text-gray-800">{GREETING}</div>
             {messages.length === 0 && (
               <div className="space-y-2">
                 <p className="px-1 text-xs font-semibold uppercase tracking-wide text-gray-400">Quick questions</p>
-                <div className="overflow-hidden rounded-2xl border border-gray-200 divide-y divide-gray-200">
+                <div className="overflow-hidden rounded-2xl border border-sky-100 divide-y divide-sky-100">
                   {SUGGESTED_PROMPTS.map(({ icon: Icon, text }) => (
                     <button
                       key={text}
                       type="button"
                       onClick={() => handleSend(text)}
                       disabled={isSending}
-                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-800 transition-colors hover:bg-gray-50 disabled:opacity-40"
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm text-gray-800 transition-colors hover:bg-sky-50 disabled:opacity-40"
                     >
-                      <Icon className="h-4 w-4 shrink-0 text-gray-500" />
+                      <Icon className="h-4 w-4 shrink-0 text-sky-600" />
                       <span className="flex-1">{text}</span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
                     </button>
@@ -94,19 +117,19 @@ export function ChatbotWidget() {
                 key={m.id}
                 className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
                   m.role === 'user'
-                    ? 'ml-auto rounded-br-sm bg-gray-900 text-white'
+                    ? 'ml-auto rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white'
                     : m.error
                       ? 'rounded-bl-sm bg-red-50 text-red-700'
-                      : 'rounded-bl-sm bg-gray-100 text-gray-800'
+                      : 'rounded-bl-sm bg-sky-50 text-gray-800'
                 }`}
               >
                 {m.text}
               </div>
             ))}
-            {isSending && <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-400">Thinking…</div>}
+            {isSending && <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-sky-50 px-3 py-2 text-sm text-gray-400">Thinking…</div>}
           </div>
 
-          <div className="flex items-center gap-2 border-t border-gray-200 px-3 py-2">
+          <div className="flex items-center gap-2 border-t border-sky-100 px-3 py-2">
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -117,13 +140,13 @@ export function ChatbotWidget() {
                 }
               }}
               placeholder="Ask a question…"
-              className="flex-1 rounded-full border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
+              className="flex-1 rounded-full border border-sky-100 px-3 py-2 text-sm outline-none focus:border-sky-400"
             />
             <button
               onClick={() => handleSend()}
               disabled={!draft.trim() || isSending}
               aria-label="Send message"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-900 text-white disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -134,7 +157,7 @@ export function ChatbotWidget() {
       <button
         onClick={() => setIsOpen((open) => !open)}
         aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
-        className="fixed bottom-24 right-4 z-[1300] flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-white shadow-xl transition-transform hover:scale-105 md:bottom-6"
+        className="fixed bottom-24 right-4 z-[1300] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl shadow-sky-500/30 transition-transform hover:scale-105 md:bottom-6"
       >
         {isOpen ? <X className="h-6 w-6" /> : <MessageCircle className="h-6 w-6" />}
       </button>
