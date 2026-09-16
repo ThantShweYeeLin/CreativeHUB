@@ -7,6 +7,7 @@ import { AdminRoute } from '../components/AdminRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { GlobalReviewPrompt } from '../components/GlobalReviewPrompt';
+import { ChatbotWidget } from '../components/ChatbotWidget';
 // Kept eager — the first thing a signed-out visitor sees, so there's
 // nothing to gain (and a loading flicker to lose) by chunking these.
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
@@ -454,8 +455,13 @@ export default function App() {
       )}
     </Routes>
     </Suspense>
-    {isAuthenticated && user?.onboardingCompleted && <MobileBottomNav />}
-    {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
+    {isAuthenticated && user?.onboardingCompleted && (
+      <>
+        <MobileBottomNav />
+        <GlobalReviewPrompt />
+        <ChatbotWidget />
+      </>
+    )}
     </>
   );
 }
