@@ -32,6 +32,7 @@ interface NotificationsPanelProps {
   onOpenProfile?: (notification: NotificationPanelItem) => void;
   onOpenGroupMessage?: (notification: NotificationPanelItem) => void;
   onOpenBooking?: (notification: NotificationPanelItem) => void;
+  onOpenSupportTicket?: (notification: NotificationPanelItem) => void;
   /** The bell button's ref — used to measure where to anchor the portaled
    * panel on desktop (see the positioning effect below). Optional so the
    * panel still renders sensibly (falling back to its static Tailwind
@@ -80,6 +81,8 @@ const getNotificationIcon = (type: string) => {
       return <Bell className="w-4 h-4 text-blue-600" />;
     case 'payment_released':
       return <Check className="w-4 h-4 text-green-600" />;
+    case 'ticket_reply':
+      return <MessageSquare className="w-4 h-4 text-sky-600" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
   }
@@ -172,6 +175,7 @@ export function NotificationsPanel({
   onOpenProfile,
   onOpenGroupMessage,
   onOpenBooking,
+  onOpenSupportTicket,
   triggerRef,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -296,6 +300,8 @@ export function NotificationsPanel({
                     onOpenRequests?.(notification);
                   } else if (notification.type === 'group_message') {
                     onOpenGroupMessage?.(notification);
+                  } else if (notification.type === 'ticket_reply') {
+                    onOpenSupportTicket?.(notification);
                   } else if (notification.type.includes('message')) {
                     onOpenMessages?.();
                   } else if (

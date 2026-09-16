@@ -655,7 +655,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                       : '/become-freelancer'
                   )
                 }
-                className="hidden md:block rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105"
+                className="whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105 sm:px-6 sm:py-2.5 sm:text-sm"
               >
                 {!isAuthenticated
                   ? 'Get Started'
@@ -761,6 +761,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onOpenProfile={handleOpenNotificationProfile}
                     onOpenBooking={handleOpenNotificationBooking}
                     onOpenGroupMessage={handleOpenNotificationGroupMessage}
+                    onOpenSupportTicket={(notification) => {
+                      setShowNotifications(false);
+                      if (notification.relatedId) {
+                        navigate('/settings', { state: { openTicketId: notification.relatedId } });
+                      } else {
+                        navigate('/settings');
+                      }
+                    }}
                   />
                 )}
               </div>

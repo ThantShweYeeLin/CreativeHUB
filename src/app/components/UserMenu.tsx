@@ -35,7 +35,10 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
       />
 
       {/* Menu Dropdown */}
-      <div className="absolute top-16 right-6 z-[1210] w-56 bg-white rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] border border-sky-100 overflow-hidden animate-fadeIn">
+      <div className="absolute top-16 right-4 z-[1210] w-64 overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)] animate-fadeIn sm:right-6">
+        <div className="bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3">
+          <p className="text-sm font-bold text-white">Menu</p>
+        </div>
         <div className="py-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
@@ -43,10 +46,12 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
               <button
                 key={item.id}
                 onClick={() => handleClick(item.id)}
-                className="w-full px-4 py-3 flex items-center gap-3 hover:bg-sky-50 transition-all group"
+                className="group flex w-full items-center gap-3 px-4 py-2.5 transition-all hover:bg-sky-50"
               >
-                <Icon className="w-5 h-5 text-gray-600 group-hover:text-gray-900 transition-colors" />
-                <span className="font-medium text-gray-900 group-hover:text-gray-900 transition-colors">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-colors group-hover:bg-gradient-to-br group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="font-medium text-gray-800 transition-colors group-hover:text-gray-900">
                   {item.label}
                 </span>
               </button>
@@ -63,10 +68,12 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
                 onLogout();
                 onClose();
               }}
-              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-red-50 transition-all group"
+              className="group flex w-full items-center gap-3 px-4 py-2.5 transition-all hover:bg-red-50"
             >
-              <LogOut className="w-5 h-5 text-gray-600 group-hover:text-red-600 transition-colors" />
-              <span className="font-medium text-gray-900 group-hover:text-red-600 transition-colors">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500 transition-colors group-hover:bg-red-500 group-hover:text-white">
+                <LogOut className="h-4 w-4" />
+              </span>
+              <span className="font-medium text-gray-800 transition-colors group-hover:text-red-600">
                 Log Out
               </span>
             </button>
@@ -76,10 +83,12 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
                 onGoToLogin();
                 onClose();
               }}
-              className="w-full px-4 py-3 flex items-center gap-3 hover:bg-sky-50 transition-all group"
+              className="group flex w-full items-center gap-3 px-4 py-2.5 transition-all hover:bg-sky-50"
             >
-              <LogIn className="w-5 h-5 text-gray-600 group-hover:text-sky-600 transition-colors" />
-              <span className="font-medium text-gray-900 group-hover:text-sky-600 transition-colors">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-colors group-hover:bg-gradient-to-br group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white">
+                <LogIn className="h-4 w-4" />
+              </span>
+              <span className="font-medium text-gray-800 transition-colors group-hover:text-sky-700">
                 Log In
               </span>
             </button>

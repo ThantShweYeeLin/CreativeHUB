@@ -1987,7 +1987,7 @@ export class DataService {
   static async getAllSupportTicketsForAdmin() {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
-      .select('*, user:user_id(id, full_name, email)')
+      .select('*, user:user_id(id, full_name, email, avatar_url)')
       .order('created_at', { ascending: false })
       .limit(200);
     return { data: data || [], error };
@@ -1999,6 +1999,29 @@ export class DataService {
       p_status: status,
       p_notes: notes || null,
     });
+    return { data, error };
+  }
+
+  static async getSupportTicketMessages(ticketId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_ticket_messages')
+      .select('*, sender:sender_id(id, full_name, avatar_url)')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
+  }
+
+  static async addSupportTicketMessage(input: { ticketId: string; senderId: string; message: string; attachmentPath?: string | null }) {
+    const { data, error } = await (supabase as any)
+      .from('support_ticket_messages')
+      .insert({
+        ticket_id: input.ticketId,
+        sender_id: input.senderId,
+        message: input.message,
+        attachment_path: input.attachmentPath || null,
+      })
+      .select('*, sender:sender_id(id, full_name, avatar_url)')
+      .single();
     return { data, error };
   }
 

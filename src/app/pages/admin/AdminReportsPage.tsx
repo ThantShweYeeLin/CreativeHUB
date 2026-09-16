@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
+import { TicketThread } from '../../../components/support/TicketThread';
 import { AdminLayout } from './AdminLayout';
 import { REPORT_REASON_LABEL } from './AdminReportDetail';
 
@@ -134,10 +136,12 @@ function UserReportsSection() {
 }
 
 function WebsiteIssuesSection() {
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
 
   const load = async () => {
     setIsLoading(true);
@@ -192,7 +196,7 @@ function WebsiteIssuesSection() {
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor[t.status] || ''}`}>{t.status}</span>
             </div>
             <p className="mt-2 text-sm text-gray-700">{t.description}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-sky-100 pt-3">
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-sky-100 pt-3">
               {(['open', 'in_progress', 'resolved', 'closed'] as const)
                 .filter((s) => s !== t.status)
                 .map((s) => (
@@ -205,7 +209,26 @@ function WebsiteIssuesSection() {
                     Mark {s.replace('_', ' ')}
                   </button>
                 ))}
+              <button
+                onClick={() => setExpandedTicketId(expandedTicketId === t.id ? null : t.id)}
+                className="ml-auto rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:shadow-md"
+              >
+                {expandedTicketId === t.id ? 'Hide conversation' : 'Reply'}
+              </button>
             </div>
+            {expandedTicketId === t.id && user?.id && (
+              <div className="mt-3 border-t border-sky-100 pt-3">
+                <TicketThread
+                  ticketId={t.id}
+                  originalDescription={t.description}
+                  originalScreenshotPath={t.screenshot_path}
+                  originalCreatedAt={t.created_at}
+                  originalAuthorName={t.user?.full_name || 'User'}
+                  originalAuthorAvatar={t.user?.avatar_url || null}
+                  currentUserId={user.id}
+                />
+              </div>
+            )}
           </div>
         ))
       )}
