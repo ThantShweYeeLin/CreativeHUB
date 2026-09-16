@@ -2067,7 +2067,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       )}
 
       {showBookingForm && isBookableFreelancer && (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
+        <div className="fixed inset-0 z-[1400] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
           <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
             <div className="sticky top-0 flex items-center justify-between border-b border-sky-100 bg-white/90 backdrop-blur-xl px-4 py-4 md:px-8 md:py-6 rounded-t-3xl">
               <h2 className="text-2xl font-bold text-gray-900">Request Booking</h2>
