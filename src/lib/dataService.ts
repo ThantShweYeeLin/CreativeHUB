@@ -110,6 +110,32 @@ export interface ExploreHeroData {
 }
 
 export class DataService {
+  // Maps a support_tickets row carrying an attendance report (see
+  // submitAttendanceTicket) onto the same AttendanceReport shape the UI
+  // already reads for legacy attendance_reports rows, so callers don't
+  // need to know which table a given report actually came from. Keeps the
+  // ticket's own `booking` join (if the caller's select() requested one)
+  // alongside it, matching legacy rows' shape for admin list views.
+  private static mapAttendanceTicketToReport(ticket: any): AttendanceReport & { booking?: any } {
+    return {
+      id: ticket.id,
+      booking_id: ticket.related_booking_id,
+      reporter_id: ticket.user_id,
+      reporter_role: ticket.reporter_role,
+      reported_user_id: ticket.reported_user_id,
+      reason: ticket.attendance_reason,
+      explanation: ticket.description || null,
+      evidence_paths: ticket.evidence_paths || [],
+      status: ticket.status,
+      admin_decision: ticket.admin_decision,
+      admin_decision_reason: ticket.admin_decision_reason,
+      resolved_by: ticket.resolved_by,
+      resolved_at: ticket.resolved_at,
+      created_at: ticket.created_at,
+      ...(ticket.booking !== undefined ? { booking: ticket.booking } : {}),
+    };
+  }
+
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
     return (
@@ -1643,24 +1669,7 @@ export class DataService {
     }
 
     if (ticketResponse.data) {
-      const ticket = ticketResponse.data;
-      const mapped: AttendanceReport = {
-        id: ticket.id,
-        booking_id: ticket.related_booking_id,
-        reporter_id: ticket.user_id,
-        reporter_role: ticket.reporter_role,
-        reported_user_id: ticket.reported_user_id,
-        reason: ticket.attendance_reason,
-        explanation: ticket.description || null,
-        evidence_paths: ticket.evidence_paths || [],
-        status: ticket.status,
-        admin_decision: ticket.admin_decision,
-        admin_decision_reason: ticket.admin_decision_reason,
-        resolved_by: ticket.resolved_by,
-        resolved_at: ticket.resolved_at,
-        created_at: ticket.created_at,
-      };
-      return { data: mapped, error: null };
+      return { data: DataService.mapAttendanceTicketToReport(ticketResponse.data), error: null };
     }
 
     const { data, error } = await (supabase as any)
@@ -1673,6 +1682,10 @@ export class DataService {
     return { data: (data || null) as AttendanceReport | null, error };
   }
 
+  // Kept for reports still sitting in the legacy attendance_reports table
+  // (filed before submit_attendance_ticket replaced submit_attendance_report)
+  // - a report's `source` field (see getAllAttendanceReportsForAdmin) says
+  // which of this pair or the *Ticket variant below applies to it.
   static async adminResolveAttendanceReport(reportId: string, decision: string, reason?: string) {
     const { data, error } = await (supabase as any).rpc('admin_resolve_attendance_report', {
       p_report_id: reportId,
@@ -1687,26 +1700,96 @@ export class DataService {
     return { data, error };
   }
 
+  // New reports (support_tickets rows carrying an attendance_reason) use
+  // these instead - same decision values as adminResolveAttendanceReport,
+  // just a ticket id rather than a legacy report id.
+  static async adminResolveAttendanceTicket(ticketId: string, decision: string, reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_resolve_attendance_ticket', {
+      p_ticket_id: ticketId,
+      p_decision: decision,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  // Requesting more evidence on a ticket-sourced attendance report reuses
+  // the generic adminRequestTicketEvidence(ticketId, note) already defined
+  // below for the ticket system - unlike the legacy
+  // adminRequestAttendanceEvidence above, it requires a note explaining
+  // what's being asked for.
+
+  // Merges both sources a report can live in - support_tickets (current)
+  // and the legacy attendance_reports table (reports filed before that
+  // migration) - into one list, each row tagged with `source` so the admin
+  // UI knows which id/RPC pair (ticket vs legacy report) applies to it.
   static async getAllAttendanceReportsForAdmin() {
-    const { data, error } = await (supabase as any)
-      .from('attendance_reports')
-      .select(
-        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
-      )
-      .in('status', ['open', 'under_review'])
-      .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    const [ticketsResponse, legacyResponse] = await Promise.all([
+      (supabase as any)
+        .from('support_tickets')
+        .select(
+          '*, booking:related_booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .not('attendance_reason', 'is', null)
+        .in('status', ['open', 'in_progress'])
+        .order('created_at', { ascending: false }),
+      (supabase as any)
+        .from('attendance_reports')
+        .select(
+          '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .in('status', ['open', 'under_review'])
+        .order('created_at', { ascending: false }),
+    ]);
+
+    if (ticketsResponse.error || legacyResponse.error) {
+      return { data: [], error: ticketsResponse.error || legacyResponse.error };
+    }
+
+    const tickets = (ticketsResponse.data || []).map((row: any) => ({
+      ...DataService.mapAttendanceTicketToReport(row),
+      source: 'ticket' as const,
+    }));
+    const legacy = (legacyResponse.data || []).map((row: any) => ({ ...row, source: 'legacy' as const }));
+    const merged = [...tickets, ...legacy].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return { data: merged, error: null };
   }
 
   static async getResolvedAttendanceReportsForAdmin() {
-    const { data, error } = await (supabase as any)
-      .from('attendance_reports')
-      .select(
-        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
-      )
-      .eq('status', 'resolved')
-      .order('resolved_at', { ascending: false });
-    return { data: data || [], error };
+    const [ticketsResponse, legacyResponse] = await Promise.all([
+      (supabase as any)
+        .from('support_tickets')
+        .select(
+          '*, booking:related_booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .not('attendance_reason', 'is', null)
+        .in('status', ['resolved', 'closed'])
+        .order('resolved_at', { ascending: false }),
+      (supabase as any)
+        .from('attendance_reports')
+        .select(
+          '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .eq('status', 'resolved')
+        .order('resolved_at', { ascending: false }),
+    ]);
+
+    if (ticketsResponse.error || legacyResponse.error) {
+      return { data: [], error: ticketsResponse.error || legacyResponse.error };
+    }
+
+    const tickets = (ticketsResponse.data || []).map((row: any) => ({
+      ...DataService.mapAttendanceTicketToReport(row),
+      source: 'ticket' as const,
+    }));
+    const legacy = (legacyResponse.data || []).map((row: any) => ({ ...row, source: 'legacy' as const }));
+    const merged = [...tickets, ...legacy].sort((a, b) => {
+      const aTime = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
+      const bTime = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    return { data: merged, error: null };
   }
 
   static async getBookingEvents(bookingId: string) {

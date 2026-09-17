@@ -70,10 +70,18 @@ export function AttendanceReportsTab() {
     void load();
   }, []);
 
-  const handleDecision = async (reportId: string, decision: AttendanceReportDecision) => {
-    setPendingId(reportId);
+  // A report's `source` (see DataService.getAllAttendanceReportsForAdmin)
+  // says which pair of RPCs applies to it: 'ticket' for reports now living
+  // in support_tickets (the current, submit_attendance_ticket path), or
+  // 'legacy' for ones still in attendance_reports (filed before that
+  // migration) - same decision values either way, just a different id/RPC.
+  const handleDecision = async (report: any, decision: AttendanceReportDecision) => {
+    setPendingId(report.id);
     setError(null);
-    const response = await DataService.adminResolveAttendanceReport(reportId, decision, decisionReason.trim() || undefined);
+    const response =
+      report.source === 'ticket'
+        ? await DataService.adminResolveAttendanceTicket(report.id, decision, decisionReason.trim() || undefined)
+        : await DataService.adminResolveAttendanceReport(report.id, decision, decisionReason.trim() || undefined);
     setPendingId(null);
     if (response.error) {
       setError((response.error as any).message || 'Unable to resolve this report.');
@@ -84,14 +92,26 @@ export function AttendanceReportsTab() {
     await load();
   };
 
-  const handleRequestEvidence = async (reportId: string) => {
-    setPendingId(reportId);
-    const response = await DataService.adminRequestAttendanceEvidence(reportId);
+  const handleRequestEvidence = async (report: any) => {
+    // The ticket-based RPC requires a note explaining what's being asked
+    // for (the legacy one didn't) - reusing the same decision-reason box
+    // for it rather than adding a second textarea just for this.
+    if (report.source === 'ticket' && !decisionReason.trim()) {
+      setError('Add a note above explaining what evidence you need before requesting it.');
+      return;
+    }
+    setPendingId(report.id);
+    setError(null);
+    const response =
+      report.source === 'ticket'
+        ? await DataService.adminRequestTicketEvidence(report.id, decisionReason.trim())
+        : await DataService.adminRequestAttendanceEvidence(report.id);
     setPendingId(null);
     if (response.error) {
       setError((response.error as any).message || 'Unable to request more evidence.');
       return;
     }
+    setDecisionReason('');
     await load();
   };
 
@@ -144,12 +164,29 @@ export function AttendanceReportsTab() {
               Reported by {report.reporter_role === 'client' ? 'Client' : 'Freelancer'}: {getReportReasonLabel(report.reason)}
             </p>
           </div>
+          {/* Ticket-sourced reports (source === 'ticket') use support_tickets'
+              status enum (open/in_progress/resolved/closed), one more value
+              than the legacy attendance_reports one (open/under_review/
+              resolved) this badge was written for - 'closed' folds into the
+              resolved styling/label, 'in_progress' into under_review's. */}
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-              report.status === 'resolved' ? 'bg-sky-50 text-gray-700' : report.status === 'under_review' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+              report.status === 'resolved' || report.status === 'closed'
+                ? 'bg-sky-50 text-gray-700'
+                : report.status === 'under_review' || report.status === 'in_progress'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-amber-100 text-amber-700'
             }`}
           >
-            {ATTENDANCE_STATE_LABEL[(report.status === 'open' ? 'disputed' : report.status) as keyof typeof ATTENDANCE_STATE_LABEL]}
+            {ATTENDANCE_STATE_LABEL[
+              (report.status === 'open'
+                ? 'disputed'
+                : report.status === 'in_progress'
+                  ? 'under_review'
+                  : report.status === 'closed'
+                    ? 'resolved'
+                    : report.status) as keyof typeof ATTENDANCE_STATE_LABEL
+            ]}
           </span>
         </button>
 
@@ -184,7 +221,7 @@ export function AttendanceReportsTab() {
               {renderEvidence(report)}
             </div>
 
-            {report.status === 'resolved' && (
+            {(report.status === 'resolved' || report.status === 'closed') && (
               <div className="rounded-xl bg-sky-50/50 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Final Decision</p>
                 <p className="text-sm text-gray-700">{DECISION_LABEL[report.admin_decision as AttendanceReportDecision] || report.admin_decision}</p>
@@ -192,7 +229,7 @@ export function AttendanceReportsTab() {
               </div>
             )}
 
-            {report.status !== 'resolved' && (
+            {report.status !== 'resolved' && report.status !== 'closed' && (
               <div className="border-t border-sky-100 pt-4">
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Decision reason (optional)</label>
                 <textarea
@@ -204,35 +241,35 @@ export function AttendanceReportsTab() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     disabled={pendingId === report.id}
-                    onClick={() => void handleDecision(report.id, 'confirm_client_no_show')}
+                    onClick={() => void handleDecision(report, 'confirm_client_no_show')}
                     className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                   >
                     <Ban className="h-3.5 w-3.5" /> Confirm Client No-Show
                   </button>
                   <button
                     disabled={pendingId === report.id}
-                    onClick={() => void handleDecision(report.id, 'confirm_freelancer_no_show')}
+                    onClick={() => void handleDecision(report, 'confirm_freelancer_no_show')}
                     className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                   >
                     <Ban className="h-3.5 w-3.5" /> Confirm Freelancer No-Show
                   </button>
                   <button
                     disabled={pendingId === report.id}
-                    onClick={() => void handleDecision(report.id, 'reject_report')}
+                    onClick={() => void handleDecision(report, 'reject_report')}
                     className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     Reject Report
                   </button>
                   <button
                     disabled={pendingId === report.id}
-                    onClick={() => void handleDecision(report.id, 'mark_mutual_dispute')}
+                    onClick={() => void handleDecision(report, 'mark_mutual_dispute')}
                     className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     Mark as Mutual Dispute
                   </button>
                   <button
                     disabled={pendingId === report.id}
-                    onClick={() => void handleDecision(report.id, 'resolve_without_penalty')}
+                    onClick={() => void handleDecision(report, 'resolve_without_penalty')}
                     className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                   >
                     <CheckCircle className="h-3.5 w-3.5" /> Resolve Without Penalty
@@ -240,7 +277,7 @@ export function AttendanceReportsTab() {
                   {report.status === 'open' && (
                     <button
                       disabled={pendingId === report.id}
-                      onClick={() => void handleRequestEvidence(report.id)}
+                      onClick={() => void handleRequestEvidence(report)}
                       className="flex items-center gap-1.5 rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
                     >
                       <AlertCircle className="h-3.5 w-3.5" /> Request Additional Evidence
