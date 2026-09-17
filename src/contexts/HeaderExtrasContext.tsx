@@ -5,9 +5,15 @@ import { createContext, useContext, useEffect, type ReactNode } from 'react';
 // its own. MainLayout owns the actual header markup/positioning: `search`
 // renders to the left of the Explore/Map/For You nav links (which always
 // stay in place), `actions` to their right, before the account controls.
+// Both of those only ever show at md+ - the nav/search/actions row is
+// hidden entirely below that. `mobileActions` is the phone equivalent: it
+// renders inline with the account controls (which ARE always visible),
+// right beside the Get Started/Become a Freelancer/Dashboard button, since
+// there's no separate nav row to inject into on a narrow screen.
 export interface HeaderExtras {
   search?: ReactNode;
   actions?: ReactNode;
+  mobileActions?: ReactNode;
 }
 
 type SetHeaderExtras = (extras: HeaderExtras | null) => void;
@@ -30,7 +36,7 @@ export function useHeaderExtras(extras: HeaderExtras | null) {
       return;
     }
     setHeaderExtras(extras);
-  }, [setHeaderExtras, extras?.search, extras?.actions]);
+  }, [setHeaderExtras, extras?.search, extras?.actions, extras?.mobileActions]);
 
   // Separately, clears MainLayout's header back to normal only on true
   // unmount (route change away from this page) - otherwise the last extras
