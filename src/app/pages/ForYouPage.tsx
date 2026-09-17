@@ -932,6 +932,16 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
   const searchSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPastSearchSection, setIsPastSearchSection] = useState(false);
+  // Which of the two search inputs (the full-size one further down the
+  // page, or the condensed one in the header once scrolled past it) the
+  // results dropdown belongs to right now - both are bound to the same
+  // userSearchQuery/userSearchResults state, but each needs its own
+  // dropdown anchored to itself. Without this, typing in the header's
+  // input opened the results box down at the (by-then off-screen)
+  // full-size input instead, since that box's visibility was derived
+  // straight from userSearchQuery with no notion of which input the user
+  // was actually looking at.
+  const [activeSearchInput, setActiveSearchInput] = useState<'main' | 'header' | null>(null);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
   const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
@@ -1096,6 +1106,34 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Shared by both the full-size search box's results dropdown and the
+  // condensed header search box's own copy of it, so results look and
+  // behave identically in either place.
+  const renderUserSearchResultsBody = () =>
+    isUserSearchLoading ? (
+      <p className="px-3 py-3 text-sm text-gray-500">Searching users...</p>
+    ) : userSearchResults.length === 0 ? (
+      <p className="px-3 py-3 text-sm text-gray-500">No users found.</p>
+    ) : (
+      userSearchResults.map((result: any) => (
+        <button
+          key={String(result.id)}
+          onClick={() => {
+            setUserSearchQuery('');
+            setUserSearchResults([]);
+            onViewProfile?.(String(result.id));
+          }}
+          className="flex w-full items-center gap-3 border-b border-sky-50 px-3 py-3 text-left transition-colors hover:bg-sky-50 last:border-b-0"
+        >
+          <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
+            <p className="truncate text-xs text-gray-500">{result.email}</p>
+          </div>
+        </button>
+      ))
+    );
+
   // Shared by both the full ComposerLauncher below and the condensed
   // header button, so "write a post" behaves identically wherever it's
   // clicked from.
@@ -1123,10 +1161,16 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           type="text"
           value={userSearchQuery}
           onChange={(event) => setUserSearchQuery(event.target.value)}
+          onFocus={() => setActiveSearchInput('header')}
           placeholder="Search users..."
           tabIndex={isPastSearchSection ? 0 : -1}
           className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
         />
+        {(userSearchQuery.trim().length >= 2 || isUserSearchLoading) && activeSearchInput === 'header' && (
+          <div className="absolute left-0 right-0 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-sky-100 bg-white/95 backdrop-blur-xl shadow-[0_12px_40px_rgba(56,189,248,0.2)] z-50">
+            {renderUserSearchResultsBody()}
+          </div>
+        )}
       </div>
     ),
     actions: (
@@ -1962,36 +2006,15 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
               <input
                 value={userSearchQuery}
                 onChange={(event) => setUserSearchQuery(event.target.value)}
+                onFocus={() => setActiveSearchInput('main')}
                 placeholder="Search users by name or email"
                 className="h-10 w-full rounded-xl border border-sky-100 bg-sky-50/50 pl-9 pr-3 text-sm text-gray-900 outline-none focus:border-sky-300 focus:bg-white"
               />
             </div>
 
-            {(userSearchQuery.trim().length >= 2 || isUserSearchLoading) && (
+            {(userSearchQuery.trim().length >= 2 || isUserSearchLoading) && activeSearchInput === 'main' && (
               <div className="mt-3 max-h-64 overflow-y-auto rounded-xl border border-sky-100 bg-white">
-                {isUserSearchLoading ? (
-                  <p className="px-3 py-3 text-sm text-gray-500">Searching users...</p>
-                ) : userSearchResults.length === 0 ? (
-                  <p className="px-3 py-3 text-sm text-gray-500">No users found.</p>
-                ) : (
-                  userSearchResults.map((result: any) => (
-                    <button
-                      key={String(result.id)}
-                      onClick={() => {
-                        setUserSearchQuery('');
-                        setUserSearchResults([]);
-                        onViewProfile?.(String(result.id));
-                      }}
-                      className="flex w-full items-center gap-3 border-b border-sky-50 px-3 py-3 text-left transition-colors hover:bg-sky-50 last:border-b-0"
-                    >
-                      <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
-                        <p className="truncate text-xs text-gray-500">{result.email}</p>
-                      </div>
-                    </button>
-                  ))
-                )}
+                {renderUserSearchResultsBody()}
               </div>
             )}
           </div>

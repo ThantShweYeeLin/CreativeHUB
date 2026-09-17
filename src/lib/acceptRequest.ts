@@ -7,10 +7,12 @@ const DEFAULT_BOOKING_DURATION_MINUTES = 120;
 // The platform holds this share of the fee as an escrowed deposit; the rest
 // is settled directly between client and freelancer (see
 // src/app/pages/admin/AdminBookingDetail.tsx's note on that). Older bookings
-// created before this was persisted still fall back to 30% client-side
-// (src/app/pages/bookingTracking/useBookingTracking.ts) — that's the actual
-// rate those legacy rows were charged, not this current policy.
-const DEPOSIT_PERCENTAGE = 0.5;
+// created before this was persisted also fall back to 30% client-side
+// (src/app/pages/bookingTracking/useBookingTracking.ts) — that fallback is
+// hardcoded independently of this constant (it's the rate those specific
+// legacy rows were actually charged), so it won't silently drift if this
+// ever changes again.
+const DEPOSIT_PERCENTAGE = 0.3;
 
 // Shared by both sides of a request/counter-offer negotiation
 // (FreelancerDashboard accepting a request or a client's counter, and

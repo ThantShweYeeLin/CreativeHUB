@@ -511,8 +511,19 @@ export function ExplorePage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  // Which of the two search inputs (the full-size one further down the
+  // page, or the condensed one in the header once scrolled past it) the
+  // suggestions dropdown belongs to right now - both are bound to the same
+  // searchQuery/suggestions state, but each needs its OWN dropdown
+  // anchored to itself. Without this, typing in the header's input opened
+  // the dropdown down at the (by-then off-screen) full-size input instead,
+  // since showSuggestions was a single shared flag with only one place to
+  // render it.
+  const [activeSearchInput, setActiveSearchInput] = useState<'main' | 'header' | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
+  const headerInputRef = useRef<HTMLInputElement | null>(null);
+  const headerSuggestionsRef = useRef<HTMLDivElement | null>(null);
   const searchSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPastSearchSection, setIsPastSearchSection] = useState(false);
   const hasRestoredScrollRef = useRef(false);
@@ -864,15 +875,20 @@ export function ExplorePage() {
     };
   }, [searchQuery]);
 
-  // Click outside to close suggestions
+  // Click outside to close suggestions - "outside" means outside whichever
+  // input/dropdown pair is actually showing right now, not both pairs at
+  // once (the other pair isn't rendered/visible, so its refs are null and
+  // would otherwise always count as "outside").
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
+      const currentInputRef = activeSearchInput === 'header' ? headerInputRef : inputRef;
+      const currentSuggestionsRef = activeSearchInput === 'header' ? headerSuggestionsRef : suggestionsRef;
       if (
-        suggestionsRef.current &&
-        inputRef.current &&
-        !suggestionsRef.current.contains(target) &&
-        !inputRef.current.contains(target)
+        currentSuggestionsRef.current &&
+        currentInputRef.current &&
+        !currentSuggestionsRef.current.contains(target) &&
+        !currentInputRef.current.contains(target)
       ) {
         setShowSuggestions(false);
       }
@@ -880,7 +896,7 @@ export function ExplorePage() {
 
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
-  }, []);
+  }, [activeSearchInput]);
 
   // Freelancers whose category isn't one of the five supported labels
   // (legacy data, or a profile mid-way through picking a valid category)
@@ -1093,6 +1109,38 @@ export function ExplorePage() {
     return filters.services.length + filters.locations.length + (filters.nearMe ? 1 : 0) + (isDefaultPrice ? 0 : 1) + (filters.minRating !== null ? 1 : 0);
   }, [filters]);
 
+  // Shared by both the full-size search box's dropdown and the condensed
+  // header search box's own copy of it, so a suggestion looks and behaves
+  // identically in either place.
+  const renderSearchSuggestion = (s: any, idx: number) => {
+    // DataService.searchUsers returns flat rows (full_name/email directly
+    // on the row); DataService.searchUsersFallback returns
+    // freelancer_profiles-shaped rows (name/email nested under `.users`) —
+    // a suggestion can be either shape, so every field needs both a flat
+    // and a nested fallback.
+    const id = s.user_id || s.users?.id || s.id;
+    const name = s.users?.full_name || s.full_name || s.title || s.users?.email || s.email || 'Unknown';
+    const subtitle = s.users?.email || s.email || s.users?.username || s.title || '';
+    const avatar = s.users?.avatar_url || s.avatar_url || DEFAULT_AVATAR_URL;
+    const suggestionGender = s.users?.gender || s.gender || null;
+    return (
+      <button
+        key={id || idx}
+        onClick={() => {
+          setShowSuggestions(false);
+          navigate(`/profile/${id}`);
+        }}
+        className="w-full text-left px-3 py-2 hover:bg-sky-50 flex items-center gap-3"
+      >
+        <Avatar src={avatar} alt={name} gender={suggestionGender} sizeClassName="w-8 h-8" />
+        <div className="flex flex-col">
+          <span className="text-sm font-medium text-gray-900">{name}</span>
+          {subtitle && <span className="text-xs text-gray-500">{subtitle}</span>}
+        </div>
+      </button>
+    );
+  };
+
   // Condensed header content, mounted in MainLayout's header at all times
   // (not just once scrolled past the full-size search section) so its
   // reserved width never changes — only `isPastSearchSection` toggles
@@ -1115,12 +1163,25 @@ export function ExplorePage() {
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
         <input
           type="text"
+          ref={headerInputRef}
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
+          onFocus={() => {
+            setActiveSearchInput('header');
+            setShowSuggestions(suggestions.length > 0);
+          }}
           placeholder="Search freelancers..."
           tabIndex={isPastSearchSection ? 0 : -1}
           className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
         />
+        {showSuggestions && activeSearchInput === 'header' && suggestions.length > 0 && (
+          <div
+            ref={headerSuggestionsRef}
+            className="absolute left-0 right-0 mt-2 max-h-80 overflow-y-auto bg-white/95 backdrop-blur-xl border border-sky-100 rounded-2xl shadow-[0_12px_40px_rgba(56,189,248,0.2)] z-50"
+          >
+            {suggestions.map((s, idx) => renderSearchSuggestion(s, idx))}
+          </div>
+        )}
       </div>
     ),
     // A previous version scaled this gap up at wider breakpoints (up to
@@ -1533,43 +1594,19 @@ export function ExplorePage() {
             ref={inputRef}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            onFocus={() => setShowSuggestions(suggestions.length > 0)}
+            onFocus={() => {
+              setActiveSearchInput('main');
+              setShowSuggestions(suggestions.length > 0);
+            }}
             placeholder="Search by name, email, or specialty — e.g. photographer, makeup, wedding"
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.18)] border border-sky-100 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all"
           />
-          {showSuggestions && suggestions.length > 0 && (
+          {showSuggestions && activeSearchInput === 'main' && suggestions.length > 0 && (
             <div
               ref={suggestionsRef}
               className="absolute left-0 right-0 mt-2 bg-white/95 backdrop-blur-xl border border-sky-100 rounded-2xl shadow-[0_12px_40px_rgba(56,189,248,0.2)] z-50 overflow-hidden"
             >
-              {suggestions.map((s, idx) => {
-                // DataService.searchUsers returns flat rows (full_name/email
-                // directly on the row); DataService.searchUsersFallback
-                // returns freelancer_profiles-shaped rows (name/email nested
-                // under `.users`) — a suggestion can be either shape, so
-                // every field needs both a flat and a nested fallback.
-                const id = s.user_id || s.users?.id || s.id;
-                const name = s.users?.full_name || s.full_name || s.title || s.users?.email || s.email || 'Unknown';
-                const subtitle = s.users?.email || s.email || s.users?.username || s.title || '';
-                const avatar = s.users?.avatar_url || s.avatar_url || DEFAULT_AVATAR_URL;
-                const suggestionGender = s.users?.gender || s.gender || null;
-                return (
-                  <button
-                    key={id || idx}
-                    onClick={() => {
-                      setShowSuggestions(false);
-                      navigate(`/profile/${id}`);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-sky-50 flex items-center gap-3"
-                  >
-                    <Avatar src={avatar} alt={name} gender={suggestionGender} sizeClassName="w-8 h-8" />
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">{name}</span>
-                      {subtitle && <span className="text-xs text-gray-500">{subtitle}</span>}
-                    </div>
-                  </button>
-                );
-              })}
+              {suggestions.map((s, idx) => renderSearchSuggestion(s, idx))}
             </div>
           )}
         </div>
