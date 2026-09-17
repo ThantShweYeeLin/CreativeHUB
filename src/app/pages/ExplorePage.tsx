@@ -420,6 +420,7 @@ function formatHeroStat(count: number) {
 
 export function ExplorePage() {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const { currency: preferredCurrency } = useCurrency();
   const navigate = useNavigate();
   const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
@@ -538,19 +539,20 @@ export function ExplorePage() {
   // Drives the condensed search/filter/Event Assistant bar that replaces
   // the header's nav links once the user scrolls past the full-size search
   // section below the hero - triggers as soon as that section's bottom
-  // edge passes under the sticky header (h-20 = 80px at md+, where the
-  // condensed bar shows), reverts the moment it's scrolled back into view.
+  // edge passes under the sticky header (h-16 = 64px on mobile, h-20 = 80px
+  // at md+), reverts the moment it's scrolled back into view. Also drives
+  // the phone equivalent (mobileActions, icons beside Get Started).
   useEffect(() => {
-    const HEADER_HEIGHT_PX = 80;
+    const headerHeightPx = isMobile ? 64 : 80;
     const handleScroll = () => {
       const section = searchSectionRef.current;
       if (!section) return;
-      setIsPastSearchSection(section.getBoundingClientRect().bottom <= HEADER_HEIGHT_PX);
+      setIsPastSearchSection(section.getBoundingClientRect().bottom <= headerHeightPx);
     };
     handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isMobile]);
 
   // Restore it exactly once, right after the first load finishes — the page
   // needs to actually be tall enough (profiles rendered) before scrolling
@@ -1159,6 +1161,39 @@ export function ExplorePage() {
         </button>
       </div>
     ),
+    // Phone equivalent of `actions` above - there's no separate nav row to
+    // inject into on a narrow screen (that whole row is md+ only), so this
+    // renders inline beside the Get Started/account-controls cluster
+    // instead, icon-only since there's no room for labels there either way.
+    mobileActions: (
+      <div className={`flex items-center gap-1.5 ${condensedVisibilityClass}`}>
+        <button
+          type="button"
+          onClick={() => setShowSearchFilter(true)}
+          title="Advanced Filter"
+          aria-label="Advanced Filter"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="relative flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-600 transition-colors hover:bg-sky-50"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          {activeAdvancedFilterCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-0.5 text-[9px] font-bold text-white">
+              {activeAdvancedFilterCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/event-matcher')}
+          title="Event Assistant"
+          aria-label="Event Assistant"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105"
+        >
+          <Sparkles className="h-4 w-4" />
+        </button>
+      </div>
+    ),
   });
 
   return (
@@ -1538,22 +1573,15 @@ export function ExplorePage() {
             </div>
           )}
         </div>
-        {/* @container on each button (not the row) - on mobile each button
-            is flex-1, sharing this row's width, so it's each button's OWN
-            width that determines whether its own label fits, not the row's
-            combined width. A container query reacts to that actual width
-            instead of a viewport breakpoint, dropping to icon-only when
-            it's genuinely tight regardless of why (a narrow phone, or this
-            pattern reused somewhere with less room). */}
         <div className="flex gap-3">
           <button
             onClick={() => setShowSearchFilter(true)}
-            className="@container relative flex-1 md:flex-none flex items-center justify-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100 @[170px]:justify-start"
+            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:-rotate-6 transition-transform">
               <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <div className="hidden text-left @[170px]:block">
+            <div className="text-left">
               <div className="font-semibold text-sm md:text-base text-gray-900">Advanced Filter</div>
               <div className="text-xs text-gray-500 hidden md:block">Refine Your Search</div>
             </div>
@@ -1566,12 +1594,12 @@ export function ExplorePage() {
           <button
             type="button"
             onClick={() => navigate('/event-matcher')}
-            className="@container flex-1 md:flex-none flex items-center justify-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100 @[170px]:justify-start"
+            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-cyan-400 to-indigo-500 shadow-lg shadow-cyan-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <div className="hidden text-left @[170px]:block">
+            <div className="text-left">
               <div className="font-semibold text-sm md:text-base text-gray-900">Event Assistant</div>
               <div className="text-xs text-gray-500 hidden md:block">Plan your event, get matched</div>
             </div>

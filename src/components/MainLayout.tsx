@@ -699,6 +699,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                   ? 'Freelancer Dashboard'
                   : 'Become a Freelancer'}
               </button>
+              {headerExtras?.mobileActions && <div className="flex items-center gap-1.5 md:hidden">{headerExtras.mobileActions}</div>}
               <div className="relative">
                 <button
                   ref={bellButtonRef}
