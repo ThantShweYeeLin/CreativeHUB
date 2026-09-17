@@ -32,6 +32,8 @@ interface NotificationsPanelProps {
   onOpenProfile?: (notification: NotificationPanelItem) => void;
   onOpenGroupMessage?: (notification: NotificationPanelItem) => void;
   onOpenBooking?: (notification: NotificationPanelItem) => void;
+  /** Any notification whose type starts with 'ticket_' (replies, evidence
+   * requests, status changes) routes here. */
   onOpenTicket?: (notification: NotificationPanelItem) => void;
   /** The bell button's ref — used to measure where to anchor the portaled
    * panel on desktop (see the positioning effect below). Optional so the
@@ -85,6 +87,8 @@ const getNotificationIcon = (type: string) => {
       return <AlertCircle className="w-4 h-4 text-amber-600" />;
     case 'ticket_status_updated':
       return <Bell className="w-4 h-4 text-blue-600" />;
+    case 'ticket_reply':
+      return <MessageSquare className="w-4 h-4 text-sky-600" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
   }
@@ -302,6 +306,8 @@ export function NotificationsPanel({
                     onOpenRequests?.(notification);
                   } else if (notification.type === 'group_message') {
                     onOpenGroupMessage?.(notification);
+                  } else if (notification.type.startsWith('ticket_')) {
+                    onOpenTicket?.(notification);
                   } else if (notification.type.includes('message')) {
                     onOpenMessages?.();
                   } else if (
@@ -319,8 +325,6 @@ export function NotificationsPanel({
                     ].includes(notification.type)
                   ) {
                     onOpenBooking?.(notification);
-                  } else if (notification.type.startsWith('ticket_')) {
-                    onOpenTicket?.(notification);
                   }
 
                   onClose();

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { Bell, Menu } from 'lucide-react';
 import logoImage from '../imports/logo.png';
 import { useAuth } from '../contexts/AuthContext';
+import { HeaderExtrasContext, type HeaderExtras } from '../contexts/HeaderExtrasContext';
 import { UserMenu } from '../app/components/UserMenu';
 import { AuthPromptModal } from '../app/components/AuthPromptModal';
 import { NotificationPanelItem, NotificationsPanel } from '../app/components/NotificationsPanel';
@@ -27,6 +28,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [canAccessFreelancerDashboard, setCanAccessFreelancerDashboard] = useState(false);
+  const [headerExtras, setHeaderExtras] = useState<HeaderExtras | null>(null);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
 
   const unreadNotificationsCount = notifications.filter((item) => !item.read).length;
@@ -603,6 +605,31 @@ export function MainLayout({ children }: MainLayoutProps) {
     }
   };
 
+  const navPills = (
+    <nav className="hidden flex-shrink-0 items-center gap-1 rounded-full border border-sky-100 bg-white/60 p-1 md:flex">
+      {[
+        { label: 'Explore', path: '/explore' },
+        { label: 'Map', path: '/map' },
+        { label: 'For You', path: '/for-you' },
+      ].map((tab) => {
+        const isActive = location.pathname === tab.path;
+        return (
+          <button
+            key={tab.path}
+            onClick={() => navigate(tab.path)}
+            className={`relative rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+              isActive
+                ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
+                : 'text-gray-600 hover:bg-sky-50 hover:text-sky-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
   return (
     <div className="min-h-screen bg-white pb-20 md:pb-0">
       {/* Header */}
@@ -621,29 +648,26 @@ export function MainLayout({ children }: MainLayoutProps) {
               />
             </button>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-1 rounded-full border border-sky-100 bg-white/60 p-1">
-              {[
-                { label: 'Explore', path: '/explore' },
-                { label: 'Map', path: '/map' },
-                { label: 'For You', path: '/for-you' },
-              ].map((tab) => {
-                const isActive = location.pathname === tab.path;
-                return (
-                  <button
-                    key={tab.path}
-                    onClick={() => navigate(tab.path)}
-                    className={`relative rounded-full px-4 py-2 text-sm font-semibold transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30'
-                        : 'text-gray-600 hover:bg-sky-50 hover:text-sky-700'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
-            </nav>
+            {/* A page (Explore) that wants condensed header content keeps
+                its search/actions nodes mounted here at all times, only
+                toggling their own visibility internally - never adding or
+                removing them from this row. That keeps the two spacer
+                slots below at a constant width (so the nav links between
+                them never jump as the page scrolls), and, being normal
+                flex content rather than absolutely positioned, it can
+                never overlap the account controls on the right or leave a
+                stray gap. Each spacer is flex-1 (so the two split the
+                space between logo/nav and nav/account-controls equally)
+                with its content centered inside it - putting the search
+                box in the middle of the logo<->nav gap, and the actions in
+                the middle of the nav<->account-controls gap. */}
+            <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+              {headerExtras?.search}
+            </div>
+            {navPills}
+            <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+              {headerExtras?.actions}
+            </div>
 
             {/* Right Actions */}
             <div className="flex items-center gap-2 md:gap-4">
@@ -659,7 +683,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                       : '/become-freelancer'
                   )
                 }
-                className="hidden md:block rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-2.5 font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105"
+                className="whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105 sm:px-6 sm:py-2.5 sm:text-sm"
               >
                 {!isAuthenticated
                   ? 'Get Started'
@@ -769,6 +793,8 @@ export function MainLayout({ children }: MainLayoutProps) {
                       setShowNotifications(false);
                       if (notification.relatedId) {
                         navigate(`/tickets/${notification.relatedId}`);
+                      } else {
+                        navigate('/tickets');
                       }
                     }}
                   />
@@ -811,7 +837,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
       {/* Main Content */}
       <main className="max-w-[1680px] mx-auto px-4 md:px-8 py-4 md:py-8">
-        {children}
+        <HeaderExtrasContext.Provider value={setHeaderExtras}>{children}</HeaderExtrasContext.Provider>
       </main>
 
       {authPromptMessage && (

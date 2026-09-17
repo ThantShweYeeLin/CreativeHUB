@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { MessageCircle } from 'lucide-react';
+import { TicketThread } from '../../../components/support/TicketThread';
+import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import { TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory, type TicketStatus } from '../../../lib/supportTickets';
 
@@ -12,6 +15,7 @@ const EVENT_LABEL: Record<string, string> = {
 
 export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
@@ -38,10 +42,9 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
     setTicket(ticketResponse.data);
     setEvents(eventsResponse.data);
 
-    const allPaths = [
-      ...(ticketResponse.data.screenshot_path ? [ticketResponse.data.screenshot_path] : []),
-      ...eventsResponse.data.flatMap((e: any) => e.evidence_paths || []),
-    ];
+    // ticket.screenshot_path is deliberately not resolved here - TicketThread
+    // resolves it itself as the conversation's first bubble.
+    const allPaths = eventsResponse.data.flatMap((e: any) => e.evidence_paths || []);
     const entries = await Promise.all(
       allPaths.map(async (path: string) => {
         const res = await DataService.getReportEvidenceSignedUrl(path);
@@ -99,14 +102,6 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
           </span>
         </div>
         <p className="text-xs text-gray-500 mb-2">{ticket.user?.full_name || 'A user'} · {ticket.user?.email} · {new Date(ticket.created_at).toLocaleString()}</p>
-        <p className="text-sm text-gray-700">{ticket.description}</p>
-        {ticket.screenshot_path && signedUrls[ticket.screenshot_path] && (
-          <img
-            src={signedUrls[ticket.screenshot_path]}
-            alt="Attached screenshot"
-            className="mt-3 max-h-64 rounded-lg border border-sky-100 object-contain"
-          />
-        )}
         {ticket.related_booking_id && (
           <button
             onClick={() => navigate(`/admin/bookings/${ticket.related_booking_id}`)}
@@ -191,6 +186,24 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
           ))}
         </div>
       </div>
+
+      {user?.id && (
+        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+          <div className="mb-3 flex items-center gap-2 text-gray-900">
+            <MessageCircle className="w-5 h-5" />
+            <h2 className="font-bold">Conversation</h2>
+          </div>
+          <TicketThread
+            ticketId={ticket.id}
+            originalDescription={ticket.description}
+            originalScreenshotPath={ticket.screenshot_path}
+            originalCreatedAt={ticket.created_at}
+            originalAuthorName={ticket.user?.full_name || 'User'}
+            originalAuthorAvatar={ticket.user?.avatar_url || null}
+            currentUserId={user.id}
+          />
+        </div>
+      )}
     </div>
   );
 }
