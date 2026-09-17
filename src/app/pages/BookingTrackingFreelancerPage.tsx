@@ -196,6 +196,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               confirmations={confirmations}
               report={attendanceReport}
               onRefresh={refresh}
+              onTicketCreated={(ticketId) => navigate(`/tickets/${ticketId}`)}
             />
             <AttendanceTimeline
               events={events}

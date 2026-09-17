@@ -263,6 +263,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               confirmations={confirmations}
               report={attendanceReport}
               onRefresh={refresh}
+              onTicketCreated={(ticketId) => navigate(`/tickets/${ticketId}`)}
             />
             <AttendanceTimeline
               events={events}

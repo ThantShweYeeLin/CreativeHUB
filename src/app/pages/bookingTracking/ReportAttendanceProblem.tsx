@@ -4,6 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import {
   getReportReasonOptions,
+  getReportReasonLabel,
   getEvidenceRequirement,
   EVIDENCE_FIELD_LABEL,
   type EvidenceField,
@@ -26,7 +27,10 @@ export function ReportAttendanceProblem({
   bookingId: string;
   role: Role;
   onCancel: () => void;
-  onSubmitted: () => Promise<void>;
+  /** Called after both the attendance report and its linked support ticket
+   * are submitted - `ticketId` is the new ticket's id, for the caller to
+   * navigate to (My Tickets / the ticket thread) once this closes. */
+  onSubmitted: (ticketId?: string) => Promise<void>;
 }) {
   const { user } = useAuth();
   const reasonOptions = getReportReasonOptions(role);
@@ -69,12 +73,27 @@ export function ReportAttendanceProblem({
       explanation: explanation.trim(),
       evidencePaths,
     });
-    setIsSubmitting(false);
     if (response.error) {
+      setIsSubmitting(false);
       setError((response.error as any)?.message || 'Unable to submit this report. Please try again.');
       return;
     }
-    await onSubmitted();
+
+    // This button has always said "Create a Ticket" / "Submit Ticket", but
+    // previously only wrote to attendance_reports - nothing a reporter
+    // could actually see or get a reply on. Also files a real support
+    // ticket, linked to this booking, so it shows up (and can be replied
+    // to) in My Tickets like any other ticket.
+    const ticketResponse = await DataService.submitSupportTicket({
+      userId: user.id,
+      category: 'booking',
+      description: [getReportReasonLabel(reason), explanation.trim()].filter(Boolean).join('\n\n'),
+      screenshotPath: evidencePaths[0] || null,
+      relatedBookingId: bookingId,
+    });
+
+    setIsSubmitting(false);
+    await onSubmitted(ticketResponse.data?.id);
   };
 
   return (

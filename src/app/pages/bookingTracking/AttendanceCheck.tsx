@@ -23,6 +23,7 @@ export function AttendanceCheck({
   confirmations,
   report,
   onRefresh,
+  onTicketCreated,
 }: {
   booking: any;
   bookingId: string;
@@ -31,6 +32,9 @@ export function AttendanceCheck({
   confirmations: AttendanceConfirmation[];
   report: AttendanceReport | null;
   onRefresh: () => Promise<void>;
+  /** Fires once the report's linked support ticket is created, so the page
+   * can navigate to it once this form closes. */
+  onTicketCreated?: (ticketId: string) => void;
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -193,9 +197,12 @@ export function AttendanceCheck({
           bookingId={bookingId}
           role={role}
           onCancel={() => setShowReportForm(false)}
-          onSubmitted={async () => {
+          onSubmitted={async (ticketId) => {
             setShowReportForm(false);
             await onRefresh();
+            if (ticketId) {
+              onTicketCreated?.(ticketId);
+            }
           }}
         />
       )}
