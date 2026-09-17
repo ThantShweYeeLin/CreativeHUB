@@ -15,8 +15,8 @@ import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
 import { haversineDistanceKm } from '../../lib/geo';
-import { useHeaderExtras } from '../../contexts/HeaderExtrasContext';
 import { useIsMobile } from '../components/ui/use-mobile';
+import { useHeaderExtras } from '../../contexts/HeaderExtrasContext';
 
 interface ProfileCardProps {
   id: string;
@@ -213,6 +213,11 @@ interface FeaturedShuffleProps {
   onOpenProfile: (id: string) => void;
   favoritedIds: Set<string>;
   onToggleFavorite: (id: string) => void;
+  /** Swiping the front card on mobile navigates the deck the same as the
+   * prev/next arrows do — those arrows only ever reveal on hover, which
+   * never fires on a touchscreen, so swipe is mobile's only way to control
+   * the deck manually today. */
+  onSwipe: (direction: 'next' | 'prev') => void;
 }
 
 // One constant size per layout, not recomputed off window width — each card
@@ -231,7 +236,7 @@ const FEATURED_CARD_WIDTH = 330;
 // comfortably fit a phone width with room to spare either side.
 const FEATURED_CARD_WIDTH_MOBILE = 210;
 
-function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favoritedIds, onToggleFavorite }: FeaturedShuffleProps) {
+function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favoritedIds, onToggleFavorite, onSwipe }: FeaturedShuffleProps) {
   const isMobile = useIsMobile();
   const cardWidth = isMobile ? FEATURED_CARD_WIDTH_MOBILE : FEATURED_CARD_WIDTH;
   const gap = Math.round(cardWidth * 0.09);
@@ -283,6 +288,13 @@ function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favorite
   }));
 
   const deckWidth = isMobile ? cardWidth + gap * 4 : cardWidth * 2 + gap;
+  // Distinguishes an actual swipe from a tap that also nudges the pointer a
+  // few pixels — onDragStart only fires once framer-motion's own movement
+  // threshold is crossed, so a clean tap never sets this at all; a real
+  // drag sets it just long enough to suppress the click that would
+  // otherwise also fire and navigate to the profile.
+  const isDraggingRef = useRef(false);
+  const swipeThreshold = cardWidth * 0.25;
 
   return (
     <div
@@ -301,7 +313,30 @@ function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favorite
               animate={style}
               exit={exitTo}
               transition={{ type: 'spring', stiffness: 280, damping: 28 }}
-              onClick={isFront ? () => onOpenProfile(candidate.id) : undefined}
+              drag={isMobile && isFront ? 'x' : false}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.7}
+              onDragStart={() => {
+                isDraggingRef.current = true;
+              }}
+              onDragEnd={(_event, info) => {
+                if (info.offset.x < -swipeThreshold) {
+                  onSwipe('next');
+                } else if (info.offset.x > swipeThreshold) {
+                  onSwipe('prev');
+                }
+                setTimeout(() => {
+                  isDraggingRef.current = false;
+                }, 0);
+              }}
+              onClick={
+                isFront
+                  ? () => {
+                      if (isDraggingRef.current) return;
+                      onOpenProfile(candidate.id);
+                    }
+                  : undefined
+              }
               style={{ width: cardWidth, height: cardHeight }}
               className={`group absolute left-0 top-0 overflow-hidden rounded-[24px] text-left shadow-[0_25px_60px_-15px_rgba(56,189,248,0.45)] ${
                 isFront ? 'cursor-pointer' : 'pointer-events-none'
@@ -1067,7 +1102,10 @@ export function ExplorePage() {
   // card, and Event Assistant card below (setSearchQuery,
   // setShowSearchFilter, navigate('/event-matcher')) so it behaves
   // identically rather than being a second, separate implementation.
-  // Icon-only at md, gains text labels at lg+.
+  // Icon-only until the actions slot itself (a @container, see MainLayout)
+  // has room for text — a container query rather than a viewport
+  // breakpoint, since this slot's actual width depends on the logo/nav/
+  // account controls around it, not on how wide the window is.
   const condensedVisibilityClass = isPastSearchSection ? '' : 'invisible';
   useHeaderExtras({
     search: (
@@ -1083,21 +1121,26 @@ export function ExplorePage() {
         />
       </div>
     ),
-    // Gap scales up with viewport width instead of staying fixed - a
-    // constant large gap (however it looked on a maximized window) left no
-    // room to shrink on a narrower one, overflowing into the Freelancer
-    // Dashboard button.
+    // A previous version scaled this gap up at wider breakpoints (up to
+    // 64px) to spread the two buttons toward opposite ends of the header's
+    // actions slot on a maximized window - but that slot's actual width
+    // depends on how much space is left over after the logo/nav/account
+    // controls, not on viewport width alone, so at plenty of ordinary
+    // desktop widths (e.g. 1280-1400px) that gap alone nearly filled the
+    // whole slot, leaving no margin on either side and crowding Advanced
+    // Filter against the nav links / Event Assistant against the account
+    // controls. A small, constant gap can't do that at any width.
     actions: (
-      <div className={`flex flex-shrink-0 items-center gap-2 lg:gap-10 xl:gap-16 ${condensedVisibilityClass}`}>
+      <div className={`flex flex-shrink-0 items-center gap-3 ${condensedVisibilityClass}`}>
         <button
           type="button"
           onClick={() => setShowSearchFilter(true)}
           title="Advanced Filter"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="relative flex flex-shrink-0 items-center gap-1.5 rounded-full border border-sky-100 bg-white/80 px-2.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-sky-50 lg:px-3"
+          className="relative flex flex-shrink-0 items-center gap-1.5 rounded-full border border-sky-100 bg-white/80 px-2.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-sky-50 @sm:px-3"
         >
           <SlidersHorizontal className="h-4 w-4 text-sky-500" />
-          <span className="hidden lg:inline">Advanced Filter</span>
+          <span className="hidden @sm:inline">Advanced Filter</span>
           {activeAdvancedFilterCount > 0 && (
             <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-1 text-[10px] font-bold text-white">
               {activeAdvancedFilterCount}
@@ -1109,10 +1152,10 @@ export function ExplorePage() {
           onClick={() => navigate('/event-matcher')}
           title="Event Assistant"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105 lg:px-3"
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105 @sm:px-3"
         >
           <Sparkles className="h-4 w-4" />
-          <span className="hidden lg:inline">Event Assistant</span>
+          <span className="hidden @sm:inline">Event Assistant</span>
         </button>
       </div>
     ),
@@ -1364,15 +1407,20 @@ export function ExplorePage() {
                     onOpenProfile={(id) => navigate(`/profile/${id}`)}
                     favoritedIds={favoritedIds}
                     onToggleFavorite={handleToggleFavorite}
+                    onSwipe={navigateHeroFeatured}
                   />
 
                   {candidates.length > 1 && (
                     <>
+                      {/* Visible by default on mobile (no hover state to reveal
+                          them on a touchscreen — swiping the card itself is the
+                          other way to navigate there), hover-revealed on desktop
+                          as before. */}
                       <button
                         type="button"
                         onClick={() => navigateHeroFeatured('prev')}
                         aria-label="Previous featured freelancer"
-                        className="absolute left-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                        className="absolute left-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white md:opacity-0 md:group-hover/hero:opacity-100"
                       >
                         <ChevronLeft className="h-5 w-5" />
                       </button>
@@ -1380,7 +1428,7 @@ export function ExplorePage() {
                         type="button"
                         onClick={() => navigateHeroFeatured('next')}
                         aria-label="Next featured freelancer"
-                        className="absolute right-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-0 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white group-hover/hero:opacity-100"
+                        className="absolute right-0 top-1/2 z-50 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-gray-700 opacity-100 shadow-sm backdrop-blur-sm transition-all hover:scale-110 hover:bg-white md:opacity-0 md:group-hover/hero:opacity-100"
                       >
                         <ChevronRight className="h-5 w-5" />
                       </button>
@@ -1490,15 +1538,22 @@ export function ExplorePage() {
             </div>
           )}
         </div>
+        {/* @container on each button (not the row) - on mobile each button
+            is flex-1, sharing this row's width, so it's each button's OWN
+            width that determines whether its own label fits, not the row's
+            combined width. A container query reacts to that actual width
+            instead of a viewport breakpoint, dropping to icon-only when
+            it's genuinely tight regardless of why (a narrow phone, or this
+            pattern reused somewhere with less room). */}
         <div className="flex gap-3">
           <button
             onClick={() => setShowSearchFilter(true)}
-            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
+            className="@container relative flex-1 md:flex-none flex items-center justify-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100 @[170px]:justify-start"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-sky-400 to-blue-500 shadow-lg shadow-sky-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:-rotate-6 transition-transform">
               <ChevronRight className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <div className="text-left">
+            <div className="hidden text-left @[170px]:block">
               <div className="font-semibold text-sm md:text-base text-gray-900">Advanced Filter</div>
               <div className="text-xs text-gray-500 hidden md:block">Refine Your Search</div>
             </div>
@@ -1511,12 +1566,12 @@ export function ExplorePage() {
           <button
             type="button"
             onClick={() => navigate('/event-matcher')}
-            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
+            className="@container flex-1 md:flex-none flex items-center justify-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100 @[170px]:justify-start"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-cyan-400 to-indigo-500 shadow-lg shadow-cyan-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
-            <div className="text-left">
+            <div className="hidden text-left @[170px]:block">
               <div className="font-semibold text-sm md:text-base text-gray-900">Event Assistant</div>
               <div className="text-xs text-gray-500 hidden md:block">Plan your event, get matched</div>
             </div>

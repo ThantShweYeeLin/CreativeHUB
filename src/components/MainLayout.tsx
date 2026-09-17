@@ -665,7 +665,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               {headerExtras?.search}
             </div>
             {navPills}
-            <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+            {/* @container: lets a page's actions content (e.g. Explore's
+                Advanced Filter/Event Assistant) respond to how much room is
+                actually left in THIS slot - which depends on the logo/nav/
+                account controls around it, not just the viewport - rather
+                than a viewport breakpoint that has no idea whether this
+                particular slot is currently wide or squeezed. */}
+            <div className="@container hidden min-w-0 flex-1 items-center justify-center md:flex">
               {headerExtras?.actions}
             </div>
 
