@@ -6,14 +6,12 @@ import {
   Globe,
   Lock,
   LogOut,
-  MessageSquare,
   Shield,
   Star,
   User,
   UserX,
 } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
-import { TicketThread } from '../../components/support/TicketThread';
+import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { authService } from '../../lib/authService';
@@ -89,7 +87,6 @@ interface SavedSettingsPayload {
 
 export function SettingsPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, signOut } = useAuth();
   const { setCurrency } = useCurrency();
   const [isLoading, setIsLoading] = useState(true);
@@ -120,18 +117,7 @@ export function SettingsPage() {
   const [isLoadingBlocked, setIsLoadingBlocked] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
-  const [showTicketModal, setShowTicketModal] = useState(false);
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
-  const [ticketCategory, setTicketCategory] = useState<'technical' | 'payment' | 'account' | 'booking' | 'suggestion' | 'other'>('technical');
-  const [ticketDescription, setTicketDescription] = useState('');
-  const [ticketFile, setTicketFile] = useState<File | null>(null);
-
-  const [showTicketsListModal, setShowTicketsListModal] = useState(false);
-  const [myTickets, setMyTickets] = useState<any[]>([]);
-  const [isLoadingTickets, setIsLoadingTickets] = useState(false);
-  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
-  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
-  const [ticketSubmitted, setTicketSubmitted] = useState(false);
 
   const role = (user?.role || 'client') as Role;
 
@@ -239,65 +225,6 @@ export function SettingsPage() {
     }
 
     setBlockedUsers((current) => current.filter((row) => row.blocked_id !== blockedId));
-  };
-
-  const loadMyTickets = async () => {
-    if (!user?.id) return;
-    setIsLoadingTickets(true);
-    const response = await DataService.getUserSupportTickets(user.id);
-    setMyTickets(response.error ? [] : response.data);
-    setIsLoadingTickets(false);
-  };
-
-  useEffect(() => {
-    const openTicketId = (location.state as { openTicketId?: string } | null)?.openTicketId;
-    if (openTicketId) {
-      setShowTicketsListModal(true);
-      setExpandedTicketId(openTicketId);
-      void loadMyTickets();
-      navigate(location.pathname, { replace: true, state: null });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.state]);
-
-  const handleSubmitTicket = async () => {
-    if (!user?.id || !ticketDescription.trim()) {
-      setErrorMessage('Describe the issue before submitting.');
-      return;
-    }
-
-    setIsSubmittingTicket(true);
-    setErrorMessage(null);
-
-    let screenshotPath: string | null = null;
-    if (ticketFile) {
-      const uploadResponse = await DataService.uploadReportEvidencePhoto(user.id, ticketFile);
-      if (uploadResponse.error || !uploadResponse.path) {
-        setErrorMessage('Unable to upload the screenshot.');
-        setIsSubmittingTicket(false);
-        return;
-      }
-      screenshotPath = uploadResponse.path;
-    }
-
-    const response = await DataService.submitSupportTicket({
-      userId: user.id,
-      category: ticketCategory,
-      description: ticketDescription.trim(),
-      screenshotPath,
-    });
-
-    setIsSubmittingTicket(false);
-
-    if (response.error) {
-      setErrorMessage((response.error as any).message || 'Unable to submit ticket.');
-      return;
-    }
-
-    setTicketSubmitted(true);
-    setTicketDescription('');
-    setTicketFile(null);
-    void loadMyTickets();
   };
 
   const persistLocalSettings = () => {
@@ -697,22 +624,10 @@ export function SettingsPage() {
               <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">FAQ</a>
               <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Contact Support</a>
               <button
-                onClick={() => {
-                  setTicketSubmitted(false);
-                  setShowTicketModal(true);
-                }}
+                onClick={() => navigate('/tickets')}
                 className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50"
               >
-                Report an Issue
-              </button>
-              <button
-                onClick={() => {
-                  setShowTicketsListModal(true);
-                  void loadMyTickets();
-                }}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50"
-              >
-                <MessageSquare className="h-4 w-4" /> My Tickets
+                Create a Ticket
               </button>
             </div>
           </section>
@@ -725,136 +640,6 @@ export function SettingsPage() {
       </div>
 
       {legalModalTab && <LegalContentModal initialTab={legalModalTab} onClose={() => setLegalModalTab(null)} />}
-
-      {showTicketModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
-            {ticketSubmitted ? (
-              <>
-                <h3 className="mb-2 text-lg font-bold text-gray-900">Thanks for letting us know</h3>
-                <p className="mb-4 text-sm text-gray-600">Our team will look into it.</p>
-                <button
-                  onClick={() => setShowTicketModal(false)}
-                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
-                >
-                  Close
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-gray-900">Report an Issue</h3>
-                  <button onClick={() => setShowTicketModal(false)} className="text-gray-400 hover:text-gray-900">✕</button>
-                </div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Category</label>
-                <select
-                  value={ticketCategory}
-                  onChange={(e) => setTicketCategory(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                >
-                  <option value="technical">Technical problem</option>
-                  <option value="payment">Payment problem</option>
-                  <option value="account">Account problem</option>
-                  <option value="booking">Booking problem</option>
-                  <option value="suggestion">Suggestion / Feedback</option>
-                  <option value="other">Other</option>
-                </select>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Description</label>
-                <textarea
-                  value={ticketDescription}
-                  onChange={(e) => setTicketDescription(e.target.value)}
-                  placeholder="Describe the issue..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                />
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Attach screenshot (optional)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setTicketFile(e.target.files?.[0] || null)}
-                  className="mb-4 text-xs"
-                />
-                <button
-                  onClick={() => void handleSubmitTicket()}
-                  disabled={isSubmittingTicket}
-                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                >
-                  {isSubmittingTicket ? 'Submitting...' : 'Submit'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showTicketsListModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">My Tickets</h3>
-              <button
-                onClick={() => {
-                  setShowTicketsListModal(false);
-                  setExpandedTicketId(null);
-                }}
-                className="text-gray-400 hover:text-gray-900"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex-1 space-y-2 overflow-y-auto">
-              {isLoadingTickets ? (
-                <p className="py-6 text-center text-sm text-gray-500">Loading…</p>
-              ) : myTickets.length === 0 ? (
-                <p className="py-6 text-center text-sm text-gray-500">You haven't reported anything yet.</p>
-              ) : (
-                myTickets.map((ticket) => {
-                  const isExpanded = expandedTicketId === ticket.id;
-                  return (
-                    <div key={ticket.id} className="rounded-xl border border-sky-100">
-                      <button
-                        onClick={() => setExpandedTicketId(isExpanded ? null : ticket.id)}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-gray-900">{ticket.description}</p>
-                          <p className="text-xs text-gray-500">{new Date(ticket.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                            ticket.status === 'resolved'
-                              ? 'bg-green-100 text-green-700'
-                              : ticket.status === 'in_progress'
-                                ? 'bg-amber-100 text-amber-700'
-                                : ticket.status === 'closed'
-                                  ? 'bg-gray-200 text-gray-600'
-                                  : 'bg-sky-100 text-sky-700'
-                          }`}
-                        >
-                          {ticket.status.replace('_', ' ')}
-                        </span>
-                      </button>
-                      {isExpanded && (
-                        <div className="border-t border-sky-100 p-3">
-                          <TicketThread
-                            ticketId={ticket.id}
-                            originalDescription={ticket.description}
-                            originalScreenshotPath={ticket.screenshot_path}
-                            originalCreatedAt={ticket.created_at}
-                            originalAuthorName="You"
-                            originalAuthorAvatar={user?.avatar_url || null}
-                            currentUserId={user!.id}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       </div>
     </div>
   );

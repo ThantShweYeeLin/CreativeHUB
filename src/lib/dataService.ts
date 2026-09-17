@@ -1913,6 +1913,7 @@ export class DataService {
     category: 'technical' | 'payment' | 'account' | 'booking' | 'suggestion' | 'other';
     description: string;
     screenshotPath?: string | null;
+    relatedBookingId?: string | null;
   }) {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
@@ -1921,6 +1922,7 @@ export class DataService {
         category: input.category,
         description: input.description,
         screenshot_path: input.screenshotPath || null,
+        related_booking_id: input.relatedBookingId || null,
       })
       .select()
       .single();
@@ -1945,13 +1947,31 @@ export class DataService {
     return { data: data || [], error };
   }
 
-  static async adminUpdateTicketStatus(ticketId: string, status: 'open' | 'in_progress' | 'resolved' | 'closed', notes?: string) {
+  static async adminUpdateTicketStatus(ticketId: string, status: 'open' | 'in_progress' | 'awaiting_evidence' | 'resolved' | 'closed', notes?: string) {
     const { data, error } = await (supabase as any).rpc('admin_update_ticket_status', {
       p_ticket_id: ticketId,
       p_status: status,
       p_notes: notes || null,
     });
     return { data, error };
+  }
+
+  static async getSupportTicket(ticketId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_tickets')
+      .select('*, user:user_id(id, full_name, email, avatar_url)')
+      .eq('id', ticketId)
+      .maybeSingle();
+    return { data, error };
+  }
+
+  static async getSupportTicketEvents(ticketId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_ticket_events')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
   }
 
   static async getSupportTicketMessages(ticketId: string) {
@@ -1974,6 +1994,23 @@ export class DataService {
       })
       .select('*, sender:sender_id(id, full_name, avatar_url)')
       .single();
+    return { data, error };
+  }
+
+  static async adminRequestTicketEvidence(ticketId: string, note: string) {
+    const { data, error } = await (supabase as any).rpc('admin_request_ticket_evidence', {
+      p_ticket_id: ticketId,
+      p_note: note,
+    });
+    return { data, error };
+  }
+
+  static async submitTicketEvidence(ticketId: string, note: string, evidencePaths: string[]) {
+    const { data, error } = await (supabase as any).rpc('submit_ticket_evidence', {
+      p_ticket_id: ticketId,
+      p_note: note || null,
+      p_evidence_paths: evidencePaths,
+    });
     return { data, error };
   }
 

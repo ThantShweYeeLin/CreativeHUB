@@ -544,7 +544,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate('/messages', { state: { openGroupConversationId: notification.relatedId } });
   };
 
-  const MENU_ITEM_AUTH_MESSAGE: Record<'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest', string> = {
+  const MENU_ITEM_AUTH_MESSAGE: Record<'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets', string> = {
     requests: 'Create an account to send and track requests.',
     groupRequest: 'Create an account to send a group request to multiple freelancers.',
     favorites: 'Create an account to save your favorite freelancers.',
@@ -552,9 +552,10 @@ export function MainLayout({ children }: MainLayoutProps) {
     messages: 'Create an account to send and receive messages.',
     bookings: 'Create an account to see your booked list.',
     settings: 'Create an account to manage your account settings.',
+    tickets: 'Create an account to create and track support tickets.',
   };
 
-  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest') => {
+  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets') => {
     setShowUserMenu(false);
 
     if (!isAuthenticated) {
@@ -587,6 +588,9 @@ export function MainLayout({ children }: MainLayoutProps) {
         break;
       case 'settings':
         navigate('/settings');
+        break;
+      case 'tickets':
+        navigate('/tickets');
         break;
     }
   };
@@ -785,12 +789,12 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onOpenProfile={handleOpenNotificationProfile}
                     onOpenBooking={handleOpenNotificationBooking}
                     onOpenGroupMessage={handleOpenNotificationGroupMessage}
-                    onOpenSupportTicket={(notification) => {
+                    onOpenTicket={(notification) => {
                       setShowNotifications(false);
                       if (notification.relatedId) {
-                        navigate('/settings', { state: { openTicketId: notification.relatedId } });
+                        navigate(`/tickets/${notification.relatedId}`);
                       } else {
-                        navigate('/settings');
+                        navigate('/tickets');
                       }
                     }}
                   />
