@@ -1585,18 +1585,26 @@ export class DataService {
     return { data: row as (AttendanceConfirmation & { already_confirmed: boolean }) | null, error };
   }
 
-  static async submitAttendanceReport(
+  // submit_attendance_report is deprecated server-side ("This flow has
+  // moved — use submit_attendance_ticket instead") - the attendance report
+  // now gets created directly as a support_tickets row (extended with
+  // reporter_role/reported_user_id/attendance_reason/evidence_paths/
+  // admin_decision columns) rather than a separate attendance_reports row,
+  // so it's visible and repliable through the same My Tickets flow as any
+  // other ticket. Same p_booking_id/p_reason/p_explanation/p_evidence_paths
+  // signature as the old RPC.
+  static async submitAttendanceTicket(
     bookingId: string,
     input: { reason: string; explanation: string; evidencePaths: string[] }
   ) {
-    const { data, error } = await (supabase as any).rpc('submit_attendance_report', {
+    const { data, error } = await (supabase as any).rpc('submit_attendance_ticket', {
       p_booking_id: bookingId,
       p_reason: input.reason,
       p_explanation: input.explanation || null,
       p_evidence_paths: input.evidencePaths,
     });
     const row = Array.isArray(data) ? data[0] : data;
-    return { data: row as AttendanceReport | null, error };
+    return { data: row as { id: string; [key: string]: any } | null, error };
   }
 
   static async getBookingAttendanceConfirmations(bookingId: string) {
@@ -1607,7 +1615,54 @@ export class DataService {
     return { data: (data || []) as AttendanceConfirmation[], error };
   }
 
+  // New attendance reports live in support_tickets now (see
+  // submitAttendanceTicket) - checked first since it's the current source
+  // of truth - falling back to the legacy attendance_reports table so a
+  // report filed before that migration still shows. Ticket rows are mapped
+  // onto the same AttendanceReport shape the rest of the UI (AttendanceCheck,
+  // AttendanceTimeline) already reads, so neither needs to know which table
+  // a given report actually came from. status/admin_decision are passed
+  // through as-is from the ticket row - support_tickets' status enum
+  // ('open'/'in_progress'/'resolved'/'closed') doesn't map 1:1 onto the
+  // legacy AttendanceReportStatus ('open'/'under_review'/'resolved'), so a
+  // ticket in 'in_progress' or 'closed' may not match every status-specific
+  // branch the older UI expects — worth a closer look if a status badge
+  // looks wrong for a ticket-sourced report.
   static async getBookingAttendanceReport(bookingId: string) {
+    const ticketResponse = await (supabase as any)
+      .from('support_tickets')
+      .select('*')
+      .eq('related_booking_id', bookingId)
+      .not('attendance_reason', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (ticketResponse.error) {
+      return { data: null, error: ticketResponse.error };
+    }
+
+    if (ticketResponse.data) {
+      const ticket = ticketResponse.data;
+      const mapped: AttendanceReport = {
+        id: ticket.id,
+        booking_id: ticket.related_booking_id,
+        reporter_id: ticket.user_id,
+        reporter_role: ticket.reporter_role,
+        reported_user_id: ticket.reported_user_id,
+        reason: ticket.attendance_reason,
+        explanation: ticket.description || null,
+        evidence_paths: ticket.evidence_paths || [],
+        status: ticket.status,
+        admin_decision: ticket.admin_decision,
+        admin_decision_reason: ticket.admin_decision_reason,
+        resolved_by: ticket.resolved_by,
+        resolved_at: ticket.resolved_at,
+        created_at: ticket.created_at,
+      };
+      return { data: mapped, error: null };
+    }
+
     const { data, error } = await (supabase as any)
       .from('attendance_reports')
       .select('*')
