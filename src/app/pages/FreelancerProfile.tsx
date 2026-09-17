@@ -54,7 +54,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
   const [minorSkills, setMinorSkills] = useState<Array<{ name: string; experienceLevel: string | null }>>([]);
   const [majorSkillExperienceLevel, setMajorSkillExperienceLevel] = useState<string | null>(null);
-  const [services, setServices] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
   const [freelancerBlockedDates, setFreelancerBlockedDates] = useState<any[]>([]);
@@ -260,7 +259,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       // further down). That serialized waterfall was the actual cause of a
       // profile page taking noticeably longer to load than it should.
       const [
-        servicesResponse,
         blockedDatesResponse,
         skillsResponse,
         reviewsResponse,
@@ -271,7 +269,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         followCountsResponse,
         postsResponse,
       ] = await Promise.all([
-        freelancerResponse.data?.id ? DataService.getFreelancerServices(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         freelancerResponse.data?.id ? DataService.getFreelancerBlockedDates(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         freelancerResponse.data?.id ? DataService.getFreelancerSkills(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         DataService.getFreelancerReviews(targetId),
@@ -287,7 +284,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         return;
       }
 
-      setServices(servicesResponse.data || []);
       setFreelancerBlockedDates(blockedDatesResponse.data || []);
       setMinorSkills((skillsResponse.data?.minor || []).map((skill: any) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
       setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
@@ -1614,40 +1610,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             )}
           </aside>
         </section>
-        )}
-
-        {isBookableFreelancer && services.length > 0 && (
-          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-            <h2 className="text-2xl font-bold text-gray-900">Services</h2>
-            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-              {services.map((service) => (
-                <div key={service.id} className="rounded-2xl border border-sky-100 bg-sky-50/50 p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-bold text-gray-900">{service.name}</h3>
-                    <span className="flex-shrink-0 whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1 text-xs font-semibold text-white">
-                      {service.pricing_type === 'custom_quote'
-                        ? 'Custom quote'
-                        : service.starting_price != null
-                        ? `${service.pricing_type === 'fixed' ? '' : 'From '}${formatCurrencyAmount(convertAmount(Number(service.starting_price), 'THB', viewerCurrency), viewerCurrency)}`
-                        : 'Price on request'}
-                    </span>
-                  </div>
-                  {service.description && <p className="mt-2 text-sm text-gray-700">{service.description}</p>}
-                  {service.duration && <p className="mt-2 text-xs text-gray-500"><span className="font-semibold text-gray-700">Duration:</span> {service.duration}</p>}
-                  {service.included && <p className="mt-1 text-xs text-gray-500"><span className="font-semibold text-gray-700">Included:</span> {service.included}</p>}
-                  {Array.isArray(service.extras) && service.extras.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {service.extras.map((extra: any, index: number) => (
-                        <span key={index} className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-gray-700 ring-1 ring-gray-200">
-                          {extra.label} +{formatCurrencyAmount(convertAmount(Number(extra.price || 0), 'THB', viewerCurrency), viewerCurrency)}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
         )}
 
         {isBookableFreelancer && (

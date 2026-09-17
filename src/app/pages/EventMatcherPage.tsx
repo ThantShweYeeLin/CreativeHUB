@@ -234,7 +234,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       confirmedCategories.map(async (category): Promise<CategoryMatch> => {
         const tier = categoryTier.get(category) || 'optional';
         const { data } = await DataService.getEventMatcherCandidates(category, date);
-        const { profiles, blockedDates, bookings, services } = data;
+        const { profiles, blockedDates, bookings } = data;
 
         const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
         for (const row of blockedDates as any[]) {
@@ -248,12 +248,6 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
           list.push(row);
           bookingsByUser.set(row.freelancer_id, list);
         }
-        const servicesByProfile = new Map<string, any[]>();
-        for (const row of services as any[]) {
-          const list = servicesByProfile.get(row.freelancer_id) || [];
-          list.push(row);
-          servicesByProfile.set(row.freelancer_id, list);
-        }
 
         const candidates: RankedCandidate[] = [];
         for (const profile of profiles as any[]) {
@@ -266,21 +260,9 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
           ];
           if (!locationCovers(providerLocations, eventLocation)) continue;
 
-          const profileServices = (servicesByProfile.get(profile.id) || []).filter((service) => service.starting_price != null);
-          // Most freelancers in this app have only ever set the older
-          // hourly_rate field and never added a Services-tab package
-          // (that tab is a newer addition) — fall back to hourly_rate so
-          // those freelancers are still matchable, rather than requiring
-          // everyone to have filled in the newer packages feature.
           let packagePrice: number | null = null;
           let serviceName = category;
-          if (profileServices.length > 0) {
-            const cheapest = [...profileServices].sort((a, b) => Number(a.starting_price) - Number(b.starting_price))[0];
-            // freelancer_services.starting_price is stored in THB app-wide
-            // (see FreelancerProfile.tsx's package pricing display).
-            packagePrice = convertAmount(Number(cheapest.starting_price), 'THB', currency);
-            serviceName = cheapest.name || category;
-          } else if (profile.hourly_rate != null) {
+          if (profile.hourly_rate != null) {
             const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
             packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
             serviceName = 'Hourly rate';

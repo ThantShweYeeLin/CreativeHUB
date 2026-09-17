@@ -757,8 +757,8 @@ export class DataService {
   // EVENT MATCHER
   // Fetches everything the pure ranking/filtering logic in lib/eventMatcher.ts
   // needs for one category on one event date: candidate profiles, their
-  // blocked dates for that date, any existing booking that day, and their
-  // service packages. Filtering (availability, location coverage) and
+  // blocked dates for that date, and any existing booking that day.
+  // Filtering (availability, location coverage) and
   // ranking happen entirely in application code afterward — this method is
   // just the query, same split as freelancerSearch.ts's interpretSearchQuery
   // / scoreFreelancerMatch versus this file's searchFreelancers.
@@ -774,20 +774,19 @@ export class DataService {
       .eq('users.account_status', 'active');
 
     if (error || !profiles || profiles.length === 0) {
-      return { data: { profiles: [], blockedDates: [], bookings: [], services: [] }, error };
+      return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
     }
 
     const profileIds = (profiles as any[]).map((profile) => profile.id);
     const userIds = (profiles as any[]).map((profile) => profile.user_id);
 
-    const [blockedDatesResponse, bookingsResponse, servicesResponse] = await Promise.all([
+    const [blockedDatesResponse, bookingsResponse] = await Promise.all([
       (supabase as any)
         .from('freelancer_blocked_dates')
         .select('freelancer_id, blocked_date')
         .in('freelancer_id', profileIds)
         .eq('blocked_date', eventDate),
       supabase.from('bookings').select('freelancer_id, start_date, status').in('freelancer_id', userIds).eq('start_date', eventDate),
-      (supabase as any).from('freelancer_services').select('*').in('freelancer_id', profileIds),
     ]);
 
     return {
@@ -795,7 +794,6 @@ export class DataService {
         profiles: profiles as any[],
         blockedDates: (blockedDatesResponse.data || []) as any[],
         bookings: (bookingsResponse.data || []) as any[],
-        services: (servicesResponse.data || []) as any[],
       },
       error: null,
     };
@@ -1260,52 +1258,6 @@ export class DataService {
     return { error };
   }
 
-  // FREELANCER SERVICES
-  static async getFreelancerServices(freelancerId: string) {
-    const { data, error } = await (supabase as any)
-      .from('freelancer_services')
-      .select('*')
-      .eq('freelancer_id', freelancerId)
-      .order('position', { ascending: true });
-    return { data, error };
-  }
-
-  static async createFreelancerService(service: {
-    freelancer_id: string;
-    name: string;
-    description?: string | null;
-    starting_price?: number | null;
-    pricing_type?: string;
-    duration?: string | null;
-    included?: string | null;
-    extras?: Array<{ label: string; price: number }>;
-    requirements?: string | null;
-  }) {
-    const { data, error } = await (supabase as any)
-      .from('freelancer_services')
-      .insert(service)
-      .select()
-      .single();
-    return { data, error };
-  }
-
-  static async updateFreelancerService(id: string, updates: Record<string, any>) {
-    const { data, error } = await (supabase as any)
-      .from('freelancer_services')
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-    return { data, error };
-  }
-
-  static async deleteFreelancerService(id: string) {
-    const { error } = await (supabase as any)
-      .from('freelancer_services')
-      .delete()
-      .eq('id', id);
-    return { error };
-  }
 
   // BOOKINGS
   // Postgres exclusion-constraint violation (bookings_no_overlap, see

@@ -27,6 +27,7 @@ import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { normalizeFreelancer } from '../../lib/freelanceMapper';
 import { useAuth } from '../../contexts/AuthContext';
+import { useHeaderExtras } from '../../contexts/HeaderExtrasContext';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender, PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
@@ -929,6 +930,8 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState<any[]>([]);
   const [isUserSearchLoading, setIsUserSearchLoading] = useState(false);
+  const searchSectionRef = useRef<HTMLDivElement | null>(null);
+  const [isPastSearchSection, setIsPastSearchSection] = useState(false);
   const [commentsByPostId, setCommentsByPostId] = useState<Record<string, FeedComment[]>>({});
   const [loadingCommentsByPostId, setLoadingCommentsByPostId] = useState<Record<string, boolean>>({});
   const [likedUsersByPostId, setLikedUsersByPostId] = useState<Record<string, any[]>>({});
@@ -1077,6 +1080,70 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       window.clearTimeout(timeoutId);
     };
   }, [userSearchQuery, user?.id]);
+
+  // Drives the condensed search bar that joins the header's nav links once
+  // the user scrolls past this page's own search box — same approach as
+  // ExplorePage's condensed header search.
+  useEffect(() => {
+    const HEADER_HEIGHT_PX = 80;
+    const handleScroll = () => {
+      const section = searchSectionRef.current;
+      if (!section) return;
+      setIsPastSearchSection(section.getBoundingClientRect().bottom <= HEADER_HEIGHT_PX);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Shared by both the full ComposerLauncher below and the condensed
+  // header button, so "write a post" behaves identically wherever it's
+  // clicked from.
+  const openComposer = () => {
+    if (!user?.id) {
+      setAuthPromptMessage('Create an account to write and share posts.');
+      return;
+    }
+    setIsComposerOpen(true);
+  };
+
+  // Condensed header search box + "Write a Post" button, mounted at all
+  // times (visibility toggled in place) so the nav links beside them never
+  // shift as the page scrolls — see the matching comment in
+  // ExplorePage.tsx for why. Reuses the exact same
+  // userSearchQuery/setUserSearchQuery state as the full search box below,
+  // and the same openComposer handler as ComposerLauncher, so neither is a
+  // second, separate implementation. For You has no Advanced Filter /
+  // Event Assistant equivalent, so `actions` here is just the one button.
+  useHeaderExtras({
+    search: (
+      <div className={`relative w-36 sm:w-48 lg:w-64 ${isPastSearchSection ? '' : 'invisible'}`}>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
+        <input
+          type="text"
+          value={userSearchQuery}
+          onChange={(event) => setUserSearchQuery(event.target.value)}
+          placeholder="Search users..."
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
+        />
+      </div>
+    ),
+    actions: (
+      <div className={`flex flex-shrink-0 items-center ${isPastSearchSection ? '' : 'invisible'}`}>
+        <button
+          type="button"
+          onClick={openComposer}
+          title="Write a Post"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105 lg:px-3"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="hidden lg:inline">Write a Post</span>
+        </button>
+      </div>
+    ),
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -1889,7 +1956,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           <h1 className="mb-2 text-3xl font-bold text-gray-900 md:text-4xl">For You</h1>
           <p className="text-sm text-gray-600 md:text-base">Live creative feed from the CreativeHUB community</p>
 
-          <div className="mt-4 rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-3 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+          <div ref={searchSectionRef} className="mt-4 rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-3 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
               <input
@@ -1951,15 +2018,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           </div>
         </div>
 
-        <ComposerLauncher
-          onOpen={() => {
-            if (!user?.id) {
-              setAuthPromptMessage('Create an account to write and share posts.');
-              return;
-            }
-            setIsComposerOpen(true);
-          }}
-        />
+        <ComposerLauncher onOpen={openComposer} />
 
         {error && (
           <div className="mb-6 mx-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

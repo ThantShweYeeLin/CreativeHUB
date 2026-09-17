@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, ChevronLeft, ChevronRight, Star, Sparkles, Heart } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { DataService, type ExploreHeroData, type AuthShowcaseSpotlight } from '../../lib/dataService';
@@ -15,6 +15,7 @@ import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
 import { haversineDistanceKm } from '../../lib/geo';
+import { useHeaderExtras } from '../../contexts/HeaderExtrasContext';
 
 interface ProfileCardProps {
   id: string;
@@ -444,6 +445,8 @@ export function ExplorePage() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
+  const searchSectionRef = useRef<HTMLDivElement | null>(null);
+  const [isPastSearchSection, setIsPastSearchSection] = useState(false);
   const hasRestoredScrollRef = useRef(false);
   // Snapshot at mount, BEFORE the live-tracking listener below can touch it —
   // otherwise a stray 'scroll' event firing while the page is still short
@@ -461,6 +464,23 @@ export function ExplorePage() {
     const handleScroll = () => {
       explorePageScrollY = window.scrollY;
     };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Drives the condensed search/filter/Event Assistant bar that replaces
+  // the header's nav links once the user scrolls past the full-size search
+  // section below the hero - triggers as soon as that section's bottom
+  // edge passes under the sticky header (h-20 = 80px at md+, where the
+  // condensed bar shows), reverts the moment it's scrolled back into view.
+  useEffect(() => {
+    const HEADER_HEIGHT_PX = 80;
+    const handleScroll = () => {
+      const section = searchSectionRef.current;
+      if (!section) return;
+      setIsPastSearchSection(section.getBoundingClientRect().bottom <= HEADER_HEIGHT_PX);
+    };
+    handleScroll();
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -1004,6 +1024,68 @@ export function ExplorePage() {
     return filters.services.length + filters.locations.length + (filters.nearMe ? 1 : 0) + (isDefaultPrice ? 0 : 1) + (filters.minRating !== null ? 1 : 0);
   }, [filters]);
 
+  // Condensed header content, mounted in MainLayout's header at all times
+  // (not just once scrolled past the full-size search section) so its
+  // reserved width never changes — only `isPastSearchSection` toggles
+  // whether it's actually visible/interactive, via `invisible` (which
+  // still occupies its layout box). That's what keeps the nav links next
+  // to it from ever shifting as the page scrolls: nothing is ever added to
+  // or removed from the header row, only shown or hidden in place. Reuses
+  // the exact same state/handlers as the full search bar, Advanced Filter
+  // card, and Event Assistant card below (setSearchQuery,
+  // setShowSearchFilter, navigate('/event-matcher')) so it behaves
+  // identically rather than being a second, separate implementation.
+  // Icon-only at md, gains text labels at lg+.
+  const condensedVisibilityClass = isPastSearchSection ? '' : 'invisible';
+  useHeaderExtras({
+    search: (
+      <div className={`relative w-36 sm:w-48 lg:w-64 ${condensedVisibilityClass}`}>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search freelancers..."
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
+        />
+      </div>
+    ),
+    // Gap scales up with viewport width instead of staying fixed - a
+    // constant large gap (however it looked on a maximized window) left no
+    // room to shrink on a narrower one, overflowing into the Freelancer
+    // Dashboard button.
+    actions: (
+      <div className={`flex flex-shrink-0 items-center gap-2 lg:gap-10 xl:gap-16 ${condensedVisibilityClass}`}>
+        <button
+          type="button"
+          onClick={() => setShowSearchFilter(true)}
+          title="Advanced Filter"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="relative flex flex-shrink-0 items-center gap-1.5 rounded-full border border-sky-100 bg-white/80 px-2.5 py-2 text-xs font-semibold text-gray-700 transition-colors hover:bg-sky-50 lg:px-3"
+        >
+          <SlidersHorizontal className="h-4 w-4 text-sky-500" />
+          <span className="hidden lg:inline">Advanced Filter</span>
+          {activeAdvancedFilterCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-1 text-[10px] font-bold text-white">
+              {activeAdvancedFilterCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate('/event-matcher')}
+          title="Event Assistant"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105 lg:px-3"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden lg:inline">Event Assistant</span>
+        </button>
+      </div>
+    ),
+  });
+
   return (
     <div className="relative">
       {/* Decorative light-blue backdrop: absolutely positioned to span the
@@ -1328,7 +1410,7 @@ export function ExplorePage() {
       </div>
 
       {/* Search and AI Matcher */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 mb-8 md:mb-12">
+      <div ref={searchSectionRef} className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 mb-8 md:mb-12">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-400" />
           <input
