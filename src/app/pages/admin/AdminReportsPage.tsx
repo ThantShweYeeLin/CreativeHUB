@@ -3,17 +3,9 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { DataService } from '../../../lib/dataService';
 import { AdminLayout } from './AdminLayout';
 import { REPORT_REASON_LABEL } from './AdminReportDetail';
+import { TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory, type TicketStatus } from '../../../lib/supportTickets';
 
 type ReportsSubTab = 'user_reports' | 'website_issues';
-
-const TICKET_CATEGORY_LABEL: Record<string, string> = {
-  technical: 'Technical problem',
-  payment: 'Payment problem',
-  account: 'Account problem',
-  booking: 'Booking problem',
-  suggestion: 'Suggestion / Feedback',
-  other: 'Other',
-};
 
 export function AdminReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,43 +126,27 @@ function UserReportsSection() {
 }
 
 function WebsiteIssuesSection() {
+  const navigate = useNavigate();
   const [tickets, setTickets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingId, setPendingId] = useState<string | null>(null);
-
-  const load = async () => {
-    setIsLoading(true);
-    const response = await DataService.getAllSupportTicketsForAdmin();
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to load tickets.');
-    } else {
-      setTickets(response.data);
-    }
-    setIsLoading(false);
-  };
 
   useEffect(() => {
-    void load();
+    let isMounted = true;
+    (async () => {
+      const response = await DataService.getAllSupportTicketsForAdmin();
+      if (!isMounted) return;
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to load tickets.');
+      } else {
+        setTickets(response.data);
+      }
+      setIsLoading(false);
+    })();
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  const handleStatusChange = async (ticketId: string, status: 'open' | 'in_progress' | 'resolved' | 'closed') => {
-    setPendingId(ticketId);
-    const response = await DataService.adminUpdateTicketStatus(ticketId, status);
-    setPendingId(null);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to update ticket.');
-      return;
-    }
-    await load();
-  };
-
-  const statusColor: Record<string, string> = {
-    open: 'bg-blue-100 text-blue-700',
-    in_progress: 'bg-amber-100 text-amber-700',
-    resolved: 'bg-green-100 text-green-700',
-    closed: 'bg-gray-200 text-gray-600',
-  };
 
   return (
     <div className="space-y-3">
@@ -181,32 +157,24 @@ function WebsiteIssuesSection() {
         <p className="text-sm text-gray-500">No tickets yet.</p>
       ) : (
         tickets.map((t) => (
-          <div key={t.id} className="rounded-2xl border border-sky-100 bg-white p-4 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+          <button
+            key={t.id}
+            onClick={() => navigate(`/admin/tickets/${t.id}`)}
+            className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="font-semibold text-gray-900">
-                  #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category] || t.category}
+                  #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
                 </p>
                 <p className="text-xs text-gray-500">{t.user?.full_name || 'A user'} · {new Date(t.created_at).toLocaleString()}</p>
               </div>
-              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusColor[t.status] || ''}`}>{t.status}</span>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[t.status as TicketStatus] || ''}`}>
+                {TICKET_STATUS_LABEL[t.status as TicketStatus] || t.status}
+              </span>
             </div>
-            <p className="mt-2 text-sm text-gray-700">{t.description}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5 border-t border-sky-100 pt-3">
-              {(['open', 'in_progress', 'resolved', 'closed'] as const)
-                .filter((s) => s !== t.status)
-                .map((s) => (
-                  <button
-                    key={s}
-                    disabled={pendingId === t.id}
-                    onClick={() => void handleStatusChange(t.id, s)}
-                    className="rounded-lg border border-sky-200 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
-                  >
-                    Mark {s.replace('_', ' ')}
-                  </button>
-                ))}
-            </div>
-          </div>
+            <p className="mt-2 line-clamp-1 text-sm text-gray-700">{t.description}</p>
+          </button>
         ))
       )}
     </div>

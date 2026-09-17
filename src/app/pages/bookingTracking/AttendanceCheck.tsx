@@ -164,7 +164,7 @@ export function AttendanceCheck({
               className="flex items-center justify-center gap-2 rounded-xl bg-sky-50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-sky-100 transition-all"
             >
               <AlertTriangle className="w-4 h-4" />
-              Report Attendance Problem
+              Create a Ticket
             </button>
           </div>
         </>
@@ -183,7 +183,7 @@ export function AttendanceCheck({
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-50 py-2.5 px-4 text-xs font-semibold text-gray-600 hover:bg-sky-100 transition-all"
         >
           <AlertTriangle className="w-3.5 h-3.5" />
-          Report Attendance Problem
+          Create a Ticket
         </button>
       )}
 

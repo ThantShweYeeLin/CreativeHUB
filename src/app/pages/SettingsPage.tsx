@@ -117,13 +117,7 @@ export function SettingsPage() {
   const [isLoadingBlocked, setIsLoadingBlocked] = useState(false);
   const [unblockingId, setUnblockingId] = useState<string | null>(null);
 
-  const [showTicketModal, setShowTicketModal] = useState(false);
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
-  const [ticketCategory, setTicketCategory] = useState<'technical' | 'payment' | 'account' | 'booking' | 'suggestion' | 'other'>('technical');
-  const [ticketDescription, setTicketDescription] = useState('');
-  const [ticketFile, setTicketFile] = useState<File | null>(null);
-  const [isSubmittingTicket, setIsSubmittingTicket] = useState(false);
-  const [ticketSubmitted, setTicketSubmitted] = useState(false);
 
   const role = (user?.role || 'client') as Role;
 
@@ -231,45 +225,6 @@ export function SettingsPage() {
     }
 
     setBlockedUsers((current) => current.filter((row) => row.blocked_id !== blockedId));
-  };
-
-  const handleSubmitTicket = async () => {
-    if (!user?.id || !ticketDescription.trim()) {
-      setErrorMessage('Describe the issue before submitting.');
-      return;
-    }
-
-    setIsSubmittingTicket(true);
-    setErrorMessage(null);
-
-    let screenshotPath: string | null = null;
-    if (ticketFile) {
-      const uploadResponse = await DataService.uploadReportEvidencePhoto(user.id, ticketFile);
-      if (uploadResponse.error || !uploadResponse.path) {
-        setErrorMessage('Unable to upload the screenshot.');
-        setIsSubmittingTicket(false);
-        return;
-      }
-      screenshotPath = uploadResponse.path;
-    }
-
-    const response = await DataService.submitSupportTicket({
-      userId: user.id,
-      category: ticketCategory,
-      description: ticketDescription.trim(),
-      screenshotPath,
-    });
-
-    setIsSubmittingTicket(false);
-
-    if (response.error) {
-      setErrorMessage((response.error as any).message || 'Unable to submit ticket.');
-      return;
-    }
-
-    setTicketSubmitted(true);
-    setTicketDescription('');
-    setTicketFile(null);
   };
 
   const persistLocalSettings = () => {
@@ -669,13 +624,10 @@ export function SettingsPage() {
               <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">FAQ</a>
               <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Contact Support</a>
               <button
-                onClick={() => {
-                  setTicketSubmitted(false);
-                  setShowTicketModal(true);
-                }}
+                onClick={() => navigate('/tickets')}
                 className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50"
               >
-                Report an Issue
+                Create a Ticket
               </button>
             </div>
           </section>
@@ -688,66 +640,6 @@ export function SettingsPage() {
       </div>
 
       {legalModalTab && <LegalContentModal initialTab={legalModalTab} onClose={() => setLegalModalTab(null)} />}
-
-      {showTicketModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
-            {ticketSubmitted ? (
-              <>
-                <h3 className="mb-2 text-lg font-bold text-gray-900">Thanks for letting us know</h3>
-                <p className="mb-4 text-sm text-gray-600">Our team will look into it.</p>
-                <button
-                  onClick={() => setShowTicketModal(false)}
-                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
-                >
-                  Close
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-gray-900">Report an Issue</h3>
-                  <button onClick={() => setShowTicketModal(false)} className="text-gray-400 hover:text-gray-900">✕</button>
-                </div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Category</label>
-                <select
-                  value={ticketCategory}
-                  onChange={(e) => setTicketCategory(e.target.value as any)}
-                  className="mb-3 w-full rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                >
-                  <option value="technical">Technical problem</option>
-                  <option value="payment">Payment problem</option>
-                  <option value="account">Account problem</option>
-                  <option value="booking">Booking problem</option>
-                  <option value="suggestion">Suggestion / Feedback</option>
-                  <option value="other">Other</option>
-                </select>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Description</label>
-                <textarea
-                  value={ticketDescription}
-                  onChange={(e) => setTicketDescription(e.target.value)}
-                  placeholder="Describe the issue..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-                />
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Attach screenshot (optional)</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setTicketFile(e.target.files?.[0] || null)}
-                  className="mb-4 text-xs"
-                />
-                <button
-                  onClick={() => void handleSubmitTicket()}
-                  disabled={isSubmittingTicket}
-                  className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                >
-                  {isSubmittingTicket ? 'Submitting...' : 'Submit'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
       </div>
     </div>
   );

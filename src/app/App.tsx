@@ -35,6 +35,8 @@ const FreelancerDashboardReviewsPage = lazy(() => import('./pages/FreelancerDash
 const FreelancerDashboardEarningsPage = lazy(() => import('./pages/FreelancerDashboardEarningsPage').then((m) => ({ default: m.FreelancerDashboardEarningsPage })));
 const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDashboardSettingsPage').then((m) => ({ default: m.FreelancerDashboardSettingsPage })));
 const PremiumSubscriptionPage = lazy(() => import('./pages/PremiumSubscriptionPage').then((m) => ({ default: m.PremiumSubscriptionPage })));
+const MyTicketsPage = lazy(() => import('./pages/MyTicketsPage').then((m) => ({ default: m.MyTicketsPage })));
+const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then((m) => ({ default: m.TicketDetailPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const BookingTrackingClientPage = lazy(() => import('./pages/BookingTrackingClientPage').then((m) => ({ default: m.BookingTrackingClientPage })));
 const BookingTrackingFreelancerPage = lazy(() => import('./pages/BookingTrackingFreelancerPage').then((m) => ({ default: m.BookingTrackingFreelancerPage })));
@@ -58,6 +60,7 @@ const AdminDisputeDetailPage = lazy(() => import('./pages/admin/AdminDisputeDeta
 const AdminAttendancePage = lazy(() => import('./pages/admin/AdminAttendancePage').then((m) => ({ default: m.AdminAttendancePage })));
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage })));
 const AdminReportDetailPage = lazy(() => import('./pages/admin/AdminReportDetailPage').then((m) => ({ default: m.AdminReportDetailPage })));
+const AdminTicketDetailPage = lazy(() => import('./pages/admin/AdminTicketDetailPage').then((m) => ({ default: m.AdminTicketDetailPage })));
 const AdminAuditLogPage = lazy(() => import('./pages/admin/AdminAuditLogPage').then((m) => ({ default: m.AdminAuditLogPage })));
 
 // Loading component
@@ -328,6 +331,22 @@ export default function App() {
             }
           />
           <Route
+            path="/tickets"
+            element={
+              <ProtectedRoute>
+                <MyTicketsPage onBack={() => navigate(-1)} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/:id"
+            element={
+              <ProtectedRoute>
+                <TicketDetailPage onBack={() => navigate('/tickets')} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/my-bookings"
             element={
               <ProtectedRoute>
@@ -493,6 +512,7 @@ export default function App() {
           <Route path="/admin/attendance" element={<AdminRoute><AdminAttendancePage /></AdminRoute>} />
           <Route path="/admin/reports" element={<AdminRoute><AdminReportsPage /></AdminRoute>} />
           <Route path="/admin/reports/:id" element={<AdminRoute><AdminReportDetailPage /></AdminRoute>} />
+          <Route path="/admin/tickets/:id" element={<AdminRoute><AdminTicketDetailPage /></AdminRoute>} />
           <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogPage /></AdminRoute>} />
           <Route
             path="/premium"

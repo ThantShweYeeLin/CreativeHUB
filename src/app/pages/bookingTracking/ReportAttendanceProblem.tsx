@@ -81,7 +81,7 @@ export function ReportAttendanceProblem({
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Report Attendance Problem</h2>
+          <h2 className="text-lg font-bold text-gray-900">Create a Ticket</h2>
           <button onClick={onCancel} className="text-gray-400 hover:text-gray-900">
             <X className="h-5 w-5" />
           </button>
@@ -179,7 +179,7 @@ export function ReportAttendanceProblem({
         {showConfirm ? (
           <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
             <p className="mb-3 text-sm text-gray-800">
-              Are you sure you want to submit this attendance report? False reports may result in account penalties.
+              Are you sure you want to submit this ticket? False reports may result in account penalties.
             </p>
             <div className="flex gap-2">
               <button
@@ -193,7 +193,7 @@ export function ReportAttendanceProblem({
                 disabled={isSubmitting}
                 className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 text-sm font-bold text-white hover:shadow-lg disabled:opacity-60"
               >
-                {isSubmitting ? 'Submitting...' : 'Yes, Submit Report'}
+                {isSubmitting ? 'Submitting...' : 'Yes, Submit Ticket'}
               </button>
             </div>
           </div>
@@ -207,7 +207,7 @@ export function ReportAttendanceProblem({
               disabled={!canSubmit}
               className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 text-sm font-bold text-white hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Submit Report
+              Submit Ticket
             </button>
           </div>
         )}
