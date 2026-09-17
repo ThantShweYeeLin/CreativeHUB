@@ -60,29 +60,26 @@ test.describe('mutual attendance verification', () => {
     }
   });
 
-  test('report form shows role-correct reasons and dynamic evidence requirements', async ({ page }) => {
+  // No-show/lateness/conduct reports route into the real dispute flow
+  // (ReportProblemFlow) now, not a standalone attendance-ticket form — see
+  // supabase/support_ticket_privacy_and_lifecycle.sql's write-up and
+  // AttendanceCheck.tsx. "Create a Ticket" (which created a disconnected
+  // support_tickets row via the now-removed submit_attendance_ticket) was
+  // renamed "Report a Problem" to match what it actually opens.
+  test('report button opens the dispute flow\'s role-correct category list', async ({ page }) => {
     await login(page);
     await page.goto(BOOKING_URL!);
 
-    const reportButton = page.locator('button', { hasText: 'Report Attendance Problem' }).first();
+    const reportButton = page.locator('button', { hasText: 'Report a Problem' }).first();
     if (await reportButton.isVisible().catch(() => false)) {
       await reportButton.click();
-      await expect(page.locator('text=Report Attendance Problem')).toBeVisible();
+      await expect(page.locator('text=What happened?')).toBeVisible();
 
-      const select = page.locator('select');
-      const expectedFirstOption = ROLE === 'client' ? 'Freelancer did not show up' : 'Client did not show up';
-      await expect(select.locator('option').first()).toHaveText(expectedFirstOption);
+      const expectedFirstOption = ROLE === 'client' ? "Freelancer didn't show up" : "Client didn't show up";
+      await expect(page.locator('button', { hasText: expectedFirstOption }).first()).toBeVisible();
 
-      // "did not show up" requires a location photo — Submit should be disabled with no file.
-      const submitButton = page.locator('button', { hasText: 'Submit Report' });
-      await expect(submitButton).toBeDisabled();
-
-      // Selecting "Other" only requires a written explanation.
-      await select.selectOption('other');
-      await page.locator('textarea').fill('A written explanation of what happened.');
-      await expect(submitButton).toBeEnabled();
-
-      await page.locator('button', { hasText: 'Cancel' }).click();
+      await page.locator('button', { hasText: expectedFirstOption }).first().click();
+      await expect(page.locator('textarea')).toBeVisible();
     }
   });
 });

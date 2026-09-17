@@ -219,6 +219,7 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
                     originalAuthorName="You"
                     originalAuthorAvatar={ticket.user?.avatar_url || null}
                     currentUserId={user.id}
+                    ticketStatus={ticket.status}
                   />
                 </div>
               )}

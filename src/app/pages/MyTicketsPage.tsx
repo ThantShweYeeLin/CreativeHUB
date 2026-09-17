@@ -187,6 +187,32 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            {/* Guidance, not a block — a genuine no-show/deliverables report
+                belongs in the booking's own dispute flow (reviewed against
+                platform records, with the other party able to respond),
+                not a support ticket that would just sit disconnected from
+                all of that. Payment failures, technical errors, and general
+                booking questions are still real tickets — this only steers,
+                the category itself never auto-creates a dispute. */}
+            {category === 'booking' && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+                <p className="font-semibold">Reporting a no-show, late arrival, or missing deliverables?</p>
+                <p className="mt-0.5">
+                  Use <span className="font-semibold">Report a Problem</span> on that booking's own tracking page instead —
+                  it goes straight to our dispute review, and the other party can respond. This form is for other
+                  booking issues, like a technical error or a general question.
+                </p>
+                {bookingId.trim() && isValidBookingId(bookingId) && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/booking/${bookingId.trim()}`)}
+                    className="mt-2 font-semibold text-amber-900 underline"
+                  >
+                    Go to that booking's tracking page
+                  </button>
+                )}
+              </div>
+            )}
             <label className="mb-1 block text-xs font-semibold text-gray-600">Description</label>
             <textarea
               value={description}

@@ -32,6 +32,11 @@ export interface ReportProblemCategoryDef {
   routesTo: 'dispute' | 'review';
 }
 
+// Client-facing copy (reporting on the freelancer). Kept as the default
+// export for backward compatibility with existing callers that don't pass
+// a role — see REPORT_PROBLEM_CATEGORIES_FREELANCER below and
+// getReportProblemCategories(role) for the freelancer-facing mirror
+// (reporting on the client).
 export const REPORT_PROBLEM_CATEGORIES: ReportProblemCategoryDef[] = [
   {
     id: 'no_show',
@@ -94,6 +99,53 @@ export const REPORT_PROBLEM_CATEGORIES: ReportProblemCategoryDef[] = [
     routesTo: 'dispute',
   },
 ];
+
+// Freelancer-facing mirror (reporting on the client) — same category ids
+// (the dispute/admin side is role-agnostic; only the wording of what's
+// being reported differs), used when Report a Problem is opened from the
+// freelancer's booking tracking page.
+export const REPORT_PROBLEM_CATEGORIES_FREELANCER: ReportProblemCategoryDef[] = [
+  {
+    id: 'no_show',
+    label: "Client didn't show up",
+    hint: 'No one checked in for the booking at all.',
+    routesTo: 'dispute',
+  },
+  {
+    id: 'late_arrival',
+    label: 'Client arrived late',
+    hint: 'They showed up, but significantly after the scheduled time.',
+    routesTo: 'dispute',
+  },
+  {
+    id: 'additional_payment_requested',
+    label: 'Client refused agreed payment',
+    hint: 'The client refused to pay the amount or terms you originally agreed on.',
+    routesTo: 'dispute',
+  },
+  {
+    id: 'unauthorized_change',
+    label: 'Booking changed without agreement',
+    hint: "Something about the booking changed and you didn't agree to it.",
+    routesTo: 'dispute',
+  },
+  {
+    id: 'unexpected_cancellation',
+    label: 'Unexpected cancellation',
+    hint: 'The booking was cancelled without proper notice.',
+    routesTo: 'dispute',
+  },
+  {
+    id: 'other',
+    label: 'Other',
+    hint: "Something else that isn't covered above.",
+    routesTo: 'dispute',
+  },
+];
+
+export function getReportProblemCategories(role: 'client' | 'freelancer'): ReportProblemCategoryDef[] {
+  return role === 'freelancer' ? REPORT_PROBLEM_CATEGORIES_FREELANCER : REPORT_PROBLEM_CATEGORIES;
+}
 
 export const DISPUTE_CATEGORY_LABEL: Record<string, string> = {
   no_show: "Freelancer didn't show up",

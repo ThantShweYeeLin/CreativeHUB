@@ -1611,27 +1611,13 @@ export class DataService {
     return { data: row as (AttendanceConfirmation & { already_confirmed: boolean }) | null, error };
   }
 
-  // submit_attendance_report is deprecated server-side ("This flow has
-  // moved — use submit_attendance_ticket instead") - the attendance report
-  // now gets created directly as a support_tickets row (extended with
-  // reporter_role/reported_user_id/attendance_reason/evidence_paths/
-  // admin_decision columns) rather than a separate attendance_reports row,
-  // so it's visible and repliable through the same My Tickets flow as any
-  // other ticket. Same p_booking_id/p_reason/p_explanation/p_evidence_paths
-  // signature as the old RPC.
-  static async submitAttendanceTicket(
-    bookingId: string,
-    input: { reason: string; explanation: string; evidencePaths: string[] }
-  ) {
-    const { data, error } = await (supabase as any).rpc('submit_attendance_ticket', {
-      p_booking_id: bookingId,
-      p_reason: input.reason,
-      p_explanation: input.explanation || null,
-      p_evidence_paths: input.evidencePaths,
-    });
-    const row = Array.isArray(data) ? data[0] : data;
-    return { data: row as { id: string; [key: string]: any } | null, error };
-  }
+  // No submit method here anymore — attendance/no-show reports now go
+  // through DataService.openBookingDispute (the real dispute system) via
+  // ReportProblemFlow, not a ticket. This intentionally leaves
+  // submit_attendance_ticket/submit_attendance_report as dead RPCs on the
+  // database side (harmless — nothing calls them), and
+  // getBookingAttendanceReport below still reads any tickets/reports they
+  // created historically, before this fix.
 
   static async getBookingAttendanceConfirmations(bookingId: string) {
     const { data, error } = await (supabase as any)
@@ -2090,6 +2076,28 @@ export class DataService {
       p_ticket_id: ticketId,
       p_status: status,
       p_notes: notes || null,
+    });
+    return { data, error };
+  }
+
+  // Genuinely private — support_ticket_admin_notes has no ticket-owner
+  // clause in its RLS at all (unlike support_ticket_events), so a plain
+  // authenticated non-admin query against it returns nothing regardless of
+  // whether they own the ticket. See
+  // supabase/support_ticket_privacy_and_lifecycle.sql.
+  static async getTicketAdminNotes(ticketId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_ticket_admin_notes')
+      .select('*, admin:admin_id(id, full_name)')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
+  }
+
+  static async adminAddTicketNote(ticketId: string, note: string) {
+    const { data, error } = await (supabase as any).rpc('admin_add_ticket_note', {
+      p_ticket_id: ticketId,
+      p_note: note,
     });
     return { data, error };
   }
@@ -2567,11 +2575,39 @@ export class DataService {
       evidencePhotoPaths?: string[];
     }
   ) {
+    // Role determined server-round-trip from the booking itself, not
+    // trusted from the caller — this is what lets either party file a
+    // dispute (freelancers previously had no way to report a client
+    // no-show at all; the RLS on bookings/booking_events already allowed
+    // it, "Users can update own bookings"/"...insert own booking events as
+    // themselves" both check client_id OR freelancer_id, this function was
+    // just hardcoded to the client's side of that).
+    const bookingResponse = await supabase
+      .from('bookings')
+      .select('client_id, freelancer_id')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingResponse.error || !bookingResponse.data) {
+      return { data: null, error: bookingResponse.error };
+    }
+
+    const booking = bookingResponse.data as any;
+    const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+    const actor: 'client' | 'freelancer' | null =
+      currentUserId === booking.client_id ? 'client' : currentUserId === booking.freelancer_id ? 'freelancer' : null;
+
+    if (!actor) {
+      return { data: null, error: { message: 'You are not a participant on this booking.' } as any };
+    }
+
+    const otherPartyId = actor === 'client' ? booking.freelancer_id : booking.client_id;
+
     // Goes straight to admin review — no more freelancer-response round in
-    // between. The client sees a simple "report submitted" state, the
-    // freelancer sees "deposit frozen," and CreativeHUB support makes the
-    // release/refund call directly from the evidence + platform records
-    // already collected, same as before.
+    // between. The reporting party sees a simple "report submitted" state,
+    // the other party sees "deposit frozen," and CreativeHUB support makes
+    // the release/refund call directly from the evidence + platform
+    // records already collected, same as before.
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -2591,7 +2627,7 @@ export class DataService {
     await (supabase as any).from('booking_events').insert({
       booking_id: bookingId,
       round: 1,
-      actor: 'client',
+      actor,
       action: 'complain',
       category: input.category,
       reason: input.reason,
@@ -2600,10 +2636,11 @@ export class DataService {
     });
 
     // No actorId — this notification is deliberately anonymized on the
-    // freelancer's side (see NotificationsPanel.tsx's booking_disputed
-    // special-case), so it never names or shows the client who reported it.
+    // reported party's side (see NotificationsPanel.tsx's booking_disputed
+    // special-case), so it never names or shows who reported it, symmetric
+    // regardless of which side filed it.
     await this.notifyEvent({
-      userId: (data as any).freelancer_id,
+      userId: otherPartyId,
       type: 'booking_disputed',
       title: 'Deposit Frozen',
       message: 'Deposit frozen due to an issue.',

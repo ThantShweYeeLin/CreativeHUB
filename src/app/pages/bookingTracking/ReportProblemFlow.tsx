@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronLeft, X } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
-import { REPORT_PROBLEM_CATEGORIES, type DisputeFlowCategory } from '../../../lib/disputeCategories';
+import { getReportProblemCategories, type DisputeFlowCategory } from '../../../lib/disputeCategories';
 import { DISPUTE_CATEGORY_CONFIG, EVIDENCE_TYPE_OPTIONS, createEvidenceItem, type LocalEvidenceItem } from '../../../lib/disputeFlowConfig';
 import { BookingReviewPrompt } from './BookingReviewPrompt';
 import { EvidenceItemEditor } from './EvidenceItemEditor';
@@ -13,8 +13,12 @@ interface ReportProblemFlowProps {
   booking: any;
   events: any[];
   confirmations: any[];
-  freelancerId: string;
-  freelancerName: string;
+  /** Which side of the booking is filing this report — picks the category
+   * wording (getReportProblemCategories) and the role recorded on each
+   * evidence item. */
+  role: 'client' | 'freelancer';
+  otherPartyId: string;
+  otherPartyName: string;
   onClose: () => void;
   onSubmitted: () => Promise<void> | void;
   // Lets DeliveryCard's "report a delivery issue" shortcut skip straight to
@@ -33,8 +37,10 @@ type Step = 'category' | 'review_redirect' | 'details' | 'summary';
 // quick questions, auto-collected platform records shown as read-only
 // context, tiered evidence upload (src/lib/disputeFlowConfig.ts decides
 // what's required vs. optional per category), a review summary, then
-// submit.
-export function ReportProblemFlow({ bookingId, userId, booking, events, confirmations, freelancerId, freelancerName, onClose, onSubmitted, initialCategory }: ReportProblemFlowProps) {
+// submit. Usable from either side of a booking (role) — the dispute/admin
+// system itself is role-agnostic, only the category wording and which
+// party is being reported on changes.
+export function ReportProblemFlow({ bookingId, userId, booking, events, confirmations, role, otherPartyId, otherPartyName, onClose, onSubmitted, initialCategory }: ReportProblemFlowProps) {
   const [step, setStep] = useState<Step>(initialCategory ? 'details' : 'category');
   const [category, setCategory] = useState<DisputeFlowCategory | null>(initialCategory ?? null);
   const [quickAnswers, setQuickAnswers] = useState<Record<string, string>>({});
@@ -43,7 +49,8 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const categoryDef = category ? REPORT_PROBLEM_CATEGORIES.find((option) => option.id === category) : null;
+  const categories = getReportProblemCategories(role);
+  const categoryDef = category ? categories.find((option) => option.id === category) : null;
   const config = category ? DISPUTE_CATEGORY_CONFIG[category] : null;
 
   const selectCategory = (id: DisputeFlowCategory | 'differed_from_agreement' | 'quality_issue', routesTo: 'dispute' | 'review') => {
@@ -114,7 +121,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
         bookingId,
         round: 1,
         submittedBy: userId,
-        role: 'client',
+        role,
         evidenceType: item.evidenceType,
         storagePath: uploadResponse.path,
         description: item.description.trim() || null,
@@ -135,7 +142,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
           </button>
         </div>
         <div className="space-y-2">
-          {REPORT_PROBLEM_CATEGORIES.map((option) => (
+          {categories.map((option) => (
             <button
               key={option.id}
               onClick={() => selectCategory(option.id, option.routesTo)}
@@ -169,7 +176,7 @@ export function ReportProblemFlow({ bookingId, userId, booking, events, confirma
           If something else happened too — like non-delivery or an unauthorized extra charge — you can report that
           separately from the category list.
         </p>
-        <BookingReviewPrompt bookingId={bookingId} viewerId={userId} revieweeId={freelancerId} revieweeName={freelancerName} />
+        <BookingReviewPrompt bookingId={bookingId} viewerId={userId} revieweeId={otherPartyId} revieweeName={otherPartyName} />
       </div>
     );
   }

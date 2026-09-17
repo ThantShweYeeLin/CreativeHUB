@@ -24,6 +24,14 @@ interface TicketThreadProps {
   originalAuthorAvatar: string | null;
   currentUserId: string;
   onMessageSent?: () => void;
+  /** A closed ticket is "finished, no further action expected" — the
+   * composer is replaced with a notice instead of a disabled input, since
+   * the database itself rejects the insert regardless of this (see
+   * support_ticket_messages' INSERT policy in
+   * supabase/support_ticket_privacy_and_lifecycle.sql); this is just so
+   * the user sees why rather than hitting a raw error. Replying to a
+   * resolved ticket is fine — it reopens automatically. */
+  ticketStatus?: string;
 }
 
 async function resolveEvidenceUrl(path: string | null): Promise<string | null> {
@@ -41,7 +49,9 @@ export function TicketThread({
   originalAuthorAvatar,
   currentUserId,
   onMessageSent,
+  ticketStatus,
 }: TicketThreadProps) {
+  const isClosed = ticketStatus === 'closed';
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [originalScreenshotUrl, setOriginalScreenshotUrl] = useState<string | null>(null);
@@ -148,27 +158,35 @@ export function TicketThread({
 
       {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
 
-      <div className="flex items-end gap-2">
-        <textarea
-          value={reply}
-          onChange={(e) => setReply(e.target.value)}
-          placeholder="Write a reply…"
-          rows={1}
-          className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
-        />
-        <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sky-100 text-gray-500 hover:bg-sky-50">
-          <Paperclip className="h-4 w-4" />
-          <input type="file" accept="image/*" className="hidden" onChange={(e) => setReplyFile(e.target.files?.[0] || null)} />
-        </label>
-        <button
-          onClick={() => void handleSend()}
-          disabled={!reply.trim() || isSending}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
-        >
-          <Send className="h-4 w-4" />
-        </button>
-      </div>
-      {replyFile && <p className="text-xs text-gray-500">Attached: {replyFile.name}</p>}
+      {isClosed ? (
+        <p className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs text-gray-500">
+          This ticket is closed, so it's read-only. If you still need help, open a new ticket referencing this one.
+        </p>
+      ) : (
+        <>
+          <div className="flex items-end gap-2">
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value)}
+              placeholder="Write a reply…"
+              rows={1}
+              className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
+            />
+            <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sky-100 text-gray-500 hover:bg-sky-50">
+              <Paperclip className="h-4 w-4" />
+              <input type="file" accept="image/*" className="hidden" onChange={(e) => setReplyFile(e.target.files?.[0] || null)} />
+            </label>
+            <button
+              onClick={() => void handleSend()}
+              disabled={!reply.trim() || isSending}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+          {replyFile && <p className="text-xs text-gray-500">Attached: {replyFile.name}</p>}
+        </>
+      )}
     </div>
   );
 }

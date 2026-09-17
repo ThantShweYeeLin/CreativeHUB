@@ -13,6 +13,8 @@ import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
 import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { RespondToDisputeForm } from './bookingTracking/RespondToDisputeForm';
+import { ReportProblemFlow } from './bookingTracking/ReportProblemFlow';
+import type { DisputeFlowCategory } from '../../lib/disputeCategories';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import { RescheduleCard, isBookingRescheduleEligible } from './bookingTracking/RescheduleCard';
 import { DeliveryCard, isDeliveryCardEligible } from './bookingTracking/DeliveryCard';
@@ -56,6 +58,36 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
   const [showRespondForm, setShowRespondForm] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
+
+  // Freelancers previously had no way to file a dispute at all (only to
+  // respond to one the client opened) — this mirrors
+  // BookingTrackingClientPage's own showDisputeForm/renderDisputeForm.
+  const [showDisputeForm, setShowDisputeForm] = useState(false);
+  const [disputeInitialCategory, setDisputeInitialCategory] = useState<DisputeFlowCategory | undefined>(undefined);
+
+  const renderDisputeForm = () =>
+    booking && user?.id ? (
+      <ReportProblemFlow
+        bookingId={booking.id}
+        userId={user.id}
+        booking={booking}
+        events={events}
+        confirmations={confirmations}
+        role="freelancer"
+        otherPartyId={booking.client_id}
+        otherPartyName={bookingData?.client.name || 'the client'}
+        initialCategory={disputeInitialCategory}
+        onClose={() => {
+          setShowDisputeForm(false);
+          setDisputeInitialCategory(undefined);
+        }}
+        onSubmitted={async () => {
+          setShowDisputeForm(false);
+          setDisputeInitialCategory(undefined);
+          await refresh();
+        }}
+      />
+    ) : null;
 
   const handleSubmitCompletion = async () => {
     if (!booking || !user?.id) return;
@@ -189,15 +221,18 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
         {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
           <div id="attendance-check">
             <AttendanceCheck
-              booking={booking}
               bookingId={booking.id}
               scheduledAt={bookingData.scheduledAt}
               role="freelancer"
               confirmations={confirmations}
               report={attendanceReport}
               onRefresh={refresh}
-              onTicketCreated={(ticketId) => navigate(`/tickets/${ticketId}`)}
+              onReportProblem={() => {
+                setDisputeInitialCategory(undefined);
+                setShowDisputeForm(true);
+              }}
             />
+            {showDisputeForm && renderDisputeForm()}
             <AttendanceTimeline
               events={events}
               confirmations={confirmations}
