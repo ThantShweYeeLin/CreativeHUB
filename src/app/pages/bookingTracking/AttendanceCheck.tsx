@@ -7,7 +7,6 @@ import {
   type AttendanceConfirmation,
   type AttendanceReport,
 } from '../../../lib/attendanceVerification';
-import { ReportAttendanceProblem } from './ReportAttendanceProblem';
 
 type Role = 'client' | 'freelancer';
 
@@ -16,25 +15,30 @@ function formatTime(date: Date) {
 }
 
 export function AttendanceCheck({
-  booking,
   bookingId,
   scheduledAt,
   role,
   confirmations,
   report,
   onRefresh,
+  onReportProblem,
 }: {
-  booking: any;
   bookingId: string;
   scheduledAt: Date | null;
   role: Role;
   confirmations: AttendanceConfirmation[];
   report: AttendanceReport | null;
   onRefresh: () => Promise<void>;
+  /** No-shows/lateness/conduct issues are booking disputes, not support
+   * tickets — this opens the parent page's own Report a Problem flow
+   * (ReportProblemFlow) rather than creating anything itself. Previously
+   * this button ("Create a Ticket") created a support_tickets row via
+   * submit_attendance_ticket, a second, disconnected reporting path
+   * alongside the real dispute system for the exact same scenarios. */
+  onReportProblem: () => void;
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
-  const [showReportForm, setShowReportForm] = useState(false);
 
   // Opportunistic, cron-free notification that the window has opened —
   // safe no-op if already notified or not yet open.
@@ -160,11 +164,11 @@ export function AttendanceCheck({
               {isConfirming ? 'Confirming...' : `Confirm ${otherRoleLabel} Presence`}
             </button>
             <button
-              onClick={() => setShowReportForm(true)}
+              onClick={onReportProblem}
               className="flex items-center justify-center gap-2 rounded-xl bg-sky-50 py-3 px-4 text-sm font-semibold text-gray-700 hover:bg-sky-100 transition-all"
             >
               <AlertTriangle className="w-4 h-4" />
-              Create a Ticket
+              Report a Problem
             </button>
           </div>
         </>
@@ -179,25 +183,12 @@ export function AttendanceCheck({
 
       {selfConfirmation && (
         <button
-          onClick={() => setShowReportForm(true)}
+          onClick={onReportProblem}
           className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-sky-50 py-2.5 px-4 text-xs font-semibold text-gray-600 hover:bg-sky-100 transition-all"
         >
           <AlertTriangle className="w-3.5 h-3.5" />
-          Create a Ticket
+          Report a Problem
         </button>
-      )}
-
-      {showReportForm && (
-        <ReportAttendanceProblem
-          booking={booking}
-          bookingId={bookingId}
-          role={role}
-          onCancel={() => setShowReportForm(false)}
-          onSubmitted={async () => {
-            setShowReportForm(false);
-            await onRefresh();
-          }}
-        />
       )}
     </div>
   );

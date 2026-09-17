@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { MessageCircle } from 'lucide-react';
+import { Lock, MessageCircle } from 'lucide-react';
 import { TicketThread } from '../../../components/support/TicketThread';
 import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
@@ -11,6 +11,7 @@ const EVENT_LABEL: Record<string, string> = {
   evidence_requested: 'Admin requested more evidence',
   evidence_submitted: 'User submitted more evidence',
   status_changed: 'Status updated',
+  reopened: 'Reopened by user reply',
 };
 
 export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
@@ -18,19 +19,23 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
   const { user } = useAuth();
   const [ticket, setTicket] = useState<any>(null);
   const [events, setEvents] = useState<any[]>([]);
+  const [adminNotes, setAdminNotes] = useState<any[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState(false);
   const [evidenceNote, setEvidenceNote] = useState('');
   const [showEvidenceForm, setShowEvidenceForm] = useState(false);
+  const [newNote, setNewNote] = useState('');
+  const [isAddingNote, setIsAddingNote] = useState(false);
 
   const load = async () => {
     setIsLoading(true);
     setError(null);
-    const [ticketResponse, eventsResponse] = await Promise.all([
+    const [ticketResponse, eventsResponse, notesResponse] = await Promise.all([
       DataService.getSupportTicket(ticketId),
       DataService.getSupportTicketEvents(ticketId),
+      DataService.getTicketAdminNotes(ticketId),
     ]);
 
     if (ticketResponse.error || !ticketResponse.data) {
@@ -41,6 +46,7 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
 
     setTicket(ticketResponse.data);
     setEvents(eventsResponse.data);
+    setAdminNotes(notesResponse.error ? [] : notesResponse.data);
 
     // ticket.screenshot_path is deliberately not resolved here - TicketThread
     // resolves it itself as the conversation's first bubble.
@@ -87,6 +93,20 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
     await load();
   };
 
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return;
+    setIsAddingNote(true);
+    setError(null);
+    const response = await DataService.adminAddTicketNote(ticketId, newNote.trim());
+    setIsAddingNote(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to add note.');
+      return;
+    }
+    setNewNote('');
+    await load();
+  };
+
   if (isLoading) return <p className="text-sm text-gray-500">Loading...</p>;
   if (error || !ticket) return <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Ticket not found.'}</div>;
 
@@ -110,12 +130,6 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
             View related booking
           </button>
         )}
-        {ticket.admin_notes && (
-          <div className="mt-3 rounded-lg bg-sky-50/50 px-3 py-2 text-sm text-gray-600 border-t border-sky-100 pt-3">
-            Admin notes: {ticket.admin_notes}
-          </div>
-        )}
-
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
         <div className="mt-3 flex flex-wrap gap-1.5 border-t border-sky-100 pt-3">
@@ -161,6 +175,45 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
         )}
       </div>
 
+      {/* Genuinely private — support_ticket_admin_notes has no ticket-owner
+          RLS clause at all, unlike the Timeline below (support_ticket_events),
+          which the ticket owner can also read. Nothing typed here is ever
+          visible to the user; to tell the user something, reply in the
+          Conversation below instead. */}
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+        <div className="mb-3 flex items-center gap-2 text-amber-900">
+          <Lock className="h-4 w-4" />
+          <h2 className="font-bold">Internal Notes (admins only)</h2>
+        </div>
+        {adminNotes.length === 0 ? (
+          <p className="text-sm text-gray-500">No internal notes yet.</p>
+        ) : (
+          <div className="mb-3 space-y-2">
+            {adminNotes.map((n) => (
+              <div key={n.id} className="rounded-lg bg-white/70 px-3 py-2 text-sm text-gray-700">
+                <p>{n.note}</p>
+                <p className="mt-1 text-xs text-gray-400">
+                  {n.admin?.full_name || 'An admin'} · {new Date(n.created_at).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+        <textarea
+          value={newNote}
+          onChange={(e) => setNewNote(e.target.value)}
+          placeholder="Add a private note for other admins — never shown to the user..."
+          className="mb-2 w-full min-h-[60px] rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
+        />
+        <button
+          disabled={isAddingNote || !newNote.trim()}
+          onClick={() => void handleAddNote()}
+          className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+        >
+          {isAddingNote ? 'Adding...' : 'Add private note'}
+        </button>
+      </div>
+
       <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h2 className="mb-3 font-bold text-gray-900">Timeline</h2>
         <div className="space-y-4">
@@ -201,6 +254,7 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
             originalAuthorName={ticket.user?.full_name || 'User'}
             originalAuthorAvatar={ticket.user?.avatar_url || null}
             currentUserId={user.id}
+            ticketStatus={ticket.status}
           />
         </div>
       )}

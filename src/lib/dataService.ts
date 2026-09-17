@@ -110,6 +110,32 @@ export interface ExploreHeroData {
 }
 
 export class DataService {
+  // Maps a support_tickets row carrying an attendance report (see
+  // submitAttendanceTicket) onto the same AttendanceReport shape the UI
+  // already reads for legacy attendance_reports rows, so callers don't
+  // need to know which table a given report actually came from. Keeps the
+  // ticket's own `booking` join (if the caller's select() requested one)
+  // alongside it, matching legacy rows' shape for admin list views.
+  private static mapAttendanceTicketToReport(ticket: any): AttendanceReport & { booking?: any } {
+    return {
+      id: ticket.id,
+      booking_id: ticket.related_booking_id,
+      reporter_id: ticket.user_id,
+      reporter_role: ticket.reporter_role,
+      reported_user_id: ticket.reported_user_id,
+      reason: ticket.attendance_reason,
+      explanation: ticket.description || null,
+      evidence_paths: ticket.evidence_paths || [],
+      status: ticket.status,
+      admin_decision: ticket.admin_decision,
+      admin_decision_reason: ticket.admin_decision_reason,
+      resolved_by: ticket.resolved_by,
+      resolved_at: ticket.resolved_at,
+      created_at: ticket.created_at,
+      ...(ticket.booking !== undefined ? { booking: ticket.booking } : {}),
+    };
+  }
+
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
     return (
@@ -1585,19 +1611,13 @@ export class DataService {
     return { data: row as (AttendanceConfirmation & { already_confirmed: boolean }) | null, error };
   }
 
-  static async submitAttendanceReport(
-    bookingId: string,
-    input: { reason: string; explanation: string; evidencePaths: string[] }
-  ) {
-    const { data, error } = await (supabase as any).rpc('submit_attendance_report', {
-      p_booking_id: bookingId,
-      p_reason: input.reason,
-      p_explanation: input.explanation || null,
-      p_evidence_paths: input.evidencePaths,
-    });
-    const row = Array.isArray(data) ? data[0] : data;
-    return { data: row as AttendanceReport | null, error };
-  }
+  // No submit method here anymore — attendance/no-show reports now go
+  // through DataService.openBookingDispute (the real dispute system) via
+  // ReportProblemFlow, not a ticket. This intentionally leaves
+  // submit_attendance_ticket/submit_attendance_report as dead RPCs on the
+  // database side (harmless — nothing calls them), and
+  // getBookingAttendanceReport below still reads any tickets/reports they
+  // created historically, before this fix.
 
   static async getBookingAttendanceConfirmations(bookingId: string) {
     const { data, error } = await (supabase as any)
@@ -1607,7 +1627,37 @@ export class DataService {
     return { data: (data || []) as AttendanceConfirmation[], error };
   }
 
+  // New attendance reports live in support_tickets now (see
+  // submitAttendanceTicket) - checked first since it's the current source
+  // of truth - falling back to the legacy attendance_reports table so a
+  // report filed before that migration still shows. Ticket rows are mapped
+  // onto the same AttendanceReport shape the rest of the UI (AttendanceCheck,
+  // AttendanceTimeline) already reads, so neither needs to know which table
+  // a given report actually came from. status/admin_decision are passed
+  // through as-is from the ticket row - support_tickets' status enum
+  // ('open'/'in_progress'/'resolved'/'closed') doesn't map 1:1 onto the
+  // legacy AttendanceReportStatus ('open'/'under_review'/'resolved'), so a
+  // ticket in 'in_progress' or 'closed' may not match every status-specific
+  // branch the older UI expects — worth a closer look if a status badge
+  // looks wrong for a ticket-sourced report.
   static async getBookingAttendanceReport(bookingId: string) {
+    const ticketResponse = await (supabase as any)
+      .from('support_tickets')
+      .select('*')
+      .eq('related_booking_id', bookingId)
+      .not('attendance_reason', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (ticketResponse.error) {
+      return { data: null, error: ticketResponse.error };
+    }
+
+    if (ticketResponse.data) {
+      return { data: DataService.mapAttendanceTicketToReport(ticketResponse.data), error: null };
+    }
+
     const { data, error } = await (supabase as any)
       .from('attendance_reports')
       .select('*')
@@ -1618,6 +1668,10 @@ export class DataService {
     return { data: (data || null) as AttendanceReport | null, error };
   }
 
+  // Kept for reports still sitting in the legacy attendance_reports table
+  // (filed before submit_attendance_ticket replaced submit_attendance_report)
+  // - a report's `source` field (see getAllAttendanceReportsForAdmin) says
+  // which of this pair or the *Ticket variant below applies to it.
   static async adminResolveAttendanceReport(reportId: string, decision: string, reason?: string) {
     const { data, error } = await (supabase as any).rpc('admin_resolve_attendance_report', {
       p_report_id: reportId,
@@ -1632,26 +1686,96 @@ export class DataService {
     return { data, error };
   }
 
+  // New reports (support_tickets rows carrying an attendance_reason) use
+  // these instead - same decision values as adminResolveAttendanceReport,
+  // just a ticket id rather than a legacy report id.
+  static async adminResolveAttendanceTicket(ticketId: string, decision: string, reason?: string) {
+    const { data, error } = await (supabase as any).rpc('admin_resolve_attendance_ticket', {
+      p_ticket_id: ticketId,
+      p_decision: decision,
+      p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  // Requesting more evidence on a ticket-sourced attendance report reuses
+  // the generic adminRequestTicketEvidence(ticketId, note) already defined
+  // below for the ticket system - unlike the legacy
+  // adminRequestAttendanceEvidence above, it requires a note explaining
+  // what's being asked for.
+
+  // Merges both sources a report can live in - support_tickets (current)
+  // and the legacy attendance_reports table (reports filed before that
+  // migration) - into one list, each row tagged with `source` so the admin
+  // UI knows which id/RPC pair (ticket vs legacy report) applies to it.
   static async getAllAttendanceReportsForAdmin() {
-    const { data, error } = await (supabase as any)
-      .from('attendance_reports')
-      .select(
-        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
-      )
-      .in('status', ['open', 'under_review'])
-      .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    const [ticketsResponse, legacyResponse] = await Promise.all([
+      (supabase as any)
+        .from('support_tickets')
+        .select(
+          '*, booking:related_booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .not('attendance_reason', 'is', null)
+        .in('status', ['open', 'in_progress'])
+        .order('created_at', { ascending: false }),
+      (supabase as any)
+        .from('attendance_reports')
+        .select(
+          '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .in('status', ['open', 'under_review'])
+        .order('created_at', { ascending: false }),
+    ]);
+
+    if (ticketsResponse.error || legacyResponse.error) {
+      return { data: [], error: ticketsResponse.error || legacyResponse.error };
+    }
+
+    const tickets = (ticketsResponse.data || []).map((row: any) => ({
+      ...DataService.mapAttendanceTicketToReport(row),
+      source: 'ticket' as const,
+    }));
+    const legacy = (legacyResponse.data || []).map((row: any) => ({ ...row, source: 'legacy' as const }));
+    const merged = [...tickets, ...legacy].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    return { data: merged, error: null };
   }
 
   static async getResolvedAttendanceReportsForAdmin() {
-    const { data, error } = await (supabase as any)
-      .from('attendance_reports')
-      .select(
-        '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
-      )
-      .eq('status', 'resolved')
-      .order('resolved_at', { ascending: false });
-    return { data: data || [], error };
+    const [ticketsResponse, legacyResponse] = await Promise.all([
+      (supabase as any)
+        .from('support_tickets')
+        .select(
+          '*, booking:related_booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .not('attendance_reason', 'is', null)
+        .in('status', ['resolved', 'closed'])
+        .order('resolved_at', { ascending: false }),
+      (supabase as any)
+        .from('attendance_reports')
+        .select(
+          '*, booking:booking_id(*, client:client_id(id, full_name, avatar_url), freelancer:freelancer_id(id, full_name, avatar_url))'
+        )
+        .eq('status', 'resolved')
+        .order('resolved_at', { ascending: false }),
+    ]);
+
+    if (ticketsResponse.error || legacyResponse.error) {
+      return { data: [], error: ticketsResponse.error || legacyResponse.error };
+    }
+
+    const tickets = (ticketsResponse.data || []).map((row: any) => ({
+      ...DataService.mapAttendanceTicketToReport(row),
+      source: 'ticket' as const,
+    }));
+    const legacy = (legacyResponse.data || []).map((row: any) => ({ ...row, source: 'legacy' as const }));
+    const merged = [...tickets, ...legacy].sort((a, b) => {
+      const aTime = a.resolved_at ? new Date(a.resolved_at).getTime() : 0;
+      const bTime = b.resolved_at ? new Date(b.resolved_at).getTime() : 0;
+      return bTime - aTime;
+    });
+    return { data: merged, error: null };
   }
 
   static async getBookingEvents(bookingId: string) {
@@ -1952,6 +2076,28 @@ export class DataService {
       p_ticket_id: ticketId,
       p_status: status,
       p_notes: notes || null,
+    });
+    return { data, error };
+  }
+
+  // Genuinely private — support_ticket_admin_notes has no ticket-owner
+  // clause in its RLS at all (unlike support_ticket_events), so a plain
+  // authenticated non-admin query against it returns nothing regardless of
+  // whether they own the ticket. See
+  // supabase/support_ticket_privacy_and_lifecycle.sql.
+  static async getTicketAdminNotes(ticketId: string) {
+    const { data, error } = await (supabase as any)
+      .from('support_ticket_admin_notes')
+      .select('*, admin:admin_id(id, full_name)')
+      .eq('ticket_id', ticketId)
+      .order('created_at', { ascending: true });
+    return { data: data || [], error };
+  }
+
+  static async adminAddTicketNote(ticketId: string, note: string) {
+    const { data, error } = await (supabase as any).rpc('admin_add_ticket_note', {
+      p_ticket_id: ticketId,
+      p_note: note,
     });
     return { data, error };
   }
@@ -2429,11 +2575,39 @@ export class DataService {
       evidencePhotoPaths?: string[];
     }
   ) {
+    // Role determined server-round-trip from the booking itself, not
+    // trusted from the caller — this is what lets either party file a
+    // dispute (freelancers previously had no way to report a client
+    // no-show at all; the RLS on bookings/booking_events already allowed
+    // it, "Users can update own bookings"/"...insert own booking events as
+    // themselves" both check client_id OR freelancer_id, this function was
+    // just hardcoded to the client's side of that).
+    const bookingResponse = await supabase
+      .from('bookings')
+      .select('client_id, freelancer_id')
+      .eq('id', bookingId)
+      .single();
+
+    if (bookingResponse.error || !bookingResponse.data) {
+      return { data: null, error: bookingResponse.error };
+    }
+
+    const booking = bookingResponse.data as any;
+    const currentUserId = (await supabase.auth.getUser()).data.user?.id;
+    const actor: 'client' | 'freelancer' | null =
+      currentUserId === booking.client_id ? 'client' : currentUserId === booking.freelancer_id ? 'freelancer' : null;
+
+    if (!actor) {
+      return { data: null, error: { message: 'You are not a participant on this booking.' } as any };
+    }
+
+    const otherPartyId = actor === 'client' ? booking.freelancer_id : booking.client_id;
+
     // Goes straight to admin review — no more freelancer-response round in
-    // between. The client sees a simple "report submitted" state, the
-    // freelancer sees "deposit frozen," and CreativeHUB support makes the
-    // release/refund call directly from the evidence + platform records
-    // already collected, same as before.
+    // between. The reporting party sees a simple "report submitted" state,
+    // the other party sees "deposit frozen," and CreativeHUB support makes
+    // the release/refund call directly from the evidence + platform
+    // records already collected, same as before.
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -2453,7 +2627,7 @@ export class DataService {
     await (supabase as any).from('booking_events').insert({
       booking_id: bookingId,
       round: 1,
-      actor: 'client',
+      actor,
       action: 'complain',
       category: input.category,
       reason: input.reason,
@@ -2462,10 +2636,11 @@ export class DataService {
     });
 
     // No actorId — this notification is deliberately anonymized on the
-    // freelancer's side (see NotificationsPanel.tsx's booking_disputed
-    // special-case), so it never names or shows the client who reported it.
+    // reported party's side (see NotificationsPanel.tsx's booking_disputed
+    // special-case), so it never names or shows who reported it, symmetric
+    // regardless of which side filed it.
     await this.notifyEvent({
-      userId: (data as any).freelancer_id,
+      userId: otherPartyId,
       type: 'booking_disputed',
       title: 'Deposit Frozen',
       message: 'Deposit frozen due to an issue.',

@@ -159,8 +159,9 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         booking={booking}
         events={events}
         confirmations={confirmations}
-        freelancerId={booking.freelancer_id}
-        freelancerName={bookingData?.freelancer.name || 'the freelancer'}
+        role="client"
+        otherPartyId={booking.freelancer_id}
+        otherPartyName={bookingData?.freelancer.name || 'the freelancer'}
         initialCategory={disputeInitialCategory}
         onClose={() => {
           setShowDisputeForm(false);
@@ -256,13 +257,16 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
         {(escrowState === 'deposit_secured' || escrowState === 'awaiting_client_confirmation') && (
           <div id="attendance-check">
             <AttendanceCheck
-              booking={booking}
               bookingId={booking.id}
               scheduledAt={bookingData.scheduledAt}
               role="client"
               confirmations={confirmations}
               report={attendanceReport}
               onRefresh={refresh}
+              onReportProblem={() => {
+                setDisputeInitialCategory(undefined);
+                setShowDisputeForm(true);
+              }}
             />
             <AttendanceTimeline
               events={events}
