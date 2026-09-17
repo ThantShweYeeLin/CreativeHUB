@@ -691,13 +691,29 @@ export function MainLayout({ children }: MainLayoutProps) {
                 }
                 className="whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105 sm:px-6 sm:py-2.5 sm:text-sm"
               >
-                {!isAuthenticated
-                  ? 'Get Started'
-                  : user?.role === 'admin'
-                  ? 'Admin Dashboard'
-                  : canAccessFreelancerDashboard
-                  ? 'Freelancer Dashboard'
-                  : 'Become a Freelancer'}
+                {/* Shorter label below sm (640px) - not just a smaller font,
+                    an actually shorter word - so there's guaranteed room
+                    left over for the mobileActions icons that can also show
+                    in this same row once scrolled (see below). The full
+                    label at sm+ never had that constraint. */}
+                <span className="sm:hidden">
+                  {!isAuthenticated
+                    ? 'Get Started'
+                    : user?.role === 'admin'
+                    ? 'Admin'
+                    : canAccessFreelancerDashboard
+                    ? 'Dashboard'
+                    : 'Freelance'}
+                </span>
+                <span className="hidden sm:inline">
+                  {!isAuthenticated
+                    ? 'Get Started'
+                    : user?.role === 'admin'
+                    ? 'Admin Dashboard'
+                    : canAccessFreelancerDashboard
+                    ? 'Freelancer Dashboard'
+                    : 'Become a Freelancer'}
+                </span>
               </button>
               {headerExtras?.mobileActions && <div className="flex items-center gap-1.5 md:hidden">{headerExtras.mobileActions}</div>}
               <div className="relative">
