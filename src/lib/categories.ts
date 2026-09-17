@@ -85,6 +85,11 @@ export const FREELANCER_CATEGORY_LABELS = FREELANCER_CATEGORIES.map((category) =
 // whether search should also check performerType (see freelancerSearch.ts).
 export const MUSICIAN_CATEGORY_LABEL = 'Musician/Live Entertainment';
 
+// A freelancer can be "also skilled in" more than one other category (each
+// with its own skills/styles/performer-type suggestions and experience
+// level) - capped so onboarding doesn't turn into selecting every category.
+export const MAX_MINOR_CATEGORIES = 3;
+
 // Historically excluded Model from the Event Matcher while Model was still
 // a valid category; Model has since been removed from FREELANCER_CATEGORIES
 // entirely (see supabase/remove_model_category.sql), so this is now simply

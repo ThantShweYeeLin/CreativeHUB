@@ -4,8 +4,9 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { normalizeCurrencyCode } from '../../lib/currency';
-import { isFreelancerCategory } from '../../lib/categories';
+import { isFreelancerCategory, MAX_MINOR_CATEGORIES } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
+import { type MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
@@ -76,24 +77,36 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [coverPhotoUpload, setCoverPhotoUpload] = useState<ImageUpload | null>(null);
   const [isDraggingCoverPhoto, setIsDraggingCoverPhoto] = useState(false);
 
-  // (b) Category (+ optional minor category), (c) Skills, (d) Styles
+  // (b) Category (+ optional minor categories), (c) Skills, (d) Styles
   const [category, setCategory] = useState<string | null>(null);
   const [categoryExperienceLevel, setCategoryExperienceLevel] = useState<string | null>(null);
-  const [minorCategory, setMinorCategory] = useState<string | null>(null);
+  // A freelancer can be "also skilled in" more than one other category (see
+  // categories.ts's MAX_MINOR_CATEGORIES) - each one's skills/styles/
+  // performerType picks are tracked in their own by-category map (not one
+  // flat array shared across all of them) so each category's TagSelector
+  // only ever shows its own picks as selected, exactly like the major
+  // category's `skills`/`styles` do. Everything gets merged into the flat
+  // freelancer_profiles.skills/styles/performer_type arrays only at save
+  // time, since that's still how those columns are stored.
+  const [minorCategories, setMinorCategories] = useState<string[]>([]);
+  const [minorCategoryExperienceLevels, setMinorCategoryExperienceLevels] = useState<Record<string, string>>({});
+  const [minorCategorySkillsByCategory, setMinorCategorySkillsByCategory] = useState<Record<string, string[]>>({});
+  const [minorCategoryStylesByCategory, setMinorCategoryStylesByCategory] = useState<Record<string, string[]>>({});
+  const [minorCategoryPerformerTypeByCategory, setMinorCategoryPerformerTypeByCategory] = useState<Record<string, string[]>>({});
   const [skills, setSkills] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
-  // Tracked separately from `skills`/`styles` (the major category's picks)
-  // so a label that happens to appear in both the major and minor
-  // category's suggested lists doesn't show as selected in both places —
-  // each TagSelector only ever reflects its own category's picks. Merged
-  // into one flat array only at save time, since that's still how
-  // freelancer_profiles.skills/styles are stored.
-  const [minorCategorySkills, setMinorCategorySkills] = useState<string[]>([]);
-  const [minorCategoryStyles, setMinorCategoryStyles] = useState<string[]>([]);
-  // Only populated (and only shown) when category/minorCategory is
-  // Musician/Live Entertainment — see categories.ts's performerType doc.
+  // Controlled-taxonomy "additional skills" (freelancer_skills, skill_type
+  // 'minor') - distinct from the free-form skills/minorCategorySkills
+  // above. Previously only settable from Edit Profile after onboarding,
+  // which is why most freelancers never had any: this lets it be picked
+  // during onboarding too, via the same MinorSkillsPicker/
+  // updateFreelancerSkills used there.
+  const [minorSkills, setMinorSkills] = useState<MinorSkillSelection[]>([]);
+  // Only populated (and only shown) when category is Musician/Live
+  // Entertainment — see categories.ts's performerType doc. The minor-
+  // category equivalent lives in minorCategoryPerformerTypeByCategory
+  // above, keyed the same way as its skills/styles.
   const [performerType, setPerformerType] = useState<string[]>([]);
-  const [minorCategoryPerformerType, setMinorCategoryPerformerType] = useState<string[]>([]);
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
 
   // (f) Social links — one URL per platform (matches the social_links
@@ -192,15 +205,37 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setCoverPhotoUpload({ file, previewUrl: URL.createObjectURL(file) });
   };
 
-  // Switching category means the Skills/Styles chosen so far almost
-  // certainly don't apply to the new one, so this asks first, then clears
-  // both and lets the next two steps' suggestions repopulate from scratch.
+  // Drops one minor category's own skills/styles/performerType/experience
+  // level - used both when the freelancer deselects it directly, and when
+  // it collides with a newly-picked major category (a category can't be
+  // both the major and a minor one at once).
+  const dropMinorCategory = (label: string) => {
+    setMinorCategories((current) => current.filter((c) => c !== label));
+    setMinorCategorySkillsByCategory((prev) => {
+      const { [label]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setMinorCategoryStylesByCategory((prev) => {
+      const { [label]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setMinorCategoryPerformerTypeByCategory((prev) => {
+      const { [label]: _removed, ...rest } = prev;
+      return rest;
+    });
+    setMinorCategoryExperienceLevels((prev) => {
+      const { [label]: _removed, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  // Switching the major category means the Skills/Styles chosen so far
+  // almost certainly don't apply to the new one, so this asks first, then
+  // clears both and lets the next two steps' suggestions repopulate from
+  // scratch.
   const applyCategoryChange = (nextCategory: string) => {
-    if (minorCategory === nextCategory) {
-      setMinorCategory(null);
-      setMinorCategorySkills([]);
-      setMinorCategoryStyles([]);
-      setMinorCategoryPerformerType([]);
+    if (minorCategories.includes(nextCategory)) {
+      dropMinorCategory(nextCategory);
     }
     if (category && category !== nextCategory && (skills.length > 0 || styles.length > 0)) {
       setPendingCategoryChange(nextCategory);
@@ -209,14 +244,21 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setCategory(nextCategory);
   };
 
-  // Minor category has no confirmation step (unlike the major one) since
-  // its skills/styles are already tracked separately — nothing outside
-  // that scope needs to be invalidated by changing it.
-  const applyMinorCategoryChange = (nextMinorCategory: string | null) => {
-    setMinorCategory(nextMinorCategory);
-    setMinorCategorySkills([]);
-    setMinorCategoryStyles([]);
-    setMinorCategoryPerformerType([]);
+  // Minor categories have no confirmation step (unlike the major one)
+  // since each one's skills/styles are already tracked separately —
+  // nothing outside that category's own scope needs to be invalidated by
+  // toggling it.
+  const toggleMinorCategory = (label: string) => {
+    if (minorCategories.includes(label)) {
+      dropMinorCategory(label);
+      return;
+    }
+    if (minorCategories.length >= MAX_MINOR_CATEGORIES) return;
+    setMinorCategories((current) => [...current, label]);
+  };
+
+  const setMinorCategoryExperienceLevel = (category: string, level: string) => {
+    setMinorCategoryExperienceLevels((prev) => ({ ...prev, [category]: level }));
   };
 
   const confirmCategoryChange = () => {
@@ -225,16 +267,20 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setSkills([]);
     setStyles([]);
     setPerformerType([]);
+    setMinorSkills([]);
     setPendingCategoryChange(null);
   };
+
+  const minorCategorySkillsCount = Object.values(minorCategorySkillsByCategory).reduce((sum, list) => sum + list.length, 0);
+  const minorCategoryStylesCount = Object.values(minorCategoryStylesByCategory).reduce((sum, list) => sum + list.length, 0);
 
   const validateStep = (current: number): string | null => {
     if (current === 1) {
       if (!displayName.trim()) return 'Professional display name is required.';
     }
     if (current === 2 && !isFreelancerCategory(category)) return 'Select a freelancer category.';
-    if (current === 3 && skills.length === 0 && minorCategorySkills.length === 0) return 'Select or add at least one skill.';
-    if (current === 4 && styles.length === 0 && minorCategoryStyles.length === 0) return 'Select or add at least one style.';
+    if (current === 3 && skills.length === 0 && minorCategorySkillsCount === 0) return 'Select or add at least one skill.';
+    if (current === 4 && styles.length === 0 && minorCategoryStylesCount === 0) return 'Select or add at least one style.';
     // Studio name is optional, but a named studio needs a real location —
     // can't have one without the other.
     if (current === 7 && studioName.trim() && studioLocations.length === 0) {
@@ -325,11 +371,11 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       setError('Select a freelancer category before finishing.');
       return;
     }
-    if (skills.length === 0 && minorCategorySkills.length === 0) {
+    if (skills.length === 0 && minorCategorySkillsCount === 0) {
       setError('Select or add at least one skill before finishing.');
       return;
     }
-    if (styles.length === 0 && minorCategoryStyles.length === 0) {
+    if (styles.length === 0 && minorCategoryStylesCount === 0) {
       setError('Select or add at least one style before finishing.');
       return;
     }
@@ -420,15 +466,21 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
     const freelancerProfilePayload = {
       title: category,
-      minor_category: minorCategory || null,
+      // minor_category (singular) is superseded by minor_categories - kept
+      // null going forward rather than written to.
+      minor_category: null,
+      minor_categories: minorCategories,
+      minor_category_experience_levels: minorCategoryExperienceLevels,
       description: bio.trim() || null,
       hourly_rate: startingPrice ? Number(startingPrice) : null,
       // freelancer_profiles.skills/styles are still one flat array — major
-      // and minor category picks are only kept separate in onboarding UI
-      // state (to fix cross-category selection highlighting), merged here.
-      skills: Array.from(new Set([...skills, ...minorCategorySkills])),
-      styles: Array.from(new Set([...styles, ...minorCategoryStyles])),
-      performer_type: Array.from(new Set([...performerType, ...minorCategoryPerformerType])),
+      // and each minor category's picks are only kept separate in
+      // onboarding UI state (to fix cross-category selection highlighting
+      // and avoid one category's TagSelector showing another category's
+      // pick as a removable custom tag), merged here.
+      skills: Array.from(new Set([...skills, ...Object.values(minorCategorySkillsByCategory).flat()])),
+      styles: Array.from(new Set([...styles, ...Object.values(minorCategoryStylesByCategory).flat()])),
+      performer_type: Array.from(new Set([...performerType, ...Object.values(minorCategoryPerformerTypeByCategory).flat()])),
       // Experience is now captured per-skill (see categoryExperienceLevel,
       // synced into freelancer_skills) instead of this one freelancer-wide
       // field, so onboarding no longer collects or sends it.
@@ -484,6 +536,15 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       for (const [platform, url] of Object.entries(portfolioLinks) as Array<[SocialPlatform, string | undefined]>) {
         if (!url || !isValidSocialUrl(url)) continue;
         await DataService.addSocialLink(freelancerProfileId, platform, url.trim());
+      }
+
+      if (minorSkills.length > 0) {
+        const skillsUpdate = await DataService.updateFreelancerSkills(user.id, { minorSkills });
+        if (skillsUpdate.error) {
+          // Non-fatal — the freelancer profile itself already saved above;
+          // don't block them from finishing onboarding over this.
+          setError((skillsUpdate.error as any)?.message || 'Profile saved, but additional skills could not be saved.');
+        }
       }
     }
 
@@ -557,8 +618,10 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
             onSelectCategory={applyCategoryChange}
             experienceLevel={categoryExperienceLevel}
             onExperienceLevelChange={setCategoryExperienceLevel}
-            selectedMinorCategory={minorCategory}
-            onSelectMinorCategory={applyMinorCategoryChange}
+            selectedMinorCategories={minorCategories}
+            onToggleMinorCategory={toggleMinorCategory}
+            minorCategoryExperienceLevels={minorCategoryExperienceLevels}
+            onMinorCategoryExperienceLevelChange={setMinorCategoryExperienceLevel}
           />
           {pendingCategoryChange && (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -592,26 +655,34 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       {step === 3 && (
         <StepSkills
           category={category}
-          minorCategory={minorCategory}
+          minorCategories={minorCategories}
           skills={skills}
           onSkillsChange={setSkills}
-          minorCategorySkills={minorCategorySkills}
-          onMinorCategorySkillsChange={setMinorCategorySkills}
+          minorCategorySkillsByCategory={minorCategorySkillsByCategory}
+          onMinorCategorySkillsChange={(minorCategory, next) =>
+            setMinorCategorySkillsByCategory((prev) => ({ ...prev, [minorCategory]: next }))
+          }
+          minorSkills={minorSkills}
+          onMinorSkillsChange={setMinorSkills}
         />
       )}
 
       {step === 4 && (
         <StepStyles
           category={category}
-          minorCategory={minorCategory}
+          minorCategories={minorCategories}
           styles={styles}
           onStylesChange={setStyles}
-          minorCategoryStyles={minorCategoryStyles}
-          onMinorCategoryStylesChange={setMinorCategoryStyles}
+          minorCategoryStylesByCategory={minorCategoryStylesByCategory}
+          onMinorCategoryStylesChange={(minorCategory, next) =>
+            setMinorCategoryStylesByCategory((prev) => ({ ...prev, [minorCategory]: next }))
+          }
           performerType={performerType}
           onPerformerTypeChange={setPerformerType}
-          minorCategoryPerformerType={minorCategoryPerformerType}
-          onMinorCategoryPerformerTypeChange={setMinorCategoryPerformerType}
+          minorCategoryPerformerTypeByCategory={minorCategoryPerformerTypeByCategory}
+          onMinorCategoryPerformerTypeChange={(minorCategory, next) =>
+            setMinorCategoryPerformerTypeByCategory((prev) => ({ ...prev, [minorCategory]: next }))
+          }
         />
       )}
 

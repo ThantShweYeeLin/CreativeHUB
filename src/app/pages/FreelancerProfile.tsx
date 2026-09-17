@@ -415,6 +415,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
   const performerType: string[] = freelancerProfile?.performer_type || [];
+  // "Band" is the one performer type worth calling out right beside the
+  // name (a client deciding who to book needs to know upfront whether
+  // they'd be booking a group act) - the rest (Solo Artist, Singer/
+  // Vocalist, Acoustic Duo, Instrumentalist, DJ) read more like additional
+  // specialties, so they show under Primary specialty instead, alongside
+  // minorSkills there.
+  const bandPerformerTypes = performerType.filter((type) => type === 'Band');
+  const otherPerformerTypes = performerType.filter((type) => type !== 'Band');
+  // Other full categories ("also skilled in" at onboarding) this freelancer
+  // also provides services in, each with its own optional experience
+  // level - shown alongside minorSkills/otherPerformerTypes under Primary
+  // specialty, same reasoning as those two.
+  const minorCategories: string[] = freelancerProfile?.minor_categories || [];
+  const minorCategoryExperienceLevels: Record<string, string> = freelancerProfile?.minor_category_experience_levels || {};
   const studioName: string = freelancerProfile?.studio_name || '';
   const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
   const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
@@ -1248,7 +1262,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                         {displayName}
                         {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
                       </h1>
-                      {performerType.map((type: string) => (
+                      {bandPerformerTypes.map((type: string) => (
                         <span key={type} className="rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold text-white md:text-sm">
                           {type}
                         </span>
@@ -1386,7 +1400,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   {displayName}
                   {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
                 </h1>
-                {performerType.map((type: string) => (
+                {bandPerformerTypes.map((type: string) => (
                   <span key={type} className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-900">
                     {type}
                   </span>
@@ -1605,54 +1619,67 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
 
           <aside className="space-y-6">
-            {/* Always rendered now (used to be hidden whenever both
-                majorSkillExperienceLevel and minorSkills were empty) - that
-                depended on two independently-optional inputs (an "(optional)"
+            {/* One consolidated card instead of three separate boxes -
+                Primary specialty (plus any additional specialties from
+                minorSkills, appended right alongside it rather than in
+                their own separate "Also skilled in" section) sits above
+                Skills and Styles inside the same card, each still always
+                rendered - it used to be hidden entirely whenever both
+                majorSkillExperienceLevel and minorSkills were empty, since
+                both are independently-optional inputs (an "(optional)"
                 experience-level picker in onboarding, and a minor-skills
-                picker that only lives in Edit Profile, never onboarding), so
-                most accounts never had either and the card silently
-                vanished. Skills/Styles below already always render with a
-                fallback for the empty case; this now matches that. */}
+                picker that only lives in Edit Profile, never onboarding) -
+                most accounts never had either and it silently vanished. */}
             <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
-              <p className="mt-1 text-base font-bold text-gray-900">
-                {title}
-                {majorSkillExperienceLevel && <span className="ml-2 text-sm font-semibold text-gray-500">· {majorSkillExperienceLevel}</span>}
-              </p>
-              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
-              {minorSkills.length > 0 ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
                 <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                    {title}
+                    {majorSkillExperienceLevel && <span className="text-white/80"> · {majorSkillExperienceLevel}</span>}
+                  </span>
                   {minorSkills.map((skill) => (
-                    <span key={skill.name} className="rounded-full border border-sky-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                    <span key={skill.name} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
                       {skill.name}
-                      {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
+                      {skill.experienceLevel && <span className="text-white/80"> · {skill.experienceLevel}</span>}
+                    </span>
+                  ))}
+                  {otherPerformerTypes.map((type) => (
+                    <span key={type} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                      {type}
+                    </span>
+                  ))}
+                  {minorCategories.map((minorCategory) => (
+                    <span key={minorCategory} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                      {minorCategory}
+                      {minorCategoryExperienceLevels[minorCategory] && (
+                        <span className="text-white/80"> · {minorCategoryExperienceLevels[minorCategory]}</span>
+                      )}
                     </span>
                   ))}
                 </div>
-              ) : (
-                <p className="mt-2 text-sm text-gray-600">No additional skills listed yet.</p>
-              )}
-            </div>
-
-            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-              <h2 className="text-xl font-bold text-gray-900">Skills</h2>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {skills.length > 0 ? skills.map((skill: string) => (
-                  <span key={skill} className="rounded-full border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
-                    {skill}
-                  </span>
-                )) : <p className="text-sm text-gray-600">No skills listed yet.</p>}
               </div>
-            </div>
 
-            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-              <h2 className="text-xl font-bold text-gray-900">Styles</h2>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {styles.length > 0 ? styles.map((style: string) => (
-                  <span key={style} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
-                    {style}
-                  </span>
-                )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
+              <div className="mt-6">
+                <h2 className="text-xl font-bold text-gray-900">Skills</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {skills.length > 0 ? skills.map((skill: string) => (
+                    <span key={skill} className="rounded-full border border-sky-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900">
+                      {skill}
+                    </span>
+                  )) : <p className="text-sm text-gray-600">No skills listed yet.</p>}
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <h2 className="text-xl font-bold text-gray-900">Styles</h2>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {styles.length > 0 ? styles.map((style: string) => (
+                    <span key={style} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
+                      {style}
+                    </span>
+                  )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
+                </div>
               </div>
             </div>
           </aside>
