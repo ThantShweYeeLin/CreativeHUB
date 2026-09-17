@@ -16,6 +16,7 @@ import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categorie
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
 import { haversineDistanceKm } from '../../lib/geo';
 import { useHeaderExtras } from '../../contexts/HeaderExtrasContext';
+import { useIsMobile } from '../components/ui/use-mobile';
 
 interface ProfileCardProps {
   id: string;
@@ -214,52 +215,83 @@ interface FeaturedShuffleProps {
   onToggleFavorite: (id: string) => void;
 }
 
-// One constant size for every screen, not recomputed off window width —
-// each card (name/rating text included) stays the exact same size
-// regardless of viewport, rather than visibly snapping to a different
-// size whenever the window crosses a breakpoint.
+// One constant size per layout, not recomputed off window width — each card
+// (name/rating text included) stays the exact same size regardless of small
+// viewport changes, rather than visibly snapping whenever the window
+// crosses a breakpoint. The two layouts below (desktop pair vs. mobile
+// single-with-peek) only switch at the useIsMobile() boolean flipping, not
+// on every resize pixel.
 const FEATURED_CARD_WIDTH = 330;
+// Two 330px cards side by side (≈690px) is wider than any phone screen —
+// the previous fixed-width deck simply got clipped by the hero section's
+// overflow-hidden edge, cutting the second card in half. Rather than
+// shrinking both cards until the same side-by-side layout barely fits (and
+// crowding their fixed-size text/badges), mobile shows one full card at a
+// time with the next ones peeking out behind it, a stack pattern sized to
+// comfortably fit a phone width with room to spare either side.
+const FEATURED_CARD_WIDTH_MOBILE = 210;
 
 function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favoritedIds, onToggleFavorite }: FeaturedShuffleProps) {
-  const cardWidth = FEATURED_CARD_WIDTH;
+  const isMobile = useIsMobile();
+  const cardWidth = isMobile ? FEATURED_CARD_WIDTH_MOBILE : FEATURED_CARD_WIDTH;
   const gap = Math.round(cardWidth * 0.09);
   const cardHeight = Math.round(cardWidth * 1.35);
   const slotCount = Math.min(4, candidates.length);
 
-  // Each slot's target transform — 0/1 are the clickable front pair,
-  // 2/3 peek out behind them, progressively smaller/dimmer/further back.
-  const SLOT_STYLE = [
-    { x: 0, y: gap, scale: 1, rotate: -3, zIndex: 40, opacity: 1 },
-    { x: cardWidth + gap, y: gap, scale: 1, rotate: 3, zIndex: 30, opacity: 1 },
-    { x: (cardWidth + gap) / 2, y: 0, scale: 0.88, rotate: 0, zIndex: 20, opacity: 0.55 },
-    { x: (cardWidth + gap) / 2, y: -gap, scale: 0.78, rotate: 0, zIndex: 10, opacity: 0.3 },
-  ];
+  // Each slot's target transform. Desktop: 0/1 are the clickable front
+  // pair side by side, 2/3 peek out behind them. Mobile: only slot 0 is
+  // the clickable front card, centered; 1/2/3 peek out directly behind it
+  // (offset only vertically, never sideways, so nothing extends past the
+  // front card's own width).
+  const SLOT_STYLE = isMobile
+    ? [
+        { x: 0, y: 0, scale: 1, rotate: 0, zIndex: 40, opacity: 1 },
+        { x: 0, y: gap * 0.7, scale: 0.93, rotate: -3, zIndex: 30, opacity: 0.55 },
+        { x: 0, y: gap * 1.4, scale: 0.87, rotate: 3, zIndex: 20, opacity: 0.3 },
+        { x: 0, y: gap * 2.1, scale: 0.81, rotate: 0, zIndex: 10, opacity: 0.15 },
+      ]
+    : [
+        { x: 0, y: gap, scale: 1, rotate: -3, zIndex: 40, opacity: 1 },
+        { x: cardWidth + gap, y: gap, scale: 1, rotate: 3, zIndex: 30, opacity: 1 },
+        { x: (cardWidth + gap) / 2, y: 0, scale: 0.88, rotate: 0, zIndex: 20, opacity: 0.55 },
+        { x: (cardWidth + gap) / 2, y: -gap, scale: 0.78, rotate: 0, zIndex: 10, opacity: 0.3 },
+      ];
 
   // A card entering (rotating 'next': appears fresh at the back; 'prev':
   // appears fresh at the front-left, sliding in from off-canvas) and a card
   // leaving (the reverse of whichever end it entered from) — direction-aware
   // so the shuffle reads as moving forward or backward, not just a generic
   // fade either way.
-  const enterFrom = direction === 'next'
-    ? { x: (cardWidth + gap) / 2, y: -gap * 2, scale: 0.6, opacity: 0 }
-    : { x: -cardWidth * 0.6, y: gap, scale: 0.9, rotate: -10, opacity: 0 };
-  const exitTo = direction === 'next'
-    ? { x: -cardWidth * 0.7, y: gap * 0.5, scale: 0.85, rotate: -12, opacity: 0 }
-    : { x: (cardWidth + gap) / 2, y: -gap * 2.5, scale: 0.55, opacity: 0 };
+  const enterFrom = isMobile
+    ? (direction === 'next'
+        ? { x: 0, y: -gap * 2.5, scale: 0.6, opacity: 0 }
+        : { x: 0, y: gap * 2.5, scale: 0.6, opacity: 0 })
+    : (direction === 'next'
+        ? { x: (cardWidth + gap) / 2, y: -gap * 2, scale: 0.6, opacity: 0 }
+        : { x: -cardWidth * 0.6, y: gap, scale: 0.9, rotate: -10, opacity: 0 });
+  const exitTo = isMobile
+    ? (direction === 'next'
+        ? { x: 0, y: gap * 2.5, scale: 0.6, opacity: 0 }
+        : { x: 0, y: -gap * 2.5, scale: 0.6, opacity: 0 })
+    : (direction === 'next'
+        ? { x: -cardWidth * 0.7, y: gap * 0.5, scale: 0.85, rotate: -12, opacity: 0 }
+        : { x: (cardWidth + gap) / 2, y: -gap * 2.5, scale: 0.55, opacity: 0 });
 
   const slots = Array.from({ length: slotCount }, (_, offset) => ({
     candidate: candidates[(index + offset) % candidates.length],
     slot: offset,
   }));
 
+  const deckWidth = isMobile ? cardWidth + gap * 4 : cardWidth * 2 + gap;
+
   return (
     <div
       className="relative mx-auto"
-      style={{ width: cardWidth * 2 + gap, height: cardHeight + gap * 2 }}
+      style={{ width: deckWidth, height: cardHeight + gap * 2 }}
     >
       <AnimatePresence initial={false}>
         {slots.map(({ candidate, slot }) => {
-          const isFront = slot < 2;
+          const isFront = isMobile ? slot < 1 : slot < 2;
           const style = SLOT_STYLE[slot];
           return (
             <motion.button

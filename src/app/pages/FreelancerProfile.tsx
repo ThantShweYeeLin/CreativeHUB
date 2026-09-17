@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Briefcase, Check, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import type { PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -120,6 +121,46 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   });
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
+
+  // The booking form overlays this page while it stays mounted underneath
+  // (unlike a route, which fully unmounts) - without pinning the body,
+  // `overflow: hidden` alone doesn't stop touch-scrolling on iOS Safari, so
+  // a drag inside the modal can scroll the long page behind it instead of
+  // the modal's own content, which is what made its bottom buttons feel
+  // unreachable. Same lock SearchFilterPanel uses over Explore.
+  useEffect(() => {
+    if (!showBookingForm) {
+      return;
+    }
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+
+    return () => {
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.left = previous.left;
+      body.style.right = previous.right;
+      body.style.width = previous.width;
+      body.style.overflow = previous.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [showBookingForm]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2028,17 +2069,33 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         </div>
       )}
 
-      {showBookingForm && isBookableFreelancer && (
-        <div className="fixed inset-0 z-[1400] flex items-end md:items-center justify-center bg-black/50 backdrop-blur-sm md:p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-t-3xl md:rounded-3xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
-            <div className="sticky top-0 flex items-center justify-between border-b border-sky-100 bg-white/90 backdrop-blur-xl px-4 py-4 md:px-8 md:py-6 rounded-t-3xl">
-              <h2 className="text-2xl font-bold text-gray-900">Request Booking</h2>
-              <button onClick={() => setShowBookingForm(false)} className="p-2 hover:bg-sky-50 rounded-full transition-colors">
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
+      {showBookingForm && isBookableFreelancer && createPortal(
+        <div className="fixed inset-0 z-[1400] overflow-y-auto bg-white">
+          <div className="relative min-h-full">
+            <PageBackdrop />
+            <div className="relative z-10">
+              <div className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg">
+                <div className="mx-auto max-w-2xl px-4 py-4">
+                  <button
+                    onClick={() => setShowBookingForm(false)}
+                    className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                    Back
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
+                      <Briefcase className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Request Booking</h2>
+                      <p className="text-sm text-gray-600">Send {displayName} the details for your project.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            <form onSubmit={handleSubmitRequest} className="p-4 md:p-8 space-y-6">
+            <form onSubmit={handleSubmitRequest} className="mx-auto max-w-2xl space-y-6 px-4 py-6">
               <div className="rounded-2xl bg-sky-50/60 p-5">
                 <div className="flex items-center gap-4">
                   <Avatar src={avatarUrl} alt={displayName} gender={profile?.gender} sizeClassName="h-16 w-16 ring-2 ring-sky-100 rounded-full" />
@@ -2245,17 +2302,24 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 Add More Freelancer
               </button>
 
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowBookingForm(false)} className="flex-1 rounded-xl bg-sky-50 px-4 py-3 font-semibold text-gray-700 hover:bg-sky-100 transition-colors">
+              <div className="flex items-center justify-between border-t border-sky-100 pt-6">
+                <button type="button" onClick={() => setShowBookingForm(false)} className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-sky-50">
                   Cancel
                 </button>
-                <button type="submit" disabled={isSubmittingRequest} className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3 font-semibold text-white shadow-md shadow-sky-500/30 hover:shadow-lg transition-all disabled:opacity-60">
+                <button
+                  type="submit"
+                  disabled={isSubmittingRequest}
+                  className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-8 py-3.5 font-semibold text-white transition-colors hover:shadow-lg disabled:opacity-60"
+                >
+                  <Send className="h-5 w-5" />
                   {isSubmittingRequest ? 'Sending...' : 'Send Request'}
                 </button>
               </div>
             </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {authPromptMessage && (
