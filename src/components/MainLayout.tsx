@@ -677,6 +677,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
             {/* Right Actions */}
             <div className="flex items-center gap-2 md:gap-4">
+              {headerExtras?.mobileActions && <div className="flex items-center gap-1.5 md:hidden">{headerExtras.mobileActions}</div>}
               <button
                 onClick={() =>
                   navigate(
@@ -693,9 +694,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               >
                 {/* Shorter label below sm (640px) - not just a smaller font,
                     an actually shorter word - so there's guaranteed room
-                    left over for the mobileActions icons that can also show
-                    in this same row once scrolled (see below). The full
-                    label at sm+ never had that constraint. */}
+                    left over for the mobileActions icons beside it (see
+                    above). The full label at sm+ never had that constraint. */}
                 <span className="sm:hidden">
                   {!isAuthenticated
                     ? 'Get Started'
@@ -715,7 +715,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                     : 'Become a Freelancer'}
                 </span>
               </button>
-              {headerExtras?.mobileActions && <div className="flex items-center gap-1.5 md:hidden">{headerExtras.mobileActions}</div>}
               <div className="relative">
                 <button
                   ref={bellButtonRef}
