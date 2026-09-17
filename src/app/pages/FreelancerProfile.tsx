@@ -1564,6 +1564,35 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
 
           <aside className="space-y-6">
+            {/* Always rendered now (used to be hidden whenever both
+                majorSkillExperienceLevel and minorSkills were empty) - that
+                depended on two independently-optional inputs (an "(optional)"
+                experience-level picker in onboarding, and a minor-skills
+                picker that only lives in Edit Profile, never onboarding), so
+                most accounts never had either and the card silently
+                vanished. Skills/Styles below already always render with a
+                fallback for the empty case; this now matches that. */}
+            <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
+              <p className="mt-1 text-base font-bold text-gray-900">
+                {title}
+                {majorSkillExperienceLevel && <span className="ml-2 text-sm font-semibold text-gray-500">· {majorSkillExperienceLevel}</span>}
+              </p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
+              {minorSkills.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {minorSkills.map((skill) => (
+                    <span key={skill.name} className="rounded-full border border-sky-100 px-3 py-1.5 text-sm font-medium text-gray-600">
+                      {skill.name}
+                      {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-gray-600">No additional skills listed yet.</p>
+              )}
+            </div>
+
             <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <h2 className="text-xl font-bold text-gray-900">Skills</h2>
               <div className="mt-4 flex flex-wrap gap-2">
@@ -1585,29 +1614,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 )) : <p className="text-sm text-gray-600">No styles listed yet.</p>}
               </div>
             </div>
-
-            {(minorSkills.length > 0 || majorSkillExperienceLevel) && (
-              <div className="rounded-3xl bg-white/90 backdrop-blur-xl p-6 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Primary specialty</p>
-                <p className="mt-1 text-base font-bold text-gray-900">
-                  {title}
-                  {majorSkillExperienceLevel && <span className="ml-2 text-sm font-semibold text-gray-500">· {majorSkillExperienceLevel}</span>}
-                </p>
-                {minorSkills.length > 0 && (
-                  <>
-                    <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Also skilled in</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {minorSkills.map((skill) => (
-                        <span key={skill.name} className="rounded-full border border-sky-100 px-3 py-1.5 text-sm font-medium text-gray-600">
-                          {skill.name}
-                          {skill.experienceLevel && <span className="text-gray-400"> · {skill.experienceLevel}</span>}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
           </aside>
         </section>
         )}
