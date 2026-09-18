@@ -3483,7 +3483,7 @@ export class DataService {
     let metadata: Record<string, Json> = { ...((notification.metadata as Record<string, Json> | null) || {}) };
     if (notification.actor_id && !metadata.actor_name && !metadata.requester_name) {
       const actorResponse = await this.getUser(String(notification.actor_id));
-      const actorName = actorResponse.data?.full_name || 'User';
+      const actorName = actorResponse.data?.full_name || 'CreativeHUB user';
       metadata = {
         ...metadata,
         actor_name: actorName,
@@ -3967,7 +3967,7 @@ export class DataService {
 
     if (!error && request.freelancer_id && request.client_id) {
       const clientUser = await this.getUser(String(request.client_id));
-      const clientName = clientUser.data?.full_name || 'User';
+      const clientName = clientUser.data?.full_name || 'CreativeHUB user';
 
       await this.createNotification({
         user_id: request.freelancer_id,

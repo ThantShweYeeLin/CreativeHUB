@@ -51,8 +51,8 @@ export function MainLayout({ children }: MainLayoutProps) {
       row.metadata?.actor_name,
       row.metadata?.name,
       inferredActorName,
-    ].find((value) => !!value && !isGenericActorName(String(value))) || 'User';
-    const finalActorName = actorName || 'User';
+    ].find((value) => !!value && !isGenericActorName(String(value))) || 'CreativeHUB user';
+    const finalActorName = actorName || 'CreativeHUB user';
 
     const projectNameFromText = (() => {
       const text = rawMessageText.replace(/^(?:creative\s*hub\s+)?/i, '').trim();

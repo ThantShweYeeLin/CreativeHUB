@@ -378,7 +378,7 @@ export function NotificationsPanel({
                           than useful context; these just state the fact,
                           with no actor at all. */}
                       {!['booking_disputed', 'deposit_payment_required', 'attendance_window_open', 'payment_update', 'payment_released', 'booking_completed'].includes(notification.type) && (
-                        <span className="font-bold">{notification.actorName || 'User'}</span>
+                        <span className="font-bold">{notification.actorName || 'CreativeHUB user'}</span>
                       )}{' '}
                       <span className="text-gray-700">
                         {['deposit_payment_required', 'attendance_window_open'].includes(notification.type)
