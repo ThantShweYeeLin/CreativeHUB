@@ -10,10 +10,22 @@ import { createContext, useContext, useEffect, type ReactNode } from 'react';
 // renders inline with the account controls (which ARE always visible),
 // right beside the Get Started/Become a Freelancer/Dashboard button, since
 // there's no separate nav row to inject into on a narrow screen.
+// `mobileSearch` is the phone equivalent of `search` - there's no room to
+// inject it inline like mobileActions, so MainLayout gives it its own thin
+// row directly under the logo/account-controls row instead. Like
+// search/actions, a page should keep it always mounted and toggle its own
+// visibility with a height/opacity class, NOT pass null/undefined to hide
+// it and NOT rely on `hidden` (display:none) to collapse it - either of
+// those forcibly blurs a focused input the instant it fires, however
+// briefly, which is exactly what broke Explore's condensed search on
+// mobile: pressing Enter (or any other momentary flicker in whatever
+// condition drives this) blurred the input and kicked focus back to the
+// full-size bar the moment it toggled off.
 export interface HeaderExtras {
   search?: ReactNode;
   actions?: ReactNode;
   mobileActions?: ReactNode;
+  mobileSearch?: ReactNode;
 }
 
 type SetHeaderExtras = (extras: HeaderExtras | null) => void;
@@ -36,7 +48,7 @@ export function useHeaderExtras(extras: HeaderExtras | null) {
       return;
     }
     setHeaderExtras(extras);
-  }, [setHeaderExtras, extras?.search, extras?.actions, extras?.mobileActions]);
+  }, [setHeaderExtras, extras?.search, extras?.actions, extras?.mobileActions, extras?.mobileSearch]);
 
   // Separately, clears MainLayout's header back to normal only on true
   // unmount (route change away from this page) - otherwise the last extras

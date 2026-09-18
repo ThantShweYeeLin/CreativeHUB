@@ -870,6 +870,22 @@ export function MainLayout({ children }: MainLayoutProps) {
               </div>
             </div>
           </div>
+
+          {/* Condensed search, phone equivalent of the desktop `search` slot
+              above (see HeaderExtrasContext.tsx) — that one's whole row is
+              `hidden md:flex`, so on a narrow screen it can never show no
+              matter how far the page scrolls. Kept always-mounted here too,
+              same as `search` itself: a page toggles its own
+              collapsed/expanded classes (height/opacity, never
+              display:none) rather than passing null - display:none (which
+              is what Tailwind's `hidden` does, and what conditional
+              rendering amounts to) forcibly blurs a focused descendant,
+              which was exactly what made typing Enter into it jump back to
+              the full-size bar the moment the measurement that drives this
+              flickered, however briefly, for any reason at all. No border/
+              padding baked in here - the page's own node owns those so it
+              can collapse them together with everything else. */}
+          {headerExtras?.mobileSearch && <div className="md:hidden">{headerExtras.mobileSearch}</div>}
         </div>
       </header>
 

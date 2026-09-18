@@ -552,7 +552,10 @@ export function ExplorePage() {
   // section below the hero - triggers as soon as that section's bottom
   // edge passes under the sticky header (h-16 = 64px on mobile, h-20 = 80px
   // at md+), reverts the moment it's scrolled back into view. Also drives
-  // the phone equivalent (mobileActions, icons beside Get Started).
+  // the phone equivalent (mobileActions, icons beside Get Started, and
+  // mobileSearch below — a plain icon button there, not its own input, so
+  // there's no focus to lose to a stray flicker in this measurement the
+  // way an actual mobile condensed search input once was).
   useEffect(() => {
     const headerHeightPx = isMobile ? 64 : 80;
     const handleScroll = () => {
@@ -1269,6 +1272,43 @@ export function ExplorePage() {
           {user?.isPremium ? <Sparkles className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
           <Crown className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-0.5 text-white shadow-sm" />
         </button>
+      </div>
+    ),
+    // Phone equivalent of `search` above — that slot's whole row is
+    // `hidden md:flex`, so on a narrow screen it never appears no matter
+    // how far the page scrolls (see HeaderExtrasContext.tsx). A plain icon
+    // button, not its own input/suggestions — tapping it scrolls the main
+    // search section back into view and focuses the full-size bar there,
+    // rather than duplicating search as a second live input. Always
+    // mounted with a height/opacity toggle (never conditional rendering or
+    // a `hidden` class) matching `search`/`actions` above — this being a
+    // button rather than an input means there's no focus to steal this
+    // time either way, but it's one less thing to reconsider later.
+    mobileSearch: (
+      <div
+        className={`overflow-hidden transition-[max-height,opacity] duration-150 ${
+          isPastSearchSection ? 'max-h-14 border-t border-sky-100 py-2 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
+        }`}
+      >
+        <div className="px-4">
+          <button
+            type="button"
+            tabIndex={isPastSearchSection ? 0 : -1}
+            onClick={() => {
+              searchSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // Focused after the smooth scroll has had time to land, not
+              // immediately — focusing the main input while it's still off
+              // past the top of the viewport would fight that animation
+              // with the browser's own "scroll the focused element into
+              // view" behavior.
+              window.setTimeout(() => inputRef.current?.focus(), 450);
+            }}
+            aria-label="Search freelancers"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 shadow-sm transition-colors hover:bg-sky-50"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     ),
   });
