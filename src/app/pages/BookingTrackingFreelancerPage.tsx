@@ -7,7 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
-import { formatCountdown } from '../../lib/bookingEscrow';
+import { formatCountdown, getBookingEarningsBreakdown } from '../../lib/bookingEscrow';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
@@ -502,20 +502,28 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           </div>
         )}
 
-        {/* Released */}
-        {escrowState === 'released' && (
-          <div className="rounded-2xl shadow-lg border-2 border-green-500 bg-white p-5 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <p className="font-bold text-gray-900">{formatMoney(bookingData.pricing.deposit)} Released</p>
-                <p className="text-xs text-gray-600">The deposit has been transferred to you</p>
+        {/* Released — shows what actually landed in the freelancer's
+            balance (deposit minus the platform's commission), same figure
+            as the Earnings tab's breakdown (getBookingEarningsBreakdown),
+            not the pre-commission deposit total. */}
+        {escrowState === 'released' && (() => {
+          const { depositAmount, commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
+          return (
+            <div className="rounded-2xl shadow-lg border-2 border-green-500 bg-white p-5 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">{formatMoney(netAmount)} Released</p>
+                  <p className="text-xs text-gray-600">
+                    Deposit {formatMoney(depositAmount)} − platform commission {formatMoney(commissionAmount)}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Refunded */}
         {escrowState === 'refunded' && (
@@ -557,6 +565,23 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </div>
               <span className="font-semibold text-gray-900">{formatMoney(bookingData.pricing.deposit)}</span>
             </div>
+            {/* Commission only actually applies once the deposit is
+                released to the freelancer — see getBookingEarningsBreakdown. */}
+            {escrowState === 'released' && (() => {
+              const { commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
+              return (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Platform commission (10%)</span>
+                    <span className="font-semibold text-red-600">−{formatMoney(commissionAmount)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">You received</span>
+                    <span className="font-semibold text-green-700">{formatMoney(netAmount)}</span>
+                  </div>
+                </>
+              );
+            })()}
             <div className="border-t border-sky-100 pt-3 mt-3 flex justify-between">
               <span className="font-bold text-gray-900">Total Booking Cost</span>
               <span className="font-bold text-gray-900 text-xl">{formatMoney(bookingData.pricing.total)}</span>

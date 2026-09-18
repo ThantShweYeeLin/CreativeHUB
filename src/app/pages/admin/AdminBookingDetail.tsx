@@ -4,6 +4,7 @@ import { Ban, CheckCircle, MessageCircle, Paperclip } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { FeedService } from '../../../lib/feedService';
 import { formatCurrencyAmount } from '../../../lib/currency';
+import { getBookingEarningsBreakdown } from '../../../lib/bookingEscrow';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
 import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
 import { PlatformRecordsPanel } from '../bookingTracking/PlatformRecordsPanel';
@@ -427,7 +428,7 @@ export function AdminBookingDetail({
       {/* Financial summary */}
       <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
         <h3 className="mb-3 text-lg font-bold text-gray-900">Financial summary</h3>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={`grid grid-cols-1 gap-3 sm:grid-cols-3 ${booking.payment_status === 'paid' ? 'md:grid-cols-5' : ''}`}>
           <div>
             <p className="text-xs font-semibold uppercase text-gray-500">Total booking value</p>
             <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrencyAmount(Number(booking.budget || 0), 'THB')}</p>
@@ -440,6 +441,25 @@ export function AdminBookingDetail({
             <p className="text-xs font-semibold uppercase text-gray-500">Deposit status</p>
             <p className="mt-1 capitalize text-gray-900">{booking.payment_status || 'unpaid'}</p>
           </div>
+          {/* Commission is only actually earned once the deposit is
+              released to the freelancer — see getBookingEarningsBreakdown,
+              the same derivation the Earnings page and both freelancer-
+              facing deposit screens use, so this always matches them. */}
+          {booking.payment_status === 'paid' && (() => {
+            const { commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
+            return (
+              <>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-gray-500">Platform commission (10%)</p>
+                  <p className="mt-1 text-lg font-bold text-emerald-700">{formatCurrencyAmount(commissionAmount, 'THB')}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-gray-500">Freelancer received</p>
+                  <p className="mt-1 text-lg font-bold text-gray-900">{formatCurrencyAmount(netAmount, 'THB')}</p>
+                </div>
+              </>
+            );
+          })()}
         </div>
         <p className="mt-3 text-xs text-gray-500">
           CreativeHUB only holds the protected deposit shown above — the remaining balance is settled directly between the client and freelancer and is not held by the platform.
