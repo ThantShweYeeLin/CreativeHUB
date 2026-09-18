@@ -22,11 +22,11 @@ test.describe('mutual attendance verification', () => {
   test.skip(!canRun, 'Requires ATTENDANCE_CHECK_URL/EMAIL/PASSWORD env vars pointing at a seeded booking.');
 
   async function login(page: import('@playwright/test').Page) {
-    await page.goto('/');
-    const loginTrigger = page.locator('text=/log in/i').first();
-    if (await loginTrigger.isVisible().catch(() => false)) {
-      await loginTrigger.click();
-    }
+    // Was `page.goto('/')` + look for a "Log In" trigger — '/' redirects a
+    // logged-out visitor straight to /explore (publicly browsable as a
+    // guest), which has no such trigger visible, so this timed out at the
+    // email field before ever reaching a login form.
+    await page.goto('/login');
     await page.locator('input[type="email"]').fill(EMAIL!);
     await page.locator('input[type="password"]').fill(PASSWORD!);
     await page.locator('button[type="submit"]').first().click();
@@ -39,11 +39,14 @@ test.describe('mutual attendance verification', () => {
 
     await expect(page.locator('text=Attendance Check')).toBeVisible();
 
+    // Required, not conditional — a booking seeded outside the attendance
+    // window (or already mutually confirmed) makes this test fail loudly
+    // instead of silently asserting nothing, which is exactly the failure
+    // mode ("looks green, tests nothing") this test exists to catch.
     const otherRole = ROLE === 'client' ? 'Freelancer' : 'Client';
     const confirmButton = page.locator('button', { hasText: `Confirm ${otherRole} Presence` });
-    if (await confirmButton.isVisible().catch(() => false)) {
-      await expect(page.locator(`text=Is your ${otherRole} present?`)).toBeVisible();
-    }
+    await expect(confirmButton).toBeVisible();
+    await expect(page.locator(`text=Is your ${otherRole} present?`)).toBeVisible();
   });
 
   test('confirming presence never lets a user confirm themselves twice', async ({ page }) => {
@@ -52,12 +55,11 @@ test.describe('mutual attendance verification', () => {
 
     const otherRole = ROLE === 'client' ? 'Freelancer' : 'Client';
     const confirmButton = page.locator('button', { hasText: `Confirm ${otherRole} Presence` });
-    if (await confirmButton.isVisible().catch(() => false)) {
-      await confirmButton.click();
-      await expect(page.locator(`text=/You confirmed the ${otherRole.toLowerCase()}'s presence/`)).toBeVisible({ timeout: 10000 });
-      // The confirm button must be gone now — only Report remains.
-      await expect(page.locator('button', { hasText: `Confirm ${otherRole} Presence` })).toHaveCount(0);
-    }
+    await expect(confirmButton).toBeVisible();
+    await confirmButton.click();
+    await expect(page.locator(`text=/You confirmed the ${otherRole.toLowerCase()}'s presence/`)).toBeVisible({ timeout: 10000 });
+    // The confirm button must be gone now — only Report remains.
+    await expect(page.locator('button', { hasText: `Confirm ${otherRole} Presence` })).toHaveCount(0);
   });
 
   // No-show/lateness/conduct reports route into the real dispute flow
@@ -71,15 +73,14 @@ test.describe('mutual attendance verification', () => {
     await page.goto(BOOKING_URL!);
 
     const reportButton = page.locator('button', { hasText: 'Report a Problem' }).first();
-    if (await reportButton.isVisible().catch(() => false)) {
-      await reportButton.click();
-      await expect(page.locator('text=What happened?')).toBeVisible();
+    await expect(reportButton).toBeVisible();
+    await reportButton.click();
+    await expect(page.locator('text=What happened?')).toBeVisible();
 
-      const expectedFirstOption = ROLE === 'client' ? "Freelancer didn't show up" : "Client didn't show up";
-      await expect(page.locator('button', { hasText: expectedFirstOption }).first()).toBeVisible();
+    const expectedFirstOption = ROLE === 'client' ? "Freelancer didn't show up" : "Client didn't show up";
+    await expect(page.locator('button', { hasText: expectedFirstOption }).first()).toBeVisible();
 
-      await page.locator('button', { hasText: expectedFirstOption }).first().click();
-      await expect(page.locator('textarea')).toBeVisible();
-    }
+    await page.locator('button', { hasText: expectedFirstOption }).first().click();
+    await expect(page.locator('textarea')).toBeVisible();
   });
 });

@@ -16,6 +16,12 @@ const EVENT_LABEL: Record<string, string> = {
   evidence_requested: 'Admin requested more evidence',
   evidence_submitted: 'You submitted more evidence',
   status_changed: 'Status updated',
+  // Only ever logged by the owner's own reply reopening a resolved/
+  // awaiting-evidence ticket (see handle_ticket_message_reopen() in
+  // supabase/support_ticket_privacy_and_lifecycle.sql) - admin's equivalent
+  // view labels the same action 'Reopened by user reply', worded for a
+  // third-person reader instead of the person it just happened to.
+  reopened: 'Ticket reopened',
 };
 
 export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
@@ -67,6 +73,26 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
+
+  // A reply can flip the ticket's own status (a user's reply reopens a
+  // resolved/awaiting-evidence ticket - see handle_ticket_message_reopen()
+  // in supabase/support_ticket_privacy_and_lifecycle.sql - and logs a
+  // 'reopened' timeline event), but TicketThread only owns the message
+  // list, not this page's ticket/events state, so without this callback
+  // the status badge and timeline both silently kept showing the
+  // pre-reply status until the next full page load. Deliberately lighter
+  // than load() - skips isLoading (no full-page "Loading..." flash for
+  // what's otherwise an in-place reply) and the evidence-signed-URL
+  // resolution (irrelevant to a plain reply).
+  const refreshTicketAndEvents = async () => {
+    if (!ticketId) return;
+    const [ticketResponse, eventsResponse] = await Promise.all([
+      DataService.getSupportTicket(ticketId),
+      DataService.getSupportTicketEvents(ticketId),
+    ]);
+    if (!ticketResponse.error && ticketResponse.data) setTicket(ticketResponse.data);
+    if (!eventsResponse.error) setEvents(eventsResponse.data);
+  };
 
   const handleSubmitEvidence = async () => {
     if (!user?.id || !ticketId) return;
@@ -220,6 +246,7 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
                     originalAuthorAvatar={ticket.user?.avatar_url || null}
                     currentUserId={user.id}
                     ticketStatus={ticket.status}
+                    onMessageSent={refreshTicketAndEvents}
                   />
                 </div>
               )}

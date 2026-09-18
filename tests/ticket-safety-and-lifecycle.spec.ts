@@ -20,6 +20,18 @@
 //   TICKET_TEST_BOOKING_ID                      - any booking TICKET_TEST_EMAIL
 //                                                 is a participant on, for the
 //                                                 routing-guidance check
+//   TICKET_TEST_OTHER_USER_TICKET_ID             - a ticket owned by a
+//                                                 DIFFERENT account than
+//                                                 TICKET_TEST_EMAIL, for the
+//                                                 cross-user access check
+//
+// Note: the authoritative, always-run coverage for RLS/RPC-level rules
+// (cross-user denial, private notes, message visibility, evidence
+// transitions, duplicate-dispute prevention, audit log) lives in
+// scripts/ticket-safety-check.ts (pnpm run test:ticket-safety) — it seeds
+// and tears down its own throwaway accounts, so it needs no env vars beyond
+// .env.local's Supabase keys. The specs below are UI-level coverage on top
+// of that, and stay skipped without real pre-seeded UI accounts/tickets.
 
 import { test, expect, type Page } from '@playwright/test';
 
@@ -31,13 +43,14 @@ const RESOLVED_TICKET_ID = process.env.TICKET_TEST_RESOLVED_ID;
 const ADMIN_EMAIL = process.env.TICKET_ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.TICKET_ADMIN_PASSWORD;
 const BOOKING_ID = process.env.TICKET_TEST_BOOKING_ID;
+const OTHER_USER_TICKET_ID = process.env.TICKET_TEST_OTHER_USER_TICKET_ID;
 
 async function login(page: Page, email: string, password: string) {
-  await page.goto('/');
-  const loginTrigger = page.locator('text=/log in/i').first();
-  if (await loginTrigger.isVisible().catch(() => false)) {
-    await loginTrigger.click();
-  }
+  // Was `page.goto('/')` + look for a "Log In" trigger — '/' redirects a
+  // logged-out visitor straight to /explore (publicly browsable as a
+  // guest), which has no such trigger visible, so every test using this
+  // helper timed out at the email field before ever reaching a login form.
+  await page.goto('/login');
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
   await page.locator('button[type="submit"]').first().click();
@@ -66,6 +79,58 @@ test.describe('ticket creation routing guidance', () => {
     const linkButton = page.locator('button', { hasText: "Go to that booking's tracking page" });
     await expect(linkButton).toBeVisible();
   });
+
+  test('a no-show description blocks Submit and offers the real dispute flow instead', async ({ page }) => {
+    await login(page, USER_EMAIL!, USER_PASSWORD!);
+    await page.goto('/tickets');
+    await page.locator('button', { hasText: 'Create a Ticket' }).click();
+
+    await page.locator('select').selectOption('booking');
+    await page.locator('input[placeholder="Paste the booking\'s ID here"]').fill(BOOKING_ID!);
+    await page.locator('textarea').fill('The freelancer never showed up to the shoot.');
+
+    await expect(page.locator('text=/reads like a no-show/i')).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Submit' })).toBeDisabled();
+
+    const gotoDisputeButton = page.locator('button', { hasText: 'Go to Report a Problem' });
+    await expect(gotoDisputeButton).toBeEnabled();
+    await gotoDisputeButton.click();
+
+    // Redirected to the booking's own tracking page (client or freelancer
+    // route, whichever this account is on) with the booking id preserved,
+    // not left on the ticket form or sent somewhere generic.
+    await expect(page).toHaveURL(new RegExp(`/(booking|freelancer-booking)/${BOOKING_ID}`));
+  });
+
+  test('a missing-deliverables description blocks Submit and offers the real dispute flow instead', async ({ page }) => {
+    await login(page, USER_EMAIL!, USER_PASSWORD!);
+    await page.goto('/tickets');
+    await page.locator('button', { hasText: 'Create a Ticket' }).click();
+
+    await page.locator('select').selectOption('booking');
+    await page.locator('input[placeholder="Paste the booking\'s ID here"]').fill(BOOKING_ID!);
+    await page.locator('textarea').fill('The freelancer never delivered the final files, deliverables are missing.');
+
+    await expect(page.locator('text=/reads like a no-show/i')).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Submit' })).toBeDisabled();
+    await expect(page.locator('button', { hasText: 'Go to Report a Problem' })).toBeEnabled();
+  });
+});
+
+test.describe('cross-user ticket access', () => {
+  const canRun = Boolean(USER_EMAIL && USER_PASSWORD && OTHER_USER_TICKET_ID);
+  test.skip(!canRun, 'Requires TICKET_TEST_EMAIL/PASSWORD and TICKET_TEST_OTHER_USER_TICKET_ID (a ticket owned by a DIFFERENT account).');
+
+  test('a user cannot open a ticket that belongs to someone else', async ({ page }) => {
+    await login(page, USER_EMAIL!, USER_PASSWORD!);
+    await page.goto(`/tickets/${OTHER_USER_TICKET_ID}`);
+
+    // RLS returns no row for a ticket that isn't this user's and they
+    // aren't an admin — the page must show its not-found/error state, never
+    // the other user's ticket content.
+    await expect(page.locator('text=/ticket not found/i')).toBeVisible();
+    await expect(page.locator('textarea')).toHaveCount(0);
+  });
 });
 
 test.describe('ticket lifecycle — closed vs resolved', () => {
@@ -89,7 +154,13 @@ test.describe('ticket lifecycle — resolved ticket reopens on reply', () => {
     await login(page, USER_EMAIL!, USER_PASSWORD!);
     await page.goto(`/tickets/${RESOLVED_TICKET_ID}`);
 
-    await expect(page.locator('text=Resolved')).toBeVisible();
+    // Exact match, not a substring — a plain `text=Resolved` also matches
+    // the ticket's own description if it happens to contain that word
+    // anywhere (Playwright's default text matching is a case-insensitive
+    // substring), which is exactly what a fixture ticket named e.g.
+    // "...(resolved)" does, turning this into a strict-mode ambiguity
+    // between the status badge and the description text.
+    await expect(page.getByText('Resolved', { exact: true })).toBeVisible();
 
     const reply = page.locator('textarea').last();
     await reply.fill('This is still happening, please take another look.');
@@ -98,7 +169,10 @@ test.describe('ticket lifecycle — resolved ticket reopens on reply', () => {
     // Status badge updates to reflect the reopened ticket, and the
     // timeline shows the reopened event.
     await expect(page.locator('text=In progress')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('text=/reopened/i')).toBeVisible();
+    // .first() — both the timeline entry's label ("Ticket reopened") and
+    // its note ("Ticket reopened after a new reply.") match this substring,
+    // which is fine here; either one being present confirms the event.
+    await expect(page.locator('text=/reopened/i').first()).toBeVisible();
   });
 });
 

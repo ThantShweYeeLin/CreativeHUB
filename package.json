@@ -9,6 +9,7 @@
     "dev:web": "vite",
     "test:e2e": "playwright test",
     "test:attendance-verification": "tsx --env-file=.env.local scripts/attendance-verification-check.ts",
+    "test:ticket-safety": "tsx --env-file=.env.local scripts/ticket-safety-check.ts",
     "preview": "vite preview"
   },
   "dependencies": {
