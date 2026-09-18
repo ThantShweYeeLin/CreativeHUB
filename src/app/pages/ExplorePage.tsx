@@ -1170,6 +1170,16 @@ export function ExplorePage() {
             setActiveSearchInput('header');
             setShowSuggestions(suggestions.length > 0);
           }}
+          // Results already filter live as you type (searchQuery drives
+          // filteredProfiles below) - Enter has nothing left to submit, so
+          // this only exists to swallow the keypress itself. Without it the
+          // browser has no <form> to submit either, but stopping it here
+          // means nothing default can ever kick in, on any browser.
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+            }
+          }}
           placeholder="Search freelancers..."
           tabIndex={isPastSearchSection ? 0 : -1}
           className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
@@ -1603,6 +1613,14 @@ export function ExplorePage() {
             onFocus={() => {
               setActiveSearchInput('main');
               setShowSuggestions(suggestions.length > 0);
+            }}
+            // Results already filter live as you type — Enter has nothing
+            // left to submit, so this only exists to swallow the keypress
+            // itself (see the header search input's identical handler).
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+              }
             }}
             placeholder="Search by name, email, or specialty — e.g. photographer, makeup, wedding"
             className="w-full pl-12 pr-4 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.18)] border border-sky-100 focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200 transition-all"
