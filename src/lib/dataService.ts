@@ -2261,6 +2261,58 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  // A dispute's category isn't a column on `bookings` itself — it lives on
+  // the initiating 'complain' booking_event (same lookup
+  // getUserDisputedBookings already does client-side).
+  private static async withDisputeCategory(bookings: any[]) {
+    if (!bookings.length) return bookings;
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: events } = await (supabase as any)
+      .from('booking_events')
+      .select('booking_id, category')
+      .eq('action', 'complain')
+      .in('booking_id', bookingIds);
+
+    const categoryByBooking: Record<string, string> = {};
+    for (const event of events || []) {
+      if (!categoryByBooking[event.booking_id]) {
+        categoryByBooking[event.booking_id] = event.category;
+      }
+    }
+    return bookings.map((b: any) => ({ ...b, dispute_category: categoryByBooking[b.id] || null }));
+  }
+
+  // No-show/late-arrival reports used to have their own separate
+  // attendance_reports/ticket-based tracking with no deposit-decision or
+  // chat at all (see the ADMIN comments above adminResolveAttendanceReport)
+  // — ReportProblemFlow now routes them through the exact same booking
+  // dispute system as every other category instead (same escrowed deposit,
+  // same admin_resolve_dispute refund/release, same conversation). This
+  // just filters the shared dispute lists down to those two categories so
+  // the Attendance Reports admin section reuses all of that directly,
+  // rather than a second, disconnected review flow.
+  private static readonly ATTENDANCE_DISPUTE_CATEGORIES = ['no_show', 'late_arrival'];
+
+  static async getAllAttendanceDisputesForAdmin() {
+    const response = await this.getAllDisputedBookingsForAdmin();
+    if (response.error) return response;
+    const withCategory = await this.withDisputeCategory(response.data);
+    return {
+      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      error: null,
+    };
+  }
+
+  static async getResolvedAttendanceDisputesForAdmin() {
+    const response = await this.getResolvedDisputesForAdmin();
+    if (response.error) return response;
+    const withCategory = await this.withDisputeCategory(response.data);
+    return {
+      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      error: null,
+    };
+  }
+
   // General (non-disputed-only) admin bookings browser — reuses the same
   // "Admins view all bookings" RLS policy the dispute queries above
   // already rely on, so no new migration is needed for this.

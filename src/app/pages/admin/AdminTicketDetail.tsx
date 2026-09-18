@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Lock, MessageCircle } from 'lucide-react';
 import { TicketThread } from '../../../components/support/TicketThread';
@@ -65,6 +65,28 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
+
+  // Lets a 'ticket_message' notification (a user replied) land directly on
+  // the conversation instead of just the top of the page (see
+  // supabase/ticket_and_dispute_message_notifications.sql). Guarded to run
+  // only once — `ticket` gets a new object reference on every reload
+  // (including load()'s own re-fetches after an admin action), so without
+  // this it would re-fire and yank the page back to the top of the card
+  // every time.
+  const hasScrolledToHash = useRef(false);
+  useEffect(() => {
+    if (!ticket || !window.location.hash || hasScrolledToHash.current) {
+      return;
+    }
+    hasScrolledToHash.current = true;
+    const target = document.getElementById(window.location.hash.slice(1));
+    // 'end', not 'start' — the conversation card is tall (message box +
+    // reply input), so aligning its TOP with the viewport pushed the
+    // actual latest message (and the reply box) below the fold. 'end'
+    // aligns the card's bottom instead, keeping the tail of the thread —
+    // where the message this notification is even about lives — in view.
+    target?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [ticket]);
 
   const handleStatusChange = async (status: TicketStatus) => {
     setPendingAction(true);
@@ -241,7 +263,7 @@ export function AdminTicketDetail({ ticketId }: { ticketId: string }) {
       </div>
 
       {user?.id && (
-        <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+        <div id="conversation" className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           <div className="mb-3 flex items-center gap-2 text-gray-900">
             <MessageCircle className="w-5 h-5" />
             <h2 className="font-bold">Conversation</h2>

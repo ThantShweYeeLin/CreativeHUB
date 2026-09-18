@@ -40,3 +40,17 @@ begin
   alter publication supabase_realtime add table public.booking_events;
 exception when duplicate_object then null;
 end $$;
+
+-- Ticket replies and dispute conversation messages (TicketThread,
+-- DisputeTicketDetailPage, AdminBookingDetail) now also subscribe live.
+do $$
+begin
+  alter publication supabase_realtime add table public.support_ticket_messages;
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  alter publication supabase_realtime add table public.dispute_evidence;
+exception when duplicate_object then null;
+end $$;

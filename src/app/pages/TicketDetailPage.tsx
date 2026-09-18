@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { CheckCircle2, ChevronLeft, Circle, MessageCircle, MessageSquare, Paperclip, ShieldAlert, Ticket as TicketIcon } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -104,6 +104,31 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
+
+  // Lets a 'ticket_reply'/'ticket_message' notification land directly on
+  // the conversation instead of just the top of the page (see
+  // supabase/ticket_and_dispute_message_notifications.sql) — waits for
+  // `ticket` so #conversation has actually rendered before scrolling.
+  // Guarded to run only once: `ticket` gets a new object reference on every
+  // refresh (including the realtime-triggered ones from TicketThread's
+  // onMessageSent), so without hasScrolledToHash this fired again on every
+  // later reply — repeatedly yanking the page back up to the top of the
+  // conversation CARD moments after the conversation's own bottom-scroll
+  // had already settled on the latest message.
+  const hasScrolledToHash = useRef(false);
+  useEffect(() => {
+    if (!ticket || !window.location.hash || hasScrolledToHash.current) {
+      return;
+    }
+    hasScrolledToHash.current = true;
+    const target = document.getElementById(window.location.hash.slice(1));
+    // 'end', not 'start' — the conversation card is tall (message box +
+    // reply input), so aligning its TOP with the viewport pushed the
+    // actual latest message (and the reply box) below the fold. 'end'
+    // aligns the card's bottom instead, keeping the tail of the thread —
+    // where the message this notification is even about lives — in view.
+    target?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [ticket]);
 
   // A reply can flip the ticket's own status (a user's reply reopens a
   // resolved/awaiting-evidence ticket - see handle_ticket_message_reopen()
@@ -305,7 +330,7 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
               </div>
 
               {user?.id && (
-                <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+                <div id="conversation" className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
                   <div className="mb-3 flex items-center gap-2 text-gray-900">
                     <MessageCircle className="w-5 h-5" />
                     <h2 className="font-bold">Conversation</h2>

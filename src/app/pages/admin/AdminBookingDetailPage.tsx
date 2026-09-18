@@ -24,7 +24,7 @@ export function AdminBookingDetailPage() {
           attendanceReport={attendanceReport}
           signedUrls={signedUrls}
           showResolutionControls={false}
-          onResolved={refresh}
+          onResolved={() => refresh({ silent: true })}
         />
       )}
     </AdminLayout>

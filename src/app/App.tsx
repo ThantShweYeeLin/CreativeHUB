@@ -8,6 +8,7 @@ import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { GlobalReviewPrompt } from '../components/GlobalReviewPrompt';
 import { ChatbotWidget } from '../components/ChatbotWidget';
+import { NotificationToastHost } from './components/common/NotificationToastHost';
 import { BootSplash } from './components/BootSplash';
 // Kept eager — the first thing a signed-out visitor sees, so there's
 // nothing to gain (and a loading flicker to lose) by chunking these.
@@ -59,6 +60,7 @@ const AdminBookingDetailPage = lazy(() => import('./pages/admin/AdminBookingDeta
 const AdminDisputesPage = lazy(() => import('./pages/admin/AdminDisputesPage').then((m) => ({ default: m.AdminDisputesPage })));
 const AdminDisputeDetailPage = lazy(() => import('./pages/admin/AdminDisputeDetailPage').then((m) => ({ default: m.AdminDisputeDetailPage })));
 const AdminAttendancePage = lazy(() => import('./pages/admin/AdminAttendancePage').then((m) => ({ default: m.AdminAttendancePage })));
+const AdminAttendanceDetailPage = lazy(() => import('./pages/admin/AdminAttendanceDetailPage').then((m) => ({ default: m.AdminAttendanceDetailPage })));
 const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage })));
 const AdminReportDetailPage = lazy(() => import('./pages/admin/AdminReportDetailPage').then((m) => ({ default: m.AdminReportDetailPage })));
 const AdminTicketDetailPage = lazy(() => import('./pages/admin/AdminTicketDetailPage').then((m) => ({ default: m.AdminTicketDetailPage })));
@@ -335,7 +337,7 @@ export default function App() {
             path="/tickets"
             element={
               <ProtectedRoute>
-                <MyTicketsPage onBack={() => navigate(-1)} />
+                <MyTicketsPage onBack={() => navigate('/explore')} />
               </ProtectedRoute>
             }
           />
@@ -519,6 +521,7 @@ export default function App() {
           <Route path="/admin/disputes" element={<AdminRoute><AdminDisputesPage /></AdminRoute>} />
           <Route path="/admin/disputes/:id" element={<AdminRoute><AdminDisputeDetailPage /></AdminRoute>} />
           <Route path="/admin/attendance" element={<AdminRoute><AdminAttendancePage /></AdminRoute>} />
+          <Route path="/admin/attendance/:id" element={<AdminRoute><AdminAttendanceDetailPage /></AdminRoute>} />
           <Route path="/admin/reports" element={<AdminRoute><AdminReportsPage /></AdminRoute>} />
           <Route path="/admin/reports/:id" element={<AdminRoute><AdminReportDetailPage /></AdminRoute>} />
           <Route path="/admin/tickets/:id" element={<AdminRoute><AdminTicketDetailPage /></AdminRoute>} />
@@ -545,6 +548,7 @@ export default function App() {
     ) && <MobileBottomNav />}
     {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
     {isAuthenticated && user?.onboardingCompleted && <ChatbotWidget />}
+    {isAuthenticated && <NotificationToastHost />}
     </>
   );
 }

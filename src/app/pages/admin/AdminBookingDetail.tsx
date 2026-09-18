@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Ban, CheckCircle, MessageCircle } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
+import { FeedService } from '../../../lib/feedService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
 import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
@@ -22,14 +23,22 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
+  // `silent` skips the isLoading toggle — used by every reload EXCEPT the
+  // very first one. AdminDisputeDetailPage/AdminBookingDetailPage both gate
+  // rendering the whole <AdminBookingDetail> tree on isLoading, so toggling
+  // it on every realtime-triggered refresh remounted the entire dispute
+  // conversation each time (tearing it down to a bare "Loading..." and
+  // rebuilding it), which resets its scroll position back to the top —
+  // exactly the bug already found and fixed in TicketThread.tsx's own
+  // load(), just one level up here.
+  const refresh = async (options?: { silent?: boolean }) => {
     if (!bookingId) return;
-    setIsLoading(true);
+    if (!options?.silent) setIsLoading(true);
     setError(null);
     const bookingResponse = await DataService.getBooking(bookingId);
     if (bookingResponse.error || !bookingResponse.data) {
       setError((bookingResponse.error as any)?.message || 'Booking not found.');
-      setIsLoading(false);
+      if (!options?.silent) setIsLoading(false);
       return;
     }
     setBooking(bookingResponse.data);
@@ -59,11 +68,27 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     );
     setSignedUrls(Object.fromEntries(entries.filter(([, url]) => url)) as Record<string, string>);
 
-    setIsLoading(false);
+    if (!options?.silent) setIsLoading(false);
   };
 
   useEffect(() => {
     void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookingId]);
+
+  // Without this, a client/freelancer's new dispute message (or attendance
+  // confirmation, or a reply on the associated ticket-style events) only
+  // ever showed up here after a manual reload.
+  useEffect(() => {
+    if (!bookingId) return;
+
+    const channel = FeedService.subscribeToBooking(bookingId, () => {
+      void refresh({ silent: true });
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
@@ -192,6 +217,41 @@ export function AdminBookingDetail({
 
   const senderLabel = (item: any) =>
     item.role === 'admin' ? 'CreativeHUB Support' : item.role === 'client' ? booking.client?.full_name || 'Client' : booking.freelancer?.full_name || 'Freelancer';
+
+  const conversationScrollRef = useRef<HTMLDivElement>(null);
+
+  // Sets scrollTop directly on the box itself rather than
+  // scrollIntoView()-ing a bottom marker — scrollIntoView walks up through
+  // every scrollable ancestor (this box, but also the page around it), so
+  // its actual result depends on how much other content the surrounding
+  // page has above/below it. Setting scrollTop here only ever touches this
+  // one box. Re-runs on signedUrls too since an attachment's image resolves
+  // slightly after the message list itself and would otherwise grow the
+  // thread taller after the scroll already happened.
+  useEffect(() => {
+    const el = conversationScrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [conversationItems.length, signedUrls]);
+
+  // Lets a 'dispute_message' notification land directly on this section
+  // instead of just the top of the page (see
+  // supabase/ticket_and_dispute_message_notifications.sql).
+  useEffect(() => {
+    if (!window.location.hash) {
+      return;
+    }
+    const target = document.getElementById(window.location.hash.slice(1));
+    // 'end', not 'start' — the dispute-messages section is tall (message box
+    // + reply input), so aligning its TOP with the viewport pushed the
+    // actual latest message (and the reply box) below the fold. 'end'
+    // aligns the section's bottom instead, keeping the tail of the thread —
+    // where the message this notification is even about lives — in view.
+    target?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    // Runs once per booking.id, after this section has actually rendered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [booking.id]);
 
   const handleDecision = async (decision: 'refund' | 'release') => {
     setIsPending(true);
@@ -415,12 +475,12 @@ export function AdminBookingDetail({
           <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Dispute timeline &amp; evidence</p>
           <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={timelineEvidence} />
 
-          <div className="mt-4 border-t border-sky-100 pt-4">
+          <div id="dispute-messages" className="mt-4 border-t border-sky-100 pt-4">
             <div className="mb-3 flex items-center gap-2 text-gray-900">
               <MessageCircle className="h-4 w-4" />
               <p className="text-xs font-semibold uppercase text-gray-500">Message the client &amp; freelancer</p>
             </div>
-            <div className="mb-3 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
+            <div ref={conversationScrollRef} className="mb-3 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
               {conversationItems.length === 0 ? (
                 <p className="py-2 text-center text-xs text-gray-500">No messages yet.</p>
               ) : (
@@ -434,6 +494,11 @@ export function AdminBookingDetail({
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{item.description}</p>
+                        {item.storage_path && signedUrls[item.storage_path] && (
+                          <a href={signedUrls[item.storage_path]} target="_blank" rel="noreferrer" className="mt-2 block">
+                            <img src={signedUrls[item.storage_path]} alt="Attachment" className="max-h-40 rounded-lg object-cover" />
+                          </a>
+                        )}
                       </div>
                       <span className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleString()}</span>
                     </div>
@@ -446,6 +511,13 @@ export function AdminBookingDetail({
               <textarea
                 value={disputeMessage}
                 onChange={(e) => setDisputeMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  // Shift+Enter still inserts a newline — only a plain Enter sends.
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSendMessage();
+                  }
+                }}
                 placeholder="Send a message to both the client and the freelancer…"
                 rows={1}
                 className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"

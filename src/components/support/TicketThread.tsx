@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Paperclip, Send } from 'lucide-react';
 import { DataService } from '../../lib/dataService';
+import { FeedService } from '../../lib/feedService';
 import { Avatar } from '../common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
@@ -60,10 +61,19 @@ export function TicketThread({
   const [replyFile, setReplyFile] = useState<File | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const load = async () => {
-    setIsLoading(true);
+  // `silent` skips the isLoading toggle — used by every reload EXCEPT the
+  // very first one. Toggling isLoading swaps the whole message list out for
+  // a "Loading conversation…" placeholder and back, which unmounts every
+  // bubble; the now much-shorter placeholder makes the browser clamp the
+  // scrollable box's scrollTop down near 0, and when the real messages
+  // remount a moment later they render at that clamped (top) position
+  // instead of back at the bottom. A silent reload just patches `messages`
+  // in place, so React only adds the new bubble instead of tearing down
+  // and rebuilding the whole list, leaving scroll position undisturbed.
+  const load = async (options?: { silent?: boolean }) => {
+    if (!options?.silent) setIsLoading(true);
     const response = await DataService.getSupportTicketMessages(ticketId);
     if (!response.error) {
       setMessages(response.data);
@@ -78,7 +88,7 @@ export function TicketThread({
       );
       setAttachmentUrls(urls);
     }
-    setIsLoading(false);
+    if (!options?.silent) setIsLoading(false);
   };
 
   useEffect(() => {
@@ -87,9 +97,40 @@ export function TicketThread({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId]);
 
+  // Without this, the other side's reply (admin replying to a user, or a
+  // user replying to their own ticket while an admin has it open) only ever
+  // showed up after a manual reload — this component only ever reloaded
+  // after ITS OWN send.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length, isLoading]);
+    const channel = FeedService.subscribeToTicketMessages(ticketId, () => {
+      void load({ silent: true });
+      onMessageSent?.();
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId]);
+
+  // Sets scrollTop directly on the box itself rather than
+  // scrollIntoView()-ing a marker at the bottom — scrollIntoView walks up
+  // through EVERY scrollable ancestor (this box, but also the page around
+  // it), so its actual result depends on how much other content the
+  // surrounding page happens to have above/below this component, which is
+  // exactly why this worked on one ticket page and not another despite
+  // both rendering the same TicketThread. Setting scrollTop here only ever
+  // touches this one box, regardless of what page it's embedded in. Re-runs
+  // on the attachment/screenshot URL maps too, not just messages — those
+  // resolve slightly after the messages themselves (a separate async step),
+  // and their images loading in afterward was growing the thread taller
+  // than what an earlier scroll had already accounted for.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }, [messages.length, isLoading, attachmentUrls, originalScreenshotUrl]);
 
   const handleSend = async () => {
     if (!reply.trim() || isSending) return;
@@ -123,13 +164,13 @@ export function TicketThread({
 
     setReply('');
     setReplyFile(null);
-    await load();
+    await load({ silent: true });
     onMessageSent?.();
   };
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
+      <div ref={scrollContainerRef} className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
         <ThreadBubble
           authorName={originalAuthorName}
           authorAvatar={originalAuthorAvatar}
@@ -153,7 +194,6 @@ export function TicketThread({
             />
           ))
         )}
-        <div ref={bottomRef} />
       </div>
 
       {error && <p className="text-xs font-semibold text-red-600">{error}</p>}
@@ -168,6 +208,13 @@ export function TicketThread({
             <textarea
               value={reply}
               onChange={(e) => setReply(e.target.value)}
+              onKeyDown={(e) => {
+                // Shift+Enter still inserts a newline — only a plain Enter sends.
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleSend();
+                }
+              }}
               placeholder="Write a reply…"
               rows={1}
               className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
