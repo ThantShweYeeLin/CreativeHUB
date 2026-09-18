@@ -9,7 +9,7 @@ import { FeedService } from '../../lib/feedService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
-import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
+import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
 import { appendLocationMeta, extractLocationMeta } from '../../lib/requestLocation';
 import { convertAmount, formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
@@ -92,6 +92,15 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     customLocation: '',
   });
   const [editLocationOptions, setEditLocationOptions] = useState<string[]>([]);
+  // The freelancer's own limits (working hours, minimum rate) — the
+  // original request creation form (FreelancerProfile.tsx) enforces these
+  // by construction (a working-hours-bounded time <select>, a `min` on the
+  // budget input), but this edit form used plain <input type="time">/
+  // number fields with no such bound, letting an edit land outside either
+  // one even though the freelancer never offered that. Mirrors that same
+  // enforcement here instead of re-deriving a third copy of it.
+  const [editTimeSlots, setEditTimeSlots] = useState<string[]>([]);
+  const [editMinimumOffer, setEditMinimumOffer] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
@@ -259,12 +268,22 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     }
 
     setEditingRequest(request);
+    // Now that this modal actually renders {error} (see the banner above
+    // the Save/Cancel row below), a stale error left over from some other
+    // action must not carry over and show up the instant this opens.
+    setError(null);
 
     // Same three sources FreelancerProfile.tsx's own booking form builds its
     // location dropdown from (studio locations, preferred locations, plain
     // profile location) — fetched fresh here since RequestsPage never
-    // otherwise loads a single freelancer's full profile.
-    const profileResponse = await DataService.getFreelancerProfile(request.freelancer.id);
+    // otherwise loads a single freelancer's full profile. getUser alongside
+    // it for preferred_currency, which getFreelancerProfile's own nested
+    // users(...) select doesn't include (needed to convert hourly_rate into
+    // the same currency this request's budget is in, below).
+    const [profileResponse, freelancerUserResponse] = await Promise.all([
+      DataService.getFreelancerProfile(request.freelancer.id),
+      DataService.getUser(request.freelancer.id),
+    ]);
     const freelancerProfile = profileResponse.data as any;
     const studioName: string = freelancerProfile?.studio_name || '';
     const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
@@ -277,12 +296,26 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     }
     setEditLocationOptions(locationOptions);
 
+    // Same working-hours-bounded slot list as the creation form (see
+    // FreelancerProfile.tsx) — this doesn't also exclude the freelancer's
+    // other bookings on the chosen date the way that form does, since this
+    // request's OWN existing slot is one of those bookings; the freelancer
+    // still reviews and can reject/counter an edited request same as a new
+    // one, so this only needs to keep it inside their stated working hours.
+    setEditTimeSlots(generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end));
+
+    const requestCurrency = request.budgetMeta?.currency || 'THB';
+    const freelancerRateCurrency = (freelancerUserResponse.data as any)?.preferred_currency || 'THB';
+    setEditMinimumOffer(
+      freelancerProfile?.hourly_rate ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, requestCurrency) : 0
+    );
+
     const currentLocation = request.locationMeta || '';
     const isKnownLocation = !currentLocation || locationOptions.includes(currentLocation);
 
     setEditForm({
       projectName: request.projectName,
-      currency: request.budgetMeta?.currency || 'THB',
+      currency: requestCurrency,
       budgetMin: String(request.budgetMeta?.min || request.budget || ''),
       budgetMax: String(request.budgetMeta?.max || request.budget || ''),
       description: request.notesText || '',
@@ -304,6 +337,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     const max = Number(editForm.budgetMax);
     if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max <= 0 || max < min) {
       setError('Please enter a valid budget range.');
+      return;
+    }
+
+    if (editMinimumOffer > 0 && min < editMinimumOffer) {
+      setError(`Your budget must be at least ${formatCurrencyAmount(editMinimumOffer, editForm.currency)}.`);
       return;
     }
 
@@ -1028,20 +1066,37 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
-                    <input
-                      type="time"
+                    {/* Bounded to the freelancer's own working hours
+                        (editTimeSlots, same generateTimeSlots the creation
+                        form uses) rather than a plain <input type="time">
+                        that let an edit land outside them entirely. */}
+                    <select
                       value={editForm.scheduleTime}
                       onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                    />
-                    <input
-                      type="time"
+                    >
+                      <option value="">Start time</option>
+                      {editTimeSlots.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      ))}
+                    </select>
+                    <select
                       value={editForm.scheduleEndTime}
                       onChange={(event) => setEditForm((current) => ({ ...current, scheduleEndTime: event.target.value }))}
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                    />
+                    >
+                      <option value="">End time</option>
+                      {editTimeSlots
+                        .filter((slot) => !editForm.scheduleTime || slot > editForm.scheduleTime)
+                        .map((slot) => (
+                          <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                        ))}
+                    </select>
                   </div>
-                  <p className="mt-2 text-xs text-gray-600">Date, start time, and end time — leave all three empty if this doesn't need a fixed schedule.</p>
+                  <p className="mt-2 text-xs text-gray-600">
+                    Date, start time, and end time — leave all three empty if this doesn't need a fixed schedule. Times are limited to{' '}
+                    {editingRequest.freelancer.name}'s working hours.
+                  </p>
                 </div>
 
                 <div>
@@ -1056,16 +1111,28 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     <input
                       value={editForm.budgetMin}
                       onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}
+                      inputMode="decimal"
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                      placeholder="Min budget"
+                      placeholder={editMinimumOffer > 0 ? `Minimum ${formatCurrencyAmount(editMinimumOffer, editForm.currency)}` : 'Min budget'}
                     />
                     <input
                       value={editForm.budgetMax}
                       onChange={(event) => setEditForm((current) => ({ ...current, budgetMax: event.target.value }))}
+                      inputMode="decimal"
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                       placeholder="Max budget"
                     />
                   </div>
+                  {/* Same enforcement as the creation form's minimumOffer
+                      (see FreelancerProfile.tsx) — a plain number input
+                      here had nothing bounding it to the freelancer's own
+                      rate at all. This live hint mirrors that; the actual
+                      enforcement is the check in saveRequestEdits. */}
+                  {editMinimumOffer > 0 && editForm.budgetMin && Number(editForm.budgetMin) < editMinimumOffer && (
+                    <p className="mt-2 text-xs font-semibold text-red-600">
+                      Your budget must be at least {formatCurrencyAmount(editMinimumOffer, editForm.currency)}.
+                    </p>
+                  )}
                 </div>
 
                 {editingRequest.groupMeta && (
@@ -1095,6 +1162,18 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       })}
                     </div>
                   </div>
+                )}
+
+                {/* setError in saveRequestEdits (e.g. the budget-below-
+                    the-freelancer's-rate check) had nowhere to actually
+                    render inside this modal - the only {error} block in
+                    this file lives in the separate "Add Another Freelancer"
+                    modal, so validation was firing but silently, making a
+                    rejected save look identical to nothing happening.
+                    Same banner style as FreelancerProfile.tsx's booking
+                    form uses for this. */}
+                {error && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
                 )}
 
                 <div className="flex items-center justify-between border-t border-sky-100 pt-6">
