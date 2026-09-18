@@ -34,3 +34,15 @@ const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{1
 export function isValidBookingId(value: string): boolean {
   return UUID_FORMAT.test(value.trim());
 }
+
+// Content-based, not category-based - selecting "Booking problem" alone must
+// never block/redirect (payment failures, technical errors, and general
+// booking questions are legitimate tickets too). Only a description that
+// actually reads like a no-show/late-arrival/missing-deliverable report
+// should route to the booking's own dispute flow instead of a plain ticket.
+const DISPUTE_REPORT_PATTERN =
+  /\b(no[\s-]?show|didn'?t\s+show|did\s+not\s+show|never\s+show(?:ed)?|never\s+arriv(?:ed|e)|didn'?t\s+arriv(?:e|ed)|did\s+not\s+arrive|missing\s+deliverable|didn'?t\s+deliver|did\s+not\s+deliver|never\s+deliver(?:ed)?|not\s+delivered|incomplete\s+(?:service|work|job)|didn'?t\s+finish|did\s+not\s+finish|unfinished\s+(?:service|work|job))\b/i;
+
+export function looksLikeDisputeReport(description: string): boolean {
+  return DISPUTE_REPORT_PATTERN.test(description);
+}

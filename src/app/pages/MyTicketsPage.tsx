@@ -4,7 +4,7 @@ import { ChevronLeft, Plus, Ticket as TicketIcon, X } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
-import { isValidBookingId, TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory } from '../../lib/supportTickets';
+import { isValidBookingId, looksLikeDisputeReport, TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory } from '../../lib/supportTickets';
 
 interface MyTicketsPageProps {
   onBack: () => void;
@@ -24,8 +24,17 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const [bookingId, setBookingId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isRoutingToDispute, setIsRoutingToDispute] = useState(false);
 
   const needsBookingId = category === 'booking' || category === 'payment';
+  // Content-based, not category-based (see looksLikeDisputeReport) - a
+  // no-show/late-arrival/missing-deliverable report belongs in the
+  // booking's own dispute flow (reviewed against platform records, with
+  // the other party able to respond), not a support ticket that would just
+  // sit disconnected from all of that. Everything else in the booking
+  // category (payment failures, technical errors, general questions)
+  // still submits as a normal ticket.
+  const isDisputeLikeReport = category === 'booking' && looksLikeDisputeReport(description);
 
   const load = async () => {
     if (!user?.id) return;
@@ -44,9 +53,34 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // Sends the user to the correct booking tracking page (client vs
+  // freelancer route depends on which side of the booking they're on) with
+  // the booking id they already typed preserved, instead of creating a
+  // ticket — the actual dispute mechanism lives there (ReportProblemFlow /
+  // DataService.openBookingDispute), not in the ticket system.
+  const goToDisputeFlow = async () => {
+    if (!isValidBookingId(bookingId) || !user?.id) return;
+    setIsRoutingToDispute(true);
+    setSubmitError(null);
+    const response = await DataService.getBooking(bookingId.trim());
+    setIsRoutingToDispute(false);
+    if (response.error || !response.data) {
+      setSubmitError("Couldn't find that booking — double check the ID, or submit this as a regular ticket instead.");
+      return;
+    }
+    const isClient = String((response.data as any).client_id) === String(user.id);
+    const basePath = isClient ? `/booking/${bookingId.trim()}` : `/freelancer-booking/${bookingId.trim()}`;
+    setShowCreateModal(false);
+    navigate(`${basePath}#${isClient ? 'report-a-problem-button' : 'attendance-check'}`);
+  };
+
   const handleSubmit = async () => {
     if (!user?.id || !description.trim()) {
       setSubmitError('Describe the issue before submitting.');
+      return;
+    }
+    if (isDisputeLikeReport) {
+      setSubmitError('This sounds like a no-show or missing-deliverable report — use "Go to Report a Problem" below instead of submitting it as a ticket.');
       return;
     }
     if (needsBookingId && !bookingId.trim()) {
@@ -213,6 +247,26 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
                 )}
               </div>
             )}
+            {/* Enforced, not just advisory - the description itself reads
+                like exactly the kind of report the banner above warns
+                about, so this blocks Submit and pushes the user into the
+                real dispute flow instead of letting it become a
+                disconnected plain ticket. */}
+            {isDisputeLikeReport && (
+              <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-800">
+                <p className="font-semibold">This reads like a no-show or missing-deliverable report.</p>
+                <p className="mt-0.5">Reports like this have to go through the booking's dispute review, not a support ticket.</p>
+                <button
+                  type="button"
+                  onClick={() => void goToDisputeFlow()}
+                  disabled={!isValidBookingId(bookingId) || isRoutingToDispute}
+                  className="mt-2 rounded-lg bg-red-600 px-3 py-1.5 font-semibold text-white disabled:opacity-60"
+                >
+                  {isRoutingToDispute ? 'Opening...' : 'Go to Report a Problem'}
+                </button>
+                {!isValidBookingId(bookingId) && <p className="mt-1.5 text-red-700">Enter the booking ID below first.</p>}
+              </div>
+            )}
             <label className="mb-1 block text-xs font-semibold text-gray-600">Description</label>
             <textarea
               value={description}
@@ -250,7 +304,7 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
             {submitError && <p className="mb-3 text-sm text-red-600">{submitError}</p>}
             <button
               onClick={() => void handleSubmit()}
-              disabled={isSubmitting || (needsBookingId && !isValidBookingId(bookingId))}
+              disabled={isSubmitting || isDisputeLikeReport || (needsBookingId && !isValidBookingId(bookingId))}
               className="w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
             >
               {isSubmitting ? 'Submitting...' : 'Submit'}

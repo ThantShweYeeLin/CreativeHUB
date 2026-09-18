@@ -2584,7 +2584,7 @@ export class DataService {
     // just hardcoded to the client's side of that).
     const bookingResponse = await supabase
       .from('bookings')
-      .select('client_id, freelancer_id')
+      .select('client_id, freelancer_id, dispute_status')
       .eq('id', bookingId)
       .single();
 
@@ -2601,6 +2601,10 @@ export class DataService {
       return { data: null, error: { message: 'You are not a participant on this booking.' } as any };
     }
 
+    if (booking.dispute_status && booking.dispute_status !== 'none') {
+      return { data: null, error: { message: 'A dispute has already been filed for this booking.' } as any };
+    }
+
     const otherPartyId = actor === 'client' ? booking.freelancer_id : booking.client_id;
 
     // Goes straight to admin review — no more freelancer-response round in
@@ -2608,6 +2612,13 @@ export class DataService {
     // the other party sees "deposit frozen," and CreativeHUB support makes
     // the release/refund call directly from the evidence + platform
     // records already collected, same as before.
+    // The dispute_status filter re-checks the same condition as the read
+    // above, but evaluated by Postgres at write time against whatever the
+    // row's actual current state is - not just the value this function
+    // happened to read a moment earlier. Without it, two dispute reports
+    // filed back-to-back (a genuine race, not just a client bug) could both
+    // pass the check above and both write - this makes the second one's
+    // update match zero rows instead.
     const { data, error } = await supabase
       .from('bookings')
       .update({
@@ -2617,11 +2628,12 @@ export class DataService {
         dispute_response_deadline: null,
       } as any)
       .eq('id', bookingId)
+      .eq('dispute_status', booking.dispute_status ?? 'none')
       .select()
       .single();
 
     if (error || !data) {
-      return { data, error };
+      return { data: null, error: error || ({ message: 'A dispute has already been filed for this booking.' } as any) };
     }
 
     await (supabase as any).from('booking_events').insert({
