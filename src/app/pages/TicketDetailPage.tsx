@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
-import { ChevronLeft, MessageCircle, MessageSquare, Paperclip, ShieldAlert, Ticket as TicketIcon } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, Circle, MessageCircle, MessageSquare, Paperclip, ShieldAlert, Ticket as TicketIcon } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { TicketThread } from '../../components/support/TicketThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
-import { TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory, type TicketStatus } from '../../lib/supportTickets';
+import {
+  CLIENT_TICKET_STATUS_DETAIL,
+  CLIENT_TICKET_STATUS_LABEL,
+  TICKET_CATEGORY_LABEL,
+  TICKET_STATUS_COLOR,
+  type TicketCategory,
+  type TicketStatus,
+} from '../../lib/supportTickets';
 
 interface TicketDetailPageProps {
   onBack: () => void;
@@ -23,6 +30,30 @@ const EVENT_LABEL: Record<string, string> = {
   // third-person reader instead of the person it just happened to.
   reopened: 'Ticket reopened',
 };
+
+type StepState = 'done' | 'current' | 'pending';
+
+// Client-friendly 3-stage view of the 5-value TicketStatus - collapses
+// awaiting_evidence into the "In progress" stage (with its own note) since
+// it's still support actively working the ticket, just blocked on the
+// client's reply, not a separate stage of its own.
+function getProgressSteps(status: TicketStatus): { key: string; label: string; description: string; state: StepState }[] {
+  const isTerminal = status === 'resolved' || status === 'closed';
+  const inProgressState: StepState = status === 'open' ? 'pending' : isTerminal ? 'done' : 'current';
+  return [
+    { key: 'submitted', label: 'Ticket submitted', description: 'Your ticket was received.', state: 'done' },
+    {
+      key: 'in_progress',
+      label: 'In progress',
+      description:
+        status === 'awaiting_evidence'
+          ? "We're waiting on more information from you before continuing."
+          : 'A support administrator is reviewing your issue.',
+      state: inProgressState,
+    },
+    { key: 'resolution', label: 'Resolution', description: "You'll be notified when there's an update.", state: isTerminal ? 'done' : 'pending' },
+  ];
+}
 
 export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
   const { id: ticketId } = useParams();
@@ -148,20 +179,30 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
             <>
               <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <TicketIcon className="w-5 h-5 text-sky-600" />
-                    <p className="font-bold text-gray-900">
-                      #{ticket.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[ticket.category as TicketCategory] || ticket.category}
-                    </p>
-                  </div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Ticket #{ticket.id.slice(0, 8).toUpperCase()}
+                  </p>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[ticket.status as TicketStatus] || ''}`}>
-                    {TICKET_STATUS_LABEL[ticket.status as TicketStatus] || ticket.status}
+                    {CLIENT_TICKET_STATUS_LABEL[ticket.status as TicketStatus] || ticket.status}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">{new Date(ticket.created_at).toLocaleString()}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  <TicketIcon className="w-5 h-5 text-sky-600" />
+                  <p className="text-lg font-bold text-gray-900">
+                    {TICKET_CATEGORY_LABEL[ticket.category as TicketCategory] || ticket.category}
+                  </p>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Created {new Date(ticket.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                 {ticket.related_booking_id && (
                   <p className="mt-1 text-xs text-gray-500">Related booking: {ticket.related_booking_id}</p>
                 )}
+              </div>
+
+              <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+                <h2 className="mb-2 font-bold text-gray-900">Current status</h2>
+                <p className="text-sm text-gray-700">
+                  {CLIENT_TICKET_STATUS_DETAIL[ticket.status as TicketStatus] || 'Support is reviewing your ticket.'}
+                </p>
               </div>
 
               {ticket.status === 'awaiting_evidence' && (
@@ -170,9 +211,20 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
                     <ShieldAlert className="w-5 h-5" />
                     <p className="font-bold">More evidence needed</p>
                   </div>
-                  <p className="mb-3 text-sm text-gray-700">
-                    An admin needs more information before this ticket can move forward. Add a note and/or files below.
-                  </p>
+                  {(() => {
+                    // Surface exactly what the admin asked for (the note
+                    // passed to admin_request_ticket_evidence), rather than
+                    // just a generic "more info needed" line — the request
+                    // itself is a public event, never an admin-only note.
+                    const latestRequest = [...events].reverse().find((e) => e.action === 'evidence_requested');
+                    return latestRequest?.note ? (
+                      <p className="mb-3 rounded-lg bg-white/70 px-3 py-2 text-sm text-gray-800">"{latestRequest.note}"</p>
+                    ) : (
+                      <p className="mb-3 text-sm text-gray-700">
+                        An admin needs more information before this ticket can move forward. Add a note and/or files below.
+                      </p>
+                    );
+                  })()}
                   <textarea
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
@@ -196,6 +248,27 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
                   </button>
                 </div>
               )}
+
+              <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+                <h2 className="mb-3 font-bold text-gray-900">Ticket progress</h2>
+                <div className="space-y-4">
+                  {getProgressSteps(ticket.status as TicketStatus).map((step) => (
+                    <div key={step.key} className="flex gap-3">
+                      {step.state === 'done' ? (
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-green-600" />
+                      ) : step.state === 'current' ? (
+                        <Circle className="mt-0.5 h-5 w-5 shrink-0 fill-amber-100 text-amber-500" />
+                      ) : (
+                        <Circle className="mt-0.5 h-5 w-5 shrink-0 text-gray-300" />
+                      )}
+                      <div>
+                        <p className={`text-sm font-semibold ${step.state === 'pending' ? 'text-gray-400' : 'text-gray-900'}`}>{step.label}</p>
+                        <p className={`text-sm ${step.state === 'pending' ? 'text-gray-400' : 'text-gray-600'}`}>{step.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
                 <div className="mb-3 flex items-center gap-2 text-gray-900">

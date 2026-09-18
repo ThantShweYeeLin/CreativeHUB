@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { AlertTriangle, ChevronLeft, Plus, Ticket as TicketIcon, X } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Ticket as TicketIcon, X } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
-import { isValidBookingId, looksLikeDisputeReport, TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory } from '../../lib/supportTickets';
+import {
+  CLIENT_TICKET_STATUS_LABEL,
+  CLIENT_TICKET_STATUS_MESSAGE,
+  isValidBookingId,
+  looksLikeDisputeReport,
+  TICKET_CATEGORY_LABEL,
+  TICKET_STATUS_COLOR,
+  type TicketCategory,
+  type TicketStatus,
+} from '../../lib/supportTickets';
 
 interface MyTicketsPageProps {
   onBack: () => void;
@@ -214,6 +224,8 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
               {mergedItems.map((item) => {
                 if (item.kind === 'ticket') {
                   const t = item.data;
+                  const status = t.status as TicketStatus;
+                  const updatedAt = t.last_activity_at || t.created_at;
                   return (
                     <button
                       key={`ticket-${t.id}`}
@@ -221,15 +233,29 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
                       className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="font-bold text-gray-900">
-                          #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Ticket #{t.id.slice(0, 8).toUpperCase()}
                         </p>
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[t.status as keyof typeof TICKET_STATUS_COLOR] || ''}`}>
-                          {TICKET_STATUS_LABEL[t.status as keyof typeof TICKET_STATUS_LABEL] || t.status}
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[status] || ''}`}>
+                          {CLIENT_TICKET_STATUS_LABEL[status] || t.status}
                         </span>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-600">{t.description}</p>
-                      <p className="mt-1 text-xs text-gray-500">{new Date(t.created_at).toLocaleString()}</p>
+                      <p className="mt-1 text-base font-bold text-gray-900">
+                        {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Reported {new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' · '}
+                        Updated {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
+                      </p>
+                      <p className="mt-2 line-clamp-2 text-sm text-gray-600">{t.description}</p>
+                      {CLIENT_TICKET_STATUS_MESSAGE[status] && (
+                        <p className="mt-2 text-sm font-medium text-gray-700">{CLIENT_TICKET_STATUS_MESSAGE[status]}</p>
+                      )}
+                      <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-sky-600">
+                        View ticket
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </span>
                     </button>
                   );
                 }

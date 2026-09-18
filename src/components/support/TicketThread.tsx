@@ -144,7 +144,7 @@ export function TicketThread({
           messages.map((m) => (
             <ThreadBubble
               key={m.id}
-              authorName={m.sender_id === currentUserId ? 'You' : m.sender?.full_name || 'Support'}
+              authorName={m.sender_id === currentUserId ? 'You' : m.sender?.full_name || 'CreativeHUB Support'}
               authorAvatar={m.sender?.avatar_url || null}
               isSelf={m.sender_id === currentUserId}
               message={m.message}

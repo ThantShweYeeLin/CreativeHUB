@@ -2053,13 +2053,40 @@ export class DataService {
     return { data, error };
   }
 
+  // Adds `last_activity_at` to each ticket (the latest of its own
+  // created_at, its events, and its messages) so My Tickets can show
+  // "Updated ..." next to "Reported ...". support_tickets has no
+  // updated_at column of its own — this is derived, not stored.
   static async getUserSupportTickets(userId: string) {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    if (error || !data || data.length === 0) {
+      return { data: data || [], error };
+    }
+
+    const ticketIds = data.map((t: any) => t.id);
+    const [eventsResponse, messagesResponse] = await Promise.all([
+      (supabase as any).from('support_ticket_events').select('ticket_id, created_at').in('ticket_id', ticketIds),
+      (supabase as any).from('support_ticket_messages').select('ticket_id, created_at').in('ticket_id', ticketIds),
+    ]);
+
+    const lastActivityByTicket: Record<string, string> = {};
+    for (const row of [...(eventsResponse.data || []), ...(messagesResponse.data || [])]) {
+      const current = lastActivityByTicket[row.ticket_id];
+      if (!current || new Date(row.created_at) > new Date(current)) {
+        lastActivityByTicket[row.ticket_id] = row.created_at;
+      }
+    }
+
+    const withActivity = data.map((t: any) => {
+      const latestActivity = lastActivityByTicket[t.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(t.created_at) ? latestActivity : t.created_at;
+      return { ...t, last_activity_at: lastActivityAt };
+    });
+    return { data: withActivity, error: null };
   }
 
   // Booking disputes (no-shows, missing deliverables, etc.) deliberately
