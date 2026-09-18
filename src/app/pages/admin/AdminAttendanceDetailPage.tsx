@@ -2,19 +2,25 @@ import { useParams } from 'react-router';
 import { AdminLayout } from './AdminLayout';
 import { AdminBookingDetail, useAdminBookingDetail } from './AdminBookingDetail';
 
-export function AdminDisputeDetailPage() {
+// Same underlying booking-dispute record and the same AdminBookingDetail
+// component AdminDisputeDetailPage.tsx renders — a dedicated route only so
+// the breadcrumb/nav-highlight say "Attendance Reports" instead of
+// "Disputes" for a no-show/late-arrival report (see
+// DataService.getAllAttendanceDisputesForAdmin for why these are the same
+// system underneath).
+export function AdminAttendanceDetailPage() {
   const { id } = useParams();
   const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, refresh } = useAdminBookingDetail(id);
 
   return (
     <AdminLayout
-      section="disputes"
-      breadcrumb={[{ label: 'Disputes', to: '/admin/disputes' }, { label: booking?.project_name || 'Loading...' }]}
+      section="attendance"
+      breadcrumb={[{ label: 'Attendance Reports', to: '/admin/attendance' }, { label: booking?.project_name || 'Loading...' }]}
     >
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading...</p>
       ) : error || !booking ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Dispute not found.'}</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error || 'Report not found.'}</div>
       ) : (
         <AdminBookingDetail
           booking={booking}

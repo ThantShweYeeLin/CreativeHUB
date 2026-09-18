@@ -88,6 +88,11 @@ const BANGKOK_UTC_OFFSET_HOURS = 7;
 
 /** Combines a "YYYY-MM-DD" date and "HH:MM" time, interpreted as Asia/Bangkok wall-clock, into the real UTC instant. */
 export function combineBangkokDateTime(date: string, time: string): Date {
-  const utcAsIfBangkok = new Date(`${date}T${time}:00Z`);
+  // `time` also accepts "HH:MM:SS" (what a Postgres `time` column round-trips
+  // as) — passed through untouched, "${date}T${time}:00Z" doubles up the
+  // seconds into a malformed string, silently producing an Invalid Date
+  // whose .toISOString() throws later, far from here.
+  const hhmm = time.slice(0, 5);
+  const utcAsIfBangkok = new Date(`${date}T${hhmm}:00Z`);
   return new Date(utcAsIfBangkok.getTime() - BANGKOK_UTC_OFFSET_HOURS * 60 * 60 * 1000);
 }

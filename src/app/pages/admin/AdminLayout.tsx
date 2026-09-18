@@ -18,6 +18,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { Avatar } from '../../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
 import { PageBackdrop } from '../../../components/common/PageBackdrop';
+import { AdminNotificationBell, useAdminNotifications } from './AdminNotificationBell';
 
 export type AdminSection = 'overview' | 'users' | 'bookings' | 'earnings' | 'disputes' | 'attendance' | 'reports' | 'audit-logs';
 
@@ -69,22 +70,36 @@ export function AdminLayout({
 }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { notifications, isLoading: isNotificationsLoading, markAsRead, markAllAsRead } = useAdminNotifications();
 
   return (
     <div className="relative min-h-screen">
       <PageBackdrop />
       <div className="relative z-10 lg:flex">
       {/* Sidebar — desktop only; admin work is desktop-first, and a real
-          sidebar needs the width a phone/tablet viewport doesn't have. */}
-      <aside className="hidden lg:flex lg:w-64 lg:flex-shrink-0 lg:flex-col lg:border-r lg:border-sky-100 lg:bg-white">
+          sidebar needs the width a phone/tablet viewport doesn't have.
+          lg:sticky + lg:h-screen pins it to exactly the viewport height
+          regardless of how long or short THIS PAGE's own content is —
+          without it, the sidebar just stretched to match whatever the main
+          content's natural height was, so it looked full-height on a long
+          page and cut short (or oddly stretched with empty space below) on
+          a short one. The nav's own overflow-y-auto below already assumed
+          a fixed-height sidebar; this is what actually gives it one. */}
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:flex-shrink-0 lg:flex-col lg:border-r lg:border-sky-100 lg:bg-white">
         <div className="flex items-center gap-2.5 border-b border-sky-100 px-5 py-5">
           <img src={logoImage} alt="CreativeHUB" className="h-9 w-9 rounded-full object-cover" />
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-bold leading-tight text-gray-900">CreativeHUB</p>
             <p className="flex items-center gap-1 text-xs font-semibold text-gray-500">
               <ShieldCheck className="h-3 w-3" /> Admin
             </p>
           </div>
+          <AdminNotificationBell
+            notifications={notifications}
+            isLoading={isNotificationsLoading}
+            onMarkAsRead={markAsRead}
+            onMarkAllAsRead={markAllAsRead}
+          />
         </div>
 
         <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-5">
@@ -144,9 +159,17 @@ export function AdminLayout({
               <ChevronLeft className="h-4 w-4" />
               Back to CreativeHUB
             </button>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-gray-900" />
-              <h1 className="text-lg font-bold text-gray-900">Admin</h1>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-gray-900" />
+                <h1 className="text-lg font-bold text-gray-900">Admin</h1>
+              </div>
+              <AdminNotificationBell
+                notifications={notifications}
+                isLoading={isNotificationsLoading}
+                onMarkAsRead={markAsRead}
+                onMarkAllAsRead={markAllAsRead}
+              />
             </div>
           </div>
           <div className="flex gap-2 overflow-x-auto px-4 pb-3">

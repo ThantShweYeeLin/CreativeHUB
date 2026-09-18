@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search, Clock, MapPin } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { FeedService } from '../../lib/feedService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
 import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
-import { extractLocationMeta } from '../../lib/requestLocation';
+import { appendLocationMeta, extractLocationMeta } from '../../lib/requestLocation';
 import { convertAmount, formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
@@ -25,6 +26,7 @@ interface RequestsPageProps {
 type RequestStatus = 'pending' | 'accepted' | 'rejected' | 'countered' | 'cancelled';
 
 const OTHER_PURPOSE_VALUE = '__other__';
+const OTHER_LOCATION_VALUE = '__other__';
 
 const getStatusColor = (status: RequestStatus) => {
   switch (status) {
@@ -70,6 +72,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [counterIncludesInput, setCounterIncludesInput] = useState('');
   const [counterDateInput, setCounterDateInput] = useState('');
   const [counterTimeInput, setCounterTimeInput] = useState('');
+  const [counterEndTimeInput, setCounterEndTimeInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
@@ -84,7 +87,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     recipientIds: [] as string[],
     scheduleDate: '',
     scheduleTime: '',
+    scheduleEndTime: '',
+    location: '',
+    customLocation: '',
   });
+  const [editLocationOptions, setEditLocationOptions] = useState<string[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -147,6 +154,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
     return () => {
       isMounted = false;
+    };
+  }, [user?.id]);
+
+  // Without this, a freelancer's counter offer / accept / reject only ever
+  // showed up here after a manual page reload — the initial load effect
+  // above only ever runs once on mount.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = FeedService.subscribeToRequests(user.id, () => {
+      void reloadRequests();
+    });
+
+    return () => {
+      channel.unsubscribe();
     };
   }, [user?.id]);
 
@@ -224,18 +246,40 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         counterRound: Number(request.counter_round || 1),
         counterDate: request.counter_date || null,
         counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
+        counterEndTime: request.counter_end_time ? String(request.counter_end_time).slice(0, 5) : null,
         includes: request.includes || null,
         date: request.created_at,
       })),
     [requests, groupMemberNamesByRequest]
   );
 
-  const openEditRequest = (request: any) => {
+  const openEditRequest = async (request: any) => {
     if (request.status !== 'pending') {
       return;
     }
 
     setEditingRequest(request);
+
+    // Same three sources FreelancerProfile.tsx's own booking form builds its
+    // location dropdown from (studio locations, preferred locations, plain
+    // profile location) — fetched fresh here since RequestsPage never
+    // otherwise loads a single freelancer's full profile.
+    const profileResponse = await DataService.getFreelancerProfile(request.freelancer.id);
+    const freelancerProfile = profileResponse.data as any;
+    const studioName: string = freelancerProfile?.studio_name || '';
+    const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
+    const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
+    const studioLocationOptions = studioLocations.map((loc) => (studioName ? `${studioName} — ${loc.formattedAddress}` : loc.formattedAddress));
+    const locationOptions = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress)];
+    const plainProfileLocation = freelancerProfile?.users?.location;
+    if (plainProfileLocation && !locationOptions.includes(plainProfileLocation)) {
+      locationOptions.unshift(plainProfileLocation);
+    }
+    setEditLocationOptions(locationOptions);
+
+    const currentLocation = request.locationMeta || '';
+    const isKnownLocation = !currentLocation || locationOptions.includes(currentLocation);
+
     setEditForm({
       projectName: request.projectName,
       currency: request.budgetMeta?.currency || 'THB',
@@ -245,6 +289,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       recipientIds: request.groupMeta?.recipients || [],
       scheduleDate: request.scheduleMeta?.date || '',
       scheduleTime: request.scheduleMeta?.time || '',
+      scheduleEndTime: request.scheduleMeta?.endTime || '',
+      location: isKnownLocation ? currentLocation : OTHER_LOCATION_VALUE,
+      customLocation: isKnownLocation ? '' : currentLocation,
     });
   };
 
@@ -265,6 +312,16 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       return;
     }
 
+    if (editForm.scheduleEndTime && !editForm.scheduleTime) {
+      setError('Please set a start time before an end time.');
+      return;
+    }
+
+    if (editForm.scheduleEndTime && editForm.scheduleEndTime <= editForm.scheduleTime) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
     const descriptionWithBudget = appendBudgetMeta(editForm.description, {
       currency: (editForm.currency || editingRequest.budgetMeta?.currency || 'THB').trim().toUpperCase(),
       min,
@@ -273,14 +330,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
     const descriptionWithSchedule =
       editForm.scheduleDate && editForm.scheduleTime
-        ? appendScheduleMeta(descriptionWithBudget, { date: editForm.scheduleDate, time: editForm.scheduleTime })
+        ? appendScheduleMeta(descriptionWithBudget, {
+            date: editForm.scheduleDate,
+            time: editForm.scheduleTime,
+            endTime: editForm.scheduleEndTime || undefined,
+          })
         : descriptionWithBudget;
+
+    const resolvedLocation = editForm.location === OTHER_LOCATION_VALUE ? editForm.customLocation.trim() : editForm.location;
+    const descriptionWithLocation = appendLocationMeta(descriptionWithSchedule, resolvedLocation.trim());
 
     const response = await DataService.updatePendingBookingRequest({
       requestId: editingRequest.id,
       clientId: user.id,
       projectName: editForm.projectName,
-      description: descriptionWithSchedule,
+      description: descriptionWithLocation,
       budget: max,
       recipientIds: editingRequest.groupMeta ? editForm.recipientIds : undefined,
     });
@@ -368,9 +432,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
   const getEffectiveSchedule = (normalizedRequest: any) => {
     if (normalizedRequest?.status === 'countered' && normalizedRequest.counterDate) {
-      return { date: normalizedRequest.counterDate, time: normalizedRequest.counterTime || '' };
+      return {
+        date: normalizedRequest.counterDate,
+        time: normalizedRequest.counterTime || '',
+        endTime: normalizedRequest.counterEndTime || '',
+      };
     }
-    return normalizedRequest?.scheduleMeta || { date: '', time: '' };
+    return normalizedRequest?.scheduleMeta || { date: '', time: '', endTime: '' };
   };
 
   // The price a counter offer starts from if the client doesn't touch that
@@ -389,6 +457,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterIncludesInput('');
     setCounterDateInput(schedule.date || '');
     setCounterTimeInput(schedule.time || '');
+    setCounterEndTimeInput(schedule.endTime || '');
   };
 
   const handleSendCounterOffer = async (requestId: string) => {
@@ -412,6 +481,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       return;
     }
 
+    const counterEndTime = counterEndTimeInput || effectiveSchedule.endTime || '';
+    if (counterEndTime && counterEndTime <= counterTime) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
     const rawRequest = requests.find((item) => item.id === requestId);
     const nextRound = Number(rawRequest?.counter_round || 1) + 1;
 
@@ -427,6 +502,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       includes: counterIncludesInput.trim() || null,
       counter_date: counterDate,
       counter_time: counterTime,
+      counter_end_time: counterEndTime || null,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -442,6 +518,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterIncludesInput('');
     setCounterDateInput('');
     setCounterTimeInput('');
+    setCounterEndTimeInput('');
     await reloadRequests();
   };
 
@@ -502,13 +579,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const handleConfirmedAction = async () => {
     if (!confirmAction) return;
     setIsSubmittingConfirm(true);
-    if (confirmAction.type === 'accept') {
-      await handleAcceptCounter(confirmAction.request);
-    } else {
-      await handleRejectCounter(confirmAction.request.id);
+    // Without this, an unexpected thrown error (as opposed to a returned
+    // { error }) left the dialog stuck on "Please wait..." forever — neither
+    // line below it ever ran, and the user had no way out but a page reload.
+    try {
+      if (confirmAction.type === 'accept') {
+        await handleAcceptCounter(confirmAction.request);
+      } else {
+        await handleRejectCounter(confirmAction.request.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmittingConfirm(false);
+      setConfirmAction(null);
     }
-    setIsSubmittingConfirm(false);
-    setConfirmAction(null);
   };
 
   return (
@@ -596,22 +681,25 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       </div>
                     </div>
 
-                    <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-3 md:gap-6 mb-4 text-xs md:text-sm text-gray-600">
-                      <div>
-                        <span className="font-semibold text-gray-900">Budget:</span> {formatBudgetRange(request.budgetMeta)}
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-4 gap-y-1.5 mb-4 text-xs md:text-sm text-gray-600">
+                      <div className="flex items-center gap-1.5">
+                        <DollarSign className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                        <span className="font-semibold text-gray-900">{formatBudgetRange(request.budgetMeta)}</span>
                       </div>
                       {request.scheduleMeta && (
-                        <div>
-                          <span className="font-semibold text-gray-900">Schedule:</span> {formatScheduleMeta(request.scheduleMeta)}
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          <span>{formatScheduleMeta(request.scheduleMeta)}</span>
                         </div>
                       )}
                       {request.locationMeta && (
-                        <div>
-                          <span className="font-semibold text-gray-900">Location:</span> {request.locationMeta}
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          <span>{request.locationMeta}</span>
                         </div>
                       )}
-                      <div>
-                        <span className="font-semibold text-gray-900">Sent:</span> {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      <div className="text-gray-400">
+                        Sent {new Date(request.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                       {request.isGroupRequest && (
                         <div>
@@ -730,7 +818,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           {request.counterBy === 'freelancer' ? "Freelancer's counter offer: " : 'Your counter offer: '}
                         </span>
                         {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
-                        {request.counterDate && <> · {formatScheduleMeta({ date: request.counterDate, time: request.counterTime || '00:00' })}</>}
+                        {request.counterDate && (
+                          <>
+                            {' '}
+                            · {formatScheduleMeta({ date: request.counterDate, time: request.counterTime || '00:00', endTime: request.counterEndTime || undefined })}
+                          </>
+                        )}
                         {request.counterMessage && <> — "{request.counterMessage}"</>}
                       </div>
                     )}
@@ -760,7 +853,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             />
                           </div>
                         </div>
-                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
                           <div>
                             <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date (optional — keeps the current date if left blank)</label>
                             <input
@@ -771,11 +864,20 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time (optional — keeps the current time if left blank)</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed start time (optional — keeps the current time if left blank)</label>
                             <input
                               type="time"
                               value={counterTimeInput}
                               onChange={(event) => setCounterTimeInput(event.target.value)}
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed end time (optional — keeps the current end time if left blank)</label>
+                            <input
+                              type="time"
+                              value={counterEndTimeInput}
+                              onChange={(event) => setCounterEndTimeInput(event.target.value)}
                               className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>
@@ -828,101 +930,186 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       </div>
 
       {editingRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
-            <h3 className="text-xl font-bold text-gray-900">Edit Pending Request</h3>
-            <div className="mt-4 space-y-4">
-              <input
-                value={editForm.projectName}
-                onChange={(event) => setEditForm((current) => ({ ...current, projectName: event.target.value }))}
-                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                placeholder="Project name"
-              />
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <input
-                  value={editForm.currency}
-                  onChange={(event) => setEditForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
-                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                  placeholder="Currency"
-                />
-                <input
-                  value={editForm.budgetMin}
-                  onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}
-                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                  placeholder="Min budget"
-                />
-                <input
-                  value={editForm.budgetMax}
-                  onChange={(event) => setEditForm((current) => ({ ...current, budgetMax: event.target.value }))}
-                  className="rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                  placeholder="Max budget"
-                />
-              </div>
-
-              <textarea
-                rows={4}
-                value={editForm.description}
-                onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))}
-                className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                placeholder="Description"
-              />
-
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">Date</label>
-                  <input
-                    type="date"
-                    min={new Date().toISOString().slice(0, 10)}
-                    value={editForm.scheduleDate}
-                    onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
-                    className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-gray-600">Time</label>
-                  <input
-                    type="time"
-                    value={editForm.scheduleTime}
-                    onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
-                    className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2"
-                  />
-                </div>
-              </div>
-
-              {editingRequest.groupMeta && (
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-gray-900">Recipients</p>
-                  <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-sky-100 bg-sky-50/50 p-2">
-                    {availableFreelancers.map((freelancer) => {
-                      const checked = editForm.recipientIds.includes(freelancer.id);
-                      return (
-                        <label key={freelancer.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
-                          <span>{freelancer.full_name}</span>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) => {
-                              const isChecked = event.target.checked;
-                              setEditForm((current) => ({
-                                ...current,
-                                recipientIds: isChecked
-                                  ? Array.from(new Set([...current.recipientIds, freelancer.id]))
-                                  : current.recipientIds.filter((id) => id !== freelancer.id),
-                              }));
-                            }}
-                          />
-                        </label>
-                      );
-                    })}
+        <div className="fixed inset-0 z-[1400] overflow-y-auto bg-white">
+          <div className="relative min-h-full">
+            <PageBackdrop />
+            <div className="relative z-10">
+              <div className="sticky top-0 z-10 border-b border-sky-100 bg-white/95 backdrop-blur-lg">
+                <div className="mx-auto max-w-2xl px-4 py-4">
+                  <button
+                    onClick={() => setEditingRequest(null)}
+                    className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                    Back
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white">
+                      <Edit className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900">Edit Request</h2>
+                      <p className="text-sm text-gray-600">Update the details you sent to {editingRequest.freelancer.name}.</p>
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="mt-5 flex gap-3">
-              <button onClick={() => setEditingRequest(null)} className="flex-1 rounded-xl bg-sky-50 px-4 py-2 font-semibold text-gray-700">Cancel</button>
-              <button onClick={() => void saveRequestEdits()} className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 font-semibold text-white">Save changes</button>
+              <div className="mx-auto max-w-2xl space-y-6 px-4 py-6">
+                <div className="rounded-2xl bg-sky-50/60 p-5">
+                  <div className="flex items-center gap-4">
+                    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full ring-2 ring-sky-100">
+                      <ImageWithFallback src={editingRequest.freelancer.avatar} alt={editingRequest.freelancer.name} className="h-full w-full object-cover" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900">{editingRequest.freelancer.name}</h3>
+                      <p className="text-gray-600">{editingRequest.freelancer.specialty}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="edit-project-name" className="mb-2 block text-sm font-semibold text-gray-900">The Purpose</label>
+                  <input
+                    id="edit-project-name"
+                    required
+                    value={editForm.projectName}
+                    onChange={(event) => setEditForm((current) => ({ ...current, projectName: event.target.value }))}
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    placeholder="What is this booking for?"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="edit-location" className="mb-2 block text-sm font-semibold text-gray-900">Location</label>
+                  <select
+                    id="edit-location"
+                    required
+                    value={editForm.location}
+                    onChange={(event) => setEditForm((current) => ({ ...current, location: event.target.value }))}
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  >
+                    <option value="" disabled>Select a location</option>
+                    {editLocationOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                    <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
+                  </select>
+                  {editForm.location === OTHER_LOCATION_VALUE && (
+                    <input
+                      required
+                      value={editForm.customLocation}
+                      onChange={(event) => setEditForm((current) => ({ ...current, customLocation: event.target.value }))}
+                      className="mt-3 w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      placeholder="Type the location for this booking"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="edit-notes" className="mb-2 block text-sm font-semibold text-gray-900">Notes <span className="font-normal text-gray-500">(optional)</span></label>
+                  <textarea
+                    id="edit-notes"
+                    rows={4}
+                    value={editForm.description}
+                    onChange={(event) => setEditForm((current) => ({ ...current, description: event.target.value }))}
+                    className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    placeholder="Anything else the freelancer should know?"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-900">Schedule</label>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <input
+                      type="date"
+                      min={new Date().toISOString().slice(0, 10)}
+                      value={editForm.scheduleDate}
+                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                    <input
+                      type="time"
+                      value={editForm.scheduleTime}
+                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                    <input
+                      type="time"
+                      value={editForm.scheduleEndTime}
+                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleEndTime: event.target.value }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-gray-600">Date, start time, and end time — leave all three empty if this doesn't need a fixed schedule.</p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <input
+                      value={editForm.currency}
+                      onChange={(event) => setEditForm((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      placeholder="Currency"
+                    />
+                    <input
+                      value={editForm.budgetMin}
+                      onChange={(event) => setEditForm((current) => ({ ...current, budgetMin: event.target.value }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      placeholder="Min budget"
+                    />
+                    <input
+                      value={editForm.budgetMax}
+                      onChange={(event) => setEditForm((current) => ({ ...current, budgetMax: event.target.value }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      placeholder="Max budget"
+                    />
+                  </div>
+                </div>
+
+                {editingRequest.groupMeta && (
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-gray-900">Recipients</label>
+                    <div className="max-h-40 space-y-2 overflow-y-auto rounded-xl border border-sky-100 bg-sky-50/40 p-2">
+                      {availableFreelancers.map((freelancer) => {
+                        const checked = editForm.recipientIds.includes(freelancer.id);
+                        return (
+                          <label key={freelancer.id} className="flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm">
+                            <span>{freelancer.full_name}</span>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={(event) => {
+                                const isChecked = event.target.checked;
+                                setEditForm((current) => ({
+                                  ...current,
+                                  recipientIds: isChecked
+                                    ? Array.from(new Set([...current.recipientIds, freelancer.id]))
+                                    : current.recipientIds.filter((id) => id !== freelancer.id),
+                                }));
+                              }}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-sky-100 pt-6">
+                  <button onClick={() => setEditingRequest(null)} className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-sky-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void saveRequestEdits()}
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-8 py-3.5 font-semibold text-white transition-colors hover:shadow-lg"
+                  >
+                    <Check className="h-5 w-5" />
+                    Save changes
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

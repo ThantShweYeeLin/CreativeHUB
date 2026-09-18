@@ -818,7 +818,18 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onOpenTicket={(notification) => {
                       setShowNotifications(false);
                       if (notification.relatedId) {
-                        navigate(`/tickets/${notification.relatedId}`);
+                        // #conversation lands directly on the reply thread
+                        // instead of the top of the page — see
+                        // TicketDetailPage.tsx's hash-scroll effect.
+                        navigate(`/tickets/${notification.relatedId}#conversation`);
+                      } else {
+                        navigate('/tickets');
+                      }
+                    }}
+                    onOpenDisputeTicket={(notification) => {
+                      setShowNotifications(false);
+                      if (notification.relatedId) {
+                        navigate(`/tickets/dispute/${notification.relatedId}#conversation`);
                       } else {
                         navigate('/tickets');
                       }

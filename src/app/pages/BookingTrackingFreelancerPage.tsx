@@ -59,6 +59,10 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const [showRespondForm, setShowRespondForm] = useState(false);
   const [isResponding, setIsResponding] = useState(false);
 
+  const [showCancelForm, setShowCancelForm] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+
   // Freelancers previously had no way to file a dispute at all (only to
   // respond to one the client opened) — this mirrors
   // BookingTrackingClientPage's own showDisputeForm/renderDisputeForm.
@@ -115,6 +119,30 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
     setCompletionText('');
     setCompletionFiles([]);
+    await refresh();
+  };
+
+  // Only reachable from the deposit_secured card (see escrowState gating
+  // below) — by definition the deposit is still paid-and-held at that
+  // point, so cancelling here always refunds it back to the client, the
+  // same way an admin's dispute "refund" decision would.
+  const handleCancelBooking = async () => {
+    if (!booking || !user?.id || isCancelling) return;
+    setIsCancelling(true);
+    setError(null);
+
+    const response = await DataService.cancelBooking(booking.id, user.id, 'freelancer', cancelReason.trim() || 'Cancelled by freelancer', {
+      refundDeposit: true,
+    });
+
+    setIsCancelling(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to cancel this booking.');
+      return;
+    }
+
+    setShowCancelForm(false);
+    setCancelReason('');
     await refresh();
   };
 
@@ -331,6 +359,48 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               >
                 {isSubmittingCompletion ? 'Submitting...' : 'Mark Complete with Evidence'}
               </button>
+
+              {!showCancelForm ? (
+                <button
+                  onClick={() => setShowCancelForm(true)}
+                  className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-3 px-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
+                >
+                  <Ban className="w-4 h-4" />
+                  Cancel Booking
+                </button>
+              ) : (
+                <div className="mt-3 rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
+                  <p className="mb-1 text-sm font-bold text-red-900">Cancel this booking?</p>
+                  <p className="mb-3 text-xs text-red-700">
+                    The secured deposit ({formatMoney(bookingData.pricing.deposit)}) will be refunded to the client. This can't be undone.
+                  </p>
+                  <textarea
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    placeholder="Why are you cancelling? (optional)"
+                    className="mb-3 w-full min-h-[60px] rounded-lg border border-red-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-red-300"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setShowCancelForm(false);
+                        setCancelReason('');
+                      }}
+                      disabled={isCancelling}
+                      className="flex-1 rounded-lg border border-red-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-red-50 disabled:opacity-60"
+                    >
+                      Keep booking
+                    </button>
+                    <button
+                      onClick={() => void handleCancelBooking()}
+                      disabled={isCancelling}
+                      className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                    >
+                      {isCancelling ? 'Cancelling...' : 'Yes, cancel & refund'}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

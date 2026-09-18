@@ -26,6 +26,43 @@ export const TICKET_STATUS_COLOR: Record<TicketStatus, string> = {
   closed: 'bg-gray-200 text-gray-600',
 };
 
+// Client-facing wording only (My Tickets card + Ticket Details page) - the
+// admin dashboard keeps TICKET_STATUS_LABEL above (e.g. "Open", "Needs your
+// input") since that's the precise, ops-oriented status admins triage by.
+// These are the friendlier translations a client reads, per status:
+//   open              -> "Submitted"              -> ticket received
+//   in_progress       -> "In progress"             -> support is reviewing
+//   awaiting_evidence -> "More information needed" -> client must respond
+//   resolved          -> "Resolved"                -> issue addressed
+//   closed            -> "Closed"                  -> no further action
+export const CLIENT_TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
+  open: 'Submitted',
+  in_progress: 'In progress',
+  awaiting_evidence: 'More information needed',
+  resolved: 'Resolved',
+  closed: 'Closed',
+};
+
+// Short one-line status preview, shown on the My Tickets card.
+export const CLIENT_TICKET_STATUS_MESSAGE: Record<TicketStatus, string> = {
+  open: 'Your ticket has been received.',
+  in_progress: 'Support is reviewing your ticket.',
+  awaiting_evidence: 'Please provide the requested information.',
+  resolved: 'The issue has been addressed.',
+  closed: 'This ticket is closed. Contact support if you need further help.',
+};
+
+// Longer explanation shown in the "Current status" card on the ticket
+// details page - never mentions internal notes, other users' evidence, or
+// moderation details, only what's happening to the client's own ticket.
+export const CLIENT_TICKET_STATUS_DETAIL: Record<TicketStatus, string> = {
+  open: 'Your ticket has been received and is in the queue for a support administrator to review.',
+  in_progress: 'Our support team is reviewing your ticket. You can reply below if you have more information.',
+  awaiting_evidence: "We need more information from you before we can continue. See below for exactly what's needed.",
+  resolved: "This issue has been addressed. If it's still a problem, reply below and we'll reopen it.",
+  closed: 'This ticket is closed. Contact support if you need further help.',
+};
+
 // related_booking_id is a uuid column - matches any RFC 4122 UUID
 // regardless of version, not just v4, since that's all Postgres itself
 // requires.

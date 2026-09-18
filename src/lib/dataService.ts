@@ -2053,13 +2053,91 @@ export class DataService {
     return { data, error };
   }
 
+  // Adds `last_activity_at` to each ticket (the latest of its own
+  // created_at, its events, and its messages) so My Tickets can show
+  // "Updated ..." next to "Reported ...". support_tickets has no
+  // updated_at column of its own — this is derived, not stored.
   static async getUserSupportTickets(userId: string) {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    if (error || !data || data.length === 0) {
+      return { data: data || [], error };
+    }
+
+    const ticketIds = data.map((t: any) => t.id);
+    const [eventsResponse, messagesResponse] = await Promise.all([
+      (supabase as any).from('support_ticket_events').select('ticket_id, created_at').in('ticket_id', ticketIds),
+      (supabase as any).from('support_ticket_messages').select('ticket_id, created_at').in('ticket_id', ticketIds),
+    ]);
+
+    const lastActivityByTicket: Record<string, string> = {};
+    for (const row of [...(eventsResponse.data || []), ...(messagesResponse.data || [])]) {
+      const current = lastActivityByTicket[row.ticket_id];
+      if (!current || new Date(row.created_at) > new Date(current)) {
+        lastActivityByTicket[row.ticket_id] = row.created_at;
+      }
+    }
+
+    const withActivity = data.map((t: any) => {
+      const latestActivity = lastActivityByTicket[t.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(t.created_at) ? latestActivity : t.created_at;
+      return { ...t, last_activity_at: lastActivityAt };
+    });
+    return { data: withActivity, error: null };
+  }
+
+  // Booking disputes (no-shows, missing deliverables, etc.) deliberately
+  // stay their own record in bookings.dispute_status/booking_events, not a
+  // support_tickets row — see supabase/support_ticket_privacy_and_lifecycle.sql
+  // and MyTicketsPage's routing guidance/block. This is purely a read for My
+  // Tickets to also SHOW the user's own reports there (one place to see
+  // every problem they've reported, ticket or dispute) without creating any
+  // new row — nothing here writes anything or duplicates the dispute.
+  //
+  // Also attaches `dispute_category` (from the round-1 'complain' event
+  // that opened the dispute — category lives on booking_events, not
+  // bookings) and `last_activity_at` (the latest booking_events timestamp,
+  // same derivation as getUserSupportTickets' last_activity_at) so the My
+  // Tickets card can show a real category and an "Updated ..." timestamp.
+  static async getUserDisputedBookings(userId: string) {
+    const { data: bookings, error } = await (supabase as any)
+      .from('bookings')
+      .select('id, project_name, dispute_status, dispute_round, client_id, freelancer_id, created_at')
+      .or(`client_id.eq.${userId},freelancer_id.eq.${userId}`)
+      .neq('dispute_status', 'none')
+      .order('created_at', { ascending: false });
+    if (error || !bookings || bookings.length === 0) {
+      return { data: bookings || [], error };
+    }
+
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: events } = await (supabase as any)
+      .from('booking_events')
+      .select('booking_id, action, category, created_at')
+      .in('booking_id', bookingIds)
+      .order('created_at', { ascending: true });
+
+    const initialCategoryByBooking: Record<string, string> = {};
+    const lastActivityByBooking: Record<string, string> = {};
+    for (const event of events || []) {
+      if (event.action === 'complain' && !initialCategoryByBooking[event.booking_id]) {
+        initialCategoryByBooking[event.booking_id] = event.category;
+      }
+      const current = lastActivityByBooking[event.booking_id];
+      if (!current || new Date(event.created_at) > new Date(current)) {
+        lastActivityByBooking[event.booking_id] = event.created_at;
+      }
+    }
+
+    const withDetails = bookings.map((b: any) => {
+      const latestActivity = lastActivityByBooking[b.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(b.created_at) ? latestActivity : b.created_at;
+      return { ...b, dispute_category: initialCategoryByBooking[b.id] || null, last_activity_at: lastActivityAt };
+    });
+    return { data: withDetails, error: null };
   }
 
   static async getAllSupportTicketsForAdmin() {
@@ -2183,6 +2261,58 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  // A dispute's category isn't a column on `bookings` itself — it lives on
+  // the initiating 'complain' booking_event (same lookup
+  // getUserDisputedBookings already does client-side).
+  private static async withDisputeCategory(bookings: any[]) {
+    if (!bookings.length) return bookings;
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: events } = await (supabase as any)
+      .from('booking_events')
+      .select('booking_id, category')
+      .eq('action', 'complain')
+      .in('booking_id', bookingIds);
+
+    const categoryByBooking: Record<string, string> = {};
+    for (const event of events || []) {
+      if (!categoryByBooking[event.booking_id]) {
+        categoryByBooking[event.booking_id] = event.category;
+      }
+    }
+    return bookings.map((b: any) => ({ ...b, dispute_category: categoryByBooking[b.id] || null }));
+  }
+
+  // No-show/late-arrival reports used to have their own separate
+  // attendance_reports/ticket-based tracking with no deposit-decision or
+  // chat at all (see the ADMIN comments above adminResolveAttendanceReport)
+  // — ReportProblemFlow now routes them through the exact same booking
+  // dispute system as every other category instead (same escrowed deposit,
+  // same admin_resolve_dispute refund/release, same conversation). This
+  // just filters the shared dispute lists down to those two categories so
+  // the Attendance Reports admin section reuses all of that directly,
+  // rather than a second, disconnected review flow.
+  private static readonly ATTENDANCE_DISPUTE_CATEGORIES = ['no_show', 'late_arrival'];
+
+  static async getAllAttendanceDisputesForAdmin() {
+    const response = await this.getAllDisputedBookingsForAdmin();
+    if (response.error) return response;
+    const withCategory = await this.withDisputeCategory(response.data);
+    return {
+      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      error: null,
+    };
+  }
+
+  static async getResolvedAttendanceDisputesForAdmin() {
+    const response = await this.getResolvedDisputesForAdmin();
+    if (response.error) return response;
+    const withCategory = await this.withDisputeCategory(response.data);
+    return {
+      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      error: null,
+    };
+  }
+
   // General (non-disputed-only) admin bookings browser — reuses the same
   // "Admins view all bookings" RLS policy the dispute queries above
   // already rely on, so no new migration is needed for this.
@@ -2301,6 +2431,21 @@ export class DataService {
       p_booking_id: bookingId,
       p_decision: decision,
       p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  // Writes into the same dispute_evidence conversation the client/
+  // freelancer's own replies live in (evidence_type 'message', role
+  // 'admin') - see supabase/dispute_admin_messages.sql. Security-definer
+  // RPC, not a plain insert, since dispute_evidence's own INSERT policy can
+  // never be satisfied by an admin (it only matches the booking's real
+  // client_id/freelancer_id).
+  static async adminSendDisputeMessage(bookingId: string, message: string, storagePath?: string | null) {
+    const { data, error } = await (supabase as any).rpc('admin_send_dispute_message', {
+      p_booking_id: bookingId,
+      p_message: message,
+      p_storage_path: storagePath || null,
     });
     return { data, error };
   }
@@ -2932,13 +3077,28 @@ export class DataService {
   // dispute had no real platform record to check against. Routes through
   // updateBooking() so the existing 'booking_cancelled' notifications to
   // both parties still fire.
-  static async cancelBooking(bookingId: string, actorId: string, actorRole: 'client' | 'freelancer', reason: string) {
-    const response = await this.updateBooking(bookingId, {
+  static async cancelBooking(
+    bookingId: string,
+    actorId: string,
+    actorRole: 'client' | 'freelancer',
+    reason: string,
+    options?: { refundDeposit?: boolean }
+  ) {
+    const updates: Record<string, any> = {
       status: 'cancelled',
       cancelled_by: actorId,
       cancelled_at: new Date().toISOString(),
       cancellation_reason: reason,
-    } as any);
+    };
+    // Routed through updateBooking() (not a separate write) so its existing
+    // payment_status-transition notification ("Your deposit for '...' has
+    // been refunded.") fires the same way a dispute refund does — one
+    // update, both the cancellation and the refund notifications.
+    if (options?.refundDeposit) {
+      updates.payment_status = 'refunded';
+    }
+
+    const response = await this.updateBooking(bookingId, updates as any);
 
     if (!response.error && response.data) {
       await (supabase as any).from('booking_events').insert({
@@ -4009,6 +4169,7 @@ export class DataService {
     includes?: string | null;
     date?: string | null;
     time?: string | null;
+    end_time?: string | null;
   }) {
     const { error } = await (supabase as any).from('request_offers').insert(row);
     return { error };
@@ -4111,6 +4272,7 @@ export class DataService {
           includes: null,
           date: scheduleMeta?.date || null,
           time: scheduleMeta?.time || null,
+          end_time: scheduleMeta?.endTime || null,
         });
       }
     }
@@ -5105,6 +5267,7 @@ export class DataService {
           includes: (data as any).includes ?? null,
           date: (data as any).counter_date ?? null,
           time: (data as any).counter_time ?? null,
+          end_time: (data as any).counter_end_time ?? null,
         });
       }
 

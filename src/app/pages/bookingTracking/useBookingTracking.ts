@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router';
 import { DataService } from '../../../lib/dataService';
+import { FeedService } from '../../../lib/feedService';
 import { getBookingEscrowState, type EscrowState } from '../../../lib/bookingEscrow';
 import { extractScheduleMeta, formatTimeLabel } from '../../../lib/requestSchedule';
 import { extractLocationMeta } from '../../../lib/requestLocation';
@@ -111,6 +112,22 @@ export function useBookingTracking() {
       isMounted = false;
     };
   }, [booking, events, disputeEvidence]);
+
+  // Without this, the other party's action (confirming attendance, a
+  // reschedule response, an admin decision, deposit paid, ...) only ever
+  // showed up here after a manual reload.
+  useEffect(() => {
+    if (!id) return;
+
+    const channel = FeedService.subscribeToBooking(id, () => {
+      void refresh();
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   const refresh = async () => {
     if (!id) return;

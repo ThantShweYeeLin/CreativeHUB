@@ -451,20 +451,47 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
   );
   const isSelectedDateBlocked = formData.scheduleDate ? isDateBlocked(freelancerBlockedDates, formData.scheduleDate) : false;
-  const availableTimeSlots = useMemo(
-    () =>
-      allTimeSlots.map((slot) => ({
+  const availableTimeSlots = useMemo(() => {
+    // A slot list generated purely from working hours has no idea what time
+    // it is "right now" — without this, picking today's date still offered
+    // start times hours in the past. Only applies when the chosen date is
+    // actually today; any other date keeps the full working-hours range.
+    const isToday = formData.scheduleDate === todayDateString;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const workingHoursEnd = freelancerProfile?.working_hours_end || '18:00';
+
+    return allTimeSlots
+      .filter((slot) => {
+        // A start time needs at least an hour left before the freelancer's
+        // working day ends, or there's no valid end time left to pair it
+        // with at all (availableEndTimeSlots below only ever offers times
+        // strictly after the chosen start, within these same working
+        // hours) — e.g. 12–18 working hours should offer 17:00 as the
+        // latest start (so 18:00 is still reachable as an end time), not
+        // 18:00 itself, which would leave nothing to pick as the end.
+        if (addMinutesToTime(slot, 60) > workingHoursEnd) return false;
+        if (!isToday) return true;
+        const [hour, minute] = slot.split(':').map(Number);
+        return hour * 60 + minute > currentMinutes;
+      })
+      .map((slot) => ({
         value: slot,
         taken: formData.scheduleDate ? isTimeSlotTaken(freelancerBookings, formData.scheduleDate, slot) : false,
-      })),
-    [allTimeSlots, freelancerBookings, formData.scheduleDate]
-  );
+      }));
+  }, [allTimeSlots, freelancerBookings, formData.scheduleDate, todayDateString, freelancerProfile?.working_hours_end]);
   // Bounded by the same working-hours slot list as the start time — an end
   // time must be after the chosen start, within that same range.
   const availableEndTimeSlots = useMemo(
     () => (formData.scheduleTime ? allTimeSlots.filter((slot) => slot > formData.scheduleTime) : []),
     [allTimeSlots, formData.scheduleTime]
   );
+  // A date that isn't blocked can still have nothing actually pickable —
+  // every remaining slot already booked, or (today) every slot that leaves
+  // room for a session has already passed. `.every()` on an empty array is
+  // `true`, which correctly covers that second case too.
+  const hasNoAvailableTimeOnSelectedDate =
+    Boolean(formData.scheduleDate) && !isSelectedDateBlocked && availableTimeSlots.every((slot) => slot.taken);
   const trust = useMemo(
     () =>
       computeTrustLevel({
@@ -2219,13 +2246,19 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <div>
                     <select
                       required
-                      disabled={!formData.scheduleDate || isSelectedDateBlocked}
+                      disabled={!formData.scheduleDate || isSelectedDateBlocked || hasNoAvailableTimeOnSelectedDate}
                       value={formData.scheduleTime}
                       onChange={(event) => setFormData((current) => ({ ...current, scheduleTime: event.target.value, scheduleEndTime: '' }))}
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
                     >
                       <option value="" disabled>
-                        {!formData.scheduleDate ? 'Choose a date first' : isSelectedDateBlocked ? 'Not available this day' : 'Start time'}
+                        {!formData.scheduleDate
+                          ? 'Choose a date first'
+                          : isSelectedDateBlocked
+                            ? 'Not available this day'
+                            : hasNoAvailableTimeOnSelectedDate
+                              ? 'No available time this day'
+                              : 'Start time'}
                       </option>
                       {availableTimeSlots.map((slot) => (
                         <option key={slot.value} value={slot.value} disabled={slot.taken}>
@@ -2255,9 +2288,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <p className="mt-2 text-xs font-semibold text-red-600">
                     This freelancer isn't available on this date. Please choose a different day.
                   </p>
+                ) : hasNoAvailableTimeOnSelectedDate ? (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    There's no available time on this day. Please choose a different day.
+                  </p>
                 ) : (
                   <p className="mt-2 text-xs text-gray-600">
-                    Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours. Times already booked are grayed out.
+                    Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours. Times already booked are grayed out, and times already passed today aren't shown.
                   </p>
                 )}
               </div>
