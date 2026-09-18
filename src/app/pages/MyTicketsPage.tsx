@@ -1,10 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Plus, Ticket as TicketIcon, X } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Ticket as TicketIcon, X } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
-import { isValidBookingId, looksLikeDisputeReport, TICKET_CATEGORY_LABEL, TICKET_STATUS_COLOR, TICKET_STATUS_LABEL, type TicketCategory } from '../../lib/supportTickets';
+import {
+  CLIENT_DISPUTE_STATUS_COLOR,
+  CLIENT_DISPUTE_STATUS_LABEL,
+  CLIENT_DISPUTE_STATUS_MESSAGE,
+  DISPUTE_CATEGORY_LABEL,
+  type DisputeStatus,
+} from '../../lib/disputeCategories';
+import {
+  CLIENT_TICKET_STATUS_LABEL,
+  CLIENT_TICKET_STATUS_MESSAGE,
+  isValidBookingId,
+  looksLikeDisputeReport,
+  TICKET_CATEGORY_LABEL,
+  TICKET_STATUS_COLOR,
+  type TicketCategory,
+  type TicketStatus,
+} from '../../lib/supportTickets';
 
 interface MyTicketsPageProps {
   onBack: () => void;
@@ -14,6 +31,7 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
+  const [disputes, setDisputes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,11 +57,17 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const load = async () => {
     if (!user?.id) return;
     setIsLoading(true);
-    const response = await DataService.getUserSupportTickets(user.id);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to load your tickets.');
+    const [ticketsResponse, disputesResponse] = await Promise.all([
+      DataService.getUserSupportTickets(user.id),
+      DataService.getUserDisputedBookings(user.id),
+    ]);
+    if (ticketsResponse.error) {
+      setError((ticketsResponse.error as any).message || 'Unable to load your tickets.');
     } else {
-      setTickets(response.data);
+      setTickets(ticketsResponse.data);
+      // Non-fatal if this one fails — tickets are the primary content here,
+      // a dispute just wouldn't show up as one more entry.
+      setDisputes(disputesResponse.error ? [] : disputesResponse.data);
     }
     setIsLoading(false);
   };
@@ -52,6 +76,17 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Disputes stay their own record (bookings.dispute_status), never a
+  // support_tickets row — this just interleaves the two for display so
+  // there's one place to see every problem reported, sorted by recency.
+  const mergedItems = useMemo(() => {
+    const ticketItems = tickets.map((t) => ({ kind: 'ticket' as const, data: t, createdAt: t.created_at }));
+    const disputeItems = disputes.map((d) => ({ kind: 'dispute' as const, data: d, createdAt: d.created_at }));
+    return [...ticketItems, ...disputeItems].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [tickets, disputes]);
 
   // Sends the user to the correct booking tracking page (client vs
   // freelancer route depends on which side of the booking they're on) with
@@ -171,7 +206,7 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
 
           {isLoading ? (
             <p className="text-sm text-gray-500">Loading...</p>
-          ) : tickets.length === 0 ? (
+          ) : mergedItems.length === 0 ? (
             <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <TicketIcon className="w-10 h-10 text-sky-300 mx-auto mb-3" />
               <p className="font-semibold text-gray-900">No tickets yet</p>
@@ -179,24 +214,87 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              {tickets.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => navigate(`/tickets/${t.id}`)}
-                  className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-bold text-gray-900">
-                      #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
+              {mergedItems.map((item) => {
+                if (item.kind === 'ticket') {
+                  const t = item.data;
+                  const status = t.status as TicketStatus;
+                  const updatedAt = t.last_activity_at || t.created_at;
+                  return (
+                    <button
+                      key={`ticket-${t.id}`}
+                      onClick={() => navigate(`/tickets/${t.id}`)}
+                      className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                          Ticket #{t.id.slice(0, 8).toUpperCase()}
+                        </p>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[status] || ''}`}>
+                          {CLIENT_TICKET_STATUS_LABEL[status] || t.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-base font-bold text-gray-900">
+                        {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Reported {new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {' · '}
+                        Updated {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
+                      </p>
+                      <p className="mt-2 line-clamp-2 text-sm text-gray-600">{t.description}</p>
+                      {CLIENT_TICKET_STATUS_MESSAGE[status] && (
+                        <p className="mt-2 text-sm font-medium text-gray-700">{CLIENT_TICKET_STATUS_MESSAGE[status]}</p>
+                      )}
+                      <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-sky-600">
+                        View ticket
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </span>
+                    </button>
+                  );
+                }
+
+                const d = item.data;
+                const disputeStatus = d.dispute_status as DisputeStatus;
+                const updatedAt = d.last_activity_at || d.created_at;
+                return (
+                  <button
+                    key={`dispute-${d.id}`}
+                    onClick={() => navigate(`/tickets/dispute/${d.id}`)}
+                    className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Ticket #D-{d.id.slice(0, 8).toUpperCase()}
+                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                          <AlertTriangle className="h-3 w-3" />
+                          Booking dispute
+                        </span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${CLIENT_DISPUTE_STATUS_COLOR[disputeStatus] || ''}`}>
+                          {CLIENT_DISPUTE_STATUS_LABEL[disputeStatus] || d.dispute_status}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="mt-1 text-base font-bold text-gray-900">
+                      Booking #{d.id.slice(0, 8).toUpperCase()}
+                      {d.dispute_category ? ` — ${DISPUTE_CATEGORY_LABEL[d.dispute_category] || d.dispute_category}` : ''}
                     </p>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[t.status as keyof typeof TICKET_STATUS_COLOR] || ''}`}>
-                      {TICKET_STATUS_LABEL[t.status as keyof typeof TICKET_STATUS_LABEL] || t.status}
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Reported {new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' · '}
+                      Updated {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
+                    </p>
+                    {CLIENT_DISPUTE_STATUS_MESSAGE[disputeStatus] && (
+                      <p className="mt-2 text-sm font-medium text-gray-700">{CLIENT_DISPUTE_STATUS_MESSAGE[disputeStatus]}</p>
+                    )}
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-sky-600">
+                      View ticket
+                      <ChevronRight className="h-3.5 w-3.5" />
                     </span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-600">{t.description}</p>
-                  <p className="mt-1 text-xs text-gray-500">{new Date(t.created_at).toLocaleString()}</p>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

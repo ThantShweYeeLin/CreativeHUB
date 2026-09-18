@@ -35,6 +35,10 @@ interface NotificationsPanelProps {
   /** Any notification whose type starts with 'ticket_' (replies, evidence
    * requests, status changes) routes here. */
   onOpenTicket?: (notification: NotificationPanelItem) => void;
+  /** 'dispute_message' (an admin message on a booking dispute) routes here
+   * instead of onOpenBooking - the dispute's ticket-style detail page
+   * (/tickets/dispute/:id), not the raw booking tracking page. */
+  onOpenDisputeTicket?: (notification: NotificationPanelItem) => void;
   /** The bell button's ref — used to measure where to anchor the portaled
    * panel on desktop (see the positioning effect below). Optional so the
    * panel still renders sensibly (falling back to its static Tailwind
@@ -88,6 +92,8 @@ const getNotificationIcon = (type: string) => {
     case 'ticket_status_updated':
       return <Bell className="w-4 h-4 text-blue-600" />;
     case 'ticket_reply':
+      return <MessageSquare className="w-4 h-4 text-sky-600" />;
+    case 'dispute_message':
       return <MessageSquare className="w-4 h-4 text-sky-600" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
@@ -182,6 +188,7 @@ export function NotificationsPanel({
   onOpenGroupMessage,
   onOpenBooking,
   onOpenTicket,
+  onOpenDisputeTicket,
   triggerRef,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -308,6 +315,8 @@ export function NotificationsPanel({
                     onOpenGroupMessage?.(notification);
                   } else if (notification.type.startsWith('ticket_')) {
                     onOpenTicket?.(notification);
+                  } else if (notification.type === 'dispute_message') {
+                    onOpenDisputeTicket?.(notification);
                   } else if (notification.type.includes('message')) {
                     onOpenMessages?.();
                   } else if (
@@ -378,7 +387,7 @@ export function NotificationsPanel({
                           than useful context; these just state the fact,
                           with no actor at all. */}
                       {!['booking_disputed', 'deposit_payment_required', 'attendance_window_open', 'payment_update', 'payment_released', 'booking_completed'].includes(notification.type) && (
-                        <span className="font-bold">{notification.actorName || 'User'}</span>
+                        <span className="font-bold">{notification.actorName || 'CreativeHUB'}</span>
                       )}{' '}
                       <span className="text-gray-700">
                         {['deposit_payment_required', 'attendance_window_open'].includes(notification.type)

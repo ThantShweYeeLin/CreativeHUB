@@ -2053,13 +2053,91 @@ export class DataService {
     return { data, error };
   }
 
+  // Adds `last_activity_at` to each ticket (the latest of its own
+  // created_at, its events, and its messages) so My Tickets can show
+  // "Updated ..." next to "Reported ...". support_tickets has no
+  // updated_at column of its own — this is derived, not stored.
   static async getUserSupportTickets(userId: string) {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    if (error || !data || data.length === 0) {
+      return { data: data || [], error };
+    }
+
+    const ticketIds = data.map((t: any) => t.id);
+    const [eventsResponse, messagesResponse] = await Promise.all([
+      (supabase as any).from('support_ticket_events').select('ticket_id, created_at').in('ticket_id', ticketIds),
+      (supabase as any).from('support_ticket_messages').select('ticket_id, created_at').in('ticket_id', ticketIds),
+    ]);
+
+    const lastActivityByTicket: Record<string, string> = {};
+    for (const row of [...(eventsResponse.data || []), ...(messagesResponse.data || [])]) {
+      const current = lastActivityByTicket[row.ticket_id];
+      if (!current || new Date(row.created_at) > new Date(current)) {
+        lastActivityByTicket[row.ticket_id] = row.created_at;
+      }
+    }
+
+    const withActivity = data.map((t: any) => {
+      const latestActivity = lastActivityByTicket[t.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(t.created_at) ? latestActivity : t.created_at;
+      return { ...t, last_activity_at: lastActivityAt };
+    });
+    return { data: withActivity, error: null };
+  }
+
+  // Booking disputes (no-shows, missing deliverables, etc.) deliberately
+  // stay their own record in bookings.dispute_status/booking_events, not a
+  // support_tickets row — see supabase/support_ticket_privacy_and_lifecycle.sql
+  // and MyTicketsPage's routing guidance/block. This is purely a read for My
+  // Tickets to also SHOW the user's own reports there (one place to see
+  // every problem they've reported, ticket or dispute) without creating any
+  // new row — nothing here writes anything or duplicates the dispute.
+  //
+  // Also attaches `dispute_category` (from the round-1 'complain' event
+  // that opened the dispute — category lives on booking_events, not
+  // bookings) and `last_activity_at` (the latest booking_events timestamp,
+  // same derivation as getUserSupportTickets' last_activity_at) so the My
+  // Tickets card can show a real category and an "Updated ..." timestamp.
+  static async getUserDisputedBookings(userId: string) {
+    const { data: bookings, error } = await (supabase as any)
+      .from('bookings')
+      .select('id, project_name, dispute_status, dispute_round, client_id, freelancer_id, created_at')
+      .or(`client_id.eq.${userId},freelancer_id.eq.${userId}`)
+      .neq('dispute_status', 'none')
+      .order('created_at', { ascending: false });
+    if (error || !bookings || bookings.length === 0) {
+      return { data: bookings || [], error };
+    }
+
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: events } = await (supabase as any)
+      .from('booking_events')
+      .select('booking_id, action, category, created_at')
+      .in('booking_id', bookingIds)
+      .order('created_at', { ascending: true });
+
+    const initialCategoryByBooking: Record<string, string> = {};
+    const lastActivityByBooking: Record<string, string> = {};
+    for (const event of events || []) {
+      if (event.action === 'complain' && !initialCategoryByBooking[event.booking_id]) {
+        initialCategoryByBooking[event.booking_id] = event.category;
+      }
+      const current = lastActivityByBooking[event.booking_id];
+      if (!current || new Date(event.created_at) > new Date(current)) {
+        lastActivityByBooking[event.booking_id] = event.created_at;
+      }
+    }
+
+    const withDetails = bookings.map((b: any) => {
+      const latestActivity = lastActivityByBooking[b.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(b.created_at) ? latestActivity : b.created_at;
+      return { ...b, dispute_category: initialCategoryByBooking[b.id] || null, last_activity_at: lastActivityAt };
+    });
+    return { data: withDetails, error: null };
   }
 
   static async getAllSupportTicketsForAdmin() {
@@ -2301,6 +2379,20 @@ export class DataService {
       p_booking_id: bookingId,
       p_decision: decision,
       p_reason: reason || null,
+    });
+    return { data, error };
+  }
+
+  // Writes into the same dispute_evidence conversation the client/
+  // freelancer's own replies live in (evidence_type 'message', role
+  // 'admin') - see supabase/dispute_admin_messages.sql. Security-definer
+  // RPC, not a plain insert, since dispute_evidence's own INSERT policy can
+  // never be satisfied by an admin (it only matches the booking's real
+  // client_id/freelancer_id).
+  static async adminSendDisputeMessage(bookingId: string, message: string) {
+    const { data, error } = await (supabase as any).rpc('admin_send_dispute_message', {
+      p_booking_id: bookingId,
+      p_message: message,
     });
     return { data, error };
   }
@@ -3483,7 +3575,7 @@ export class DataService {
     let metadata: Record<string, Json> = { ...((notification.metadata as Record<string, Json> | null) || {}) };
     if (notification.actor_id && !metadata.actor_name && !metadata.requester_name) {
       const actorResponse = await this.getUser(String(notification.actor_id));
-      const actorName = actorResponse.data?.full_name || 'User';
+      const actorName = actorResponse.data?.full_name || 'CreativeHUB';
       metadata = {
         ...metadata,
         actor_name: actorName,
@@ -3967,7 +4059,7 @@ export class DataService {
 
     if (!error && request.freelancer_id && request.client_id) {
       const clientUser = await this.getUser(String(request.client_id));
-      const clientName = clientUser.data?.full_name || 'User';
+      const clientName = clientUser.data?.full_name || 'CreativeHUB';
 
       await this.createNotification({
         user_id: request.freelancer_id,

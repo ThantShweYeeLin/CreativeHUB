@@ -45,14 +45,18 @@ export function MainLayout({ children }: MainLayoutProps) {
       }
       return isGenericActorName(rawMessageText) ? 'Freelancer' : null;
     })();
-    const actorName = [
+    const resolvedActorName = [
       actor?.full_name,
       row.metadata?.requester_name,
       row.metadata?.actor_name,
       row.metadata?.name,
       inferredActorName,
-    ].find((value) => !!value && !isGenericActorName(String(value))) || 'User';
-    const finalActorName = actorName || 'User';
+    ].find((value) => !!value && !isGenericActorName(String(value)));
+    // No identifiable person behind this notification (anonymous actor or a
+    // system-generated one) — show the app logo instead of a person avatar,
+    // set alongside actorAvatar below.
+    const isAnonymousActor = !resolvedActorName;
+    const finalActorName = resolvedActorName || 'CreativeHUB';
 
     const projectNameFromText = (() => {
       const text = rawMessageText.replace(/^(?:creative\s*hub\s+)?/i, '').trim();
@@ -112,7 +116,7 @@ export function MainLayout({ children }: MainLayoutProps) {
       title: String(row.title || 'Notification'),
       message: displayMessage,
       actorName: finalActorName,
-      actorAvatar: actor?.avatar_url || null,
+      actorAvatar: actor?.avatar_url || (isAnonymousActor ? logoImage : null),
       actorGender: actor?.gender || null,
       actorId: actor?.id || row.actor_id || null,
       requesterId: row.metadata?.requester_id || row.actor_id || null,
@@ -815,6 +819,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                       setShowNotifications(false);
                       if (notification.relatedId) {
                         navigate(`/tickets/${notification.relatedId}`);
+                      } else {
+                        navigate('/tickets');
+                      }
+                    }}
+                    onOpenDisputeTicket={(notification) => {
+                      setShowNotifications(false);
+                      if (notification.relatedId) {
+                        navigate(`/tickets/dispute/${notification.relatedId}`);
                       } else {
                         navigate('/tickets');
                       }
