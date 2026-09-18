@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ChevronLeft, Plus, Ticket as TicketIcon, X } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Plus, Ticket as TicketIcon, X } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -10,10 +10,25 @@ interface MyTicketsPageProps {
   onBack: () => void;
 }
 
+// Booking disputes use their own status column (bookings.dispute_status),
+// separate from support_tickets.status — this is display-only, just for
+// the merged list below, and never written back anywhere.
+const DISPUTE_STATUS_LABEL: Record<string, string> = {
+  open: 'Open',
+  under_admin_review: 'Under review',
+  resolved: 'Resolved',
+};
+const DISPUTE_STATUS_COLOR: Record<string, string> = {
+  open: 'bg-amber-100 text-amber-700',
+  under_admin_review: 'bg-blue-100 text-blue-700',
+  resolved: 'bg-green-100 text-green-700',
+};
+
 export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tickets, setTickets] = useState<any[]>([]);
+  const [disputes, setDisputes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,11 +54,17 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const load = async () => {
     if (!user?.id) return;
     setIsLoading(true);
-    const response = await DataService.getUserSupportTickets(user.id);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to load your tickets.');
+    const [ticketsResponse, disputesResponse] = await Promise.all([
+      DataService.getUserSupportTickets(user.id),
+      DataService.getUserDisputedBookings(user.id),
+    ]);
+    if (ticketsResponse.error) {
+      setError((ticketsResponse.error as any).message || 'Unable to load your tickets.');
     } else {
-      setTickets(response.data);
+      setTickets(ticketsResponse.data);
+      // Non-fatal if this one fails — tickets are the primary content here,
+      // a dispute just wouldn't show up as one more entry.
+      setDisputes(disputesResponse.error ? [] : disputesResponse.data);
     }
     setIsLoading(false);
   };
@@ -52,6 +73,17 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Disputes stay their own record (bookings.dispute_status), never a
+  // support_tickets row — this just interleaves the two for display so
+  // there's one place to see every problem reported, sorted by recency.
+  const mergedItems = useMemo(() => {
+    const ticketItems = tickets.map((t) => ({ kind: 'ticket' as const, data: t, createdAt: t.created_at }));
+    const disputeItems = disputes.map((d) => ({ kind: 'dispute' as const, data: d, createdAt: d.created_at }));
+    return [...ticketItems, ...disputeItems].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [tickets, disputes]);
 
   // Sends the user to the correct booking tracking page (client vs
   // freelancer route depends on which side of the booking they're on) with
@@ -171,7 +203,7 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
 
           {isLoading ? (
             <p className="text-sm text-gray-500">Loading...</p>
-          ) : tickets.length === 0 ? (
+          ) : mergedItems.length === 0 ? (
             <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <TicketIcon className="w-10 h-10 text-sky-300 mx-auto mb-3" />
               <p className="font-semibold text-gray-900">No tickets yet</p>
@@ -179,24 +211,52 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
             </div>
           ) : (
             <div className="space-y-3">
-              {tickets.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => navigate(`/tickets/${t.id}`)}
-                  className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-bold text-gray-900">
-                      #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
-                    </p>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[t.status as keyof typeof TICKET_STATUS_COLOR] || ''}`}>
-                      {TICKET_STATUS_LABEL[t.status as keyof typeof TICKET_STATUS_LABEL] || t.status}
-                    </span>
-                  </div>
-                  <p className="mt-1 line-clamp-2 text-sm text-gray-600">{t.description}</p>
-                  <p className="mt-1 text-xs text-gray-500">{new Date(t.created_at).toLocaleString()}</p>
-                </button>
-              ))}
+              {mergedItems.map((item) => {
+                if (item.kind === 'ticket') {
+                  const t = item.data;
+                  return (
+                    <button
+                      key={`ticket-${t.id}`}
+                      onClick={() => navigate(`/tickets/${t.id}`)}
+                      className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-bold text-gray-900">
+                          #{t.id.slice(0, 8).toUpperCase()} — {TICKET_CATEGORY_LABEL[t.category as TicketCategory] || t.category}
+                        </p>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${TICKET_STATUS_COLOR[t.status as keyof typeof TICKET_STATUS_COLOR] || ''}`}>
+                          {TICKET_STATUS_LABEL[t.status as keyof typeof TICKET_STATUS_LABEL] || t.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm text-gray-600">{t.description}</p>
+                      <p className="mt-1 text-xs text-gray-500">{new Date(t.created_at).toLocaleString()}</p>
+                    </button>
+                  );
+                }
+
+                const d = item.data;
+                const isClient = String(d.client_id) === String(user?.id);
+                const basePath = isClient ? `/booking/${d.id}` : `/freelancer-booking/${d.id}`;
+                return (
+                  <button
+                    key={`dispute-${d.id}`}
+                    onClick={() => navigate(`${basePath}#${isClient ? 'report-a-problem-button' : 'attendance-check'}`)}
+                    className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-bold text-gray-900">
+                        <AlertTriangle className="mr-1.5 inline-block h-4 w-4 text-amber-500 align-text-bottom" />
+                        Dispute — {d.project_name || 'Booking'}
+                      </p>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${DISPUTE_STATUS_COLOR[d.dispute_status] || ''}`}>
+                        {DISPUTE_STATUS_LABEL[d.dispute_status] || d.dispute_status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">Reported on this booking — tracked on its booking page, not as a separate ticket.</p>
+                    <p className="mt-1 text-xs text-gray-500">{new Date(d.created_at).toLocaleString()}</p>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

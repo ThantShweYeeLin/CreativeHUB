@@ -2062,6 +2062,23 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  // Booking disputes (no-shows, missing deliverables, etc.) deliberately
+  // stay their own record in bookings.dispute_status/booking_events, not a
+  // support_tickets row — see supabase/support_ticket_privacy_and_lifecycle.sql
+  // and MyTicketsPage's routing guidance/block. This is purely a read for My
+  // Tickets to also SHOW the user's own reports there (one place to see
+  // every problem they've reported, ticket or dispute) without creating any
+  // new row — nothing here writes anything or duplicates the dispute.
+  static async getUserDisputedBookings(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('bookings')
+      .select('id, project_name, dispute_status, client_id, freelancer_id, created_at')
+      .or(`client_id.eq.${userId},freelancer_id.eq.${userId}`)
+      .neq('dispute_status', 'none')
+      .order('created_at', { ascending: false });
+    return { data: data || [], error };
+  }
+
   static async getAllSupportTicketsForAdmin() {
     const { data, error } = await (supabase as any)
       .from('support_tickets')
