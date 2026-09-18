@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, CheckCircle, MessageCircle } from 'lucide-react';
+import { Ban, CheckCircle, MessageCircle, Paperclip } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { FeedService } from '../../../lib/feedService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
 import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
 import { PlatformRecordsPanel } from '../bookingTracking/PlatformRecordsPanel';
+import { AttachmentPreview } from '../../components/common/AttachmentPreview';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
 
 // Loads a booking + its events/attendance/evidence-signed-urls once, shared
@@ -189,11 +191,13 @@ export function AdminBookingDetail({
   onResolved: () => void | Promise<void>;
 }) {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [decisionReason, setDecisionReason] = useState('');
   const [isPending, setIsPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const [disputeMessage, setDisputeMessage] = useState('');
+  const [disputeMessageFile, setDisputeMessageFile] = useState<File | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [messageError, setMessageError] = useState<string | null>(null);
 
@@ -267,16 +271,30 @@ export function AdminBookingDetail({
   };
 
   const handleSendMessage = async () => {
-    if (!disputeMessage.trim() || isSendingMessage) return;
+    // A photo on its own is a complete message — no caption required.
+    if ((!disputeMessage.trim() && !disputeMessageFile) || isSendingMessage || !user?.id) return;
     setIsSendingMessage(true);
     setMessageError(null);
-    const response = await DataService.adminSendDisputeMessage(booking.id, disputeMessage.trim());
+
+    let storagePath: string | null = null;
+    if (disputeMessageFile) {
+      const uploadResponse = await DataService.uploadBookingEvidencePhoto(user.id, booking.id, disputeMessageFile);
+      if (uploadResponse.error || !uploadResponse.path) {
+        setMessageError('Unable to upload the attachment.');
+        setIsSendingMessage(false);
+        return;
+      }
+      storagePath = uploadResponse.path;
+    }
+
+    const response = await DataService.adminSendDisputeMessage(booking.id, disputeMessage.trim(), storagePath);
     setIsSendingMessage(false);
     if (response.error) {
       setMessageError((response.error as any).message || 'Unable to send message.');
       return;
     }
     setDisputeMessage('');
+    setDisputeMessageFile(null);
     await onResolved();
   };
 
@@ -493,9 +511,9 @@ export function AdminBookingDetail({
                           item.role === 'admin' ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
                         }`}
                       >
-                        <p className="whitespace-pre-wrap">{item.description}</p>
+                        {item.description && <p className="whitespace-pre-wrap">{item.description}</p>}
                         {item.storage_path && signedUrls[item.storage_path] && (
-                          <a href={signedUrls[item.storage_path]} target="_blank" rel="noreferrer" className="mt-2 block">
+                          <a href={signedUrls[item.storage_path]} target="_blank" rel="noreferrer" className={item.description ? 'mt-2 block' : 'block'}>
                             <img src={signedUrls[item.storage_path]} alt="Attachment" className="max-h-40 rounded-lg object-cover" />
                           </a>
                         )}
@@ -522,14 +540,23 @@ export function AdminBookingDetail({
                 rows={1}
                 className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
               />
+              <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sky-100 text-gray-500 hover:bg-sky-50">
+                <Paperclip className="h-4 w-4" />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => setDisputeMessageFile(e.target.files?.[0] || null)} />
+              </label>
               <button
                 onClick={() => void handleSendMessage()}
-                disabled={!disputeMessage.trim() || isSendingMessage}
+                disabled={(!disputeMessage.trim() && !disputeMessageFile) || isSendingMessage}
                 className="shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
               >
                 {isSendingMessage ? 'Sending...' : 'Send'}
               </button>
             </div>
+            {disputeMessageFile && (
+              <div className="mt-2">
+                <AttachmentPreview file={disputeMessageFile} onRemove={() => setDisputeMessageFile(null)} />
+              </div>
+            )}
           </div>
 
           {canDecide && (

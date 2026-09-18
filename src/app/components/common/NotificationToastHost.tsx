@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { MessageSquare, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { DataService } from '../../../lib/dataService';
 import { FeedService } from '../../../lib/feedService';
+import { resolveNotificationRoute } from '../../../lib/notificationNavigation';
 
 interface ToastItem {
   id: string;
@@ -10,29 +12,13 @@ interface ToastItem {
   message: string | null;
   type: string;
   relatedId: string | null;
+  actorId: string | null;
+  counterBy: 'client' | 'freelancer' | null;
+  actorName: string | null;
 }
 
 const AUTO_DISMISS_MS = 5000;
 const EXIT_DURATION_MS = 300;
-
-// Only the two message types this session added notification triggers for
-// (see supabase/ticket_and_dispute_message_notifications.sql) have a known
-// destination — every other notification type still toasts (so nothing
-// needs a refresh to be seen at all), it just isn't clickable-through.
-function routeForNotification(type: string, relatedId: string | null, isAdmin: boolean): string | null {
-  if (!relatedId) return null;
-  // #conversation / #dispute-messages land directly on the reply thread
-  // instead of the top of the page — see the matching hash-scroll effects
-  // in TicketDetailPage.tsx, AdminTicketDetail.tsx, DisputeTicketDetailPage.tsx
-  // and AdminBookingDetail.tsx.
-  if (type === 'dispute_message') {
-    return isAdmin ? `/admin/disputes/${relatedId}#dispute-messages` : `/tickets/dispute/${relatedId}#conversation`;
-  }
-  if (type.startsWith('ticket_')) {
-    return isAdmin ? `/admin/tickets/${relatedId}#conversation` : `/tickets/${relatedId}#conversation`;
-  }
-  return null;
-}
 
 // Slides in from the right (entered=false -> true flips the transform),
 // sits for AUTO_DISMISS_MS, then slides back out (leaving=true) before
@@ -119,6 +105,9 @@ export function NotificationToastHost() {
           message: row.message || null,
           type: String(row.type || 'system'),
           relatedId: row.related_id ? String(row.related_id) : null,
+          actorId: row.actor_id ? String(row.actor_id) : null,
+          counterBy: row.metadata?.counter_by || null,
+          actorName: row.metadata?.actor_name || row.metadata?.requester_name || null,
         },
       ]);
     });
@@ -142,8 +131,14 @@ export function NotificationToastHost() {
           item={item}
           onDismiss={() => setToasts((current) => current.filter((t) => t.id !== item.id))}
           onOpen={() => {
-            const path = routeForNotification(item.type, item.relatedId, isAdmin);
-            if (path) navigate(path);
+            void DataService.markNotificationAsRead(item.id);
+            void resolveNotificationRoute(
+              { id: item.id, type: item.type, relatedId: item.relatedId, counterBy: item.counterBy, actorId: item.actorId, actorName: item.actorName },
+              user ? { id: user.id, role: user.role } : null,
+              isAdmin
+            ).then((route) => {
+              if (route) navigate(route.path, route.state ? { state: route.state } : undefined);
+            });
           }}
         />
       ))}

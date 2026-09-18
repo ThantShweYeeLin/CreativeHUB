@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronLeft, Circle, MessageCircle, Paperclip, Ticket as TicketIcon } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { AttachmentPreview } from '../components/common/AttachmentPreview';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
@@ -112,7 +113,8 @@ export function DisputeTicketDetailPage({ onBack }: DisputeTicketDetailPageProps
   }, [booking]);
 
   const handleSendReply = async () => {
-    if (!user?.id || !booking?.id || !reply.trim() || isSending) return;
+    // A photo on its own is a complete message — no caption required.
+    if (!user?.id || !booking?.id || (!reply.trim() && !replyFile) || isSending) return;
     setIsSending(true);
     setSendError(null);
 
@@ -255,9 +257,9 @@ export function DisputeTicketDetailPage({ onBack }: DisputeTicketDetailPageProps
                                     isSelf ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
                                   }`}
                                 >
-                                  <p className="whitespace-pre-wrap">{item.description}</p>
+                                  {item.description && <p className="whitespace-pre-wrap">{item.description}</p>}
                                   {item.storage_path && signedUrls[item.storage_path] && (
-                                    <a href={signedUrls[item.storage_path]} target="_blank" rel="noreferrer" className="mt-2 block">
+                                    <a href={signedUrls[item.storage_path]} target="_blank" rel="noreferrer" className={item.description ? 'mt-2 block' : 'block'}>
                                       <img src={signedUrls[item.storage_path]} alt="Attachment" className="max-h-40 rounded-lg object-cover" />
                                     </a>
                                   )}
@@ -295,13 +297,13 @@ export function DisputeTicketDetailPage({ onBack }: DisputeTicketDetailPageProps
                           </label>
                           <button
                             onClick={() => void handleSendReply()}
-                            disabled={!reply.trim() || isSending}
+                            disabled={(!reply.trim() && !replyFile) || isSending}
                             className="shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
                           >
                             {isSending ? 'Sending...' : 'Send reply'}
                           </button>
                         </div>
-                        {replyFile && <p className="text-xs text-gray-500">Attached: {replyFile.name}</p>}
+                        {replyFile && <AttachmentPreview file={replyFile} onRemove={() => setReplyFile(null)} />}
                       </>
                     ) : (
                       <p className="rounded-lg bg-gray-50 px-3 py-2.5 text-xs text-gray-500">

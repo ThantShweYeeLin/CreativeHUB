@@ -2441,10 +2441,11 @@ export class DataService {
   // RPC, not a plain insert, since dispute_evidence's own INSERT policy can
   // never be satisfied by an admin (it only matches the booking's real
   // client_id/freelancer_id).
-  static async adminSendDisputeMessage(bookingId: string, message: string) {
+  static async adminSendDisputeMessage(bookingId: string, message: string, storagePath?: string | null) {
     const { data, error } = await (supabase as any).rpc('admin_send_dispute_message', {
       p_booking_id: bookingId,
       p_message: message,
+      p_storage_path: storagePath || null,
     });
     return { data, error };
   }
@@ -3076,13 +3077,28 @@ export class DataService {
   // dispute had no real platform record to check against. Routes through
   // updateBooking() so the existing 'booking_cancelled' notifications to
   // both parties still fire.
-  static async cancelBooking(bookingId: string, actorId: string, actorRole: 'client' | 'freelancer', reason: string) {
-    const response = await this.updateBooking(bookingId, {
+  static async cancelBooking(
+    bookingId: string,
+    actorId: string,
+    actorRole: 'client' | 'freelancer',
+    reason: string,
+    options?: { refundDeposit?: boolean }
+  ) {
+    const updates: Record<string, any> = {
       status: 'cancelled',
       cancelled_by: actorId,
       cancelled_at: new Date().toISOString(),
       cancellation_reason: reason,
-    } as any);
+    };
+    // Routed through updateBooking() (not a separate write) so its existing
+    // payment_status-transition notification ("Your deposit for '...' has
+    // been refunded.") fires the same way a dispute refund does — one
+    // update, both the cancellation and the refund notifications.
+    if (options?.refundDeposit) {
+      updates.payment_status = 'refunded';
+    }
+
+    const response = await this.updateBooking(bookingId, updates as any);
 
     if (!response.error && response.data) {
       await (supabase as any).from('booking_events').insert({

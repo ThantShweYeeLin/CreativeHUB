@@ -3,6 +3,7 @@ import { Paperclip, Send } from 'lucide-react';
 import { DataService } from '../../lib/dataService';
 import { FeedService } from '../../lib/feedService';
 import { Avatar } from '../common/Avatar';
+import { AttachmentPreview } from '../../app/components/common/AttachmentPreview';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 
 interface TicketMessage {
@@ -133,7 +134,8 @@ export function TicketThread({
   }, [messages.length, isLoading, attachmentUrls, originalScreenshotUrl]);
 
   const handleSend = async () => {
-    if (!reply.trim() || isSending) return;
+    // A photo on its own is a complete message — no caption required.
+    if ((!reply.trim() && !replyFile) || isSending) return;
     setIsSending(true);
     setError(null);
 
@@ -225,13 +227,13 @@ export function TicketThread({
             </label>
             <button
               onClick={() => void handleSend()}
-              disabled={!reply.trim() || isSending}
+              disabled={(!reply.trim() && !replyFile) || isSending}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </button>
           </div>
-          {replyFile && <p className="text-xs text-gray-500">Attached: {replyFile.name}</p>}
+          {replyFile && <AttachmentPreview file={replyFile} onRemove={() => setReplyFile(null)} />}
         </>
       )}
     </div>
@@ -263,9 +265,9 @@ function ThreadBubble({
             isSelf ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
           }`}
         >
-          <p className="whitespace-pre-wrap">{message}</p>
+          {message && <p className="whitespace-pre-wrap">{message}</p>}
           {attachmentUrl && (
-            <a href={attachmentUrl} target="_blank" rel="noreferrer" className="mt-2 block">
+            <a href={attachmentUrl} target="_blank" rel="noreferrer" className={message ? 'mt-2 block' : 'block'}>
               <img src={attachmentUrl} alt="Attachment" className="max-h-40 rounded-lg object-cover" />
             </a>
           )}
