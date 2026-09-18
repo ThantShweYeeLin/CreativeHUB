@@ -511,19 +511,17 @@ export function ExplorePage() {
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  // Which of the two search inputs (the full-size one further down the
-  // page, or the condensed one in the header once scrolled past it) the
-  // suggestions dropdown belongs to right now - both are bound to the same
-  // searchQuery/suggestions state, but each needs its OWN dropdown
-  // anchored to itself. Without this, typing in the header's input opened
-  // the dropdown down at the (by-then off-screen) full-size input instead,
-  // since showSuggestions was a single shared flag with only one place to
-  // render it.
-  const [activeSearchInput, setActiveSearchInput] = useState<'main' | 'header' | null>(null);
+  // There used to be a second, condensed search input living in the
+  // header once scrolled past this section, bound to the same
+  // searchQuery/suggestions state as this one but needing its own
+  // dropdown anchored to itself - hence tracking which of the two was
+  // active. Both the desktop and mobile condensed versions are now just
+  // icon buttons that jump back to this one (see scrollToMainSearch),
+  // so there's only ever this single input/dropdown pair, but the flag
+  // stays in case a second one ever comes back.
+  const [activeSearchInput, setActiveSearchInput] = useState<'main' | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const suggestionsRef = useRef<HTMLDivElement | null>(null);
-  const headerInputRef = useRef<HTMLInputElement | null>(null);
-  const headerSuggestionsRef = useRef<HTMLDivElement | null>(null);
   const searchSectionRef = useRef<HTMLDivElement | null>(null);
   const [isPastSearchSection, setIsPastSearchSection] = useState(false);
   const hasRestoredScrollRef = useRef(false);
@@ -878,20 +876,18 @@ export function ExplorePage() {
     };
   }, [searchQuery]);
 
-  // Click outside to close suggestions - "outside" means outside whichever
-  // input/dropdown pair is actually showing right now, not both pairs at
-  // once (the other pair isn't rendered/visible, so its refs are null and
-  // would otherwise always count as "outside").
+  // Click outside the main search input/suggestions dropdown to close it.
+  // The condensed header search (both the desktop and mobile versions) is
+  // now just an icon button that jumps back to this one, so there's only
+  // ever this single input/dropdown pair to worry about.
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node;
-      const currentInputRef = activeSearchInput === 'header' ? headerInputRef : inputRef;
-      const currentSuggestionsRef = activeSearchInput === 'header' ? headerSuggestionsRef : suggestionsRef;
       if (
-        currentSuggestionsRef.current &&
-        currentInputRef.current &&
-        !currentSuggestionsRef.current.contains(target) &&
-        !currentInputRef.current.contains(target)
+        suggestionsRef.current &&
+        inputRef.current &&
+        !suggestionsRef.current.contains(target) &&
+        !inputRef.current.contains(target)
       ) {
         setShowSuggestions(false);
       }
@@ -899,7 +895,7 @@ export function ExplorePage() {
 
     document.addEventListener('click', onDocClick);
     return () => document.removeEventListener('click', onDocClick);
-  }, [activeSearchInput]);
+  }, []);
 
   // Freelancers whose category isn't one of the five supported labels
   // (legacy data, or a profile mid-way through picking a valid category)
@@ -1160,41 +1156,31 @@ export function ExplorePage() {
   // breakpoint, since this slot's actual width depends on the logo/nav/
   // account controls around it, not on how wide the window is.
   const condensedVisibilityClass = isPastSearchSection ? '' : 'invisible';
+  // Jumps back up to the main search bar and focuses it - shared by the
+  // desktop condensed icon below and mobileSearch's mobile version, so
+  // scrolling past the hero never leaves a second, separate search input
+  // anywhere, just one way back to the one real search field.
+  const scrollToMainSearch = () => {
+    searchSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Focused after the smooth scroll has had time to land, not
+    // immediately — focusing the main input while it's still off past the
+    // top of the viewport would fight that animation with the browser's
+    // own "scroll the focused element into view" behavior.
+    window.setTimeout(() => inputRef.current?.focus(), 450);
+  };
   useHeaderExtras({
     search: (
-      <div className={`relative w-36 sm:w-48 lg:w-64 ${condensedVisibilityClass}`}>
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-sky-400" />
-        <input
-          type="text"
-          ref={headerInputRef}
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          onFocus={() => {
-            setActiveSearchInput('header');
-            setShowSuggestions(suggestions.length > 0);
-          }}
-          // Results already filter live as you type (searchQuery drives
-          // filteredProfiles below) - Enter has nothing left to submit, so
-          // this only exists to swallow the keypress itself. Without it the
-          // browser has no <form> to submit either, but stopping it here
-          // means nothing default can ever kick in, on any browser.
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.preventDefault();
-            }
-          }}
-          placeholder="Search freelancers..."
+      <div className={condensedVisibilityClass}>
+        <button
+          type="button"
+          onClick={scrollToMainSearch}
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="w-full rounded-full border border-sky-100 bg-white/80 py-2 pl-9 pr-3 text-sm focus:border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-200"
-        />
-        {showSuggestions && activeSearchInput === 'header' && suggestions.length > 0 && (
-          <div
-            ref={headerSuggestionsRef}
-            className="absolute left-0 right-0 mt-2 max-h-80 overflow-y-auto bg-white/95 backdrop-blur-xl border border-sky-100 rounded-2xl shadow-[0_12px_40px_rgba(56,189,248,0.2)] z-50"
-          >
-            {suggestions.map((s, idx) => renderSearchSuggestion(s, idx))}
-          </div>
-        )}
+          aria-label="Search freelancers"
+          title="Search freelancers"
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 shadow-sm transition-colors hover:bg-sky-50"
+        >
+          <Search className="h-5 w-5" />
+        </button>
       </div>
     ),
     // A previous version scaled this gap up at wider breakpoints (up to
@@ -1287,26 +1273,19 @@ export function ExplorePage() {
     mobileSearch: (
       <div
         className={`overflow-hidden transition-[max-height,opacity] duration-150 ${
-          isPastSearchSection ? 'max-h-14 border-t border-sky-100 py-2 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
+          isPastSearchSection ? 'max-h-16 border-t border-sky-100 py-2 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
         }`}
       >
         <div className="px-4">
           <button
             type="button"
             tabIndex={isPastSearchSection ? 0 : -1}
-            onClick={() => {
-              searchSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              // Focused after the smooth scroll has had time to land, not
-              // immediately — focusing the main input while it's still off
-              // past the top of the viewport would fight that animation
-              // with the browser's own "scroll the focused element into
-              // view" behavior.
-              window.setTimeout(() => inputRef.current?.focus(), 450);
-            }}
+            onClick={scrollToMainSearch}
             aria-label="Search freelancers"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 shadow-sm transition-colors hover:bg-sky-50"
+            title="Search freelancers"
+            className="flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 shadow-sm transition-colors hover:bg-sky-50"
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-5 w-5" />
           </button>
         </div>
       </div>
