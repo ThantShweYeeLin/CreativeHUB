@@ -1,4 +1,4 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket, Crown } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
@@ -10,14 +10,14 @@ interface UserMenuProps {
 
 export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onGoToLogin }: UserMenuProps) {
   const menuItems = [
-    { id: 'bookings' as const, label: 'My Booked List', icon: Package },
-    { id: 'requests' as const, label: 'My Requests', icon: Send },
-    { id: 'groupRequest' as const, label: 'Group Request', icon: Users },
-    { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
-    { id: 'favorites' as const, label: 'Favorites', icon: Heart },
-    { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark },
-    { id: 'tickets' as const, label: 'Create a Ticket', icon: Ticket },
-    { id: 'settings' as const, label: 'Settings', icon: Settings },
+    { id: 'bookings' as const, label: 'My Booked List', icon: Package, premium: false },
+    { id: 'requests' as const, label: 'My Requests', icon: Send, premium: false },
+    { id: 'groupRequest' as const, label: 'Group Request', icon: Users, premium: true },
+    { id: 'messages' as const, label: 'Messages', icon: MessageCircle, premium: false },
+    { id: 'favorites' as const, label: 'Favorites', icon: Heart, premium: false },
+    { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark, premium: false },
+    { id: 'tickets' as const, label: 'Create a Ticket', icon: Ticket, premium: false },
+    { id: 'settings' as const, label: 'Settings', icon: Settings, premium: false },
   ] as const;
 
   type MenuItemId = UserMenuProps['onSelectItem'] extends (item: infer T) => any ? T : never;
@@ -52,8 +52,13 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-colors group-hover:bg-gradient-to-br group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="font-medium text-gray-800 transition-colors group-hover:text-gray-900">
+                <span className="flex flex-1 items-center gap-1.5 font-medium text-gray-800 transition-colors group-hover:text-gray-900">
                   {item.label}
+                  {item.premium && (
+                    <span className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      <Crown className="h-2.5 w-2.5" /> Premium
+                    </span>
+                  )}
                 </span>
               </button>
             );

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart, Crown } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { DataService, type ExploreHeroData, type AuthShowcaseSpotlight } from '../../lib/dataService';
@@ -1213,12 +1213,13 @@ export function ExplorePage() {
         <button
           type="button"
           onClick={() => navigate('/event-matcher')}
-          title="Event Assistant"
+          title="Event Assistant — Premium feature"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105 @sm:px-3"
+          className="relative flex flex-shrink-0 items-center gap-1.5 rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 px-2.5 py-2 text-xs font-semibold text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105 @sm:px-3"
         >
           <Sparkles className="h-4 w-4" />
           <span className="hidden @sm:inline">Event Assistant</span>
+          <Crown className="absolute -right-1.5 -top-1.5 h-4 w-4 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-0.5 text-white shadow-sm" />
         </button>
       </div>
     ),
@@ -1246,12 +1247,13 @@ export function ExplorePage() {
         <button
           type="button"
           onClick={() => navigate('/event-matcher')}
-          title="Event Assistant"
-          aria-label="Event Assistant"
+          title="Event Assistant — Premium feature"
+          aria-label="Event Assistant — Premium feature"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105"
+          className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105"
         >
           <Sparkles className="h-4 w-4" />
+          <Crown className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-0.5 text-white shadow-sm" />
         </button>
       </div>
     ),
@@ -1631,13 +1633,18 @@ export function ExplorePage() {
           <button
             type="button"
             onClick={() => navigate('/event-matcher')}
-            className="flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
+            className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-cyan-400 to-indigo-500 shadow-lg shadow-cyan-500/40 rounded-xl flex items-center justify-center group-hover:scale-110 group-hover:rotate-6 transition-transform">
               <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div className="text-left">
-              <div className="font-semibold text-sm md:text-base text-gray-900">Event Assistant</div>
+              <div className="flex items-center gap-1.5 font-semibold text-sm md:text-base text-gray-900">
+                Event Assistant
+                <span className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  <Crown className="h-2.5 w-2.5" /> Premium
+                </span>
+              </div>
               <div className="text-xs text-gray-500 hidden md:block">Plan your event, get matched</div>
             </div>
           </button>

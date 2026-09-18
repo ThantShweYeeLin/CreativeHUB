@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } 
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
+import { PremiumGate } from '../components/PremiumGate';
 import { AdminRoute } from '../components/AdminRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
@@ -322,7 +323,12 @@ export default function App() {
             path="/group-request"
             element={
               <ProtectedRoute>
-                <GroupRequestPage onBack={() => navigate(-1)} />
+                <PremiumGate
+                  featureName="Group Request"
+                  featureDescription="Book multiple freelancers together for one event with a single coordinated request."
+                >
+                  <GroupRequestPage onBack={() => navigate(-1)} />
+                </PremiumGate>
               </ProtectedRoute>
             }
           />
@@ -330,7 +336,12 @@ export default function App() {
             path="/event-matcher"
             element={
               <ProtectedRoute>
-                <EventMatcherPage onBack={() => navigate(-1)} />
+                <PremiumGate
+                  featureName="Event Assistant"
+                  featureDescription="Describe your event and let CreativeHUB match you with the right freelancers automatically."
+                >
+                  <EventMatcherPage onBack={() => navigate(-1)} />
+                </PremiumGate>
               </ProtectedRoute>
             }
           />

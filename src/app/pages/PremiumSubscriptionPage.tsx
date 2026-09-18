@@ -1,7 +1,9 @@
-import { ChevronLeft, Shield, Clock, Award, RefreshCw, FileText, Headphones, Tag, Star, Check, X, Sparkles, Crown } from 'lucide-react';
+import { ChevronLeft, Shield, Clock, Award, RefreshCw, FileText, Headphones, Tag, Star, Check, X, Sparkles, Crown, Users } from 'lucide-react';
 import { useState } from 'react';
+import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { DataService } from '../../lib/dataService';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 
 interface PremiumSubscriptionPageProps {
@@ -50,17 +52,49 @@ const premiumFeatures = [
     title: 'Priority Booking',
     description: 'Get first access to book in-demand freelancers before anyone else.',
     premium: true
+  },
+  {
+    icon: Users,
+    title: 'Group Request',
+    description: 'Book multiple freelancers together for one event with a single coordinated request.',
+    premium: true
+  },
+  {
+    icon: Sparkles,
+    title: 'Event Assistant',
+    description: 'Describe your event and let CreativeHUB match you with the right freelancers automatically.',
+    premium: true
   }
 ];
 
 export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps) {
+  const { user } = useAuth();
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
   const { currency: preferredCurrency } = useCurrency();
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const annualPrice = formatCurrencyAmount(convertAmount(999, 'THB', viewerCurrency), viewerCurrency);
   const monthlyPrice = formatCurrencyAmount(convertAmount(99, 'THB', viewerCurrency), viewerCurrency);
   const monthlyFromAnnual = formatCurrencyAmount(convertAmount(83, 'THB', viewerCurrency), viewerCurrency);
   const annualSavings = formatCurrencyAmount(convertAmount(189, 'THB', viewerCurrency), viewerCurrency);
+
+  // Simulated, like the rest of this app's payment flows — just flips
+  // is_premium, no real payment processor. Full reload afterwards (same
+  // convention as onboarding_completed elsewhere) so AuthContext re-reads
+  // the fresh flag and the Group Request / Event Assistant paywalls unlock.
+  const handleUpgrade = async () => {
+    if (!user?.id || isUpgrading) return;
+    setIsUpgrading(true);
+    setUpgradeError(null);
+    const { error } = await DataService.upgradeToPremium(user.id);
+    if (error) {
+      setUpgradeError((error as any).message || 'Unable to upgrade right now. Please try again.');
+      setIsUpgrading(false);
+      return;
+    }
+    window.location.href = '/premium';
+  };
 
   return (
     <div className="relative min-h-screen pb-20">
@@ -300,13 +334,29 @@ export function PremiumSubscriptionPage({ onBack }: PremiumSubscriptionPageProps
         </div>
 
         {/* CTA Button */}
-        <button className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
-          <Crown className="w-6 h-6" />
-          Upgrade to Premium
-          <span className="text-sm font-normal">
-            {selectedPlan === 'annual' ? `${annualPrice}/year` : `${monthlyPrice}/month`}
-          </span>
-        </button>
+        {user?.isPremium ? (
+          <div className="w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white py-5 rounded-2xl font-bold text-lg shadow-md shadow-amber-500/30 flex items-center justify-center gap-2">
+            <Crown className="w-6 h-6" />
+            You're a Premium Member
+          </div>
+        ) : (
+          <>
+            {upgradeError && (
+              <p className="mb-3 text-center text-sm text-red-600">{upgradeError}</p>
+            )}
+            <button
+              onClick={handleUpgrade}
+              disabled={isUpgrading}
+              className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-5 rounded-2xl font-bold text-lg shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:hover:scale-100"
+            >
+              <Crown className="w-6 h-6" />
+              {isUpgrading ? 'Upgrading...' : 'Upgrade to Premium'}
+              <span className="text-sm font-normal">
+                {selectedPlan === 'annual' ? `${annualPrice}/year` : `${monthlyPrice}/month`}
+              </span>
+            </button>
+          </>
+        )}
 
         {/* Footer Note */}
         <p className="text-center text-xs text-gray-500 mt-6 leading-relaxed">

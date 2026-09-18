@@ -1173,6 +1173,20 @@ export class DataService {
     return { data, error };
   }
 
+  // Simulated, like the rest of this app's payment flows (see
+  // FreelancerDashboard's "Simulated earnings" note) — just flips the flag,
+  // no real payment processor involved. Gates Group Request and Event
+  // Assistant (see PremiumGate.tsx).
+  static async upgradeToPremium(userId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_premium: true, premium_since: new Date().toISOString() } as any)
+      .eq('id', userId)
+      .select()
+      .single();
+    return { data, error };
+  }
+
   static async uploadUserProfileImage(userId: string, file: File, imageType: 'avatar' | 'cover') {
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${userId}/${imageType}-${Date.now()}.${fileExt}`;
