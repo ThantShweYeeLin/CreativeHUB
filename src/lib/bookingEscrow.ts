@@ -2,6 +2,40 @@ export const DEPOSIT_DEADLINE_HOURS = 24;
 export const CLIENT_RESPONSE_DAYS = 7;
 export const DISPUTE_RESPONSE_HOURS = 72;
 
+// The platform's cut of the released deposit — taken out of the freelancer's
+// share, not added on top of what the client paid. Fixed platform-wide for
+// now (see AdminEarningsPage.tsx and FreelancerDashboard.tsx's earnings tab,
+// the two places this actually gets shown).
+export const COMMISSION_PERCENTAGE = 0.1;
+
+// Fallback for bookings written before deposit_amount was persisted, same
+// rate/reasoning as acceptRequest.ts's own DEPOSIT_PERCENTAGE constant —
+// kept independent of it deliberately (see that file's comment).
+const LEGACY_DEPOSIT_PERCENTAGE = 0.3;
+
+export interface BookingEarningsBreakdown {
+  /** The deposit amount released, before the platform's commission. */
+  depositAmount: number;
+  /** The platform's cut, already included in depositAmount (not additional). */
+  commissionAmount: number;
+  /** What the freelancer actually receives: depositAmount - commissionAmount. */
+  netAmount: number;
+}
+
+/**
+ * Only meaningful once the deposit has actually been released to the
+ * freelancer (payment_status 'paid' -> getBookingEscrowState === 'released')
+ * — a still-escrowed or refunded deposit hasn't generated any commission.
+ */
+export function getBookingEarningsBreakdown(booking: any): BookingEarningsBreakdown {
+  const depositAmount = booking?.deposit_amount != null
+    ? Number(booking.deposit_amount)
+    : Math.round(Number(booking?.budget || 0) * LEGACY_DEPOSIT_PERCENTAGE);
+  const commissionAmount = Math.round(depositAmount * COMMISSION_PERCENTAGE);
+  const netAmount = depositAmount - commissionAmount;
+  return { depositAmount, commissionAmount, netAmount };
+}
+
 export type EscrowState =
   | 'awaiting_deposit'
   | 'deposit_secured'

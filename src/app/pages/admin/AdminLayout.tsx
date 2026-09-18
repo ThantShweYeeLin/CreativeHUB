@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router';
 import {
   ChevronLeft,
   ChevronRight,
+  DollarSign,
   Flag,
   LayoutDashboard,
   ListChecks,
@@ -18,7 +19,7 @@ import { Avatar } from '../../../components/common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
 import { PageBackdrop } from '../../../components/common/PageBackdrop';
 
-export type AdminSection = 'overview' | 'users' | 'bookings' | 'disputes' | 'attendance' | 'reports' | 'audit-logs';
+export type AdminSection = 'overview' | 'users' | 'bookings' | 'earnings' | 'disputes' | 'attendance' | 'reports' | 'audit-logs';
 
 export interface AdminBreadcrumbItem {
   label: string;
@@ -39,6 +40,7 @@ const NAV_GROUPS: Array<{ label: string | null; items: NavItem[] }> = [
     items: [
       { id: 'users', label: 'Users', path: '/admin/users', icon: UsersIcon },
       { id: 'bookings', label: 'Bookings', path: '/admin/bookings', icon: CalendarClock },
+      { id: 'earnings', label: 'Earnings', path: '/admin/earnings', icon: DollarSign },
     ],
   },
   {

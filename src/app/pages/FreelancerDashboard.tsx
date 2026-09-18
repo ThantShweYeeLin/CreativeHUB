@@ -12,6 +12,7 @@ import {
   Edit,
   Layers,
   MapPin,
+  Percent,
   Plus,
   Settings,
   Star,
@@ -33,7 +34,7 @@ import { extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib
 import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedule';
 import { extractLocationMeta } from '../../lib/requestLocation';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
-import { getBookingEscrowState, formatCountdown } from '../../lib/bookingEscrow';
+import { getBookingEscrowState, formatCountdown, getBookingEarningsBreakdown } from '../../lib/bookingEscrow';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
 import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
@@ -328,9 +329,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   }, [bookings, earningsMonthFilter]);
 
   const earningsStats = useMemo(() => {
-    const totalEarned = monthFilteredBookings
-      .filter((booking) => booking.payment_status === 'paid')
-      .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
+    const paidBookings = monthFilteredBookings.filter((booking) => booking.payment_status === 'paid');
+    // "Total earned" is what actually lands in the freelancer's pocket —
+    // the released deposit minus the platform's commission, not the full
+    // project budget (most of which settles directly between client and
+    // freelancer, outside escrow; see bookingEscrow.ts).
+    const totalEarned = paidBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).netAmount, 0);
+    const totalCommission = paidBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).commissionAmount, 0);
     const pendingInEscrow = monthFilteredBookings
       .filter((booking) => booking.payment_status === 'deposit_paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
@@ -338,9 +343,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     const bookingCount = monthFilteredBookings.filter(
       (booking) => getBookingEscrowState(booking) !== 'annulled' && booking.payment_status !== 'paid'
     ).length;
-    const completedProjectCount = monthFilteredBookings.filter((booking) => booking.payment_status === 'paid').length;
+    const completedProjectCount = paidBookings.length;
 
-    return { totalEarned, pendingInEscrow, bookingCount, completedProjectCount };
+    return { totalEarned, totalCommission, pendingInEscrow, bookingCount, completedProjectCount };
   }, [monthFilteredBookings]);
 
   const handleRequestDecision = async (requestId: string, status: 'accepted' | 'rejected') => {
@@ -1298,12 +1303,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
               {[
                 {
-                  label: 'Total earned',
+                  label: 'Total earned (after commission)',
                   value: formatCurrencyAmount(
                     convertAmount(earningsStats.totalEarned, 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')),
                     normalizeCurrencyCode(preferredCurrency, 'THB')
                   ),
                   icon: DollarSign,
+                },
+                {
+                  label: 'Platform commission paid',
+                  value: formatCurrencyAmount(
+                    convertAmount(earningsStats.totalCommission, 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')),
+                    normalizeCurrencyCode(preferredCurrency, 'THB')
+                  ),
+                  icon: Percent,
                 },
                 {
                   label: 'Pending / in escrow',
@@ -1357,6 +1370,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                             normalizeCurrencyCode(preferredCurrency, 'THB')
                           )}
                         </p>
+                        {/* Only once the deposit is actually released does a
+                            commission apply — before that there's nothing
+                            to break down yet (see getBookingEarningsBreakdown). */}
+                        {booking.payment_status === 'paid' && (() => {
+                          const currency = normalizeCurrencyCode(preferredCurrency, 'THB');
+                          const { depositAmount, commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
+                          const fmt = (amount: number) => formatCurrencyAmount(convertAmount(amount, 'THB', currency), currency);
+                          return (
+                            <p className="mt-0.5 text-xs text-gray-400">
+                              Deposit {fmt(depositAmount)} − commission {fmt(commissionAmount)} = you received{' '}
+                              <span className="font-semibold text-gray-600">{fmt(netAmount)}</span>
+                            </p>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-center gap-3">
                         {isDisputed ? (
