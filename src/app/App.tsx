@@ -37,6 +37,7 @@ const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDas
 const PremiumSubscriptionPage = lazy(() => import('./pages/PremiumSubscriptionPage').then((m) => ({ default: m.PremiumSubscriptionPage })));
 const MyTicketsPage = lazy(() => import('./pages/MyTicketsPage').then((m) => ({ default: m.MyTicketsPage })));
 const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then((m) => ({ default: m.TicketDetailPage })));
+const DisputeTicketDetailPage = lazy(() => import('./pages/DisputeTicketDetailPage').then((m) => ({ default: m.DisputeTicketDetailPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const BookingTrackingClientPage = lazy(() => import('./pages/BookingTrackingClientPage').then((m) => ({ default: m.BookingTrackingClientPage })));
 const BookingTrackingFreelancerPage = lazy(() => import('./pages/BookingTrackingFreelancerPage').then((m) => ({ default: m.BookingTrackingFreelancerPage })));
@@ -343,6 +344,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <TicketDetailPage onBack={() => navigate('/tickets')} />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/tickets/dispute/:id"
+            element={
+              <ProtectedRoute>
+                <DisputeTicketDetailPage onBack={() => navigate('/tickets')} />
               </ProtectedRoute>
             }
           />

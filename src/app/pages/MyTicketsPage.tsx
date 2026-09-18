@@ -6,6 +6,13 @@ import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import {
+  CLIENT_DISPUTE_STATUS_COLOR,
+  CLIENT_DISPUTE_STATUS_LABEL,
+  CLIENT_DISPUTE_STATUS_MESSAGE,
+  DISPUTE_CATEGORY_LABEL,
+  type DisputeStatus,
+} from '../../lib/disputeCategories';
+import {
   CLIENT_TICKET_STATUS_LABEL,
   CLIENT_TICKET_STATUS_MESSAGE,
   isValidBookingId,
@@ -19,20 +26,6 @@ import {
 interface MyTicketsPageProps {
   onBack: () => void;
 }
-
-// Booking disputes use their own status column (bookings.dispute_status),
-// separate from support_tickets.status — this is display-only, just for
-// the merged list below, and never written back anywhere.
-const DISPUTE_STATUS_LABEL: Record<string, string> = {
-  open: 'Open',
-  under_admin_review: 'Under review',
-  resolved: 'Resolved',
-};
-const DISPUTE_STATUS_COLOR: Record<string, string> = {
-  open: 'bg-amber-100 text-amber-700',
-  under_admin_review: 'bg-blue-100 text-blue-700',
-  resolved: 'bg-green-100 text-green-700',
-};
 
 export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
   const navigate = useNavigate();
@@ -261,25 +254,44 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
                 }
 
                 const d = item.data;
-                const isClient = String(d.client_id) === String(user?.id);
-                const basePath = isClient ? `/booking/${d.id}` : `/freelancer-booking/${d.id}`;
+                const disputeStatus = d.dispute_status as DisputeStatus;
+                const updatedAt = d.last_activity_at || d.created_at;
                 return (
                   <button
                     key={`dispute-${d.id}`}
-                    onClick={() => navigate(`${basePath}#${isClient ? 'report-a-problem-button' : 'attendance-check'}`)}
+                    onClick={() => navigate(`/tickets/dispute/${d.id}`)}
                     className="w-full rounded-2xl border border-sky-100 bg-white p-4 text-left shadow-[0_8px_30px_rgba(56,189,248,0.15)] hover:bg-sky-50 transition-all"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-bold text-gray-900">
-                        <AlertTriangle className="mr-1.5 inline-block h-4 w-4 text-amber-500 align-text-bottom" />
-                        Dispute — {d.project_name || 'Booking'}
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                        Ticket #D-{d.id.slice(0, 8).toUpperCase()}
                       </p>
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${DISPUTE_STATUS_COLOR[d.dispute_status] || ''}`}>
-                        {DISPUTE_STATUS_LABEL[d.dispute_status] || d.dispute_status}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-semibold text-sky-700">
+                          <AlertTriangle className="h-3 w-3" />
+                          Booking dispute
+                        </span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${CLIENT_DISPUTE_STATUS_COLOR[disputeStatus] || ''}`}>
+                          {CLIENT_DISPUTE_STATUS_LABEL[disputeStatus] || d.dispute_status}
+                        </span>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600">Reported on this booking — tracked on its booking page, not as a separate ticket.</p>
-                    <p className="mt-1 text-xs text-gray-500">{new Date(d.created_at).toLocaleString()}</p>
+                    <p className="mt-1 text-base font-bold text-gray-900">
+                      Booking #{d.id.slice(0, 8).toUpperCase()}
+                      {d.dispute_category ? ` — ${DISPUTE_CATEGORY_LABEL[d.dispute_category] || d.dispute_category}` : ''}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      Reported {new Date(d.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {' · '}
+                      Updated {formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}
+                    </p>
+                    {CLIENT_DISPUTE_STATUS_MESSAGE[disputeStatus] && (
+                      <p className="mt-2 text-sm font-medium text-gray-700">{CLIENT_DISPUTE_STATUS_MESSAGE[disputeStatus]}</p>
+                    )}
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-sky-600">
+                      View ticket
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </span>
                   </button>
                 );
               })}

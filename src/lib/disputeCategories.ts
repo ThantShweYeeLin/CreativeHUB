@@ -147,6 +147,42 @@ export function getReportProblemCategories(role: 'client' | 'freelancer'): Repor
   return role === 'freelancer' ? REPORT_PROBLEM_CATEGORIES_FREELANCER : REPORT_PROBLEM_CATEGORIES;
 }
 
+// Client-facing status wording for the "Booking dispute" entries shown in
+// My Tickets / the dispute ticket-style detail view — mirrors
+// CLIENT_TICKET_STATUS_LABEL/_MESSAGE/_DETAIL in supportTickets.ts, but for
+// bookings.dispute_status instead of support_tickets.status. 'open' is a
+// legacy value no longer written by openBookingDispute (disputes now go
+// straight to 'under_admin_review' on filing) but kept here so any old
+// disputed booking still shows a real label instead of the raw DB value.
+export type DisputeStatus = 'open' | 'under_admin_review' | 'resolved';
+
+export const CLIENT_DISPUTE_STATUS_LABEL: Record<DisputeStatus, string> = {
+  open: 'Under review',
+  under_admin_review: 'Under review',
+  resolved: 'Resolved',
+};
+
+export const CLIENT_DISPUTE_STATUS_COLOR: Record<DisputeStatus, string> = {
+  open: 'bg-amber-100 text-amber-700',
+  under_admin_review: 'bg-amber-100 text-amber-700',
+  resolved: 'bg-green-100 text-green-700',
+};
+
+// Short one-line status preview, shown on the My Tickets card.
+export const CLIENT_DISPUTE_STATUS_MESSAGE: Record<DisputeStatus, string> = {
+  open: 'Your dispute is being reviewed by CreativeHUB Admin. You will be notified when there is an update.',
+  under_admin_review: 'Your dispute is being reviewed by CreativeHUB Admin. You will be notified when there is an update.',
+  resolved: 'CreativeHUB Admin has made a final decision on this dispute.',
+};
+
+// Longer explanation shown in the "Current status" card on the dispute's
+// ticket-style detail page.
+export const CLIENT_DISPUTE_STATUS_DETAIL: Record<DisputeStatus, string> = {
+  open: 'CreativeHUB support is reviewing the evidence and platform records for this dispute. You can add more information below if needed.',
+  under_admin_review: 'CreativeHUB support is reviewing the evidence and platform records for this dispute. You can add more information below if needed.',
+  resolved: 'This dispute has been resolved. See the decision below for the outcome, including what happened to the deposit.',
+};
+
 export const DISPUTE_CATEGORY_LABEL: Record<string, string> = {
   no_show: "Freelancer didn't show up",
   late_arrival: 'Freelancer arrived late',

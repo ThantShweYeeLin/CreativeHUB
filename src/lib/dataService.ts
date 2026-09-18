@@ -2096,14 +2096,48 @@ export class DataService {
   // Tickets to also SHOW the user's own reports there (one place to see
   // every problem they've reported, ticket or dispute) without creating any
   // new row — nothing here writes anything or duplicates the dispute.
+  //
+  // Also attaches `dispute_category` (from the round-1 'complain' event
+  // that opened the dispute — category lives on booking_events, not
+  // bookings) and `last_activity_at` (the latest booking_events timestamp,
+  // same derivation as getUserSupportTickets' last_activity_at) so the My
+  // Tickets card can show a real category and an "Updated ..." timestamp.
   static async getUserDisputedBookings(userId: string) {
-    const { data, error } = await (supabase as any)
+    const { data: bookings, error } = await (supabase as any)
       .from('bookings')
-      .select('id, project_name, dispute_status, client_id, freelancer_id, created_at')
+      .select('id, project_name, dispute_status, dispute_round, client_id, freelancer_id, created_at')
       .or(`client_id.eq.${userId},freelancer_id.eq.${userId}`)
       .neq('dispute_status', 'none')
       .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    if (error || !bookings || bookings.length === 0) {
+      return { data: bookings || [], error };
+    }
+
+    const bookingIds = bookings.map((b: any) => b.id);
+    const { data: events } = await (supabase as any)
+      .from('booking_events')
+      .select('booking_id, action, category, created_at')
+      .in('booking_id', bookingIds)
+      .order('created_at', { ascending: true });
+
+    const initialCategoryByBooking: Record<string, string> = {};
+    const lastActivityByBooking: Record<string, string> = {};
+    for (const event of events || []) {
+      if (event.action === 'complain' && !initialCategoryByBooking[event.booking_id]) {
+        initialCategoryByBooking[event.booking_id] = event.category;
+      }
+      const current = lastActivityByBooking[event.booking_id];
+      if (!current || new Date(event.created_at) > new Date(current)) {
+        lastActivityByBooking[event.booking_id] = event.created_at;
+      }
+    }
+
+    const withDetails = bookings.map((b: any) => {
+      const latestActivity = lastActivityByBooking[b.id];
+      const lastActivityAt = latestActivity && new Date(latestActivity) > new Date(b.created_at) ? latestActivity : b.created_at;
+      return { ...b, dispute_category: initialCategoryByBooking[b.id] || null, last_activity_at: lastActivityAt };
+    });
+    return { data: withDetails, error: null };
   }
 
   static async getAllSupportTicketsForAdmin() {
