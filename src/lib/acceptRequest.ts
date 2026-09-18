@@ -25,20 +25,28 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
   const isAcceptedCounter = request.status === 'countered' && request.counter_date && request.counter_time;
   // A counter offer may have proposed a different date/time — if the offer
   // being accepted is a counter, that takes precedence over the original ask.
+  // counter_time comes back from Postgres's `time` column as "HH:MM:SS", not
+  // the "HH:MM" combineBangkokDateTime below expects — left un-truncated,
+  // "${date}T${time}:00Z" became a malformed, doubled-up seconds string
+  // (e.g. "...T16:00:00:00Z"), producing an Invalid Date whose later
+  // .toISOString() call threw (surfaced in Safari as a bare "Invalid Date"
+  // error), leaving the accept flow stuck with no visible reason why.
   const startDate = isAcceptedCounter ? request.counter_date : scheduleMeta?.date || null;
-  const startTime = isAcceptedCounter ? request.counter_time : scheduleMeta?.time || null;
+  const startTime = isAcceptedCounter ? String(request.counter_time).slice(0, 5) : scheduleMeta?.time || null;
 
   // The original ask's duration (end - start) is what a counter offer's
-  // start_time carries forward — a counter only proposes a new *start*
-  // (see supabase/counter_schedule.sql), not its own end time. Falls back
-  // to the same default session length src/lib/availability.ts assumes
-  // when nothing else is known.
+  // start_time carries forward when the counter didn't propose its own end
+  // time (see supabase/counter_end_time.sql) — falls back to the same
+  // default session length src/lib/availability.ts assumes when nothing
+  // else is known.
   const originalDurationMinutes =
     scheduleMeta?.time && scheduleMeta?.endTime
       ? minutesBetween(scheduleMeta.time, scheduleMeta.endTime)
       : DEFAULT_BOOKING_DURATION_MINUTES;
   const endTime = isAcceptedCounter
-    ? addMinutesToTime(startTime, originalDurationMinutes)
+    ? request.counter_end_time
+      ? String(request.counter_end_time).slice(0, 5)
+      : addMinutesToTime(startTime as string, originalDurationMinutes)
     : scheduleMeta?.endTime || (startTime ? addMinutesToTime(startTime, DEFAULT_BOOKING_DURATION_MINUTES) : null);
 
   const startAt = startDate && startTime ? combineBangkokDateTime(startDate, startTime) : null;

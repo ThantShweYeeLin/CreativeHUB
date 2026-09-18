@@ -60,7 +60,14 @@ export function NegotiationHistoryModal({
     .map((line: string) => line.trim())
     .filter(Boolean);
   const originalSchedule = extractScheduleMeta(request.message, request.description);
-  const currentSchedule = hasCounter && request.counter_date ? { date: request.counter_date, time: (request.counter_time || '00:00').slice(0, 5) } : null;
+  const currentSchedule =
+    hasCounter && request.counter_date
+      ? {
+          date: request.counter_date,
+          time: (request.counter_time || '00:00').slice(0, 5),
+          endTime: request.counter_end_time ? String(request.counter_end_time).slice(0, 5) : undefined,
+        }
+      : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm md:items-center md:p-4">
@@ -151,7 +158,12 @@ export function NegotiationHistoryModal({
                     <p className="text-sm font-semibold text-gray-900">
                       {ACTION_LABEL[offer.action] || offer.action}
                       {offer.price != null && ` — ${formatCurrencyAmount(Number(offer.price), 'THB')}`}
-                      {offer.date && ` · ${formatScheduleMeta({ date: offer.date, time: (offer.time || '00:00').slice(0, 5) })}`}
+                      {offer.date &&
+                        ` · ${formatScheduleMeta({
+                          date: offer.date,
+                          time: (offer.time || '00:00').slice(0, 5),
+                          endTime: offer.end_time ? String(offer.end_time).slice(0, 5) : undefined,
+                        })}`}
                     </p>
                     {(() => {
                       // The very first "request" round's message is the raw

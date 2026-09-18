@@ -5,6 +5,7 @@ import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
+import { FeedService } from '../../lib/feedService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
@@ -70,6 +71,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [counterIncludesInput, setCounterIncludesInput] = useState('');
   const [counterDateInput, setCounterDateInput] = useState('');
   const [counterTimeInput, setCounterTimeInput] = useState('');
+  const [counterEndTimeInput, setCounterEndTimeInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
@@ -150,6 +152,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     };
   }, [user?.id]);
 
+  // Without this, a freelancer's counter offer / accept / reject only ever
+  // showed up here after a manual page reload — the initial load effect
+  // above only ever runs once on mount.
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = FeedService.subscribeToRequests(user.id, () => {
+      void reloadRequests();
+    });
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     const groupRecipientIds = requests.flatMap((request) => request.group_meta?.recipients || []);
     const uniqueRecipientIds = Array.from(new Set(groupRecipientIds.map(String).filter(Boolean)));
@@ -224,6 +241,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         counterRound: Number(request.counter_round || 1),
         counterDate: request.counter_date || null,
         counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
+        counterEndTime: request.counter_end_time ? String(request.counter_end_time).slice(0, 5) : null,
         includes: request.includes || null,
         date: request.created_at,
       })),
@@ -368,9 +386,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
   const getEffectiveSchedule = (normalizedRequest: any) => {
     if (normalizedRequest?.status === 'countered' && normalizedRequest.counterDate) {
-      return { date: normalizedRequest.counterDate, time: normalizedRequest.counterTime || '' };
+      return {
+        date: normalizedRequest.counterDate,
+        time: normalizedRequest.counterTime || '',
+        endTime: normalizedRequest.counterEndTime || '',
+      };
     }
-    return normalizedRequest?.scheduleMeta || { date: '', time: '' };
+    return normalizedRequest?.scheduleMeta || { date: '', time: '', endTime: '' };
   };
 
   // The price a counter offer starts from if the client doesn't touch that
@@ -389,6 +411,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterIncludesInput('');
     setCounterDateInput(schedule.date || '');
     setCounterTimeInput(schedule.time || '');
+    setCounterEndTimeInput(schedule.endTime || '');
   };
 
   const handleSendCounterOffer = async (requestId: string) => {
@@ -412,6 +435,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       return;
     }
 
+    const counterEndTime = counterEndTimeInput || effectiveSchedule.endTime || '';
+    if (counterEndTime && counterEndTime <= counterTime) {
+      setError('End time must be after the start time.');
+      return;
+    }
+
     const rawRequest = requests.find((item) => item.id === requestId);
     const nextRound = Number(rawRequest?.counter_round || 1) + 1;
 
@@ -427,6 +456,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       includes: counterIncludesInput.trim() || null,
       counter_date: counterDate,
       counter_time: counterTime,
+      counter_end_time: counterEndTime || null,
     } as any);
 
     setIsSubmittingCounter(false);
@@ -442,6 +472,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     setCounterIncludesInput('');
     setCounterDateInput('');
     setCounterTimeInput('');
+    setCounterEndTimeInput('');
     await reloadRequests();
   };
 
@@ -502,13 +533,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const handleConfirmedAction = async () => {
     if (!confirmAction) return;
     setIsSubmittingConfirm(true);
-    if (confirmAction.type === 'accept') {
-      await handleAcceptCounter(confirmAction.request);
-    } else {
-      await handleRejectCounter(confirmAction.request.id);
+    // Without this, an unexpected thrown error (as opposed to a returned
+    // { error }) left the dialog stuck on "Please wait..." forever — neither
+    // line below it ever ran, and the user had no way out but a page reload.
+    try {
+      if (confirmAction.type === 'accept') {
+        await handleAcceptCounter(confirmAction.request);
+      } else {
+        await handleRejectCounter(confirmAction.request.id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setIsSubmittingConfirm(false);
+      setConfirmAction(null);
     }
-    setIsSubmittingConfirm(false);
-    setConfirmAction(null);
   };
 
   return (
@@ -730,7 +769,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           {request.counterBy === 'freelancer' ? "Freelancer's counter offer: " : 'Your counter offer: '}
                         </span>
                         {formatCurrencyAmount(request.counterPrice || 0, 'THB')}
-                        {request.counterDate && <> · {formatScheduleMeta({ date: request.counterDate, time: request.counterTime || '00:00' })}</>}
+                        {request.counterDate && (
+                          <>
+                            {' '}
+                            · {formatScheduleMeta({ date: request.counterDate, time: request.counterTime || '00:00', endTime: request.counterEndTime || undefined })}
+                          </>
+                        )}
                         {request.counterMessage && <> — "{request.counterMessage}"</>}
                       </div>
                     )}
@@ -760,7 +804,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             />
                           </div>
                         </div>
-                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
                           <div>
                             <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date (optional — keeps the current date if left blank)</label>
                             <input
@@ -771,11 +815,20 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed time (optional — keeps the current time if left blank)</label>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed start time (optional — keeps the current time if left blank)</label>
                             <input
                               type="time"
                               value={counterTimeInput}
                               onChange={(event) => setCounterTimeInput(event.target.value)}
+                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed end time (optional — keeps the current end time if left blank)</label>
+                            <input
+                              type="time"
+                              value={counterEndTimeInput}
+                              onChange={(event) => setCounterEndTimeInput(event.target.value)}
                               className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                             />
                           </div>

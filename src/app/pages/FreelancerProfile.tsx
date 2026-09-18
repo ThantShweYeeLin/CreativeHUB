@@ -451,14 +451,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     [freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end]
   );
   const isSelectedDateBlocked = formData.scheduleDate ? isDateBlocked(freelancerBlockedDates, formData.scheduleDate) : false;
-  const availableTimeSlots = useMemo(
-    () =>
-      allTimeSlots.map((slot) => ({
+  const availableTimeSlots = useMemo(() => {
+    // A slot list generated purely from working hours has no idea what time
+    // it is "right now" — without this, picking today's date still offered
+    // start times hours in the past. Only applies when the chosen date is
+    // actually today; any other date keeps the full working-hours range.
+    const isToday = formData.scheduleDate === todayDateString;
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    return allTimeSlots
+      .filter((slot) => {
+        if (!isToday) return true;
+        const [hour, minute] = slot.split(':').map(Number);
+        return hour * 60 + minute > currentMinutes;
+      })
+      .map((slot) => ({
         value: slot,
         taken: formData.scheduleDate ? isTimeSlotTaken(freelancerBookings, formData.scheduleDate, slot) : false,
-      })),
-    [allTimeSlots, freelancerBookings, formData.scheduleDate]
-  );
+      }));
+  }, [allTimeSlots, freelancerBookings, formData.scheduleDate, todayDateString]);
   // Bounded by the same working-hours slot list as the start time — an end
   // time must be after the chosen start, within that same range.
   const availableEndTimeSlots = useMemo(
@@ -2257,7 +2269,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-gray-600">
-                    Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours. Times already booked are grayed out.
+                    Available {formatTimeLabel(freelancerProfile?.working_hours_start || '09:00')} – {formatTimeLabel(freelancerProfile?.working_hours_end || '18:00')}, this freelancer's working hours. Times already booked are grayed out, and times already passed today aren't shown.
                   </p>
                 )}
               </div>

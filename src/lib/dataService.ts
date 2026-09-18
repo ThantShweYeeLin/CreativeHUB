@@ -4009,6 +4009,7 @@ export class DataService {
     includes?: string | null;
     date?: string | null;
     time?: string | null;
+    end_time?: string | null;
   }) {
     const { error } = await (supabase as any).from('request_offers').insert(row);
     return { error };
@@ -4111,6 +4112,7 @@ export class DataService {
           includes: null,
           date: scheduleMeta?.date || null,
           time: scheduleMeta?.time || null,
+          end_time: scheduleMeta?.endTime || null,
         });
       }
     }
@@ -5105,6 +5107,7 @@ export class DataService {
           includes: (data as any).includes ?? null,
           date: (data as any).counter_date ?? null,
           time: (data as any).counter_time ?? null,
+          end_time: (data as any).counter_end_time ?? null,
         });
       }
 
