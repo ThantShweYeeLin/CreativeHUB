@@ -2383,6 +2383,20 @@ export class DataService {
     return { data, error };
   }
 
+  // Writes into the same dispute_evidence conversation the client/
+  // freelancer's own replies live in (evidence_type 'message', role
+  // 'admin') - see supabase/dispute_admin_messages.sql. Security-definer
+  // RPC, not a plain insert, since dispute_evidence's own INSERT policy can
+  // never be satisfied by an admin (it only matches the booking's real
+  // client_id/freelancer_id).
+  static async adminSendDisputeMessage(bookingId: string, message: string) {
+    const { data, error } = await (supabase as any).rpc('admin_send_dispute_message', {
+      p_booking_id: bookingId,
+      p_message: message,
+    });
+    return { data, error };
+  }
+
   // PAYMENT METHODS (simulated — only display info is ever stored, never
   // the full card number or CVC)
   static async getPaymentMethods(userId: string) {

@@ -823,6 +823,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                         navigate('/tickets');
                       }
                     }}
+                    onOpenDisputeTicket={(notification) => {
+                      setShowNotifications(false);
+                      if (notification.relatedId) {
+                        navigate(`/tickets/dispute/${notification.relatedId}`);
+                      } else {
+                        navigate('/tickets');
+                      }
+                    }}
                   />
                 )}
               </div>

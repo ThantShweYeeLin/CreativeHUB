@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Ban, CheckCircle } from 'lucide-react';
+import { Ban, CheckCircle, MessageCircle } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
@@ -168,12 +168,30 @@ export function AdminBookingDetail({
   const [isPending, setIsPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const [disputeMessage, setDisputeMessage] = useState('');
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [messageError, setMessageError] = useState<string | null>(null);
+
   const deposit = booking.deposit_amount != null ? Number(booking.deposit_amount) : Math.round(Number(booking.budget || 0) * 0.3);
   const clientClaim = events.find((e) => e.actor === 'client' && e.action === 'complain');
   const freelancerResponse = [...events].reverse().find((e) => e.actor === 'freelancer' && e.action === 'evidence');
   const hasDispute = booking.dispute_status && booking.dispute_status !== 'none';
   const canDecide = showResolutionControls && booking.dispute_status === 'under_admin_review';
   const agreement = booking.confirmed_agreement || null;
+
+  // Message-type dispute_evidence items (client, freelancer, or admin - see
+  // supabase/dispute_admin_messages.sql) are a running conversation, not
+  // per-round structured evidence, so they're kept out of DisputeTimeline
+  // (which groups other evidence with a matching round+role complain/
+  // evidence event) and rendered in their own thread below instead.
+  const timelineEvidence = disputeEvidence.filter((item) => item.evidence_type !== 'message');
+  const conversationItems = disputeEvidence
+    .filter((item) => item.evidence_type === 'message')
+    .slice()
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const senderLabel = (item: any) =>
+    item.role === 'admin' ? 'CreativeHUB Support' : item.role === 'client' ? booking.client?.full_name || 'Client' : booking.freelancer?.full_name || 'Freelancer';
 
   const handleDecision = async (decision: 'refund' | 'release') => {
     setIsPending(true);
@@ -185,6 +203,20 @@ export function AdminBookingDetail({
       return;
     }
     setDecisionReason('');
+    await onResolved();
+  };
+
+  const handleSendMessage = async () => {
+    if (!disputeMessage.trim() || isSendingMessage) return;
+    setIsSendingMessage(true);
+    setMessageError(null);
+    const response = await DataService.adminSendDisputeMessage(booking.id, disputeMessage.trim());
+    setIsSendingMessage(false);
+    if (response.error) {
+      setMessageError((response.error as any).message || 'Unable to send message.');
+      return;
+    }
+    setDisputeMessage('');
     await onResolved();
   };
 
@@ -381,7 +413,52 @@ export function AdminBookingDetail({
           )}
 
           <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Dispute timeline &amp; evidence</p>
-          <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
+          <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={timelineEvidence} />
+
+          <div className="mt-4 border-t border-sky-100 pt-4">
+            <div className="mb-3 flex items-center gap-2 text-gray-900">
+              <MessageCircle className="h-4 w-4" />
+              <p className="text-xs font-semibold uppercase text-gray-500">Message the client &amp; freelancer</p>
+            </div>
+            <div className="mb-3 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
+              {conversationItems.length === 0 ? (
+                <p className="py-2 text-center text-xs text-gray-500">No messages yet.</p>
+              ) : (
+                conversationItems.map((item) => (
+                  <div key={item.id} className={`flex gap-2 ${item.role === 'admin' ? 'flex-row-reverse text-right' : ''}`}>
+                    <div className={`max-w-[80%] ${item.role === 'admin' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                      <span className="text-[11px] font-semibold text-gray-500">{senderLabel(item)}</span>
+                      <div
+                        className={`rounded-2xl px-3 py-2 text-sm ${
+                          item.role === 'admin' ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap">{item.description}</p>
+                      </div>
+                      <span className="text-[10px] text-gray-400">{new Date(item.created_at).toLocaleString()}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {messageError && <p className="mb-2 text-xs font-semibold text-red-600">{messageError}</p>}
+            <div className="flex items-end gap-2">
+              <textarea
+                value={disputeMessage}
+                onChange={(e) => setDisputeMessage(e.target.value)}
+                placeholder="Send a message to both the client and the freelancer…"
+                rows={1}
+                className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+              />
+              <button
+                onClick={() => void handleSendMessage()}
+                disabled={!disputeMessage.trim() || isSendingMessage}
+                className="shrink-0 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
+              >
+                {isSendingMessage ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+          </div>
 
           {canDecide && (
             <div className="mt-4 border-t border-sky-100 pt-4">

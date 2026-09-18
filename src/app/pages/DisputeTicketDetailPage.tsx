@@ -202,11 +202,12 @@ export function DisputeTicketDetailPage({ onBack }: DisputeTicketDetailPageProps
                         <p className="py-2 text-center text-xs text-gray-500">No messages yet.</p>
                       ) : (
                         conversationItems.map((item) => {
-                          const isSelf = item.submitted_by === user.id;
+                          const isSelf = item.role !== 'admin' && item.submitted_by === user.id;
+                          const senderLabel = isSelf ? 'You' : item.role === 'admin' ? 'CreativeHUB Support' : otherPartyLabel;
                           return (
                             <div key={item.id} className={`flex gap-2 ${isSelf ? 'flex-row-reverse text-right' : ''}`}>
                               <div className={`max-w-[80%] ${isSelf ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
-                                <span className="text-[11px] font-semibold text-gray-500">{isSelf ? 'You' : otherPartyLabel}</span>
+                                <span className="text-[11px] font-semibold text-gray-500">{senderLabel}</span>
                                 <div
                                   className={`rounded-2xl px-3 py-2 text-sm ${
                                     isSelf ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
