@@ -7,7 +7,7 @@ const router = Router();
 // Phase A plumbing only — this proves the server<->Omise round-trip works
 // (real Omise charge, real test-mode money movement) before Phase B
 // (premium subscriptions) and Phase C (deposit commission) build on it.
-// Deliberately not auth-gated yet: nothing here is tied to a real user,
+// Behind requireAuth (see routes/index.ts) like every other route, but not yet tied to a real user,
 // booking, or subscription — it only exists to verify the pipe. Both later
 // phases add their own auth (a signed-in user for Premium, the booking's
 // own client for a deposit) once there's something real to attach a charge

@@ -139,11 +139,9 @@ export default function App() {
     <Routes>
       {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      {/* A shared post must open for a logged-out visitor too, so this is
-          unconditional like reset-password above — never nested inside the
-          isAuthenticated/!isAuthenticated blocks below, otherwise the
-          logged-out block's own catch-all (`*` -> /signup) would swallow it. */}
-      <Route path="/post/:postId" element={<PublicPostPage />} />
+      {/* Shared-post links now require a session like every other deep
+          link - a logged-out visitor falls through to the /login redirect. */}
+      {isAuthenticated && <Route path="/post/:postId" element={<PublicPostPage />} />}
       {/* Same reasoning — a prospective signer-upper must be able to read
           these before creating an account, so they can't sit behind the
           logged-out block's own catch-all either. */}
@@ -155,46 +153,14 @@ export default function App() {
           <Route path="/login" element={<LoginPageWithRouting />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/signup" element={<SignUpPageWithRouting />} />
-          {/* Guests can browse these three the same as a signed-in user -
-              MainLayout and each page already null-guard every use of
-              `user`, so no ProtectedRoute wrapper here. Everything else
-              still funnels through the catch-all below. */}
-          <Route path="/explore" element={<MainLayout><ExplorePage /></MainLayout>} />
+          {/* Every other URL (Explore, profiles, bookings, tickets, ... any
+              deep link) needs a session: a logged-out visitor is sent to the
+              sign-in page, remembering where they were headed so logging in
+              lands them back there. */}
           <Route
-            path="/map"
-            element={
-              <MainLayout>
-                <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
-              </MainLayout>
-            }
+            path="*"
+            element={<Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />}
           />
-          <Route
-            path="/for-you"
-            element={
-              <MainLayout>
-                <ForYouPage
-                  onViewProfile={(id) => navigate(`/profile/${id}`)}
-                  onOpenMessages={() => navigate('/login')}
-                />
-              </MainLayout>
-            }
-          />
-          {/* Public profile pages - browsable, but every write action inside
-              them (favorite, follow, message, book, report) is soft-gated
-              via AuthPromptModal rather than hidden or crashing. */}
-          <Route
-            path="/profile/:id"
-            element={
-              <FreelancerProfile
-                onBack={() => navigate(-1)}
-                requestStatus={null}
-                onOpenChat={() => navigate('/login')}
-              />
-            }
-          />
-          <Route path="/team/:id" element={<TeamProfilePage />} />
-          <Route path="/" element={<Navigate to="/explore" replace />} />
-          <Route path="*" element={<Navigate to="/signup" replace />} />
         </>
       )}
 
