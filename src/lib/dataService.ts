@@ -17,7 +17,7 @@ import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerif
 import type { DisputeFlowCategory } from './disputeCategories';
 import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 import { tokenizeCard, type CardDetails } from './omiseClient';
-import type { FreelancerSubscription, GroupApplication, GroupOpportunity, PremiumPlan } from './freelancerPremium';
+import { acceptApplicationErrorMessage, type FreelancerSubscription, type GroupApplication, type GroupOpportunity, type PremiumPlan } from './freelancerPremium';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -4216,6 +4216,30 @@ export class DataService {
       },
     });
     return { data: data as string | null, error };
+  }
+
+  /** Non-null when this request came from an open Group Request application (RLS: only its client / applicant can see the link). */
+  static async getGroupApplicationIdForRequest(requestId: string): Promise<string | null> {
+    const { data } = await (supabase as any)
+      .from('group_opportunity_applications')
+      .select('id')
+      .eq('request_id', requestId)
+      .maybeSingle();
+    return data?.id ?? null;
+  }
+
+  /**
+   * The only way an application becomes a booking: one database transaction
+   * that enforces the role's slot limit, refuses duplicate acceptance and
+   * creates the booking. Nothing is left half-done if any step fails.
+   */
+  static async acceptGroupApplication(requestId: string) {
+    const { data, error } = await (supabase as any).rpc('accept_group_application', { p_request_id: requestId });
+    if (error) {
+      const friendly = acceptApplicationErrorMessage(error.message);
+      return { data: null, error: new Error(friendly || error.message || 'Unable to accept this application.') };
+    }
+    return { data: { id: (data as any).booking_id as string }, error: null };
   }
 
   static async closeGroupOpportunity(opportunityId: string) {

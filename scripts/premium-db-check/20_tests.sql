@@ -144,7 +144,9 @@ select public.ok('client counter-offer notifies the applicant',
 update public.requests set counter_price = 4300 where id = :'req1';
 select public.ok('an unrelated edit does not notify again',
   (select count(*) from public.notifications where user_id = :F1 and type = 'application_update') = 1);
-update public.requests set status = 'accepted' where id = :'req1';
+set role authenticated; select public.as_user(:F1);
+select public.accept_group_application(:'req1') as acc1 \gset
+reset role;
 select public.ok('acceptance notifies the applicant',
   (select count(*) from public.notifications where user_id = :F1 and type = 'application_update' and metadata->>'event' = 'accepted') = 1);
 update public.requests set status = 'accepted', updated_at = now() where id = :'req1';

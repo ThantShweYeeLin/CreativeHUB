@@ -29,8 +29,16 @@ create table public.freelancer_profiles (
 create table public.freelancer_blocked_dates (
   id uuid primary key default gen_random_uuid(), freelancer_id uuid references public.freelancer_profiles(id) on delete cascade, blocked_date date
 );
+create extension if not exists btree_gist;
 create table public.bookings (
-  id uuid primary key default gen_random_uuid(), client_id uuid, freelancer_id uuid, start_date date, status public.booking_status default 'pending'
+  id uuid primary key default gen_random_uuid(), client_id uuid, freelancer_id uuid, start_date date,
+  status public.booking_status default 'pending',
+  project_name text, description text, budget numeric, payment_status text, deliverables text,
+  start_time time, end_time time, start_at timestamptz, end_at timestamptz,
+  deposit_amount numeric, deposit_deadline timestamptz, confirmed_agreement jsonb, group_id text,
+  -- same guard as supabase/booking_overlap_protection.sql
+  constraint bookings_no_overlap exclude using gist (freelancer_id with =, tstzrange(start_at, end_at, '[)') with &&)
+    where (status in ('pending', 'confirmed') and start_at is not null and end_at is not null)
 );
 create table public.requests (
   id uuid primary key default gen_random_uuid(), client_id uuid references public.users(id), freelancer_id uuid references public.users(id),
@@ -38,6 +46,7 @@ create table public.requests (
   counter_price numeric, counter_message text, counter_by text, counter_round int,
   counter_date date, counter_time time, counter_end_time time,
   start_date date, start_time time, end_time time,
+  includes text,
   created_at timestamptz default now(), updated_at timestamptz default now()
 );
 create table public.request_offers (

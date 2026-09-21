@@ -10,4 +10,8 @@ PSQL=(psql -h /tmp -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -d postgres -c "drop database if exists $DB" -c "create database $DB"
 "${PSQL[@]}" -d $DB -f "$HERE/00_stub_schema.sql"
 "${PSQL[@]}" -d $DB -f "$HERE/../../supabase/freelancer_premium.sql"
+"${PSQL[@]}" -d $DB -f "$HERE/../../supabase/premium_hardening.sql"
 "${PSQL[@]}" -d $DB -f "$HERE/20_tests.sql" 2>&1 | grep -E '(NOTICE:  (PASS|FAIL)|ERROR|ALL CHECKS)' | sed -E 's/^psql:[^ ]+ //; s/^NOTICE:  //'
+
+"${PSQL[@]}" -d $DB -f "$HERE/25_accept_tests.sql" 2>&1 | grep -E '(NOTICE:  (PASS|FAIL)|ERROR|ALL CHECKS)' | sed -E 's/^psql:[^ ]+ //; s/^NOTICE:  //'
+bash "$HERE/30_concurrency.sh"

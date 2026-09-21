@@ -2,12 +2,17 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRouter from './routes/index.js';
+import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.use(cors({ origin: true, credentials: true }));
+// Omise signs the exact request bytes, so the webhook gets the RAW body and
+// must be registered before express.json() consumes it. It is deliberately
+// outside requireAuth: Omise has no user session - the signature is the auth.
+app.post('/api/webhooks/omise', express.raw({ type: '*/*', limit: '256kb' }), createOmiseWebhookHandler());
 app.use(express.json());
 app.use('/api', apiRouter);
 

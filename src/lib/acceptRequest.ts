@@ -72,7 +72,16 @@ export async function acceptRequestAndCreateBooking(request: any, overrideBudget
     locked_at: new Date().toISOString(),
   };
 
-  const bookingResponse = await DataService.createBooking({
+  // An application to an open Group Request is accepted by a single database
+  // transaction (slot limit + duplicate guard + booking together) instead of
+  // the create-booking-then-update-status steps below, which can't be made
+  // atomic or race-safe from the browser. It writes the same agreement, price,
+  // schedule and deposit fields; the follow-up steps here (conversation,
+  // deposit reminder) are unchanged.
+  const applicationId = await DataService.getGroupApplicationIdForRequest(request.id);
+  const bookingResponse = applicationId
+    ? await DataService.acceptGroupApplication(request.id)
+    : await DataService.createBooking({
     client_id: request.client_id,
     freelancer_id: request.freelancer_id,
     project_name: request.project_name,

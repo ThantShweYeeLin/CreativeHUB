@@ -7,7 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test:subscriptions": "tsx --env-file=../.env.local checks/subscriptions.check.ts"
+    "test:subscriptions": "tsx --env-file=../.env.local checks/subscriptions.check.ts",
+    "test:webhook": "tsx checks/webhook.check.ts",
+    "reconcile:omise": "tsx scripts/reconcile-omise.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.38.4",

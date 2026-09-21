@@ -255,6 +255,8 @@ async function main() {
     const bk = bookings[0] || {};
     check('the booking has the agreed price, event date and a locked agreement, awaiting the deposit',
       Number(bk.budget) === 4800 && String(bk.start_date) === EVENT_DATE && bk.status === 'pending' && bk.payment_status === 'unpaid' && Number(bk.confirmed_agreement?.price) === 4800, bk);
+    const hardened = !/Could not find the function|schema cache/i.test(msg(await admin.rpc('accept_group_application', { p_request_id: crypto.randomUUID() }) as any));
+    if (hardened) check('the accepted application is linked to its booking', (((await admin.from('group_opportunity_applications').select('booking_id').eq('request_id', req.id)).data as any[])?.[0]?.booking_id) === bk.id);
     const f1Notifs = ((await admin.from('notifications').select('type, metadata, actor_id').eq('user_id', F1.id)).data || []) as any[];
     const upd = f1Notifs.filter((n) => n.type === 'application_update');
     check('the freelancer got exactly one "accepted" application update, with no client identity', upd.length === 1 && upd[0].metadata?.event === 'accepted' && upd[0].actor_id === null, upd);
@@ -285,6 +287,38 @@ async function main() {
   } finally {
     vite.kill();
     try { execFileSync('pkill', ['-f', 'vite --port 5173']); } catch { /* already gone */ }
+  }
+
+  console.log('Phase A — atomic acceptance under real concurrency (needs supabase/premium_hardening.sql on the live project)');
+  const probe: any = await admin.rpc('accept_group_application', { p_request_id: crypto.randomUUID() });
+  if (/Could not find the function|schema cache/i.test(msg(probe))) {
+    skip('atomic acceptance / final-slot race / duplicate acceptance / rollback on booking failure', 'supabase/premium_hardening.sql is not applied on the live project yet (run it, then re-run this script)');
+  } else {
+    check('accept_group_application exists and rejects a non-application request', /NOT_AN_APPLICATION|Not authenticated/.test(msg(probe)), msg(probe));
+    const oppA = await C1.db.rpc('create_group_opportunity', { p_payload: { title: `${OPP_TITLE} (final slot)`, event_date: EVENT_DATE, start_time: '18:00', end_time: '21:00', location_city: 'Bangkok', location_lat: BKK.lat, location_lng: BKK.lng, roles: [{ category: 'Makeup Artist', budget: 2500, slots: 1 }] } });
+    const roleA = ((await C1.db.from('group_opportunity_roles').select('id').eq('opportunity_id', oppA.data as string)).data || [])[0] as any;
+    // F4 (cancelled-but-active) and F7 (bought via the server route above? not yet) -> use F4 and a freshly activated F2.
+    await activate(F2.id, 'monthly', `race-${F2.email}`);
+    for (const f of [F4, F2]) {
+      const a = await f.db.rpc('apply_to_group_opportunity', { p_role_id: roleA.id, p_price: 2400, p_message: 'final slot' });
+      if (a.error) throw new Error(`apply for final-slot test failed: ${a.error.message}`);
+    }
+    const appsA = ((await admin.from('group_opportunity_applications').select('request_id, freelancer_id').eq('opportunity_id', oppA.data as string)).data || []) as any[];
+    const [x, y] = await Promise.all(appsA.map((a) => C1.db.rpc('accept_group_application', { p_request_id: a.request_id })));
+    check('two clients-side accepts racing for the LAST slot: exactly one succeeds', [x, y].filter((z) => !z.error).length === 1, [msg(x), msg(y)]);
+    check('the loser is refused with ROLE_FILLED', [x, y].some((z) => /ROLE_FILLED/.test(msg(z))), [msg(x), msg(y)]);
+    const bookingsA = ((await admin.from('bookings').select('id, freelancer_id, budget').eq('client_id', C1.id).in('freelancer_id', [F4.id, F2.id])).data || []) as any[];
+    check('exactly one booking exists for that role', bookingsA.length === 1, bookingsA);
+    const linked = ((await admin.from('group_opportunity_applications').select('booking_id, freelancer_id').eq('opportunity_id', oppA.data as string).not('booking_id', 'is', null)).data || []) as any[];
+    check('the winning application is linked to that booking and the loser to none', linked.length === 1 && linked[0].booking_id === bookingsA[0]?.id && linked[0].freelancer_id === bookingsA[0]?.freelancer_id, linked);
+    const loserReq = appsA.find((a) => a.freelancer_id !== bookingsA[0]?.freelancer_id)?.request_id;
+    check('the loser\'s request is untouched (still countered)', (((await admin.from('requests').select('status').eq('id', loserReq)).data as any[])?.[0]?.status) === 'countered');
+    const winnerReq = appsA.find((a) => a.freelancer_id === bookingsA[0]?.freelancer_id)?.request_id;
+    const [d1, d2] = await Promise.all([C1.db.rpc('accept_group_application', { p_request_id: winnerReq }), C1.db.rpc('accept_group_application', { p_request_id: winnerReq })]);
+    check('accepting an already-accepted application (twice, concurrently) is refused', [d1, d2].every((z) => /ALREADY_ACCEPTED/.test(msg(z))), [msg(d1), msg(d2)]);
+    check('and still only one booking exists', (((await admin.from('bookings').select('id').eq('client_id', C1.id).in('freelancer_id', [F4.id, F2.id])).data) || []).length === 1);
+    const flip = await C1.db.from('requests').update({ status: 'accepted' }).eq('id', loserReq);
+    check('the client cannot bypass the limit by setting the request status directly', !!flip.error && /accept_group_application/.test(msg(flip)), msg(flip));
   }
 
   console.log('Phase 1h — Event Matching eligibility (live RPC, real client session)');

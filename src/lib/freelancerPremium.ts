@@ -98,3 +98,17 @@ export function applicationStatusLabel(app: Pick<GroupApplication, 'request_stat
       return { label: 'Under review', tone: 'amber' };
   }
 }
+
+// Errors accept_group_application() raises (supabase/premium_hardening.sql).
+export const ACCEPT_APPLICATION_ERROR_MESSAGE: Record<string, string> = {
+  ROLE_FILLED: 'All spots for this role are already filled.',
+  ALREADY_ACCEPTED: 'This application has already been accepted.',
+  OPPORTUNITY_CLOSED: 'This Group Request is closed or its date has passed.',
+  REQUEST_NOT_OPEN: 'This application is no longer open.',
+  BOOKING_SLOT_TAKEN: 'This time slot is no longer available — the freelancer was just booked for it.',
+};
+
+export function acceptApplicationErrorMessage(message: string | undefined | null): string | null {
+  const code = Object.keys(ACCEPT_APPLICATION_ERROR_MESSAGE).find((key) => (message || '').includes(key));
+  return code ? ACCEPT_APPLICATION_ERROR_MESSAGE[code] : null;
+}

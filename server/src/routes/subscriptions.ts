@@ -8,11 +8,10 @@ import { createSupabaseAdminClient, createSupabaseForRequest, getBearerToken } f
 // created and verified with Omise here, and only then does the service-role
 // call to activate_freelancer_subscription() (supabase/freelancer_premium.sql)
 // extend the period. The browser only ever sends a one-time card token.
-export const PLANS = {
-  monthly: { amountSatang: 9900 },
-  annual: { amountSatang: 99900 },
-} as const;
-export type PlanId = keyof typeof PLANS;
+import { defaultWebhookDeps } from './omiseWebhook.js';
+import { PLANS, verifyAndActivate, type ActivationDeps, type PaymentEvent, type PlanId } from '../lib/premiumCharges.js';
+export { PLANS };
+export type { PlanId };
 
 const checkoutSchema = z.object({ plan: z.enum(['monthly', 'annual']), token: z.string().min(1) });
 const confirmSchema = z.object({ chargeId: z.string().min(1) });
@@ -27,6 +26,7 @@ export interface SubscriptionDeps {
   activate: (userId: string, plan: PlanId, chargeId: string, amountSatang: number) => Promise<{ error: { message: string } | null }>;
   cancel: (accessToken: string) => Promise<{ error: { message: string } | null }>;
   returnUri?: string;
+  recordEvent?: (event: PaymentEvent) => Promise<void>;
 }
 
 function defaultDeps(): SubscriptionDeps {
@@ -56,13 +56,15 @@ function defaultDeps(): SubscriptionDeps {
       const { error } = await createSupabaseForRequest(accessToken).rpc('cancel_my_subscription');
       return { error };
     },
-    returnUri: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/freelancer-dashboard/premium` : undefined,
+    recordEvent: defaultWebhookDeps().recordEvent,
   };
 }
 
 export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> = {}) {
   const router = Router();
   const deps = { ...defaultDeps(), ...overrides } as SubscriptionDeps;
+  // Read per request: this module is imported before dotenv.config() runs.
+  const returnUri = () => deps.returnUri ?? (process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/freelancer-dashboard/premium` : undefined);
 
   // requireAuth (routes/index.ts) has already verified the token and set
   // res.locals.userId before any handler here runs.
@@ -90,22 +92,22 @@ export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> =
         capture: true,
         description: `CreativeHUB Freelancer Premium (${plan})`,
         metadata: { user_id: userId, plan, kind: 'freelancer_premium' },
-        ...(deps.returnUri ? { return_uri: deps.returnUri } : {}),
+        ...(returnUri() ? { return_uri: returnUri() } : {}),
       });
 
-      if (charge.paid && charge.status === 'successful') {
-        const { error } = await deps.activate(userId, plan, charge.id, amountSatang);
-        if (error) {
-          console.error('Subscription activation failed after a paid charge:', charge.id, error);
-          return res.status(500).json({ message: 'Payment received but activation failed. Contact support with reference ' + charge.id });
-        }
-        return res.json({ status: 'active', chargeId: charge.id });
-      }
-
+      // 3-D Secure: the buyer must authenticate with their bank first. Nothing
+      // is granted here - the webhook (or /confirm when they return) does that
+      // once Omise reports the charge as paid.
       if (charge.authorize_uri && charge.status === 'pending') {
         return res.json({ status: 'pending', chargeId: charge.id, authorizeUri: charge.authorize_uri });
       }
 
+      const result = await verifyAndActivate(deps, charge, { eventKey: 'checkout', expectedUserId: userId });
+      if (result.status === 'activated') return res.json({ status: 'active', chargeId: charge.id });
+      if (result.status === 'error') {
+        console.error('Subscription activation failed after a paid charge:', charge.id, result.reason);
+        return res.status(500).json({ message: 'Payment received but activation failed. It will be retried automatically; contact support with reference ' + charge.id });
+      }
       return res.status(402).json({ message: charge.failure_message || 'Your card was declined.' });
     } catch (error) {
       console.error('Subscription checkout failed:', error);
@@ -115,8 +117,8 @@ export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> =
 
   // Called after the card issuer's 3-D Secure step (or to retry activation).
   // Trusts nothing from the caller except the charge id: the charge is
-  // re-fetched from Omise and must be paid, ours (metadata.user_id), for a
-  // known plan, at exactly that plan's price.
+  // re-fetched from Omise and must be paid, ours, for a known plan, at exactly
+  // that plan's price - the same rules the webhook applies.
   router.post('/confirm', async (req, res) => {
     const parsed = confirmSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Missing charge reference.' });
@@ -124,24 +126,18 @@ export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> =
 
     try {
       const charge = await deps.charges.retrieve(parsed.data.chargeId);
-      const plan = charge?.metadata?.plan as PlanId | undefined;
+      const result = await verifyAndActivate(deps, charge, { eventKey: 'confirm', expectedUserId: userId });
 
-      if (!charge || charge.metadata?.kind !== 'freelancer_premium' || charge.metadata?.user_id !== userId) {
-        return res.status(403).json({ message: 'That payment does not belong to this account.' });
+      if (result.status === 'activated') return res.json({ status: 'active', chargeId: charge.id });
+      if (result.status === 'error') {
+        console.error('Subscription activation failed on confirm:', charge?.id, result.reason);
+        return res.status(500).json({ message: 'Unable to activate Premium. Contact support with reference ' + charge?.id });
       }
-      if (!plan || !(plan in PLANS) || charge.amount !== PLANS[plan].amountSatang || charge.currency?.toLowerCase() !== 'thb') {
-        return res.status(400).json({ message: 'That payment does not match a Premium plan.' });
+      if (result.status === 'rejected') {
+        return res.status(result.reason?.includes('different user') ? 403 : 400).json({ message: result.reason?.includes('different user') ? 'That payment does not belong to this account.' : 'That payment does not match a Premium plan.' });
       }
-      if (!(charge.paid && charge.status === 'successful')) {
-        return res.status(402).json({ message: charge.status === 'pending' ? 'The payment is still being processed.' : 'The payment was not completed.' });
-      }
-
-      const { error } = await deps.activate(userId, plan, charge.id, charge.amount);
-      if (error) {
-        console.error('Subscription activation failed on confirm:', charge.id, error);
-        return res.status(500).json({ message: 'Unable to activate Premium. Contact support with reference ' + charge.id });
-      }
-      return res.json({ status: 'active', chargeId: charge.id });
+      if (!charge || charge.metadata?.kind !== 'freelancer_premium') return res.status(403).json({ message: 'That payment does not belong to this account.' });
+      return res.status(402).json({ message: charge.status === 'pending' ? 'The payment is still being processed.' : 'The payment was not completed.' });
     } catch (error) {
       console.error('Subscription confirm failed:', error);
       return res.status(500).json({ message: 'Unable to confirm the payment right now.' });

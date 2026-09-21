@@ -13,7 +13,8 @@
     "test:ticket-safety": "tsx --env-file=.env.local scripts/ticket-safety-check.ts",
     "preview": "vite preview",
     "test:premium-db": "bash scripts/premium-db-check/run.sh",
-    "test:premium-live": "tsx --env-file=.env.local scripts/premium-live-check.ts"
+    "test:premium-live": "tsx --env-file=.env.local scripts/premium-live-check.ts",
+    "test:omise": "tsx --env-file=.env.local --env-file=server/.env scripts/omise-test-mode-check.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
