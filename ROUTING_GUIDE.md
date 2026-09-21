@@ -22,7 +22,6 @@ Your app now uses React Router v7 with proper URL paths. Each page is accessible
 - **`/booking/:id`** - Booking details (e.g., `/booking/5`)
 - **`/freelancer-dashboard`** - Freelancer dashboard
 - **`/become-freelancer`** - Freelancer onboarding
-- **`/premium`** - Premium subscription
 
 ## 🔐 Authentication Flow
 
