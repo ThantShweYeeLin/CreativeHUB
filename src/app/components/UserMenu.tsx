@@ -1,28 +1,23 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket, Crown, Lock } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
   onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets') => void;
   onLogout: () => void;
   isAuthenticated: boolean;
-  /** Gates Group Request (and any other premium item below) — a locked
-   * item still navigates on click, landing on PremiumGate's paywall
-   * screen rather than being disabled outright, but reads as visibly
-   * locked right here so a non-premium user isn't surprised by it. */
-  isPremium: boolean;
   onGoToLogin: () => void;
 }
 
-export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, isPremium, onGoToLogin }: UserMenuProps) {
+export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onGoToLogin }: UserMenuProps) {
   const menuItems = [
-    { id: 'bookings' as const, label: 'My Booked List', icon: Package, premium: false },
-    { id: 'requests' as const, label: 'My Requests', icon: Send, premium: false },
-    { id: 'groupRequest' as const, label: 'Group Request', icon: Users, premium: true },
-    { id: 'messages' as const, label: 'Messages', icon: MessageCircle, premium: false },
-    { id: 'favorites' as const, label: 'Favorites', icon: Heart, premium: false },
-    { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark, premium: false },
-    { id: 'tickets' as const, label: 'Create a Ticket', icon: Ticket, premium: false },
-    { id: 'settings' as const, label: 'Settings', icon: Settings, premium: false },
+    { id: 'bookings' as const, label: 'My Booked List', icon: Package },
+    { id: 'requests' as const, label: 'My Requests', icon: Send },
+    { id: 'groupRequest' as const, label: 'Group Request', icon: Users },
+    { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
+    { id: 'favorites' as const, label: 'Favorites', icon: Heart },
+    { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark },
+    { id: 'tickets' as const, label: 'Create a Ticket', icon: Ticket },
+    { id: 'settings' as const, label: 'Settings', icon: Settings },
   ] as const;
 
   type MenuItemId = UserMenuProps['onSelectItem'] extends (item: infer T) => any ? T : never;
@@ -48,29 +43,17 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, isP
         <div className="py-2">
           {menuItems.map((item) => {
             const Icon = item.icon;
-            const isLocked = item.premium && !isPremium;
             return (
               <button
                 key={item.id}
                 onClick={() => handleClick(item.id)}
-                className={`group flex w-full items-center gap-3 px-4 py-2.5 transition-all ${isLocked ? 'bg-amber-50/40 hover:bg-amber-50' : 'hover:bg-sky-50'}`}
+                className="group flex w-full items-center gap-3 px-4 py-2.5 transition-all hover:bg-sky-50"
               >
-                <span
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
-                    isLocked
-                      ? 'bg-amber-100 text-amber-600 group-hover:bg-gradient-to-br group-hover:from-amber-400 group-hover:to-orange-500 group-hover:text-white'
-                      : 'bg-sky-50 text-sky-600 group-hover:bg-gradient-to-br group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white'
-                  }`}
-                >
-                  {isLocked ? <Lock className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-50 text-sky-600 transition-colors group-hover:bg-gradient-to-br group-hover:from-sky-500 group-hover:to-blue-600 group-hover:text-white">
+                  <Icon className="h-4 w-4" />
                 </span>
-                <span className={`flex flex-1 items-center gap-1.5 font-medium transition-colors ${isLocked ? 'text-gray-500 group-hover:text-gray-700' : 'text-gray-800 group-hover:text-gray-900'}`}>
+                <span className="flex flex-1 items-center gap-1.5 font-medium text-gray-800 transition-colors group-hover:text-gray-900">
                   {item.label}
-                  {item.premium && (
-                    <span className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      <Crown className="h-2.5 w-2.5" /> {isLocked ? 'Locked · Premium' : 'Premium'}
-                    </span>
-                  )}
                 </span>
               </button>
             );

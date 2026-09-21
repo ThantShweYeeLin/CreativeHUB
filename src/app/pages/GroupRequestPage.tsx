@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, Crown, MapPin, Search, Users, X } from 'lucide-react';
+import { ChevronLeft, MapPin, Search, Users, X } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
@@ -353,12 +353,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               <Users className="h-5 w-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">Group Request</h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  <Crown className="h-3 w-3" /> Premium
-                </span>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Group Request</h1>
               <p className="text-sm text-gray-600">Book multiple freelancers at once, each with their own purpose and budget.</p>
             </div>
           </div>

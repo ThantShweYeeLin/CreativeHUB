@@ -863,7 +863,6 @@ export function MainLayout({ children }: MainLayoutProps) {
                     onSelectItem={handleMenuSelection}
                     onLogout={handleLogout}
                     isAuthenticated={isAuthenticated}
-                    isPremium={!!user?.isPremium}
                     onGoToLogin={() => navigate('/login')}
                   />
                 )}

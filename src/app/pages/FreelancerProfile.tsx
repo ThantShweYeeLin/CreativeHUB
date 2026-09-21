@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Briefcase, Check, ChevronLeft, Crown, Edit, Flag, Heart, Info, Lock, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import type { PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -1719,21 +1719,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </section>
         )}
 
-        {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
-          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-            <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
-            <div className="mt-4 space-y-3 text-sm text-gray-700">
-              {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
-              {(freelancerProfile?.limitation_days || []).length > 0 && (
-                <p>
-                  <span className="font-semibold text-gray-900">Doesn't work on:</span> {(freelancerProfile.limitation_days as string[]).join(', ')}
-                </p>
-              )}
-              {freelancerProfile?.limitation_note && <p>{freelancerProfile.limitation_note}</p>}
-            </div>
-          </section>
-        )}
-
         {(isBookableFreelancer || canViewClientReviews) && reviews.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
             <h2 className="text-2xl font-bold text-gray-900">{canViewClientReviews ? 'Reviews from Freelancers' : 'Reviews'}</h2>
@@ -1770,6 +1755,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   )}
                 </div>
               ))}
+            </div>
+          </section>
+        )}
+
+        {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+            <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
+            <div className="mt-4 space-y-3 text-sm text-gray-700">
+              {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
+              {(freelancerProfile?.limitation_days || []).length > 0 && (
+                <p>
+                  <span className="font-semibold text-gray-900">Doesn't work on:</span> {(freelancerProfile.limitation_days as string[]).join(', ')}
+                </p>
+              )}
+              {freelancerProfile?.limitation_note && <p>{freelancerProfile.limitation_note}</p>}
             </div>
           </section>
         )}
@@ -2364,23 +2364,14 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               {/* Feeds the same /group-request route as the Group Request
-                  menu item (see handleAddMoreFreelancer above) - a
-                  non-premium user still lands on PremiumGate's paywall on
-                  click, this just makes that visible before they click. */}
+                  menu item (see handleAddMoreFreelancer above). */}
               <button
                 type="button"
                 onClick={handleAddMoreFreelancer}
-                className={`flex w-full items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 font-semibold transition-colors ${
-                  user?.isPremium
-                    ? 'border-sky-100 text-gray-700 hover:border-sky-300 hover:bg-sky-50'
-                    : 'border-amber-200 bg-amber-50/40 text-gray-600 hover:border-amber-300 hover:bg-amber-50'
-                }`}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-sky-100 px-4 py-3 font-semibold text-gray-700 transition-colors hover:border-sky-300 hover:bg-sky-50"
               >
-                {user?.isPremium ? <Users className="h-4 w-4" /> : <Lock className="h-4 w-4 text-amber-600" />}
+                <Users className="h-4 w-4" />
                 Add More Freelancer
-                <span className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                  <Crown className="h-2.5 w-2.5" /> {user?.isPremium ? 'Premium' : 'Locked · Premium'}
-                </span>
               </button>
 
               <div className="flex items-center justify-between border-t border-sky-100 pt-6">

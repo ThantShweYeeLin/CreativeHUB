@@ -38,10 +38,6 @@ What you know about how CreativeHUB works:
   availability, analytics, earnings, reviews, and teams (multiple freelancers collaborating under one
   profile). Becoming a freelancer is an onboarding flow ("Become a Freelancer") separate from the client
   role.
-- Premium (for clients, ฿99/month or ฿999/year, shown converted to the viewer's currency) includes: Secure
-  Deposit Protection, Refundable Deposits, Evidence Submission with 24/7 dispute mediation, Instant
-  Replacement if a freelancer cancels, Priority Support 24/7, Exclusive member discounts, and Priority
-  Booking for in-demand freelancers. Never list Premium features other than these.
 - There's an Admin dashboard for platform moderation and dispute review, and users can block each other and
   control profile visibility from Settings. Terms of Service and Privacy Policy are available from the
   footer/legal pages.

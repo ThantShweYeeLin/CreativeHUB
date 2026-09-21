@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, ChevronRight, CreditCard, Crown, Flag, Maximize2, Minimize2, Package, RotateCcw, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
+import { Bot, ChevronRight, CreditCard, Flag, Maximize2, Minimize2, Package, RotateCcw, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
 import { sendChatbotMessage, type ChatTurn } from '../lib/chatbotService';
 
 interface DisplayMessage extends ChatTurn {
@@ -20,7 +20,6 @@ const SUGGESTED_PROMPTS: { icon: LucideIcon; text: string }[] = [
   { icon: Search, text: 'How do I book a freelancer?' },
   { icon: Users, text: "What's a Group Request?" },
   { icon: Scale, text: 'How do disputes get resolved?' },
-  { icon: Crown, text: 'What does Premium include?' },
 ];
 
 // Rendered once at the app root, alongside MobileBottomNav, so it floats on

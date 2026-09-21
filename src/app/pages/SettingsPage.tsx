@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Bell,
   ClipboardList,
@@ -7,7 +7,6 @@ import {
   Lock,
   LogOut,
   Shield,
-  Star,
   User,
   UserX,
 } from 'lucide-react';
@@ -120,10 +119,6 @@ export function SettingsPage() {
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
 
   const role = (user?.role || 'client') as Role;
-
-  const planLabel = useMemo(() => {
-    return role === 'freelancer' ? 'Free (Freelancer)' : 'Free (Client)';
-  }, [role]);
 
   useEffect(() => {
     let isMounted = true;
@@ -572,15 +567,6 @@ export function SettingsPage() {
               <input value={preferences.currency} onChange={(e) => setPreferences((c) => ({ ...c, currency: e.target.value.toUpperCase() }))} placeholder="e.g. USD" className="rounded-lg border border-sky-100 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
               <select value={preferences.distanceUnit} onChange={(e) => setPreferences((c) => ({ ...c, distanceUnit: e.target.value as 'km' | 'miles' }))} className="rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"><option value="km">Kilometers</option><option value="miles">Miles</option></select>
             </div>
-          </section>
-
-          <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-            <div className="mb-2 flex items-center gap-2 text-gray-900">
-              <Star className="h-5 w-5" />
-              <h2 className="text-lg font-bold">Membership</h2>
-            </div>
-            <p className="text-sm text-gray-700">Current Plan: <span className="font-semibold">{planLabel}</span></p>
-            <button onClick={() => navigate('/premium')} className="mt-3 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg">Upgrade / Manage Plan</button>
           </section>
 
           {role === 'client' && user?.id && (

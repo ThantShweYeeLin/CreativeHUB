@@ -1173,58 +1173,6 @@ export class DataService {
     return { data, error };
   }
 
-  // Simulated, like the rest of this app's payment flows (see
-  // FreelancerDashboard's "Simulated earnings" note) — just flips the flag,
-  // no real payment processor involved. Gates Group Request and Event
-  // Assistant (see PremiumGate.tsx).
-  static async upgradeToPremium(userId: string, payment: { plan: 'monthly' | 'annual'; amount: number; cardLabel: string }) {
-    const { data, error } = await supabase
-      .from('users')
-      .update({ is_premium: true, premium_since: new Date().toISOString() } as any)
-      .eq('id', userId)
-      .select()
-      .single();
-
-    if (error || !data) {
-      return { data, error };
-    }
-
-    // Recorded even though the users.* flag above already gates access —
-    // this ledger is what the admin Earnings page's "Premium Fees" tab and
-    // the Total premium revenue figure are actually computed from (see
-    // getPremiumPurchasesForAdmin), same relationship as booking commission
-    // vs. the raw payment_status flag.
-    await (supabase as any).from('premium_purchases').insert({
-      user_id: userId,
-      plan: payment.plan,
-      amount: payment.amount,
-      card_label: payment.cardLabel,
-    });
-
-    return { data, error: null };
-  }
-
-  static async getPremiumPurchasesForAdmin(params: { limit?: number; offset?: number } = {}) {
-    const { limit = 200, offset = 0 } = params;
-    const { data, error, count } = await (supabase as any)
-      .from('premium_purchases')
-      .select('*, user:user_id(id, full_name, email, avatar_url)', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-    return { data: data || [], count: count ?? 0, error };
-  }
-
-  static async getPremiumUsersForAdmin(params: { limit?: number; offset?: number } = {}) {
-    const { limit = 200, offset = 0 } = params;
-    const { data, error, count } = await (supabase as any)
-      .from('users')
-      .select('id, full_name, email, avatar_url, role, premium_since', { count: 'exact' })
-      .eq('is_premium', true)
-      .order('premium_since', { ascending: false })
-      .range(offset, offset + limit - 1);
-    return { data: data || [], count: count ?? 0, error };
-  }
-
   static async uploadUserProfileImage(userId: string, file: File, imageType: 'avatar' | 'cover') {
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${userId}/${imageType}-${Date.now()}.${fileExt}`;

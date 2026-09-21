@@ -4,14 +4,11 @@ import { omiseClient } from '../lib/omiseClient.js';
 
 const router = Router();
 
-// Phase A plumbing only — this proves the server<->Omise round-trip works
-// (real Omise charge, real test-mode money movement) before Phase B
-// (premium subscriptions) and Phase C (deposit commission) build on it.
-// Behind requireAuth (see routes/index.ts) like every other route, but not yet tied to a real user,
-// booking, or subscription — it only exists to verify the pipe. Both later
-// phases add their own auth (a signed-in user for Premium, the booking's
-// own client for a deposit) once there's something real to attach a charge
-// to.
+// Plumbing only - this proves the server<->Omise round-trip works (real
+// Omise charge, real test-mode money movement). It's behind requireAuth
+// (routes/index.ts) like every other route, but not yet tied to a real
+// user or booking; whatever builds on it (e.g. a deposit commission)
+// should add its own check that the caller is the booking's own client.
 const chargeSchema = z.object({
   token: z.string().min(1),
   // Omise amounts are in the smallest currency unit — satang for THB

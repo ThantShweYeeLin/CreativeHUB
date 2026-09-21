@@ -3,7 +3,6 @@ import { Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } 
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { ProtectedRoute } from '../components/ProtectedRoute';
-import { PremiumGate } from '../components/PremiumGate';
 import { AdminRoute } from '../components/AdminRoute';
 import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
@@ -36,7 +35,6 @@ const FreelancerDashboardAnalyticsPage = lazy(() => import('./pages/FreelancerDa
 const FreelancerDashboardReviewsPage = lazy(() => import('./pages/FreelancerDashboardReviewsPage').then((m) => ({ default: m.FreelancerDashboardReviewsPage })));
 const FreelancerDashboardEarningsPage = lazy(() => import('./pages/FreelancerDashboardEarningsPage').then((m) => ({ default: m.FreelancerDashboardEarningsPage })));
 const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDashboardSettingsPage').then((m) => ({ default: m.FreelancerDashboardSettingsPage })));
-const PremiumSubscriptionPage = lazy(() => import('./pages/PremiumSubscriptionPage').then((m) => ({ default: m.PremiumSubscriptionPage })));
 const MyTicketsPage = lazy(() => import('./pages/MyTicketsPage').then((m) => ({ default: m.MyTicketsPage })));
 const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then((m) => ({ default: m.TicketDetailPage })));
 const DisputeTicketDetailPage = lazy(() => import('./pages/DisputeTicketDetailPage').then((m) => ({ default: m.DisputeTicketDetailPage })));
@@ -289,12 +287,7 @@ export default function App() {
             path="/group-request"
             element={
               <ProtectedRoute>
-                <PremiumGate
-                  featureName="Group Request"
-                  featureDescription="Book multiple freelancers together for one event with a single coordinated request."
-                >
-                  <GroupRequestPage onBack={() => navigate(-1)} />
-                </PremiumGate>
+                <GroupRequestPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -302,12 +295,7 @@ export default function App() {
             path="/event-matcher"
             element={
               <ProtectedRoute>
-                <PremiumGate
-                  featureName="Event Assistant"
-                  featureDescription="Describe your event and let CreativeHUB match you with the right freelancers automatically."
-                >
-                  <EventMatcherPage onBack={() => navigate(-1)} />
-                </PremiumGate>
+                <EventMatcherPage onBack={() => navigate(-1)} />
               </ProtectedRoute>
             }
           />
@@ -505,14 +493,6 @@ export default function App() {
           <Route path="/admin/reports/:id" element={<AdminRoute><AdminReportDetailPage /></AdminRoute>} />
           <Route path="/admin/tickets/:id" element={<AdminRoute><AdminTicketDetailPage /></AdminRoute>} />
           <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogPage /></AdminRoute>} />
-          <Route
-            path="/premium"
-            element={
-              <ProtectedRoute>
-                <PremiumSubscriptionPage onBack={() => navigate(-1)} />
-              </ProtectedRoute>
-            }
-          />
 
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/explore" replace />} />

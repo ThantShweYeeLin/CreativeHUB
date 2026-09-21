@@ -41,7 +41,6 @@ export interface AuthUser {
   pronouns: string | null;
   emailConfirmedAt: string | null;
   onboardingCompleted: boolean;
-  isPremium: boolean;
 }
 
 class AuthService {
@@ -237,7 +236,6 @@ class AuthService {
           pronouns: null,
           emailConfirmedAt: session.user.email_confirmed_at ?? null,
           onboardingCompleted: false,
-          isPremium: false,
         },
         error: null,
       };
@@ -284,7 +282,6 @@ class AuthService {
           pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: authData.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-          isPremium: Boolean((userProfile as any).is_premium),
         },
         error: null,
       };
@@ -383,7 +380,6 @@ class AuthService {
           pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-          isPremium: Boolean((userProfile as any).is_premium),
         },
         error: null,
       };
@@ -475,7 +471,6 @@ class AuthService {
             pronouns: userProfile.pronouns ?? null,
             emailConfirmedAt: session.user.email_confirmed_at ?? null,
             onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-            isPremium: Boolean((userProfile as any).is_premium),
           });
         }
       } else {

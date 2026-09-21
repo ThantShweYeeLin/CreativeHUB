@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router';
 import {
   Building2,
   ChevronLeft,
-  Crown,
   Gem,
   GraduationCap,
   Heart,
@@ -389,12 +388,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl font-bold text-gray-900">Event Assistant</h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-2 py-0.5 text-[10px] font-bold text-white">
-                  <Crown className="h-3 w-3" /> Premium
-                </span>
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Event Assistant</h1>
               <p className="text-sm text-gray-600">Plan your event and get matched with real providers within your budget.</p>
             </div>
           </div>
