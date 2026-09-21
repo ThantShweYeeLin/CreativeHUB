@@ -8,6 +8,7 @@ import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { GlobalReviewPrompt } from '../components/GlobalReviewPrompt';
 import { ChatbotWidget } from '../components/ChatbotWidget';
+import { PremiumPromo } from '../components/PremiumPromo';
 import { NotificationToastHost } from './components/common/NotificationToastHost';
 import { BootSplash } from './components/BootSplash';
 // Kept eager — the first thing a signed-out visitor sees, so there's
@@ -534,6 +535,7 @@ export default function App() {
     ) && <MobileBottomNav />}
     {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
     {isAuthenticated && user?.onboardingCompleted && <ChatbotWidget />}
+    {isAuthenticated && user?.onboardingCompleted && user.role === 'freelancer' && <PremiumPromo />}
     {isAuthenticated && <NotificationToastHost />}
     </>
   );
