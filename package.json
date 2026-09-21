@@ -14,7 +14,9 @@
     "preview": "vite preview",
     "test:premium-db": "bash scripts/premium-db-check/run.sh",
     "test:premium-live": "tsx --env-file=.env.local scripts/premium-live-check.ts",
-    "test:omise": "tsx --env-file=.env.local --env-file=server/.env scripts/omise-test-mode-check.ts"
+    "test:omise": "tsx --env-file=.env.local --env-file=server/.env scripts/omise-test-mode-check.ts",
+    "test:demo-card": "tsx scripts/demo-card-check.ts",
+    "test:premium-demo": "tsx --env-file=.env.local scripts/premium-demo-e2e.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

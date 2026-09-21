@@ -9,6 +9,7 @@ import { createSupabaseAdminClient, createSupabaseForRequest, getBearerToken } f
 // call to activate_freelancer_subscription() (supabase/freelancer_premium.sql)
 // extend the period. The browser only ever sends a one-time card token.
 import { defaultWebhookDeps } from './omiseWebhook.js';
+import { createDemoCharge, paymentMode } from '../lib/demoPayments.js';
 import { PLANS, verifyAndActivate, type ActivationDeps, type PaymentEvent, type PlanId } from '../lib/premiumCharges.js';
 export { PLANS };
 export type { PlanId };
@@ -27,13 +28,16 @@ export interface SubscriptionDeps {
   cancel: (accessToken: string) => Promise<{ error: { message: string } | null }>;
   returnUri?: string;
   recordEvent?: (event: PaymentEvent) => Promise<void>;
+  saveCardSummary?: (chargeId: string, brand: string, last4: string) => Promise<void>;
 }
 
 function defaultDeps(): SubscriptionDeps {
   return {
+    // Mode is read per call: this module is imported before dotenv.config().
     charges: {
-      create: (input) => (omiseClient.charges as any).create(input),
-      retrieve: (id) => (omiseClient.charges as any).retrieve(id),
+      create: async (input) => (paymentMode() === 'demo' ? createDemoCharge(input as any) : (omiseClient.charges as any).create(input)),
+      // Demo charges settle instantly and are never re-fetched.
+      retrieve: async (id) => (paymentMode() === 'demo' ? undefined : (omiseClient.charges as any).retrieve(id)),
     },
     isFreelancer: async (userId) => {
       const admin = createSupabaseAdminClient();
@@ -44,19 +48,23 @@ function defaultDeps(): SubscriptionDeps {
       return user?.role === 'freelancer' && !!profile;
     },
     activate: async (userId, plan, chargeId, amountSatang) => {
-      const { error } = await createSupabaseAdminClient().rpc('activate_freelancer_subscription', {
+      const admin = createSupabaseAdminClient();
+      const { data, error } = await admin.rpc('activate_freelancer_subscription', {
         p_user: userId,
         p_plan: plan,
         p_charge_id: chargeId,
         p_amount_satang: amountSatang,
       });
-      return { error };
+      return { error, periodEnd: (data as any)?.current_period_end ?? null };
     },
     cancel: async (accessToken) => {
       const { error } = await createSupabaseForRequest(accessToken).rpc('cancel_my_subscription');
       return { error };
     },
     recordEvent: defaultWebhookDeps().recordEvent,
+    saveCardSummary: async (chargeId, brand, last4) => {
+      await createSupabaseAdminClient().from('subscription_payments').update({ card_brand: brand, card_last4: last4 }).eq('omise_charge_id', chargeId);
+    },
   };
 }
 
@@ -69,7 +77,7 @@ export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> =
   // requireAuth (routes/index.ts) has already verified the token and set
   // res.locals.userId before any handler here runs.
   router.get('/plans', (_req, res) => {
-    res.json({ plans: PLANS, currency: 'thb' });
+    res.json({ plans: PLANS, currency: 'thb', mode: paymentMode() });
   });
 
   router.post('/checkout', async (req, res) => {
@@ -103,7 +111,16 @@ export function createSubscriptionsRouter(overrides: Partial<SubscriptionDeps> =
       }
 
       const result = await verifyAndActivate(deps, charge, { eventKey: 'checkout', expectedUserId: userId });
-      if (result.status === 'activated') return res.json({ status: 'active', chargeId: charge.id });
+      if (result.status === 'activated') {
+        const card = charge.card ? { brand: charge.card.brand, last4: charge.card.last_digits } : null;
+        // Best effort: keeps the card's brand/last4 for receipts (needs supabase/demo_payments.sql).
+        if (card) await deps.saveCardSummary?.(charge.id, card.brand, card.last4);
+        return res.json({
+          status: 'active',
+          chargeId: charge.id,
+          receipt: { amountSatang, plan, paidAt: new Date().toISOString(), validUntil: result.periodEnd ?? null, card, demo: String(charge.id).startsWith('chrg_demo_') },
+        });
+      }
       if (result.status === 'error') {
         console.error('Subscription activation failed after a paid charge:', charge.id, result.reason);
         return res.status(500).json({ message: 'Payment received but activation failed. It will be retried automatically; contact support with reference ' + charge.id });

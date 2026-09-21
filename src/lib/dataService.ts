@@ -4115,7 +4115,7 @@ export class DataService {
     return (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
   }
 
-  private static async premiumApi(path: string, body: unknown) {
+  private static async premiumApi(path: string, body?: unknown) {
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
     if (!accessToken) {
@@ -4123,9 +4123,9 @@ export class DataService {
     }
     try {
       const response = await fetch(`${this.premiumApiBase()}${path}`, {
-        method: 'POST',
+        method: body === undefined ? 'GET' : 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(body),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -4137,6 +4137,21 @@ export class DataService {
     }
   }
 
+  /** Which payment mode the server is in ('demo' = simulated, no real charge). */
+  static async getPremiumMode(): Promise<'demo' | 'omise'> {
+    const { data } = await this.premiumApi('/subscriptions/plans');
+    return data?.mode === 'omise' ? 'omise' : 'demo';
+  }
+
+  static async getPaymentHistory(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('subscription_payments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    return { data: (data || []) as any[], error };
+  }
+
   static async getMySubscription(userId: string) {
     const { data, error } = await (supabase as any)
       .from('freelancer_subscriptions')
@@ -4146,13 +4161,21 @@ export class DataService {
     return { data: (data || null) as FreelancerSubscription | null, error };
   }
 
-  /** Card details go straight to Omise for a one-time token; only that token reaches our server. */
-  static async startPremiumCheckout(plan: PremiumPlan, card: CardDetails) {
+  /**
+   * Real mode: card details go straight to Omise for a one-time token. Demo
+   * mode: a token carrying only brand/last4/expiry/simulated outcome is built
+   * locally. Either way a full card number never reaches our server.
+   */
+  static async startPremiumCheckout(plan: PremiumPlan, card: CardDetails | { demoToken: string }) {
     let token: string;
-    try {
-      token = await tokenizeCard(card);
-    } catch (error) {
-      return { data: null, error: error instanceof Error ? error : new Error('Unable to verify this card.') };
+    if ('demoToken' in card) {
+      token = card.demoToken;
+    } else {
+      try {
+        token = await tokenizeCard(card);
+      } catch (error) {
+        return { data: null, error: error instanceof Error ? error : new Error('Unable to verify this card.') };
+      }
     }
     return this.premiumApi('/subscriptions/checkout', { plan, token });
   }

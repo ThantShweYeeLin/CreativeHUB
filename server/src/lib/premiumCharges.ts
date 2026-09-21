@@ -42,7 +42,7 @@ export interface PaymentEvent {
 }
 
 export interface ActivationDeps {
-  activate: (userId: string, plan: PlanId, chargeId: string, amountSatang: number) => Promise<{ error: { message: string } | null; alreadyActive?: boolean }>;
+  activate: (userId: string, plan: PlanId, chargeId: string, amountSatang: number) => Promise<{ error: { message: string } | null; alreadyActive?: boolean; periodEnd?: string | null }>;
   recordEvent?: (event: PaymentEvent) => Promise<void>;
 }
 
@@ -55,25 +55,30 @@ export async function verifyAndActivate(
   deps: ActivationDeps,
   charge: any,
   ctx: { omiseEventId?: string | null; eventKey?: string | null; expectedUserId?: string } = {}
-): Promise<{ status: 'activated' | 'ignored' | 'rejected' | 'error'; reason?: string; userId?: string }> {
+): Promise<{ status: 'activated' | 'ignored' | 'rejected' | 'error'; reason?: string; userId?: string; periodEnd?: string | null }> {
   const verdict = verifyPremiumCharge(charge);
   const base = { omiseEventId: ctx.omiseEventId, eventKey: ctx.eventKey, chargeId: charge?.id ?? null };
+  // Recording is for reconciliation only - a logging failure must never change
+  // whether a valid payment is honoured (or a bad one refused).
+  const record = async (event: PaymentEvent) => {
+    try { await deps.recordEvent?.(event); } catch (error) { console.error('Unable to record payment event:', (error as Error).message); }
+  };
 
   if (verdict.kind !== 'valid') {
-    await deps.recordEvent?.({ ...base, outcome: verdict.kind, reason: verdict.reason });
+    await record({ ...base, outcome: verdict.kind, reason: verdict.reason });
     return { status: verdict.kind, reason: verdict.reason };
   }
   if (ctx.expectedUserId && verdict.userId !== ctx.expectedUserId) {
     const reason = 'charge belongs to a different user';
-    await deps.recordEvent?.({ ...base, userId: verdict.userId, outcome: 'rejected', reason });
+    await record({ ...base, userId: verdict.userId, outcome: 'rejected', reason });
     return { status: 'rejected', reason, userId: verdict.userId };
   }
 
-  const { error } = await deps.activate(verdict.userId, verdict.plan, charge.id, verdict.amountSatang);
+  const { error, periodEnd } = await deps.activate(verdict.userId, verdict.plan, charge.id, verdict.amountSatang);
   if (error) {
-    await deps.recordEvent?.({ ...base, userId: verdict.userId, outcome: 'error', reason: `activation failed: ${error.message}` });
+    await record({ ...base, userId: verdict.userId, outcome: 'error', reason: `activation failed: ${error.message}` });
     return { status: 'error', reason: error.message, userId: verdict.userId };
   }
-  await deps.recordEvent?.({ ...base, userId: verdict.userId, outcome: 'activated' });
-  return { status: 'activated', userId: verdict.userId };
+  await record({ ...base, userId: verdict.userId, outcome: 'activated' });
+  return { status: 'activated', userId: verdict.userId, periodEnd };
 }

@@ -164,6 +164,16 @@ async function main() {
   r = await post(h.app, body, signed(body));
   check('if Omise\'s API is unreachable the webhook fails closed (500) and records it', r.status === 500 && h.activateCalls.length === 0 && h.events.at(-1)?.outcome === 'error');
 
+  const noisy = harness();
+  const throwing = createOmiseWebhookHandler({
+    secretBase64: SECRET, retrieveCharge: async () => charge(),
+    activate: async (_u, _p, c) => { noisy.activateCalls.push(c); return { error: null }; },
+    recordEvent: async () => { throw new Error('log table missing'); },
+  });
+  const app2 = express(); app2.post('/hook', express.raw({ type: '*/*' }), throwing);
+  r = await post(app2, body, signed(body));
+  check('a failure to write the reconciliation log never changes the outcome (valid payment still activates)', r.status === 200 && noisy.activateCalls.length === 1);
+
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

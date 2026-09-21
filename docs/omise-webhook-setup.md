@@ -1,3 +1,7 @@
+> **Payment mode.** Until real Omise keys are configured the server runs in **demo mode** (`PAYMENT_MODE=demo`, the default
+> when `OMISE_SECRET_KEY` is empty): a realistic checkout that moves no money — see "Demo mode" at the bottom. Everything
+> below only matters once you switch to `PAYMENT_MODE=omise`.
+
 # Omise webhook setup (Freelancer Premium)
 
 The webhook is what activates Premium when the buyer's browser never comes back
@@ -46,3 +50,13 @@ stolen/lost `4111 1111 1113 0012`; payment rejected `4111 1111 1111 0014`. 3-D S
 test account (email support@omise.co).
 To see Omise itself deliver to your endpoint, expose the server (e.g. `ngrok http 4000`), register that URL and
 make a test purchase with the browser tab closed right after confirming.
+
+## Demo mode (default without Omise keys)
+- `PAYMENT_MODE=demo|omise` (auto: `omise` if `OMISE_SECRET_KEY` starts with `skey_`, otherwise `demo`).
+- The card form validates like a real one (Luhn, expiry, per-brand CVC), shows a processing state, a bank-style decline
+  message and a printable receipt. The browser sends only brand / last four / expiry / a simulated outcome — never the card number.
+- Test cards: `4242 4242 4242 4242` succeeds; `4000 0000 0000 0002` declined; `…9995` insufficient funds;
+  `…0069` expired; `…0119` processing error. Any other valid card number succeeds.
+- **Do not run demo mode where Premium has real value**: the simulated outcome is chosen by the client, so anyone can "pay".
+- Optional: `supabase/demo_payments.sql` adds card brand/last4 columns so past receipts show "Visa •••• 4242".
+- Demo payments have references starting `chrg_demo_` so they can never be confused with real Omise charges.
