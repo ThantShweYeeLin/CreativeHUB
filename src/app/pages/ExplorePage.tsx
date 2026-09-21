@@ -1,3 +1,4 @@
+import { PremiumBanner } from '../../components/PremiumBanner';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -1420,6 +1421,8 @@ export function ExplorePage() {
 
       <div className="relative z-10">
       {/* Hero */}
+      <PremiumBanner />
+
       <section className="relative mb-12 overflow-hidden rounded-[32px] border border-sky-100 bg-white/50 px-6 py-10 backdrop-blur-sm sm:px-10 md:mb-16 md:py-14">
         <Heart className="hero-heart-float pointer-events-none absolute left-6 top-8 h-6 w-6 fill-sky-200 text-sky-300" aria-hidden="true" />
         <Heart className="hero-heart-float hero-heart-float-delay pointer-events-none absolute left-16 top-24 h-4 w-4 fill-sky-200 text-sky-300" aria-hidden="true" />
