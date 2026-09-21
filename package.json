@@ -12,7 +12,8 @@
     "test:anon-access": "tsx --env-file=.env.local scripts/anon-access-check.ts",
     "test:ticket-safety": "tsx --env-file=.env.local scripts/ticket-safety-check.ts",
     "preview": "vite preview",
-    "test:premium-db": "bash scripts/premium-db-check/run.sh"
+    "test:premium-db": "bash scripts/premium-db-check/run.sh",
+    "test:premium-live": "tsx --env-file=.env.local scripts/premium-live-check.ts"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

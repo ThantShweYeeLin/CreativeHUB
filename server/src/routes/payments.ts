@@ -17,7 +17,16 @@ const chargeSchema = z.object({
   description: z.string().optional(),
 });
 
+// Review finding: this route creates a REAL Omise charge for any amount and
+// any card token on behalf of any signed-in user. Nothing in the app calls it,
+// and left on it lets any account use the merchant's Omise account as a
+// card-testing oracle. It grants no in-app value (it writes nothing), but it is
+// off unless explicitly enabled for pipe-testing.
 router.post('/charge', async (req, res) => {
+  if (process.env.ENABLE_TEST_CHARGE_ENDPOINT !== 'true') {
+    return res.status(404).json({ message: 'Not found.' });
+  }
+
   const parsed = chargeSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ message: 'Invalid request.', issues: parsed.error.issues });

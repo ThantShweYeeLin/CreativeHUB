@@ -4,6 +4,7 @@ import express from 'express';
 import type { AddressInfo } from 'node:net';
 import { createSubscriptionsRouter, PLANS } from '../src/routes/subscriptions.js';
 import { requireAuth } from '../src/lib/requireAuth.js';
+import paymentsRouter from '../src/routes/payments.js';
 
 let passed = 0, failed = 0;
 const check = (name: string, ok: boolean, detail?: unknown) => {
@@ -121,6 +122,14 @@ async function main() {
   check('no token -> 401 (never reaches Omise)', r.status === 401);
   r = await call(app, '/subscriptions/checkout', { plan: 'monthly', token: 'tokn_1' }, { Authorization: 'Bearer forged' });
   check('forged token -> 401', r.status === 401);
+
+  console.log('POST /payments/charge (legacy test endpoint)');
+  const payApp = express();
+  payApp.use(express.json());
+  payApp.use((req, res, next) => { res.locals.userId = 'user-1'; next(); });
+  payApp.use('/payments', paymentsRouter);
+  r = await call(payApp, '/payments/charge', { token: 'tokn_x', amountSatang: 100000 });
+  check('a signed-in user can no longer create arbitrary real charges (disabled by default)', r.status === 404, r);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
