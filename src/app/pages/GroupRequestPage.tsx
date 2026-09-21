@@ -355,6 +355,9 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Group Request</h1>
               <p className="text-sm text-gray-600">Book multiple freelancers at once, each with their own purpose and budget.</p>
+              <button type="button" onClick={() => navigate('/group-request/open')} className="mt-1 text-sm font-semibold text-sky-600 hover:text-sky-700">
+                Or post an open request for Premium freelancers to apply to →
+              </button>
             </div>
           </div>
         </div>

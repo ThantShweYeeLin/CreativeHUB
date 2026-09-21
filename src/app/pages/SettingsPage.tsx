@@ -120,6 +120,26 @@ export function SettingsPage() {
 
   const role = (user?.role || 'client') as Role;
 
+  // Stored server-side (unlike the localStorage toggles above) because the
+  // server creates these notifications and has to be able to honour them.
+  const [opportunityPrefs, setOpportunityPrefs] = useState({ opportunityAlerts: true, applicationUpdates: true });
+
+  useEffect(() => {
+    if (!user?.id || role !== 'freelancer') return;
+    void DataService.getNotificationPreferences(user.id).then(setOpportunityPrefs);
+  }, [user?.id, role]);
+
+  const handleOpportunityPrefChange = async (patch: Partial<typeof opportunityPrefs>) => {
+    if (!user?.id) return;
+    const next = { ...opportunityPrefs, ...patch };
+    setOpportunityPrefs(next);
+    const { error } = await DataService.saveNotificationPreferences(user.id, next);
+    if (error) {
+      setOpportunityPrefs(opportunityPrefs);
+      setErrorMessage('Unable to save that notification preference.');
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -549,6 +569,12 @@ export function SettingsPage() {
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.appBookingStatus} onChange={(e) => setNotifications((c) => ({ ...c, appBookingStatus: e.target.checked }))} /> In-app: Booking status</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.appAIMatches} onChange={(e) => setNotifications((c) => ({ ...c, appAIMatches: e.target.checked }))} /> In-app: AI match recommendations</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.appReviews} onChange={(e) => setNotifications((c) => ({ ...c, appReviews: e.target.checked }))} /> In-app: Reviews received</label>
+              {role === 'freelancer' && (
+                <>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={opportunityPrefs.opportunityAlerts} onChange={(e) => void handleOpportunityPrefChange({ opportunityAlerts: e.target.checked })} /> In-app: New Group Request opportunities (Premium)</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={opportunityPrefs.applicationUpdates} onChange={(e) => void handleOpportunityPrefChange({ applicationUpdates: e.target.checked })} /> In-app: Updates on my applications</label>
+                </>
+              )}
             </div>
           </section>
 

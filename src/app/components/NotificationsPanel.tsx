@@ -39,6 +39,9 @@ interface NotificationsPanelProps {
    * instead of onOpenBooking - the dispute's ticket-style detail page
    * (/tickets/dispute/:id), not the raw booking tracking page. */
   onOpenDisputeTicket?: (notification: NotificationPanelItem) => void;
+  /** 'opportunity_new' / 'application_update' (Freelancer Premium) open the
+   * freelancer's Opportunities page. */
+  onOpenOpportunities?: (notification: NotificationPanelItem) => void;
   /** The bell button's ref — used to measure where to anchor the portaled
    * panel on desktop (see the positioning effect below). Optional so the
    * panel still renders sensibly (falling back to its static Tailwind
@@ -95,6 +98,9 @@ const getNotificationIcon = (type: string) => {
       return <MessageSquare className="w-4 h-4 text-sky-600" />;
     case 'dispute_message':
       return <MessageSquare className="w-4 h-4 text-sky-600" />;
+    case 'opportunity_new':
+    case 'application_update':
+      return <Bell className="w-4 h-4 text-sky-600" />;
     default:
       return <Bell className="w-4 h-4 text-gray-600" />;
   }
@@ -189,6 +195,7 @@ export function NotificationsPanel({
   onOpenBooking,
   onOpenTicket,
   onOpenDisputeTicket,
+  onOpenOpportunities,
   triggerRef,
 }: NotificationsPanelProps) {
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -317,6 +324,8 @@ export function NotificationsPanel({
                     onOpenTicket?.(notification);
                   } else if (notification.type === 'dispute_message') {
                     onOpenDisputeTicket?.(notification);
+                  } else if (notification.type === 'opportunity_new' || notification.type === 'application_update') {
+                    onOpenOpportunities?.(notification);
                   } else if (notification.type.includes('message')) {
                     onOpenMessages?.();
                   } else if (

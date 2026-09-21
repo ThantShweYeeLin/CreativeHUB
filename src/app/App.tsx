@@ -34,8 +34,11 @@ const FreelancerDashboardCalendarPage = lazy(() => import('./pages/FreelancerDas
 const FreelancerDashboardAnalyticsPage = lazy(() => import('./pages/FreelancerDashboardAnalyticsPage').then((m) => ({ default: m.FreelancerDashboardAnalyticsPage })));
 const FreelancerDashboardReviewsPage = lazy(() => import('./pages/FreelancerDashboardReviewsPage').then((m) => ({ default: m.FreelancerDashboardReviewsPage })));
 const FreelancerDashboardEarningsPage = lazy(() => import('./pages/FreelancerDashboardEarningsPage').then((m) => ({ default: m.FreelancerDashboardEarningsPage })));
+const FreelancerDashboardOpportunitiesPage = lazy(() => import('./pages/FreelancerDashboardOpportunitiesPage').then((m) => ({ default: m.FreelancerDashboardOpportunitiesPage })));
+const FreelancerDashboardPremiumPage = lazy(() => import('./pages/FreelancerDashboardPremiumPage').then((m) => ({ default: m.FreelancerDashboardPremiumPage })));
 const FreelancerDashboardSettingsPage = lazy(() => import('./pages/FreelancerDashboardSettingsPage').then((m) => ({ default: m.FreelancerDashboardSettingsPage })));
 const MyTicketsPage = lazy(() => import('./pages/MyTicketsPage').then((m) => ({ default: m.MyTicketsPage })));
+const OpenGroupRequestPage = lazy(() => import('./pages/OpenGroupRequestPage').then((m) => ({ default: m.OpenGroupRequestPage })));
 const TicketDetailPage = lazy(() => import('./pages/TicketDetailPage').then((m) => ({ default: m.TicketDetailPage })));
 const DisputeTicketDetailPage = lazy(() => import('./pages/DisputeTicketDetailPage').then((m) => ({ default: m.DisputeTicketDetailPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
@@ -292,6 +295,14 @@ export default function App() {
             }
           />
           <Route
+            path="/group-request/open"
+            element={
+              <ProtectedRoute>
+                <OpenGroupRequestPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/event-matcher"
             element={
               <ProtectedRoute>
@@ -434,6 +445,22 @@ export default function App() {
             element={
               <ProtectedRoute>
                 {user?.role === 'freelancer' ? <FreelancerDashboardEarningsPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/opportunities"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardOpportunitiesPage /> : <Navigate to="/become-freelancer" replace />}
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/freelancer-dashboard/premium"
+            element={
+              <ProtectedRoute>
+                {user?.role === 'freelancer' ? <FreelancerDashboardPremiumPage /> : <Navigate to="/become-freelancer" replace />}
               </ProtectedRoute>
             }
           />

@@ -8,10 +8,12 @@ import {
   ClipboardList,
   Clock,
   CreditCard,
+  Crown,
   DollarSign,
   Edit,
   Layers,
   MapPin,
+  Megaphone,
   Percent,
   Plus,
   Settings,
@@ -37,11 +39,13 @@ import { extractLocationMeta } from '../../lib/requestLocation';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { getBookingEscrowState, formatCountdown, getBookingEarningsBreakdown } from '../../lib/bookingEscrow';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
+import { FreelancerOpportunitiesPanel } from './freelancer-dashboard/FreelancerOpportunitiesPanel';
+import { FreelancerPremiumPanel } from './freelancer-dashboard/FreelancerPremiumPanel';
 import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 
-type DashboardSection = 'requests' | 'bookings' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'settings';
+type DashboardSection = 'requests' | 'bookings' | 'analytics' | 'calendar' | 'reviews' | 'earnings' | 'settings' | 'opportunities' | 'premium';
 
 const PAYMENT_STATUS_SEQUENCE = ['unpaid', 'deposit_paid', 'paid'] as const;
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -669,11 +673,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
   const tabs: { id: DashboardSection; label: string; icon: any; path: string }[] = [
     { id: 'requests', label: 'Requests', icon: Users, path: '/freelancer-dashboard/requests' },
+    { id: 'opportunities', label: 'Opportunities', icon: Megaphone, path: '/freelancer-dashboard/opportunities' },
     { id: 'bookings', label: 'Bookings', icon: ClipboardList, path: '/freelancer-dashboard/bookings' },
     { id: 'calendar', label: 'Calendar', icon: Calendar, path: '/freelancer-dashboard/calendar' },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp, path: '/freelancer-dashboard/analytics' },
     { id: 'reviews', label: 'Reviews', icon: Star, path: '/freelancer-dashboard/reviews' },
     { id: 'earnings', label: 'Earnings', icon: DollarSign, path: '/freelancer-dashboard/earnings' },
+    { id: 'premium', label: 'Premium', icon: Crown, path: '/freelancer-dashboard/premium' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/freelancer-dashboard/settings' },
   ];
 
@@ -1335,6 +1341,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </div>
             )}
           </div>
+        ) : section === 'opportunities' ? (
+          <FreelancerOpportunitiesPanel />
+        ) : section === 'premium' ? (
+          <FreelancerPremiumPanel />
         ) : section === 'earnings' ? (
           <div className="space-y-6 md:space-y-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">

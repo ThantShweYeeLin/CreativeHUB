@@ -16,6 +16,8 @@ import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import type { DisputeFlowCategory } from './disputeCategories';
 import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
+import { tokenizeCard, type CardDetails } from './omiseClient';
+import type { FreelancerSubscription, GroupApplication, GroupOpportunity, PremiumPlan } from './freelancerPremium';
 
 type User = Database['public']['Tables']['users']['Row'];
 type FreelancerProfile = Database['public']['Tables']['freelancer_profiles']['Row'];
@@ -789,17 +791,17 @@ export class DataService {
   // just the query, same split as freelancerSearch.ts's interpretSearchQuery
   // / scoreFreelancerMatch versus this file's searchFreelancers.
   static async getEventMatcherCandidates(category: string, eventDate: string) {
-    const { data: profiles, error } = await supabase
-      .from('freelancer_profiles')
-      .select(
-        'id, user_id, title, styles, experience_years, hourly_rate, locations, studio_locations, users:user_id!inner(id, full_name, avatar_url, gender, rating, total_reviews, account_status, preferred_currency)' as any
-      )
-      .eq('title', category)
-      .eq('is_available', true)
-      .neq('visibility', 'limited')
-      .eq('users.account_status', 'active');
+    // Eligibility (an active Freelancer Premium subscription, plus the same
+    // category / available / not-limited-visibility / active-account filters
+    // this query always had) is applied inside Postgres by
+    // get_event_matcher_candidates() - see supabase/freelancer_premium.sql -
+    // so it can't be bypassed from the browser. Availability on the date,
+    // location coverage, budget and style matching still happen below and in
+    // lib/eventMatcher.ts exactly as before.
+    const { data: rpcProfiles, error } = await (supabase as any).rpc('get_event_matcher_candidates', { p_category: category });
+    const profiles = (rpcProfiles || []) as any[];
 
-    if (error || !profiles || profiles.length === 0) {
+    if (error || profiles.length === 0) {
       return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
     }
 
@@ -4104,6 +4106,140 @@ export class DataService {
       message: `Your Event Matcher plan sent ${recipientCount} request${recipientCount === 1 ? '' : 's'}.`,
       metadata: { recipient_count: recipientCount },
     });
+  }
+
+  // FREELANCER PREMIUM
+  // Access is decided by Postgres/the server (supabase/freelancer_premium.sql,
+  // server/src/routes/subscriptions.ts). These methods only call them.
+  private static premiumApiBase() {
+    return (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
+  }
+
+  private static async premiumApi(path: string, body: unknown) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      return { data: null, error: new Error('Please sign in again.') };
+    }
+    try {
+      const response = await fetch(`${this.premiumApiBase()}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify(body),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return { data: null, error: new Error(json.message || 'Something went wrong. Please try again.') };
+      }
+      return { data: json, error: null };
+    } catch {
+      return { data: null, error: new Error('Unable to reach the payment server. Please try again.') };
+    }
+  }
+
+  static async getMySubscription(userId: string) {
+    const { data, error } = await (supabase as any)
+      .from('freelancer_subscriptions')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { data: (data || null) as FreelancerSubscription | null, error };
+  }
+
+  /** Card details go straight to Omise for a one-time token; only that token reaches our server. */
+  static async startPremiumCheckout(plan: PremiumPlan, card: CardDetails) {
+    let token: string;
+    try {
+      token = await tokenizeCard(card);
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unable to verify this card.') };
+    }
+    return this.premiumApi('/subscriptions/checkout', { plan, token });
+  }
+
+  static async confirmPremiumCharge(chargeId: string) {
+    return this.premiumApi('/subscriptions/confirm', { chargeId });
+  }
+
+  static async cancelPremium() {
+    return this.premiumApi('/subscriptions/cancel', {});
+  }
+
+  static async getGroupOpportunities() {
+    const { data, error } = await (supabase as any).rpc('get_group_opportunities');
+    return { data: (data || []) as GroupOpportunity[], error };
+  }
+
+  static async getGroupOpportunity(opportunityId: string) {
+    const { data, error } = await (supabase as any).rpc('get_group_opportunity', { p_opportunity_id: opportunityId });
+    return { data: (data || null) as GroupOpportunity | null, error };
+  }
+
+  static async applyToGroupOpportunity(roleId: string, price: number, message: string) {
+    const { data, error } = await (supabase as any).rpc('apply_to_group_opportunity', {
+      p_role_id: roleId,
+      p_price: price,
+      p_message: message || null,
+    });
+    return { data, error };
+  }
+
+  static async getMyGroupApplications() {
+    const { data, error } = await (supabase as any).rpc('get_my_group_applications');
+    return { data: (data || []) as GroupApplication[], error };
+  }
+
+  static async createGroupOpportunity(payload: {
+    title: string;
+    description?: string;
+    eventDate: string;
+    startTime?: string;
+    endTime?: string;
+    locationCity?: string | null;
+    locationText?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    roles: Array<{ category: string; budget: number; currency: string; slots?: number; styles?: string[]; note?: string }>;
+  }) {
+    const { data, error } = await (supabase as any).rpc('create_group_opportunity', {
+      p_payload: {
+        title: payload.title,
+        description: payload.description || '',
+        event_date: payload.eventDate,
+        start_time: payload.startTime || '',
+        end_time: payload.endTime || '',
+        location_city: payload.locationCity || '',
+        location_text: payload.locationText || '',
+        location_lat: payload.latitude ?? '',
+        location_lng: payload.longitude ?? '',
+        roles: payload.roles,
+      },
+    });
+    return { data: data as string | null, error };
+  }
+
+  static async closeGroupOpportunity(opportunityId: string) {
+    const { error } = await (supabase as any).rpc('close_group_opportunity', { p_opportunity_id: opportunityId });
+    return { error };
+  }
+
+  static async getNotificationPreferences(userId: string) {
+    const { data } = await (supabase as any)
+      .from('notification_preferences')
+      .select('opportunity_alerts, application_updates')
+      .eq('user_id', userId)
+      .maybeSingle();
+    return { opportunityAlerts: data?.opportunity_alerts ?? true, applicationUpdates: data?.application_updates ?? true };
+  }
+
+  static async saveNotificationPreferences(userId: string, prefs: { opportunityAlerts: boolean; applicationUpdates: boolean }) {
+    const { error } = await (supabase as any).from('notification_preferences').upsert({
+      user_id: userId,
+      opportunity_alerts: prefs.opportunityAlerts,
+      application_updates: prefs.applicationUpdates,
+      updated_at: new Date().toISOString(),
+    });
+    return { error };
   }
 
   // REQUESTS

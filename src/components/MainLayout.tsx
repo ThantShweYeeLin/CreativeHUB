@@ -826,6 +826,10 @@ export function MainLayout({ children }: MainLayoutProps) {
                         navigate('/tickets');
                       }
                     }}
+                    onOpenOpportunities={() => {
+                      setShowNotifications(false);
+                      navigate('/freelancer-dashboard/opportunities');
+                    }}
                     onOpenDisputeTicket={(notification) => {
                       setShowNotifications(false);
                       if (notification.relatedId) {

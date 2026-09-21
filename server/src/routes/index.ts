@@ -6,6 +6,7 @@ import feedRouter from './feed.js';
 import accountRouter from './account.js';
 import chatbotRouter from './chatbot.js';
 import paymentsRouter from './payments.js';
+import subscriptionsRouter from './subscriptions.js';
 import { requireAuth } from '../lib/requireAuth.js';
 
 const router = Router();
@@ -21,5 +22,6 @@ router.use('/feed', feedRouter);
 router.use('/account', accountRouter);
 router.use('/chatbot', chatbotRouter);
 router.use('/payments', paymentsRouter);
+router.use('/subscriptions', subscriptionsRouter);
 
 export default router;

@@ -320,6 +320,37 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
   const isDropped = (category: string) => budgetFit.dropped.some((item) => item.category === category);
 
+  // Opens this same plan to Premium freelancers who fit (category, area,
+  // date): they're notified once and can apply from their dashboard; the
+  // applications land in My Requests for the client to review.
+  const handlePostOpenRequest = async () => {
+    if (!location || !eventType || !date) return;
+    const categories = Array.from(selectedCategories);
+    if (categories.length === 0) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+    const perRoleBudget = Math.max(1, Math.round(budgetNumber / categories.length));
+    const { error } = await DataService.createGroupOpportunity({
+      title: `${eventType} team`,
+      description: `Posted from CreativeHUB's Event Assistant.${styles.length ? ` Style: ${styles.join(', ')}.` : ''}${setting ? ` Setting: ${setting}.` : ''}`,
+      eventDate: date,
+      startTime: eventTime,
+      locationCity: location.city || location.district || null,
+      locationText: location.formattedAddress,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      roles: categories.map((category) => ({ category, budget: perRoleBudget, currency, styles })),
+    });
+    setIsSubmitting(false);
+
+    if (error) {
+      setSubmitError((error as any).message || 'Unable to post your request.');
+      return;
+    }
+    navigate('/requests');
+  };
+
   const handleSendRequests = async () => {
     if (!user?.id || !location || !eventType) return;
     if (budgetFit.kept.length === 0) {
@@ -781,6 +812,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                 <p className="text-center text-xs text-gray-400">
                   This sends booking requests through your normal Requests flow — nothing is booked automatically.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => void handlePostOpenRequest()}
+                  disabled={isSubmitting}
+                  className="w-full rounded-xl border-2 border-sky-200 px-4 py-3 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:opacity-50"
+                >
+                  Or open this plan to Premium freelancers to apply
+                </button>
               </>
             )}
           </div>
