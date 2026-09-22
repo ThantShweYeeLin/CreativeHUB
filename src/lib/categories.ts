@@ -59,8 +59,11 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
   },
   {
     id: 'decorator-florist',
-    label: 'Decorator/Florist',
-    skills: ['Event Decoration', 'Floral Arrangement', 'Backdrop Setup', 'Table Decoration', 'Proposal Setup', 'Wedding Decoration', 'Balloon Decoration', 'Bridal Bouquets'],
+    label: 'Decorators',
+    // 'Florist' is a suggested skill here (not its own category) — a
+    // Decorator's floral work is one specialty among several, same as
+    // 'Balloon Decoration' or 'Backdrop Setup'.
+    skills: ['Florist', 'Event Decoration', 'Floral Arrangement', 'Backdrop Setup', 'Table Decoration', 'Proposal Setup', 'Wedding Decoration', 'Balloon Decoration', 'Bridal Bouquets'],
     styles: ['Romantic', 'Minimalist', 'Luxury', 'Vintage', 'Modern', 'Elegant', 'Cute', 'Floral', 'Rustic', 'Bohemian', 'Garden', 'Traditional', 'Glamorous', 'Whimsical'],
   },
   {

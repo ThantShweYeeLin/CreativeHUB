@@ -11,7 +11,7 @@ const CATEGORY_ALIASES: Array<{ label: string; aliases: string[] }> = [
   { label: 'Hair Stylist', aliases: ['hair', 'hairstylist', 'hair stylist', 'hairstyling', 'hairdresser'] },
   { label: 'Fashion Designer', aliases: ['fashion', 'fashion designer', 'designer', 'design'] },
   { label: 'Videographer', aliases: ['video', 'videography', 'videographer', 'videographers', 'cinematographer', 'cinematography'] },
-  { label: 'Decorator/Florist', aliases: ['decorator', 'decorators', 'decoration', 'decor', 'florist', 'florists', 'flowers', 'floral', 'styling'] },
+  { label: 'Decorators', aliases: ['decorator', 'decorators', 'decoration', 'decor', 'florist', 'florists', 'flowers', 'floral', 'styling'] },
   { label: 'Cake/Dessert Maker', aliases: ['cake', 'cakes', 'dessert', 'desserts', 'bakery', 'baker', 'pastry'] },
   { label: 'Musician/Live Entertainment', aliases: ['dj', 'djs', 'musician', 'musicians', 'music', 'band', 'live band', 'entertainment', 'entertainer'] },
 ];

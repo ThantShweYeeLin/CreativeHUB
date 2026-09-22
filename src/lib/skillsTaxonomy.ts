@@ -40,7 +40,7 @@ export const MINOR_SKILL_GROUPS: SkillGroup[] = [
   },
   {
     category: 'Events',
-    skills: ['Decorator/Florist', 'Cake/Dessert Maker', 'Musician/Live Entertainment'],
+    skills: ['Decorators', 'Florist', 'Cake/Dessert Maker', 'Musician/Live Entertainment'],
   },
 ];
 

@@ -393,7 +393,7 @@ function normalizeText(value: string | null | undefined) {
   return (value || '').toLowerCase().replace(/&/g, 'and').replace(/\s+/g, ' ').trim();
 }
 
-/** "Photographer" -> "Photographers", "Decorator/Florist" -> "Decorators/Florists", "Cake/Dessert Maker" -> "Cakes/Dessert Makers" — pluralizes the last word of each "/"-joined segment. */
+/** "Photographer" -> "Photographers", "Decorators" -> "Decorators", "Cake/Dessert Maker" -> "Cakes/Dessert Makers" — pluralizes the last word of each "/"-joined segment. */
 function pluralizeCategory(label: string) {
   return label
     .split('/')
