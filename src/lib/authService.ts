@@ -290,6 +290,10 @@ class AuthService {
     }
   }
 
+  // No session exists yet at this point in sign-up, and
+  // supabase/lock_down_anonymous_access.sql revoked anon's direct table
+  // access - so this goes through the public (no-auth) /auth/check-email
+  // route, which checks it server-side with the admin client.
   async checkEmailExists(email: string): Promise<{ exists: boolean; error: Error | null }> {
     try {
       const normalized = email.trim();
@@ -297,19 +301,21 @@ class AuthService {
         return { exists: false, error: new Error('Email is required.') };
       }
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('id')
-        .ilike('email', normalized)
-        .limit(1);
+      const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
+      const response = await fetch(`${apiBase}/auth/check-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: normalized }),
+      });
+      const json = await response.json().catch(() => ({}));
 
-      if (error) {
-        return { exists: false, error: this.toFriendlyAuthError(error, 'Unable to validate email.') };
+      if (!response.ok) {
+        return { exists: false, error: new Error(json.message || 'Unable to validate email.') };
       }
 
-      return { exists: (data || []).length > 0, error: null };
+      return { exists: !!json.exists, error: null };
     } catch (error) {
-      return { exists: false, error: error instanceof Error ? error : new Error('Unknown error') };
+      return { exists: false, error: new Error('Unable to reach the server. Please try again.') };
     }
   }
 

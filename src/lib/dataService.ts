@@ -615,103 +615,24 @@ export class DataService {
   }
 
   // Public, unauthenticated snapshot of real platform activity used to power
-  // the rotating showcase on the login/sign-up screens — every table read
-  // here has a "viewable by everyone" RLS policy, so this works pre-login.
+  // the rotating showcase on the login/sign-up screens. These used to be
+  // direct anon Supabase queries under "viewable by everyone" policies, but
+  // supabase/lock_down_anonymous_access.sql revoked anon's table access
+  // entirely, so this now goes through the public (no-auth) /auth/showcase
+  // route, which runs the same queries server-side with the admin client.
   static async getAuthShowcaseData(): Promise<{ data: AuthShowcaseData | null; error: unknown }> {
-    if (!hasSupabaseConfig) {
-      return { data: null, error: new Error('Supabase is not configured.') };
+    // Not premiumApi(): that requires a signed-in session, and this must work
+    // on the logged-out login/sign-up screens it's shown on.
+    try {
+      const response = await fetch(`${this.premiumApiBase()}/auth/showcase`);
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        return { data: null, error: new Error(json.message || 'Unable to load showcase data.') };
+      }
+      return { data: json as AuthShowcaseData, error: null };
+    } catch (error) {
+      return { data: null, error };
     }
-
-    const [
-      freelancerCountResp,
-      memberCountResp,
-      reviewStatsResp,
-      avatarRowsResp,
-      testimonialRowsResp,
-      spotlightRowsResp,
-    ] = await Promise.all([
-      supabase.from('users').select('id', { count: 'exact', head: true })
-        .eq('role', 'freelancer').eq('account_status', 'active'),
-      supabase.from('users').select('id', { count: 'exact', head: true })
-        .eq('account_status', 'active'),
-      // Read straight from the reviews table rather than the per-user
-      // users.rating/total_reviews aggregate — that aggregate was seeded
-      // with placeholder counts for demo profiles that have no matching
-      // rows in `reviews`, so it wildly overstates real review volume.
-      (supabase as any).from('reviews').select('rating', { count: 'exact' }).limit(1000),
-      supabase.from('users').select('full_name, avatar_url')
-        .eq('role', 'freelancer').eq('account_status', 'active')
-        .not('avatar_url', 'is', null)
-        .order('total_reviews', { ascending: false })
-        .limit(6),
-      (supabase as any).from('reviews')
-        .select('id, rating, comment, created_at, reviewer:reviewer_id(full_name, avatar_url), reviewee:reviewee_id(full_name)')
-        .not('comment', 'is', null)
-        .gte('rating', 4)
-        .order('created_at', { ascending: false })
-        .limit(15),
-      // Freelancer spotlight — the old file-upload "portfolio" feature was
-      // removed from the product (onboarding now only collects social
-      // links), so the rotating showcase highlights real, currently-active
-      // freelancer profiles instead of stale/orphaned portfolio rows.
-      (supabase as any).from('freelancer_profiles')
-        .select('user_id, title, skills, users:user_id!inner(full_name, avatar_url, rating, total_reviews, location, account_status)')
-        .neq('visibility', 'limited')
-        .eq('is_available', true)
-        .eq('users.account_status', 'active')
-        .not('users.avatar_url', 'is', null)
-        .order('total_reviews', { foreignTable: 'users', ascending: false })
-        .limit(8),
-    ]);
-
-    const reviewRows = (reviewStatsResp.data || []) as Array<{ rating: number | null }>;
-    const totalReviews = reviewStatsResp.count ?? reviewRows.length;
-    const avgRating = reviewRows.length > 0
-      ? reviewRows.reduce((sum, r) => sum + (r.rating || 0), 0) / reviewRows.length
-      : 0;
-
-    const avatars: AuthShowcaseAvatar[] = ((avatarRowsResp.data || []) as Array<{ full_name: string | null; avatar_url: string | null }>)
-      .filter((r) => !!r.avatar_url)
-      .map((r) => ({ name: r.full_name || 'Creative', avatarUrl: r.avatar_url as string }));
-
-    const testimonials: AuthShowcaseTestimonial[] = ((testimonialRowsResp.data || []) as Array<any>)
-      .filter((r) => typeof r.comment === 'string' && r.comment.trim().length >= 12 && r.reviewer)
-      .slice(0, 6)
-      .map((r) => ({
-        id: r.id,
-        comment: (r.comment as string).trim(),
-        rating: Number(r.rating) || 5,
-        reviewerName: r.reviewer?.full_name || 'CreativeHUB member',
-        reviewerAvatar: r.reviewer?.avatar_url || null,
-        revieweeName: r.reviewee?.full_name || null,
-      }));
-
-    const spotlights: AuthShowcaseSpotlight[] = ((spotlightRowsResp.data || []) as Array<any>)
-      .filter((r) => r.users?.avatar_url)
-      .slice(0, 8)
-      .map((r) => ({
-        id: r.user_id,
-        name: r.users?.full_name || 'Freelancer',
-        avatarUrl: r.users?.avatar_url || null,
-        title: r.title || null,
-        skills: Array.isArray(r.skills) ? r.skills.slice(0, 3) : [],
-        rating: Number(r.users?.rating) || 0,
-        totalReviews: Number(r.users?.total_reviews) || 0,
-        location: r.users?.location || null,
-      }));
-
-    return {
-      data: {
-        freelancerCount: freelancerCountResp.count || 0,
-        memberCount: memberCountResp.count || 0,
-        totalReviews,
-        avgRating,
-        avatars,
-        testimonials,
-        spotlights,
-      },
-      error: freelancerCountResp.error || memberCountResp.error || reviewStatsResp.error || null,
-    };
   }
 
   // Explore page hero: real platform stats + one featured freelancer to
