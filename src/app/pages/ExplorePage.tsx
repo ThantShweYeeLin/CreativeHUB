@@ -1479,7 +1479,7 @@ export function ExplorePage() {
                       : 'text-5xl sm:text-6xl md:text-7xl'
                   }`}
                 >
-                  {heroCategoryLabels[heroCategoryIndex]}s
+                  {pluralizeCategory(heroCategoryLabels[heroCategoryIndex])}
                 </span>
               </div>
               That Move You
