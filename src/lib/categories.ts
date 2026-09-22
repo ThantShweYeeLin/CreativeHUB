@@ -74,8 +74,10 @@ export const FREELANCER_CATEGORIES: FreelancerCategoryDef[] = [
   },
   {
     id: 'musician-live-entertainment',
-    label: 'Musician/Live Entertainment',
-    skills: ['Live Performance', 'Acoustic Set', 'Wedding Ceremony Music', 'Cover Songs', 'Song Requests', 'Custom Setlists', 'Sound Equipment', 'Vocals/Singing', 'Guitar', 'Piano/Keyboard', 'Violin'],
+    label: 'Musicians',
+    // 'Live Entertainment' is a suggested skill here (not its own
+    // category) — same pattern as 'Florist' under Decorators.
+    skills: ['Live Entertainment', 'Live Performance', 'Acoustic Set', 'Wedding Ceremony Music', 'Cover Songs', 'Song Requests', 'Custom Setlists', 'Sound Equipment', 'Vocals/Singing', 'Guitar', 'Piano/Keyboard', 'Violin'],
     styles: ['Pop', 'Acoustic', 'Romantic', 'Jazz', 'Classical', 'R&B', 'Rock'],
     performerType: ['Solo Artist', 'Band', 'Singer/Vocalist', 'Acoustic Duo', 'Instrumentalist', 'DJ'],
   },
@@ -86,7 +88,7 @@ export const FREELANCER_CATEGORY_LABELS = FREELANCER_CATEGORIES.map((category) =
 // The one category with a performerType list — used to conditionally show
 // the performer-format picker in onboarding/Edit Profile and to decide
 // whether search should also check performerType (see freelancerSearch.ts).
-export const MUSICIAN_CATEGORY_LABEL = 'Musician/Live Entertainment';
+export const MUSICIAN_CATEGORY_LABEL = 'Musicians';
 
 // A freelancer can be "also skilled in" more than one other category (each
 // with its own skills/styles/performer-type suggestions and experience
@@ -124,7 +126,7 @@ export function suggestedStylesForCategory(categoryLabel: string | null | undefi
   return getFreelancerCategory(categoryLabel || undefined)?.styles ?? [];
 }
 
-/** Suggested performer-format chips — non-empty only for Musician/Live Entertainment. */
+/** Suggested performer-format chips — non-empty only for Musicians. */
 export function suggestedPerformerTypesForCategory(categoryLabel: string | null | undefined): string[] {
   return getFreelancerCategory(categoryLabel || undefined)?.performerType ?? [];
 }

@@ -124,21 +124,21 @@ interface CarouselSectionProps {
 
 // Per-category font size for the hero's rotating word, keyed by the raw
 // label (before pluralizeCategory() runs) — hand-picked per label rather
-// than measured at runtime, so a short word like "Decorators" renders
-// noticeably bigger and a long one like "Musician/Live Entertainment"
-// noticeably smaller, while every one has already been checked (see the
-// Playwright pass in the commit this came from) to still fit inside the
-// reserved two-line-tall box below without changing its size. Falls back
-// to the "normal" tier for any category added later without an entry here.
+// than measured at runtime, so a short word like "Musicians" renders
+// noticeably bigger and a long one like "Cake/Dessert Maker" noticeably
+// smaller, while every one has already been checked (see the Playwright
+// pass in the commit this came from) to still fit inside the reserved
+// two-line-tall box below without changing its size. Falls back to the
+// "normal" tier for any category added later without an entry here.
 const HERO_WORD_SIZE: Record<string, string> = {
-  'Decorators': 'text-6xl sm:text-7xl md:text-8xl',
+  Musicians: 'text-6xl sm:text-7xl md:text-8xl',
+  Decorators: 'text-6xl sm:text-7xl md:text-8xl',
   Photographer: 'text-5xl sm:text-6xl md:text-7xl',
   Videographer: 'text-5xl sm:text-6xl md:text-7xl',
   'Hair Stylist': 'text-5xl sm:text-6xl md:text-7xl',
   'Makeup Artist': 'text-4xl sm:text-6xl md:text-7xl',
   'Fashion Designer': 'text-3xl sm:text-5xl md:text-6xl',
-  'Cake/Dessert Maker': 'text-3xl sm:text-4xl md:text-5xl',
-  'Musician/Live Entertainment': 'text-2xl sm:text-3xl md:text-4xl',
+  'Cake/Dessert Maker': 'text-3xl sm:text-5xl md:text-5xl',
 };
 const HERO_WORD_DEFAULT_SIZE = 'text-4xl sm:text-5xl md:text-6xl';
 

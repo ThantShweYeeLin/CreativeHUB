@@ -16,7 +16,7 @@ const CATEGORIES = [
   'Fashion Designer',
   'Decorators',
   'Cake/Dessert Maker',
-  'Musician/Live Entertainment',
+  'Musicians',
 ];
 
 const BASE_SYSTEM_INSTRUCTION = `

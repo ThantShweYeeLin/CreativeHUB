@@ -46,7 +46,7 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Fashion Designer': 2,
     'Decorators': 3,
     'Cake/Dessert Maker': 2,
-    'Musician/Live Entertainment': 2,
+    'Musicians': 2,
   },
   'Birthday Party': {
     Photographer: 2,
@@ -56,7 +56,7 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Fashion Designer': 1,
     'Decorators': 3,
     'Cake/Dessert Maker': 3,
-    'Musician/Live Entertainment': 2,
+    'Musicians': 2,
   },
   Proposal: {
     Photographer: 3,
@@ -66,7 +66,7 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Fashion Designer': 1,
     'Decorators': 2,
     'Cake/Dessert Maker': 1,
-    'Musician/Live Entertainment': 1,
+    'Musicians': 1,
   },
   'Graduation Celebration': {
     Photographer: 3,
@@ -76,7 +76,7 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Fashion Designer': 1,
     'Decorators': 2,
     'Cake/Dessert Maker': 2,
-    'Musician/Live Entertainment': 1,
+    'Musicians': 1,
   },
 };
 
@@ -264,7 +264,7 @@ export interface EventMatcherCandidate {
   userId: string;
   freelancerProfileId: string;
   fullName: string;
-  // Aesthetic descriptors only — for Musician/Live Entertainment this is
+  // Aesthetic descriptors only — for Musicians this is
   // genre (Pop, Jazz, Rock, ...), never performer format (Band, DJ, ...).
   // Performer format isn't an aesthetic match signal the way genre or
   // visual style is, so it's deliberately not part of this candidate shape
