@@ -399,7 +399,11 @@ function pluralizeCategory(label: string) {
     .split('/')
     .map((segment) => {
       const words = segment.trim().split(' ');
-      words[words.length - 1] = `${words[words.length - 1]}s`;
+      const lastWord = words[words.length - 1];
+      // Already plural (e.g. "Decorators") — don't double it into "Decoratorss".
+      if (!lastWord.toLowerCase().endsWith('s')) {
+        words[words.length - 1] = `${lastWord}s`;
+      }
       return words.join(' ');
     })
     .join('/');
