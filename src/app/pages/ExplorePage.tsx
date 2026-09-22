@@ -122,13 +122,25 @@ interface CarouselSectionProps {
   onToggleFavorite?: (id: string) => void;
 }
 
-// Which of FREELANCER_CATEGORIES' labels are long enough to wrap to a
-// second line in the hero's rotating word (checked against the raw label,
-// before the "s" the hero appends) — a fixed, known set of 8 categories,
-// so hardcoding which ones wrap is far more robust than measuring rendered
-// DOM height on every rotation (which would also need to guess how the
-// enlarged, one-line font-size affects wrapping before it's even painted).
-const TWO_LINE_HERO_CATEGORY_LABELS = new Set(['Musician/Live Entertainment']);
+// Per-category font size for the hero's rotating word, keyed by the raw
+// label (before pluralizeCategory() runs) — hand-picked per label rather
+// than measured at runtime, so a short word like "Decorators" renders
+// noticeably bigger and a long one like "Musician/Live Entertainment"
+// noticeably smaller, while every one has already been checked (see the
+// Playwright pass in the commit this came from) to still fit inside the
+// reserved two-line-tall box below without changing its size. Falls back
+// to the "normal" tier for any category added later without an entry here.
+const HERO_WORD_SIZE: Record<string, string> = {
+  'Decorators': 'text-6xl sm:text-7xl md:text-8xl',
+  Photographer: 'text-5xl sm:text-6xl md:text-7xl',
+  Videographer: 'text-5xl sm:text-6xl md:text-7xl',
+  'Hair Stylist': 'text-5xl sm:text-6xl md:text-7xl',
+  'Makeup Artist': 'text-4xl sm:text-6xl md:text-7xl',
+  'Fashion Designer': 'text-3xl sm:text-5xl md:text-6xl',
+  'Cake/Dessert Maker': 'text-3xl sm:text-4xl md:text-5xl',
+  'Musician/Live Entertainment': 'text-2xl sm:text-3xl md:text-4xl',
+};
+const HERO_WORD_DEFAULT_SIZE = 'text-4xl sm:text-5xl md:text-6xl';
 
 // Module-level (not component state) so it survives ExplorePage unmounting
 // entirely when a user opens a profile — a plain useState/ref would reset
@@ -1453,30 +1465,21 @@ export function ExplorePage() {
               Discover
               {/* Reserves a constant 2-line-tall box (in em, at THIS h1's own
                   base font-size — the rotating word's own font-size below
-                  doesn't affect it, so enlarging that word never overflows
-                  this reservation) - short words like "Photographers" sit
-                  on one line, long ones like "Musician/Live Entertainments"
-                  wrap to two, but either way the hero's total height (and
-                  everything below it) never shifts between rotations. */}
+                  doesn't affect it, so resizing that word never overflows
+                  this reservation) - each category renders at its own
+                  HERO_WORD_SIZE (shorter labels bigger, longer ones
+                  smaller), so the box's height never shifts between
+                  rotations even though every label is a different length. */}
               <div className="flex min-h-[2.2em] items-center">
                 <span
                   key={heroCategoryIndex}
                   className={`hero-word-in inline-block bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text leading-[1.25] text-transparent ${
-                    // The handful of categories long enough to wrap to two
-                    // lines at the base size keep it — sizing them up too
-                    // risks wrapping even more aggressively and overflowing
-                    // the reserved box above. Every shorter, one-line label
-                    // instead renders one Tailwind step bigger than the
-                    // surrounding "Discover"/"That Move You" text, so it
-                    // actually fills the reserved two-line-tall box instead
-                    // of sitting small with empty space above and below it.
                     // leading-[1.25] (looser than the h1's own leading-[1.1])
-                    // is required here, not cosmetic — at this larger size,
-                    // 1.1 doesn't leave enough room below the baseline and
-                    // was clipping descenders (the tails on g/y/p).
-                    TWO_LINE_HERO_CATEGORY_LABELS.has(heroCategoryLabels[heroCategoryIndex])
-                      ? ''
-                      : 'text-5xl sm:text-6xl md:text-7xl'
+                    // is required here, not cosmetic — at these larger
+                    // sizes, 1.1 doesn't leave enough room below the
+                    // baseline and was clipping descenders (the tails on
+                    // g/y/p).
+                    HERO_WORD_SIZE[heroCategoryLabels[heroCategoryIndex]] || HERO_WORD_DEFAULT_SIZE
                   }`}
                 >
                   {pluralizeCategory(heroCategoryLabels[heroCategoryIndex])}
