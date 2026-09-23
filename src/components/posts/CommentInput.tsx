@@ -27,7 +27,12 @@ export function CommentInput({
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (focusToken) {
+    // Skipped on touch screens: focusing here pops the on-screen keyboard
+    // up the instant the comment sheet opens, before the user has even
+    // seen the sheet. There, the keyboard only opens once they tap the
+    // input themselves. Desktop keeps the jump-straight-to-typing focus.
+    const isTouchScreen = window.matchMedia?.('(pointer: coarse)').matches;
+    if (focusToken && !isTouchScreen) {
       inputRef.current?.focus();
     }
   }, [focusToken]);

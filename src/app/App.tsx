@@ -8,6 +8,7 @@ import { MainLayout } from '../components/MainLayout';
 import { MobileBottomNav } from '../components/MobileBottomNav';
 import { GlobalReviewPrompt } from '../components/GlobalReviewPrompt';
 import { ChatbotWidget } from '../components/ChatbotWidget';
+import { AppGuide } from '../components/AppGuide';
 import { PremiumPromo } from '../components/PremiumPromo';
 import { NotificationToastHost } from './components/common/NotificationToastHost';
 import { BootSplash } from './components/BootSplash';
@@ -535,6 +536,7 @@ export default function App() {
     ) && <MobileBottomNav />}
     {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
     {isAuthenticated && user?.onboardingCompleted && <ChatbotWidget />}
+    {isAuthenticated && user?.onboardingCompleted && <AppGuide />}
     {isAuthenticated && user?.onboardingCompleted && user.role === 'freelancer' && <PremiumPromo />}
     {isAuthenticated && <NotificationToastHost />}
     </>

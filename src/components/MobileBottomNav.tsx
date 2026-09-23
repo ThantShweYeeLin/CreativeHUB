@@ -34,7 +34,7 @@ export function MobileBottomNav() {
 
   return (
     <>
-    <nav className="fixed inset-x-0 bottom-0 z-[1200] flex items-center justify-around border-t border-sky-100 bg-white/95 backdrop-blur-lg py-2 md:hidden">
+    <nav data-tour="nav" className="fixed inset-x-0 bottom-0 z-[1200] flex items-center justify-around border-t border-sky-100 bg-white/95 backdrop-blur-lg py-2 md:hidden">
       {tabs.map((tab) => {
         const isActive = tab.activeMatch(location.pathname);
         const Icon = tab.icon;
