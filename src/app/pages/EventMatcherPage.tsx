@@ -230,64 +230,93 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     };
     const budgetForCategory = budgetNumber / confirmedCategories.length;
 
+    // Builds the same ranked-candidate list from whichever profile set was
+    // fetched (Premium-only, or the no-Premium-filter fallback) - date
+    // availability, location coverage, having a set price, and scoring are
+    // identical either way; only which freelancers were fetched differs.
+    const buildCandidates = (profiles: any[], blockedDates: any[], bookings: any[], category: string): RankedCandidate[] => {
+      const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
+      for (const row of blockedDates) {
+        const list = blockedByProfile.get(row.freelancer_id) || [];
+        list.push(row);
+        blockedByProfile.set(row.freelancer_id, list);
+      }
+      const bookingsByUser = new Map<string, any[]>();
+      for (const row of bookings) {
+        const list = bookingsByUser.get(row.freelancer_id) || [];
+        list.push(row);
+        bookingsByUser.set(row.freelancer_id, list);
+      }
+
+      const candidates: RankedCandidate[] = [];
+      for (const profile of profiles) {
+        const isFree = isFreelancerFreeOnDate(bookingsByUser.get(profile.user_id) || [], blockedByProfile.get(profile.id) || [], date);
+        if (!isFree) continue;
+
+        const providerLocations: LocationPointLike[] = [
+          ...(Array.isArray(profile.locations) ? profile.locations : []),
+          ...(Array.isArray(profile.studio_locations) ? profile.studio_locations : []),
+        ];
+        if (!locationCovers(providerLocations, eventLocation)) continue;
+
+        let packagePrice: number | null = null;
+        let serviceName = category;
+        if (profile.hourly_rate != null) {
+          const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
+          packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
+          serviceName = 'Hourly rate';
+        }
+        if (packagePrice == null) continue;
+
+        const candidate: RankedCandidate = {
+          userId: profile.user_id,
+          freelancerProfileId: profile.id,
+          fullName: profile.users?.full_name || 'Freelancer',
+          avatarUrl: profile.users?.avatar_url || null,
+          styles: Array.isArray(profile.styles) ? profile.styles : [],
+          rating: Number(profile.users?.rating) || 0,
+          totalReviews: Number(profile.users?.total_reviews) || 0,
+          experienceYears: profile.experience_years ?? null,
+          packagePrice,
+          packageCurrency: currency,
+          serviceName,
+          score: 0,
+        };
+        candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
+        candidates.push(candidate);
+      }
+
+      candidates.sort((a, b) => b.score - a.score);
+      return candidates;
+    };
+
     const results = await Promise.all(
       confirmedCategories.map(async (category): Promise<CategoryMatch> => {
         const tier = categoryTier.get(category) || 'optional';
-        const { data } = await DataService.getEventMatcherCandidates(category, date);
-        const { profiles, blockedDates, bookings } = data;
 
-        const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
-        for (const row of blockedDates as any[]) {
-          const list = blockedByProfile.get(row.freelancer_id) || [];
-          list.push(row);
-          blockedByProfile.set(row.freelancer_id, list);
-        }
-        const bookingsByUser = new Map<string, any[]>();
-        for (const row of bookings as any[]) {
-          const list = bookingsByUser.get(row.freelancer_id) || [];
-          list.push(row);
-          bookingsByUser.set(row.freelancer_id, list);
-        }
+        const premiumResponse = await DataService.getEventMatcherCandidates(category, date);
+        let candidates = buildCandidates(
+          premiumResponse.data.profiles as any[],
+          premiumResponse.data.blockedDates,
+          premiumResponse.data.bookings,
+          category
+        );
 
-        const candidates: RankedCandidate[] = [];
-        for (const profile of profiles as any[]) {
-          const isFree = isFreelancerFreeOnDate(bookingsByUser.get(profile.user_id) || [], blockedByProfile.get(profile.id) || [], date);
-          if (!isFree) continue;
-
-          const providerLocations: LocationPointLike[] = [
-            ...(Array.isArray(profile.locations) ? profile.locations : []),
-            ...(Array.isArray(profile.studio_locations) ? profile.studio_locations : []),
-          ];
-          if (!locationCovers(providerLocations, eventLocation)) continue;
-
-          let packagePrice: number | null = null;
-          let serviceName = category;
-          if (profile.hourly_rate != null) {
-            const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
-            packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
-            serviceName = 'Hourly rate';
-          }
-          if (packagePrice == null) continue;
-
-          const candidate: RankedCandidate = {
-            userId: profile.user_id,
-            freelancerProfileId: profile.id,
-            fullName: profile.users?.full_name || 'Freelancer',
-            avatarUrl: profile.users?.avatar_url || null,
-            styles: Array.isArray(profile.styles) ? profile.styles : [],
-            rating: Number(profile.users?.rating) || 0,
-            totalReviews: Number(profile.users?.total_reviews) || 0,
-            experienceYears: profile.experience_years ?? null,
-            packagePrice,
-            packageCurrency: currency,
-            serviceName,
-            score: 0,
-          };
-          candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
-          candidates.push(candidate);
+        // No Premium freelancer survived date/location/price filtering for
+        // this category (whether because none exist, or the ones that do
+        // are busy or too far) - fill in with everyone else who qualifies,
+        // so the plan never shows "no providers" while a free freelancer
+        // nearby is actually available that day.
+        if (candidates.length === 0) {
+          const anyResponse = await DataService.getEventMatcherCandidatesAny(category, date);
+          candidates = buildCandidates(
+            anyResponse.data.profiles as any[],
+            anyResponse.data.blockedDates,
+            anyResponse.data.bookings,
+            category
+          );
         }
 
-        candidates.sort((a, b) => b.score - a.score);
         return { category, tier, candidates: candidates.slice(0, 5), selectedIndex: 0 };
       })
     );
@@ -809,9 +838,6 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   <Users className="h-4 w-4" />
                   {isSubmitting ? 'Sending requests...' : 'Send Requests to My Event Team'}
                 </button>
-                <p className="text-center text-xs text-gray-400">
-                  This sends booking requests through your normal Requests flow — nothing is booked automatically.
-                </p>
                 <button
                   type="button"
                   onClick={() => void handlePostOpenRequest()}
