@@ -415,18 +415,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const availability = freelancerProfile?.is_available === false ? 'Currently unavailable' : 'Available for new bookings';
   const skills = freelancerProfile?.skills || [];
   const styles = freelancerProfile?.styles || [];
+  // Performer format (Band, Solo Artist, DJ, ...) shown alongside minorSkills
+  // under Primary specialty rather than beside the name.
   const performerType: string[] = freelancerProfile?.performer_type || [];
-  // "Band" is the one performer type worth calling out right beside the
-  // name (a client deciding who to book needs to know upfront whether
-  // they'd be booking a group act) - the rest (Solo Artist, Singer/
-  // Vocalist, Acoustic Duo, Instrumentalist, DJ) read more like additional
-  // specialties, so they show under Primary specialty instead, alongside
-  // minorSkills there.
-  const bandPerformerTypes = performerType.filter((type) => type === 'Band');
-  const otherPerformerTypes = performerType.filter((type) => type !== 'Band');
   // Other full categories ("also skilled in" at onboarding) this freelancer
   // also provides services in, each with its own optional experience
-  // level - shown alongside minorSkills/otherPerformerTypes under Primary
+  // level - shown alongside minorSkills/performerType under Primary
   // specialty, same reasoning as those two.
   const minorCategories: string[] = freelancerProfile?.minor_categories || [];
   const minorCategoryExperienceLevels: Record<string, string> = freelancerProfile?.minor_category_experience_levels || {};
@@ -1290,13 +1284,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       <h1 className="text-2xl font-bold md:text-3xl">
                         {displayName}
                         {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
-                        {shouldDisplayGender(gender) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {genderLabel(gender)}</span>}
                       </h1>
-                      {bandPerformerTypes.map((type: string) => (
-                        <span key={type} className="rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold text-white md:text-sm">
-                          {type}
-                        </span>
-                      ))}
                     </div>
                     <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
                   </div>
@@ -1429,13 +1417,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <h1 className="text-xl font-bold text-gray-900">
                   {displayName}
                   {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
-                  {shouldDisplayGender(gender) && <span className="ml-2 text-sm font-normal text-gray-500">· {genderLabel(gender)}</span>}
                 </h1>
-                {bandPerformerTypes.map((type: string) => (
-                  <span key={type} className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-900">
-                    {type}
-                  </span>
-                ))}
               </div>
               <p className="mt-1 text-sm text-gray-600">{title}</p>
 
@@ -1536,6 +1518,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
           <div className="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4">
             <p className="text-gray-700 leading-7">{bio}</p>
+            {shouldDisplayGender(gender) && <p className="mt-1 text-sm text-gray-500">{genderLabel(gender)}</p>}
 
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -1675,7 +1658,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       {skill.experienceLevel && <span className="text-white/80"> · {skill.experienceLevel}</span>}
                     </span>
                   ))}
-                  {otherPerformerTypes.map((type) => (
+                  {performerType.map((type) => (
                     <span key={type} className="rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-sm font-semibold text-white">
                       {type}
                     </span>
