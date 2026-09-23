@@ -710,23 +710,16 @@ export class DataService {
   // ranking happen entirely in application code afterward — this method is
   // just the query, same split as freelancerSearch.ts's interpretSearchQuery
   // / scoreFreelancerMatch versus this file's searchFreelancers.
-  static async getEventMatcherCandidates(category: string, eventDate: string) {
-    // Eligibility (an active Freelancer Premium subscription, plus the same
-    // category / available / not-limited-visibility / active-account filters
-    // this query always had) is applied inside Postgres by
-    // get_event_matcher_candidates() - see supabase/freelancer_premium.sql -
-    // so it can't be bypassed from the browser. Availability on the date,
-    // location coverage, budget and style matching still happen below and in
-    // lib/eventMatcher.ts exactly as before.
-    const { data: rpcProfiles, error } = await (supabase as any).rpc('get_event_matcher_candidates', { p_category: category });
-    const profiles = (rpcProfiles || []) as any[];
-
-    if (error || profiles.length === 0) {
-      return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
+  // Shared by getEventMatcherCandidates/getEventMatcherCandidatesAny below -
+  // joins in blocked dates + bookings on the event date for whichever
+  // profile set the caller already fetched, so availability filtering (done
+  // client-side in EventMatcherPage.tsx/lib/eventMatcher.ts) has what it needs.
+  private static async withEventMatcherAvailability(profiles: any[], eventDate: string) {
+    if (profiles.length === 0) {
+      return { profiles: [], blockedDates: [], bookings: [] };
     }
-
-    const profileIds = (profiles as any[]).map((profile) => profile.id);
-    const userIds = (profiles as any[]).map((profile) => profile.user_id);
+    const profileIds = profiles.map((profile) => profile.id);
+    const userIds = profiles.map((profile) => profile.user_id);
 
     const [blockedDatesResponse, bookingsResponse] = await Promise.all([
       (supabase as any)
@@ -738,13 +731,35 @@ export class DataService {
     ]);
 
     return {
-      data: {
-        profiles: profiles as any[],
-        blockedDates: (blockedDatesResponse.data || []) as any[],
-        bookings: (bookingsResponse.data || []) as any[],
-      },
-      error: null,
+      profiles,
+      blockedDates: (blockedDatesResponse.data || []) as any[],
+      bookings: (bookingsResponse.data || []) as any[],
     };
+  }
+
+  // Eligibility (an active Freelancer Premium subscription, plus the same
+  // category / available / not-limited-visibility / active-account filters
+  // this query always had) is applied inside Postgres by
+  // get_event_matcher_candidates() - see supabase/freelancer_premium.sql -
+  // so it can't be bypassed from the browser. Availability on the date,
+  // location coverage, budget and style matching still happen in
+  // EventMatcherPage.tsx and lib/eventMatcher.ts exactly as before.
+  static async getEventMatcherCandidates(category: string, eventDate: string) {
+    const { data: rpcProfiles, error } = await (supabase as any).rpc('get_event_matcher_candidates', { p_category: category });
+    if (error) return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
+    return { data: await this.withEventMatcherAvailability((rpcProfiles || []) as any[], eventDate), error: null };
+  }
+
+  // Same shape as getEventMatcherCandidates, minus the Premium check (see
+  // supabase/event_matcher_fallback_after_filtering.sql) - only ever called
+  // as a second attempt by EventMatcherPage.tsx, after the Premium-only
+  // result comes back empty once date/location/budget filtering is applied,
+  // so a category never shows "no providers" just because the Premium
+  // freelancers who exist happen to be busy or too far that day.
+  static async getEventMatcherCandidatesAny(category: string, eventDate: string) {
+    const { data: rpcProfiles, error } = await (supabase as any).rpc('get_event_matcher_candidates_any', { p_category: category });
+    if (error) return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
+    return { data: await this.withEventMatcherAvailability((rpcProfiles || []) as any[], eventDate), error: null };
   }
 
   static async searchFreelancers(query: string, skills?: string[]) {

@@ -15,5 +15,6 @@ PSQL=(psql -h /tmp -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q)
 
 "${PSQL[@]}" -d $DB -f "$HERE/25_accept_tests.sql" 2>&1 | grep -E '(NOTICE:  (PASS|FAIL)|ERROR|ALL CHECKS)' | sed -E 's/^psql:[^ ]+ //; s/^NOTICE:  //'
 "${PSQL[@]}" -d $DB -f "$HERE/../../supabase/event_matcher_premium_fallback.sql"
-"${PSQL[@]}" -d $DB -f "$HERE/40_event_matcher_fallback.sql" 2>&1 | grep -E '(NOTICE:  (PASS|FAIL)|ERROR|ALL CHECKS)' | sed -E 's/^psql:[^ ]+ //; s/^NOTICE:  //'
+"${PSQL[@]}" -d $DB -f "$HERE/../../supabase/event_matcher_fallback_after_filtering.sql"
+"${PSQL[@]}" -d $DB -f "$HERE/45_event_matcher_any_fallback.sql" 2>&1 | grep -E '(NOTICE:  (PASS|FAIL)|ERROR|ALL CHECKS)' | sed -E 's/^psql:[^ ]+ //; s/^NOTICE:  //'
 bash "$HERE/30_concurrency.sh"
