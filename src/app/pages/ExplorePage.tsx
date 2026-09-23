@@ -1441,7 +1441,7 @@ export function ExplorePage() {
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">
               <Sparkles className="h-3.5 w-3.5" />
-              Global Creative Marketplace
+              Thailand's Creative Marketplace
             </span>
 
             <h1 className="mt-5 font-serif text-4xl font-bold leading-[1.1] text-gray-900 sm:text-5xl md:text-6xl">

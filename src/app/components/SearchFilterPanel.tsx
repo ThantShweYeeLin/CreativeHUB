@@ -2,7 +2,7 @@ import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizont
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCurrency } from '../../contexts/CurrencyContext';
-import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode, SUPPORTED_CURRENCIES } from '../../lib/currency';
+import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -172,22 +172,6 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
       ...prev,
       priceRange: [safeMin, prev.priceRange[1]],
     }));
-  };
-
-  const handleCurrencyChange = (value: string) => {
-    const nextCurrency = normalizeCurrencyCode(value, DEFAULT_CURRENCY);
-
-    setFilters((prev) => {
-      const currentCurrency = normalizeCurrencyCode(prev.currency, DEFAULT_CURRENCY);
-      const nextMin = Math.max(PRICE_MIN, Math.round(convertAmount(prev.priceRange[0], currentCurrency, nextCurrency)));
-      const nextMax = Math.min(PRICE_MAX, Math.round(convertAmount(prev.priceRange[1], currentCurrency, nextCurrency)));
-
-      return {
-        ...prev,
-        currency: nextCurrency,
-        priceRange: [Math.min(nextMin, nextMax), Math.max(nextMin, nextMax)],
-      };
-    });
   };
 
   const setMaxPrice = (value: number) => {
@@ -396,21 +380,6 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               Choose a preset for quick filtering, or type your exact minimum and maximum budget.
             </p>
             <div className="space-y-6">
-              <div>
-                <label className={`mb-2 block ${FIELD_LABEL_CLASS}`}>Currency</label>
-                <select
-                  value={filters.currency}
-                  onChange={(event) => handleCurrencyChange(event.target.value)}
-                  className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                >
-                  {SUPPORTED_CURRENCIES.map((item) => (
-                    <option key={item.code} value={item.code}>
-                      {item.code} - {item.symbol} {item.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               <div className="flex flex-wrap gap-2">
                 {budgetPresets.map((preset) => {
                   const isActive =

@@ -167,11 +167,23 @@ export function FreelancerOpportunitiesPanel() {
           <div className="grid gap-4 md:grid-cols-2">
             {opportunities.map((opportunity) => {
               const myRoles = opportunity.roles.filter((role) => role.eligible);
+              // has_applied only ever means "I applied at some point" - it
+              // doesn't say what happened since, so a declined application
+              // kept showing this card as a flat green "Applied" forever.
+              // Cross-reference the same applications this freelancer's own
+              // "My applications" tab already fetches to show what's
+              // actually true now (Declined, Accepted, Under review, ...).
+              const myApplication = applications.find((application) => application.opportunity_id === opportunity.id);
+              const appliedStatus = myApplication ? applicationStatusLabel(myApplication) : null;
               return (
                 <div key={opportunity.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-bold text-gray-900">{opportunity.title}</h3>
-                    {opportunity.has_applied && <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-700">Applied</span>}
+                    {opportunity.has_applied && (
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${appliedStatus ? TONE_CLASS[appliedStatus.tone] : 'bg-green-100 text-green-700'}`}>
+                        {appliedStatus?.label || 'Applied'}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />

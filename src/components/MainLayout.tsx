@@ -34,11 +34,23 @@ export function MainLayout({ children }: MainLayoutProps) {
 
   const unreadNotificationsCount = notifications.filter((item) => !item.read).length;
 
+  // Always system-generated, never a real person's action (see
+  // supabase/freelancer_premium.sql's create_group_opportunity /
+  // notify_group_application_update — both insert with actor_id null,
+  // deliberately, so the client's identity is never leaked to a
+  // freelancer browsing Opportunities). Their message text can still read
+  // like "<something> declined/accepted ..." (e.g. "Your application for
+  // 'X' was declined."), which used to fool the name-inference regex below
+  // into treating the sentence fragment before that verb as a person's
+  // name, so the CreativeHUB logo fallback never kicked in.
+  const SYSTEM_ONLY_NOTIFICATION_TYPES = new Set(['opportunity_new', 'application_update']);
+
   const mapNotificationRecord = (row: any): NotificationPanelItem => {
     const actor = Array.isArray(row.actor) ? row.actor[0] : row.actor;
     const rawMessageText = typeof row.message === 'string' ? row.message : '';
+    const isSystemOnlyType = SYSTEM_ONLY_NOTIFICATION_TYPES.has(String(row.type || ''));
     const isGenericActorName = (value?: string | null) => /^(?:creative\s*hub|creativehub|freelancer|user|someone)\b/i.test(String(value || ''));
-    const inferredActorName = (() => {
+    const inferredActorName = isSystemOnlyType ? null : (() => {
       const match = rawMessageText.match(/^(.+?)\s+(?:sent|accepted|declined|rejected|cancelled)\b/i);
       const candidate = match?.[1]?.trim();
       if (candidate && !isGenericActorName(candidate)) {

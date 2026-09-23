@@ -5368,21 +5368,47 @@ export class DataService {
           });
         }
 
-        if (nextStatus === 'rejected' && clientId) {
-          const freelancerUser = freelancerId ? await this.getUser(freelancerId) : null;
-          const actorName = freelancerUser?.data?.full_name || 'Someone';
+        if (nextStatus === 'rejected') {
+          // Whoever's offer was outstanding is who got rejected — the OTHER
+          // party is the one who did the rejecting. A pristine request with
+          // no counter yet (counter_by '') only the freelancer can act on,
+          // same as counter_by 'client' (the freelancer is responding to the
+          // client's counter). counter_by 'freelancer' means the client is
+          // the one responding — including declining a freelancer's Group
+          // Request application, which arrives pre-set to counter_by
+          // 'freelancer' (see apply_to_group_opportunity). Without this,
+          // the client got their own reject echoed back as if the
+          // freelancer had rejected THEM.
+          const rejectedByClient = String((data as any).counter_by || '') === 'freelancer';
+          const recipientId = rejectedByClient ? freelancerId : clientId;
+          const actorId = rejectedByClient ? clientId : freelancerId;
 
-          await this.notifyEvent({
-            userId: clientId,
-            actorId: freelancerId || null,
-            type: 'request_rejected',
-            title: isGroupRequest ? 'Group Project rejected' : 'Booking rejected',
-            message: isGroupRequest
-              ? `${actorName} rejected your Group Project request for ${projectName}.`
-              : `${actorName} rejected ${projectName}.`,
-            relatedId: requestId,
-            metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
-          });
+          // A client declining an Open Group Request application already
+          // gets an anonymized notification via the
+          // notify_group_application_update DB trigger ("Your application
+          // for '<event>' was declined.", no client identity attached, per
+          // supabase/freelancer_premium.sql). Sending this one too would
+          // both duplicate it and leak the client's real name/avatar to a
+          // freelancer they've never met — the opposite of what that
+          // trigger deliberately hides.
+          const isGroupApplicationReject = rejectedByClient && Boolean(await this.getGroupApplicationIdForRequest(requestId));
+
+          if (recipientId && !isGroupApplicationReject) {
+            const actorUser = actorId ? await this.getUser(actorId) : null;
+            const actorName = actorUser?.data?.full_name || 'Someone';
+
+            await this.notifyEvent({
+              userId: recipientId,
+              actorId: actorId || null,
+              type: 'request_rejected',
+              title: isGroupRequest ? 'Group Project rejected' : 'Booking rejected',
+              message: isGroupRequest
+                ? `${actorName} rejected your Group Project request for ${projectName}.`
+                : `${actorName} rejected ${projectName}.`,
+              relatedId: requestId,
+              metadata: { project_name: projectName, actor_name: actorName, requester_name: actorName },
+            });
+          }
 
           await this.logRequestOffer({
             request_id: requestId,
