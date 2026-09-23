@@ -15,7 +15,6 @@ import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import type { DisputeFlowCategory } from './disputeCategories';
-import { MAX_MINOR_SKILLS, isSkillExperienceLevel } from './skillsTaxonomy';
 import { tokenizeCard, type CardDetails } from './omiseClient';
 import { acceptApplicationErrorMessage, type FreelancerSubscription, type GroupApplication, type GroupOpportunity, type PremiumPlan } from './freelancerPremium';
 
@@ -968,81 +967,6 @@ export class DataService {
     return map;
   }
 
-  // The only mutating entry point for minor skills — the major skill keeps
-  // changing through the existing category/title flow. Takes skill NAMES
-  // (matching how skills/styles tags already work everywhere else in this
-  // app — no other part of the app plumbs skill ids through the UI) plus
-  // each one's optional experience level, and re-validates everything
-  // server-side (max count, no duplicates, not equal to the current major
-  // skill, must be real active skill rows, level must be a recognized
-  // value) rather than trusting whatever the picker UI already enforced
-  // client-side.
-  static async updateFreelancerSkills(
-    userId: string,
-    { minorSkills }: { minorSkills: Array<{ name: string; experienceLevel?: string | null }> }
-  ): Promise<{ data: FreelancerSkillsSummary | null; error: unknown }> {
-    const dedupedByName = new Map(minorSkills.map((entry) => [entry.name, entry.experienceLevel ?? null]));
-    const dedupedNames = Array.from(dedupedByName.keys());
-    if (dedupedNames.length > MAX_MINOR_SKILLS) {
-      return { data: null, error: new Error(`You can select up to ${MAX_MINOR_SKILLS} minor skills.`) };
-    }
-    for (const level of dedupedByName.values()) {
-      if (level !== null && !isSkillExperienceLevel(level)) {
-        return { data: null, error: new Error('Invalid experience level.') };
-      }
-    }
-
-    const profileResp = await supabase
-      .from('freelancer_profiles')
-      .select('id, title')
-      .eq('user_id', userId)
-      .maybeSingle();
-    const freelancerId = (profileResp.data as { id?: string; title?: string } | null)?.id;
-    const majorTitle = (profileResp.data as { id?: string; title?: string } | null)?.title || null;
-    if (!freelancerId) {
-      return { data: null, error: new Error('Complete your freelancer profile before adding skills.') };
-    }
-
-    if (majorTitle && dedupedNames.includes(majorTitle)) {
-      return { data: null, error: new Error('Your major skill cannot also be a minor skill.') };
-    }
-
-    let validSkills: FreelancerSkillRef[] = [];
-    if (dedupedNames.length > 0) {
-      const skillsResp = await (supabase as any)
-        .from('skills')
-        .select('id, name')
-        .in('name', dedupedNames)
-        .eq('is_active', true);
-      validSkills = (skillsResp.data || []) as FreelancerSkillRef[];
-      if (validSkills.length !== dedupedNames.length) {
-        return { data: null, error: new Error('One or more selected skills are no longer available.') };
-      }
-    }
-
-    const deleteResp = await (supabase as any)
-      .from('freelancer_skills')
-      .delete()
-      .eq('freelancer_id', freelancerId)
-      .eq('skill_type', 'minor');
-    if (deleteResp.error) return { data: null, error: deleteResp.error };
-
-    if (validSkills.length > 0) {
-      const insertResp = await (supabase as any)
-        .from('freelancer_skills')
-        .insert(
-          validSkills.map((skill) => ({
-            freelancer_id: freelancerId,
-            skill_id: skill.id,
-            skill_type: 'minor',
-            experience_level: dedupedByName.get(skill.name) ?? null,
-          }))
-        );
-      if (insertResp.error) return { data: null, error: insertResp.error };
-    }
-
-    return this.getFreelancerSkills(freelancerId);
-  }
 
   static async updateUser(userId: string, updates: Partial<User>) {
     const firstAttempt = await supabase

@@ -6,7 +6,6 @@ import { geocodeAddress } from '../../lib/osmGeocoding';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { isFreelancerCategory, MAX_MINOR_CATEGORIES } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
-import { type MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
@@ -93,13 +92,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const [minorCategoryPerformerTypeByCategory, setMinorCategoryPerformerTypeByCategory] = useState<Record<string, string[]>>({});
   const [skills, setSkills] = useState<string[]>([]);
   const [styles, setStyles] = useState<string[]>([]);
-  // Controlled-taxonomy "additional skills" (freelancer_skills, skill_type
-  // 'minor') - distinct from the free-form skills/minorCategorySkills
-  // above. Previously only settable from Edit Profile after onboarding,
-  // which is why most freelancers never had any: this lets it be picked
-  // during onboarding too, via the same MinorSkillsPicker/
-  // updateFreelancerSkills used there.
-  const [minorSkills, setMinorSkills] = useState<MinorSkillSelection[]>([]);
   // Only populated (and only shown) when category is Musician/Live
   // Entertainment — see categories.ts's performerType doc. The minor-
   // category equivalent lives in minorCategoryPerformerTypeByCategory
@@ -261,7 +253,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     setSkills([]);
     setStyles([]);
     setPerformerType([]);
-    setMinorSkills([]);
     setPendingCategoryChange(null);
   };
 
@@ -529,15 +520,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         if (!url || !isValidSocialUrl(url)) continue;
         await DataService.addSocialLink(freelancerProfileId, platform, url.trim());
       }
-
-      if (minorSkills.length > 0) {
-        const skillsUpdate = await DataService.updateFreelancerSkills(user.id, { minorSkills });
-        if (skillsUpdate.error) {
-          // Non-fatal — the freelancer profile itself already saved above;
-          // don't block them from finishing onboarding over this.
-          setError((skillsUpdate.error as any)?.message || 'Profile saved, but additional skills could not be saved.');
-        }
-      }
     }
 
     await setCurrency(normalizeCurrencyCode(startingPriceCurrency, 'THB'), true);
@@ -654,8 +636,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           onMinorCategorySkillsChange={(minorCategory, next) =>
             setMinorCategorySkillsByCategory((prev) => ({ ...prev, [minorCategory]: next }))
           }
-          minorSkills={minorSkills}
-          onMinorSkillsChange={setMinorSkills}
+          onRemoveMinorCategory={dropMinorCategory}
         />
       )}
 
@@ -669,6 +650,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
           onMinorCategoryStylesChange={(minorCategory, next) =>
             setMinorCategoryStylesByCategory((prev) => ({ ...prev, [minorCategory]: next }))
           }
+          onRemoveMinorCategory={dropMinorCategory}
           performerType={performerType}
           onPerformerTypeChange={setPerformerType}
           minorCategoryPerformerTypeByCategory={minorCategoryPerformerTypeByCategory}

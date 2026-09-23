@@ -1,7 +1,5 @@
 import { TagSelector } from '../../../components/common/TagSelector';
 import { suggestedSkillsForCategory } from '../../../lib/categories';
-import { MinorSkillsPicker, type MinorSkillSelection } from '../../../components/common/MinorSkillsPicker';
-import { MAX_MINOR_SKILLS } from '../../../lib/skillsTaxonomy';
 
 interface StepSkillsProps {
   category: string | null;
@@ -10,8 +8,7 @@ interface StepSkillsProps {
   minorCategories: string[];
   minorCategorySkillsByCategory: Record<string, string[]>;
   onMinorCategorySkillsChange: (category: string, skills: string[]) => void;
-  minorSkills: MinorSkillSelection[];
-  onMinorSkillsChange: (skills: MinorSkillSelection[]) => void;
+  onRemoveMinorCategory: (category: string) => void;
 }
 
 export function StepSkills({
@@ -21,8 +18,7 @@ export function StepSkills({
   minorCategories,
   minorCategorySkillsByCategory,
   onMinorCategorySkillsChange,
-  minorSkills,
-  onMinorSkillsChange,
+  onRemoveMinorCategory,
 }: StepSkillsProps) {
   return (
     <div className="space-y-6">
@@ -39,7 +35,16 @@ export function StepSkills({
 
       {minorCategories.map((minorCategory) => (
         <div key={minorCategory}>
-          <p className="mb-1 text-sm font-semibold text-gray-700">Skills for {minorCategory}</p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-700">Skills for {minorCategory}</p>
+            <button
+              type="button"
+              onClick={() => onRemoveMinorCategory(minorCategory)}
+              className="text-xs font-semibold text-gray-400 hover:text-red-600"
+            >
+              Not a specialty? Remove
+            </button>
+          </div>
           <p className="mb-4 text-xs text-gray-500">The specialty you're also skilled in — select what you can do here too.</p>
           <TagSelector
             suggestions={suggestedSkillsForCategory(minorCategory)}
@@ -49,14 +54,6 @@ export function StepSkills({
           />
         </div>
       ))}
-
-      <div>
-        <p className="mb-1 text-sm font-semibold text-gray-700">Additional skills</p>
-        <p className="mb-4 text-xs text-gray-500">
-          Other capabilities you offer beyond {category || 'your primary category'} — optional, up to {MAX_MINOR_SKILLS}.
-        </p>
-        <MinorSkillsPicker majorSkill={category} selected={minorSkills} onChange={onMinorSkillsChange} />
-      </div>
     </div>
   );
 }
