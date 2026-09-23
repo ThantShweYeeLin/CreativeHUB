@@ -10,8 +10,8 @@ interface UserMenuProps {
 
 export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onGoToLogin }: UserMenuProps) {
   const menuItems = [
-    { id: 'bookings' as const, label: 'My Booked List', icon: Package },
     { id: 'requests' as const, label: 'My Requests', icon: Send },
+    { id: 'bookings' as const, label: 'My Booked List', icon: Package },
     { id: 'groupRequest' as const, label: 'Group Request', icon: Users },
     { id: 'messages' as const, label: 'Messages', icon: MessageCircle },
     { id: 'favorites' as const, label: 'Favorites', icon: Heart },

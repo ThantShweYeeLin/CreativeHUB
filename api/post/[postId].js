@@ -43,7 +43,7 @@ function escapeHtml(value) {
   ));
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   const postId = req.query?.postId;
   const userAgent = req.headers['user-agent'] || '';
   const host = req.headers['x-forwarded-host'] || req.headers.host;
