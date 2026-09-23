@@ -199,6 +199,7 @@ export function ChatbotWidget() {
       )}
 
       <button
+        data-tour="assistant"
         onClick={() => setIsOpen((open) => !open)}
         aria-label={isOpen ? 'Close chat assistant' : 'Open chat assistant'}
         className="fixed bottom-24 right-4 z-[1300] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-xl shadow-sky-500/30 transition-transform hover:scale-105 md:bottom-6"

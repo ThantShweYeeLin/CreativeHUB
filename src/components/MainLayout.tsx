@@ -12,6 +12,7 @@ import { FeedService } from '../lib/feedService';
 import { supabase } from '../lib/supabase';
 import { Avatar } from './common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../lib/defaults';
+import { OPEN_APP_GUIDE_EVENT } from './AppGuide';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -548,7 +549,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     navigate('/messages', { state: { openGroupConversationId: notification.relatedId } });
   };
 
-  const MENU_ITEM_AUTH_MESSAGE: Record<'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets', string> = {
+  const MENU_ITEM_AUTH_MESSAGE: Record<'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets' | 'guide', string> = {
     requests: 'Create an account to send and track requests.',
     groupRequest: 'Create an account to send a group request to multiple freelancers.',
     favorites: 'Create an account to save your favorite freelancers.',
@@ -557,9 +558,10 @@ export function MainLayout({ children }: MainLayoutProps) {
     bookings: 'Create an account to see your booked list.',
     settings: 'Create an account to manage your account settings.',
     tickets: 'Create an account to create and track support tickets.',
+    guide: 'Create an account to take the app tour.',
   };
 
-  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets') => {
+  const handleMenuSelection = (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets' | 'guide') => {
     setShowUserMenu(false);
 
     if (!isAuthenticated) {
@@ -596,6 +598,9 @@ export function MainLayout({ children }: MainLayoutProps) {
       case 'tickets':
         navigate('/tickets');
         break;
+      case 'guide':
+        window.dispatchEvent(new Event(OPEN_APP_GUIDE_EVENT));
+        break;
     }
   };
 
@@ -610,7 +615,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   };
 
   const navPills = (
-    <nav className="hidden flex-shrink-0 items-center gap-1 rounded-full border border-sky-100 bg-white/60 p-1 md:flex">
+    <nav data-tour="nav" className="hidden flex-shrink-0 items-center gap-1 rounded-full border border-sky-100 bg-white/60 p-1 md:flex">
       {[
         { label: 'Explore', path: '/explore' },
         { label: 'Map', path: '/map' },
@@ -687,6 +692,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             <div className="flex min-w-0 items-center gap-[clamp(3px,1.2vw,16px)]">
               {headerExtras?.mobileActions && <div className="flex items-center md:hidden">{headerExtras.mobileActions}</div>}
               <button
+                data-tour="role-action"
                 onClick={() =>
                   navigate(
                     !isAuthenticated
@@ -726,6 +732,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               <div className="relative">
                 <button
                   ref={bellButtonRef}
+                  data-tour="notifications"
                   onClick={() => {
                     if (!isAuthenticated) {
                       setAuthPromptMessage('Create an account to receive notifications about your bookings and messages.');
@@ -847,6 +854,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               </div>
               {isAuthenticated && (
                 <button
+                  data-tour="profile"
                   onClick={() => navigate('/client-profile')}
                   className="w-[clamp(26px,7.5vw,40px)] h-[clamp(26px,7.5vw,40px)] flex-shrink-0 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-sky-100"
                 >
@@ -860,6 +868,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               )}
               <div className="relative">
                 <button
+                  data-tour="menu"
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="p-[clamp(4px,1.5vw,8px)] hover:bg-sky-50 rounded-full transition-colors"
                 >

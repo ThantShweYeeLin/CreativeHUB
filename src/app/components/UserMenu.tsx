@@ -1,8 +1,8 @@
-import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket } from 'lucide-react';
+import { Send, MessageCircle, Heart, Settings, LogOut, LogIn, Package, Users, Bookmark, Ticket, Compass } from 'lucide-react';
 
 interface UserMenuProps {
   onClose: () => void;
-  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets') => void;
+  onSelectItem: (item: 'requests' | 'messages' | 'favorites' | 'savedPosts' | 'settings' | 'bookings' | 'groupRequest' | 'tickets' | 'guide') => void;
   onLogout: () => void;
   isAuthenticated: boolean;
   onGoToLogin: () => void;
@@ -18,6 +18,7 @@ export function UserMenu({ onClose, onSelectItem, onLogout, isAuthenticated, onG
     { id: 'savedPosts' as const, label: 'Saved Posts', icon: Bookmark },
     { id: 'tickets' as const, label: 'Create a Ticket', icon: Ticket },
     { id: 'settings' as const, label: 'Settings', icon: Settings },
+    { id: 'guide' as const, label: 'App Guide', icon: Compass },
   ] as const;
 
   type MenuItemId = UserMenuProps['onSelectItem'] extends (item: infer T) => any ? T : never;

@@ -1609,7 +1609,7 @@ export function ExplorePage() {
 
       {/* Search and AI Matcher */}
       <div ref={searchSectionRef} className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4 mb-8 md:mb-12">
-        <div className="flex-1 relative">
+        <div data-tour="search" className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-sky-400" />
           <input
             type="text"
@@ -1642,6 +1642,7 @@ export function ExplorePage() {
         </div>
         <div className="flex gap-3">
           <button
+            data-tour="filter"
             onClick={() => setShowSearchFilter(true)}
             className="relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100"
           >
@@ -1660,6 +1661,7 @@ export function ExplorePage() {
           </button>
           <button
             type="button"
+            data-tour="event-assistant"
             onClick={() => navigate('/event-matcher')}
             className={`relative flex-1 md:flex-none flex items-center gap-3 px-4 md:px-6 py-3 md:py-4 bg-white/80 backdrop-blur-xl rounded-2xl shadow-[0_8px_24px_rgba(56,189,248,0.18)] hover:shadow-[0_12px_32px_rgba(56,189,248,0.3)] hover:-translate-y-0.5 transition-all group border border-sky-100`}
           >
