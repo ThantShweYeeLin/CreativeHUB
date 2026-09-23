@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -122,11 +122,23 @@ export default function App() {
   // (browser back/forward) so pages with their own scroll-restoration logic
   // — see ExplorePage's explorePageScrollY — can still put the scroll back
   // where the user left it instead of this forcing it to 0 first.
+  //
+  // navigationType is read via a ref, not listed as a dependency: a filter
+  // chip on Explore calls setSearchParams({ replace: true }), which changes
+  // only the query string (pathname stays the same) but still flips
+  // navigationType from the page-load 'POP' to 'REPLACE'. With
+  // navigationType in the deps, that flip alone re-ran this effect and
+  // scrolled to top on the first filter click after a refresh (never
+  // again after, since it then stayed 'REPLACE') even though the route
+  // itself never changed.
+  const navigationTypeRef = useRef(navigationType);
+  navigationTypeRef.current = navigationType;
   useEffect(() => {
-    if (navigationType !== 'POP') {
+    if (navigationTypeRef.current !== 'POP') {
       window.scrollTo(0, 0);
     }
-  }, [location.pathname, navigationType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   if (loading) {
     return <BootSplash />;
