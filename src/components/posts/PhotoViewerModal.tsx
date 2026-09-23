@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { ImageWithFallback } from '../common/ImageWithFallback';
@@ -27,10 +28,17 @@ export function PhotoViewerModal({ url, alt, isVideo, onClose }: PhotoViewerModa
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  return (
+  return createPortal(
+    // Portaled to document.body - pages like ForYouPage wrap their content
+    // in a `relative z-10` div, which creates its own stacking context and
+    // traps this overlay's z-index inside it, underneath MainLayout's header
+    // and the mobile bottom nav (both z-[1200]). On phones that left the
+    // bottom nav covering the comment input, so it couldn't be typed in.
+    // See the same fix in SearchFilterPanel.tsx.
     <div
-      // Above the global mobile bottom nav (z-[1200], see MobileBottomNav).
-      className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/90 p-4"
+      // Above the global mobile bottom nav (z-[1200], see MobileBottomNav) and
+      // PostDetailModal (z-[1300]), which it can be opened from.
+      className="fixed inset-0 z-[1400] flex items-center justify-center bg-black/90 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -50,7 +58,8 @@ export function PhotoViewerModal({ url, alt, isVideo, onClose }: PhotoViewerModa
       ) : (
         <ImageWithFallback src={url} alt={alt || 'Post image'} className="max-h-[90vh] max-w-[90vw] object-contain" />
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 

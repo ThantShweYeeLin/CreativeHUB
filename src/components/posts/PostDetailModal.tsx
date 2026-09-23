@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect } from 'react';
 import { Bookmark, Heart, MessageCircle, Share2, Trash2, X } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
@@ -166,7 +167,13 @@ export function PostDetailModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  return (
+  return createPortal(
+    // Portaled to document.body - pages like ForYouPage wrap their content
+    // in a `relative z-10` div, which creates its own stacking context and
+    // traps this overlay's z-index inside it, underneath MainLayout's header
+    // and the mobile bottom nav (both z-[1200]). On phones that left the
+    // bottom nav covering the comment input, so it couldn't be typed in.
+    // See the same fix in SearchFilterPanel.tsx.
     <div
       // Above the global mobile bottom nav (z-[1200], see MobileBottomNav) —
       // otherwise its opaque bar sits on top of the sheet's bottom edge,
@@ -338,7 +345,8 @@ export function PostDetailModal({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

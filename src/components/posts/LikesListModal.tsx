@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { Avatar } from '../common/Avatar';
 
@@ -25,7 +26,13 @@ interface LikesListModalProps {
 // matter how many likers there are, and the header count always reflects
 // the post's real total even when only a capped page of rows is loaded.
 export function LikesListModal({ totalCount, users, isLoading, fallbackAvatarUrl, onClose, onViewUser }: LikesListModalProps) {
-  return (
+  return createPortal(
+    // Portaled to document.body - pages like ForYouPage wrap their content
+    // in a `relative z-10` div, which creates its own stacking context and
+    // traps this overlay's z-index inside it, underneath MainLayout's header
+    // and the mobile bottom nav (both z-[1200]). On phones that left the
+    // bottom nav covering the comment input, so it couldn't be typed in.
+    // See the same fix in SearchFilterPanel.tsx.
     <div className="fixed inset-0 z-[1400] flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative z-10 flex max-h-[70vh] w-full max-w-sm flex-col overflow-hidden rounded-2xl bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
@@ -76,6 +83,7 @@ export function LikesListModal({ totalCount, users, isLoading, fallbackAvatarUrl
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

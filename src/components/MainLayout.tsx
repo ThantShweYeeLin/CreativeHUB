@@ -643,12 +643,12 @@ export function MainLayout({ children }: MainLayoutProps) {
             {/* Logo */}
             <button
               onClick={() => navigate('/explore')}
-              className="flex items-center gap-2 transition-transform hover:scale-105"
+              className="flex flex-shrink-0 items-center gap-2 transition-transform hover:scale-105"
             >
               <img
                 src={logoImage}
                 alt="CreativeHUB"
-                className="h-12 w-12 md:h-14 md:w-14 rounded-full object-cover shadow-sm ring-2 ring-white"
+                className="h-[clamp(32px,9vw,56px)] w-[clamp(32px,9vw,56px)] rounded-full object-cover shadow-sm ring-2 ring-white"
               />
             </button>
 
@@ -679,9 +679,13 @@ export function MainLayout({ children }: MainLayoutProps) {
               {headerExtras?.actions}
             </div>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-2 md:gap-4">
-              {headerExtras?.mobileActions && <div className="flex items-center gap-1.5 md:hidden">{headerExtras.mobileActions}</div>}
+            {/* Right Actions - sizes/gaps are clamp()ed to the viewport
+                width so the whole cluster (including Explore's
+                mobileActions icons) scales smoothly as the window or phone
+                narrows, staying on this one row, and tops out at the
+                original desktop sizes. */}
+            <div className="flex min-w-0 items-center gap-[clamp(3px,1.2vw,16px)]">
+              {headerExtras?.mobileActions && <div className="flex items-center md:hidden">{headerExtras.mobileActions}</div>}
               <button
                 onClick={() =>
                   navigate(
@@ -694,7 +698,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                       : '/become-freelancer'
                   )
                 }
-                className="whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105 sm:px-6 sm:py-2.5 sm:text-sm"
+                className="whitespace-nowrap rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-[clamp(8px,3vw,24px)] py-[clamp(4px,1.5vw,10px)] text-[clamp(10px,2.8vw,14px)] font-semibold text-white shadow-md shadow-sky-500/30 transition-transform hover:scale-105"
               >
                 {/* Shorter label below sm (640px) - not just a smaller font,
                     an actually shorter word - so there's guaranteed room
@@ -729,9 +733,9 @@ export function MainLayout({ children }: MainLayoutProps) {
                     }
                     setShowNotifications(!showNotifications);
                   }}
-                  className="relative p-2 hover:bg-sky-50 rounded-full transition-colors"
+                  className="relative p-[clamp(4px,1.5vw,8px)] hover:bg-sky-50 rounded-full transition-colors"
                 >
-                  <Bell className="w-5 h-5 text-gray-600" />
+                  <Bell className="w-[clamp(14px,4.5vw,20px)] h-[clamp(14px,4.5vw,20px)] text-gray-600" />
                   {unreadNotificationsCount > 0 && (
                     <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
                   )}
@@ -844,7 +848,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               {isAuthenticated && (
                 <button
                   onClick={() => navigate('/client-profile')}
-                  className="w-8 h-8 md:w-10 md:h-10 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-sky-100"
+                  className="w-[clamp(26px,7.5vw,40px)] h-[clamp(26px,7.5vw,40px)] flex-shrink-0 rounded-full cursor-pointer hover:shadow-lg transition-shadow ring-2 ring-sky-100"
                 >
                   <Avatar
                     src={profileAvatarUrl || DEFAULT_AVATAR_URL}
@@ -857,9 +861,9 @@ export function MainLayout({ children }: MainLayoutProps) {
               <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="p-2 hover:bg-sky-50 rounded-full transition-colors"
+                  className="p-[clamp(4px,1.5vw,8px)] hover:bg-sky-50 rounded-full transition-colors"
                 >
-                  <Menu className="w-5 h-5 text-gray-600" />
+                  <Menu className="w-[clamp(14px,4.5vw,20px)] h-[clamp(14px,4.5vw,20px)] text-gray-600" />
                 </button>
                 {showUserMenu && (
                   <UserMenu

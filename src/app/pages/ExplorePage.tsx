@@ -2,7 +2,7 @@ import { PremiumBanner } from '../../components/PremiumBanner';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart, Bookmark } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { DataService, type ExploreHeroData, type AuthShowcaseSpotlight } from '../../lib/dataService';
@@ -89,6 +89,7 @@ function ProfileCard({ id, name, specialty, minorSkills, rating, reviews, image,
             className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-transform hover:scale-110"
           >
             <Heart className={`h-4 w-4 ${isFavorited ? 'fill-blue-500 text-blue-500' : 'text-gray-700'}`} />
+
           </span>
         )}
 
@@ -1242,17 +1243,29 @@ export function ExplorePage() {
     // inject into on a narrow screen (that whole row is md+ only), so this
     // renders inline beside the Get Started/account-controls cluster
     // instead, icon-only since there's no room for labels there either way.
+    // Search sits in this same row (rather than a separate row below the
+    // header) so all three icons stay on one line on a narrow screen.
     mobileActions: (
-      <div className={`flex items-center gap-1.5 ${condensedVisibilityClass}`}>
+      <div className={`flex items-center gap-[clamp(3px,1vw,6px)] ${condensedVisibilityClass}`}>
+        <button
+          type="button"
+          onClick={scrollToMainSearch}
+          title="Search freelancers"
+          aria-label="Search freelancers"
+          tabIndex={isPastSearchSection ? 0 : -1}
+          className="flex h-[clamp(24px,7.5vw,36px)] w-[clamp(24px,7.5vw,36px)] items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 transition-colors hover:bg-sky-50"
+        >
+          <Search className="h-[clamp(12px,4vw,18px)] w-[clamp(12px,4vw,18px)]" />
+        </button>
         <button
           type="button"
           onClick={() => setShowSearchFilter(true)}
           title="Advanced Filter"
           aria-label="Advanced Filter"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="relative flex h-8 w-8 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-600 transition-colors hover:bg-sky-50"
+          className="relative flex h-[clamp(24px,7.5vw,36px)] w-[clamp(24px,7.5vw,36px)] items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-600 transition-colors hover:bg-sky-50"
         >
-          <SlidersHorizontal className="h-4 w-4" />
+          <SlidersHorizontal className="h-[clamp(12px,4vw,18px)] w-[clamp(12px,4vw,18px)]" />
           {activeAdvancedFilterCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-blue-600 px-0.5 text-[9px] font-bold text-white">
               {activeAdvancedFilterCount}
@@ -1265,40 +1278,10 @@ export function ExplorePage() {
           title="Event Assistant"
           aria-label="Event Assistant"
           tabIndex={isPastSearchSection ? 0 : -1}
-          className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105"
+          className="relative flex h-[clamp(24px,7.5vw,36px)] w-[clamp(24px,7.5vw,36px)] items-center justify-center rounded-full bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-md shadow-cyan-500/30 transition-transform hover:scale-105"
         >
-          <Sparkles className="h-4 w-4" />
+          <Sparkles className="h-[clamp(12px,4vw,18px)] w-[clamp(12px,4vw,18px)]" />
         </button>
-      </div>
-    ),
-    // Phone equivalent of `search` above — that slot's whole row is
-    // `hidden md:flex`, so on a narrow screen it never appears no matter
-    // how far the page scrolls (see HeaderExtrasContext.tsx). A plain icon
-    // button, not its own input/suggestions — tapping it scrolls the main
-    // search section back into view and focuses the full-size bar there,
-    // rather than duplicating search as a second live input. Always
-    // mounted with a height/opacity toggle (never conditional rendering or
-    // a `hidden` class) matching `search`/`actions` above — this being a
-    // button rather than an input means there's no focus to steal this
-    // time either way, but it's one less thing to reconsider later.
-    mobileSearch: (
-      <div
-        className={`overflow-hidden transition-[max-height,opacity] duration-150 ${
-          isPastSearchSection ? 'max-h-16 border-t border-sky-100 py-2 opacity-100' : 'pointer-events-none max-h-0 opacity-0'
-        }`}
-      >
-        <div className="px-4">
-          <button
-            type="button"
-            tabIndex={isPastSearchSection ? 0 : -1}
-            onClick={scrollToMainSearch}
-            aria-label="Search freelancers"
-            title="Search freelancers"
-            className="flex h-11 w-11 items-center justify-center rounded-full border border-sky-100 bg-white/80 text-sky-500 shadow-sm transition-colors hover:bg-sky-50"
-          >
-            <Search className="h-5 w-5" />
-          </button>
-        </div>
       </div>
     ),
   });
