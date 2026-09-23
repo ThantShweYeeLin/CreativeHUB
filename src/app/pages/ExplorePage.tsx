@@ -5,13 +5,13 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Search, ChevronLeft, ChevronRight, SlidersHorizontal, Star, Sparkles, Heart, Bookmark } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { SiteFooter } from '../../components/common/SiteFooter';
 import { DataService, type ExploreHeroData, type AuthShowcaseSpotlight } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import type { Gender } from '../../lib/database.types';
 import { SearchFilterPanel, type FilterState } from '../components/SearchFilterPanel';
 import { AuthPromptModal } from '../components/AuthPromptModal';
 import { useAuth } from '../../contexts/AuthContext';
-import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { FREELANCER_CATEGORIES, isFreelancerCategory } from '../../lib/categories';
 import { interpretSearchQuery, scoreFreelancerMatch } from '../../lib/freelancerSearch';
@@ -439,9 +439,7 @@ function formatHeroStat(count: number) {
 export function ExplorePage() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const { currency: preferredCurrency } = useCurrency();
   const navigate = useNavigate();
-  const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>(() => cachedFreelancers || []);
   const [minorSkillsByFreelancerId, setMinorSkillsByFreelancerId] = useState<Map<string, string[]>>(new Map());
@@ -521,7 +519,7 @@ export function ExplorePage() {
     services: [],
     priceRange: [0, 10000],
     locations: [],
-    currency: normalizedPreferredCurrency,
+    currency: 'THB',
     nearMe: null,
     minRating: null,
   });
@@ -812,24 +810,6 @@ export function ExplorePage() {
       });
     }
   };
-
-  useEffect(() => {
-    setFilters((current) => {
-      if (current.currency === normalizedPreferredCurrency) {
-        return current;
-      }
-
-      // Keep existing numeric budget intent when currency changes globally.
-      const nextMin = Math.round(convertAmount(current.priceRange[0], current.currency, normalizedPreferredCurrency));
-      const nextMax = Math.round(convertAmount(current.priceRange[1], current.currency, normalizedPreferredCurrency));
-
-      return {
-        ...current,
-        currency: normalizedPreferredCurrency,
-        priceRange: [Math.min(nextMin, nextMax), Math.max(nextMin, nextMax)],
-      };
-    });
-  }, [normalizedPreferredCurrency]);
 
   // Autocomplete: fetch suggestions (debounced) from both searchUsers and fallback
   useEffect(() => {
@@ -1772,12 +1752,15 @@ export function ExplorePage() {
         />
       ))}
 
+      <SiteFooter />
+
       {showSearchFilter && (
         <SearchFilterPanel
           initialFilters={filters}
           userLocation={userLocation}
           onClose={() => setShowSearchFilter(false)}
           onSearch={(nextFilters) => setFilters(nextFilters)}
+          onClearAll={() => setSelectedCategory('All')}
         />
       )}
 

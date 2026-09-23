@@ -506,7 +506,11 @@ export default function App() {
             path="/become-freelancer"
             element={
               <ProtectedRoute>
-                <BecomeFreelancerPage onBack={() => navigate(-1)} />
+                {user?.role === 'freelancer' ? (
+                  <Navigate to="/freelancer-dashboard" replace />
+                ) : (
+                  <BecomeFreelancerPage onBack={() => navigate(-1)} />
+                )}
               </ProtectedRoute>
             }
           />

@@ -235,18 +235,28 @@ function haversineDistanceKm(a: LocationPointLike, b: LocationPointLike): number
   return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
 }
 
+// The literal preset a freelancer can pick in onboarding/Edit Profile (see
+// StepServiceLocations.tsx's TRAVEL_ANYWHERE) — stored as a location entry
+// with no coordinates and no city/district, which every check below skips
+// over as "not enough info to match", so picking it never actually did
+// anything. Recognized here as the deliberate wildcard it's meant to be.
+const TRAVEL_ANYWHERE_ADDRESS = 'Open to travel anywhere';
+
 /**
  * Whether a provider's saved locations (freelancer_profiles.locations +
  * studio_locations) cover the event location — never assumes a provider
- * travels anywhere it hasn't listed. Prefers real lat/lng distance; falls
- * back to a loose city/district text match for older rows that were
- * migrated from plain text and have null coordinates (see
- * supabase/locations_to_structured_jsonb.sql).
+ * travels anywhere it hasn't listed, unless they've explicitly said they
+ * do (the "Open to travel anywhere" preset). Otherwise prefers real
+ * lat/lng distance; falls back to a loose city/district text match for
+ * older rows that were migrated from plain text and have null
+ * coordinates (see supabase/locations_to_structured_jsonb.sql).
  */
 export function locationCovers(providerLocations: LocationPointLike[], eventLocation: LocationPointLike): boolean {
   if (providerLocations.length === 0) return false;
 
   return providerLocations.some((providerPoint) => {
+    if ((providerPoint.formattedAddress || '').trim() === TRAVEL_ANYWHERE_ADDRESS) return true;
+
     const distanceKm = haversineDistanceKm(providerPoint, eventLocation);
     if (distanceKm !== null) return distanceKm <= DEFAULT_COVERAGE_RADIUS_KM;
 

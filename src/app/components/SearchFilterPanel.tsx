@@ -1,8 +1,7 @@
 import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizontal, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useCurrency } from '../../contexts/CurrencyContext';
-import { convertAmount, formatCurrencyAmount, getCurrencySymbol, normalizeCurrencyCode } from '../../lib/currency';
+import { formatCurrencyAmount, getCurrencySymbol } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -14,6 +13,14 @@ interface SearchFilterPanelProps {
   initialFilters?: FilterState;
   /** The signed-in client's own profile location, if set — surfaced as a one-click suggested chip. */
   userLocation?: string | null;
+  /**
+   * Called (in addition to onSearch) when "Clear All" is pressed - resets
+   * anything the caller owns outside this panel's own FilterState, e.g.
+   * Explore's separate category pill row, which isn't part of FilterState
+   * and would otherwise survive a "Clear All" untouched (including through
+   * a later back-navigation, since it's persisted in the URL).
+   */
+  onClearAll?: () => void;
 }
 
 export interface FilterState {
@@ -57,19 +64,19 @@ const budgetPresetsBaseThb: Array<{ key: string; range: [number, number]; type: 
   { key: 'over', range: [8000, 10000], type: 'over' },
 ];
 
-function defaultRangeForCurrency(currencyCode: string): [number, number] {
-  const max = Math.round(convertAmount(10000, DEFAULT_CURRENCY, currencyCode));
-  return [PRICE_MIN, Math.max(PRICE_MIN, max)];
-}
+// Filtering is always done in THB, regardless of the viewer's own preferred
+// display currency (account setting or location-guessed) — that currency
+// is just for how prices are SHOWN elsewhere in the app; letting it also
+// change what "under ฿2,000" means here made the filter's own budget
+// presets silently drift depending on who was searching.
+const DEFAULT_PRICE_RANGE: [number, number] = [PRICE_MIN, 10000];
 
-export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocation }: SearchFilterPanelProps) {
-  const { currency: preferredCurrency, setCurrency } = useCurrency();
-  const normalizedPreferredCurrency = normalizeCurrencyCode(preferredCurrency, DEFAULT_CURRENCY);
+export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocation, onClearAll }: SearchFilterPanelProps) {
   const [filters, setFilters] = useState<FilterState>({
     services: initialFilters?.services || [],
-    priceRange: initialFilters?.priceRange || defaultRangeForCurrency(normalizedPreferredCurrency),
+    priceRange: initialFilters?.priceRange || DEFAULT_PRICE_RANGE,
     locations: initialFilters?.locations || [],
-    currency: normalizeCurrencyCode(initialFilters?.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+    currency: DEFAULT_CURRENCY,
     nearMe: initialFilters?.nearMe || null,
     minRating: initialFilters?.minRating ?? null,
   });
@@ -126,45 +133,29 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         services: initialFilters.services,
         priceRange: initialFilters.priceRange,
         locations: initialFilters.locations,
-        currency: normalizeCurrencyCode(initialFilters.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
+        currency: DEFAULT_CURRENCY,
         nearMe: initialFilters.nearMe || null,
         minRating: initialFilters.minRating ?? null,
       });
-      return;
     }
+  }, [initialFilters]);
 
-    setFilters((prev) => ({
-      ...prev,
-      currency: normalizeCurrencyCode(prev.currency || normalizedPreferredCurrency, DEFAULT_CURRENCY),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialFilters, normalizedPreferredCurrency]);
+  const budgetPresets = useMemo(
+    () =>
+      budgetPresetsBaseThb.map((preset) => {
+        const label = (() => {
+          if (preset.type === 'any') return 'Any Budget';
+          if (preset.type === 'under') return `Under ${formatCurrencyAmount(preset.range[1], DEFAULT_CURRENCY)}`;
+          if (preset.type === 'over') return `${formatCurrencyAmount(preset.range[0], DEFAULT_CURRENCY)}+`;
+          return `${formatCurrencyAmount(preset.range[0], DEFAULT_CURRENCY)} - ${formatCurrencyAmount(preset.range[1], DEFAULT_CURRENCY)}`;
+        })();
 
-  const budgetPresets = useMemo(() => {
-    const selectedCurrency = normalizeCurrencyCode(filters.currency, DEFAULT_CURRENCY);
+        return { key: preset.key, label, range: preset.range };
+      }),
+    []
+  );
 
-    return budgetPresetsBaseThb.map((preset) => {
-      const convertedRange: [number, number] = [
-        Math.round(convertAmount(preset.range[0], DEFAULT_CURRENCY, selectedCurrency)),
-        Math.round(convertAmount(preset.range[1], DEFAULT_CURRENCY, selectedCurrency)),
-      ];
-
-      const label = (() => {
-        if (preset.type === 'any') return 'Any Budget';
-        if (preset.type === 'under') return `Under ${formatCurrencyAmount(convertedRange[1], selectedCurrency)}`;
-        if (preset.type === 'over') return `${formatCurrencyAmount(convertedRange[0], selectedCurrency)}+`;
-        return `${formatCurrencyAmount(convertedRange[0], selectedCurrency)} - ${formatCurrencyAmount(convertedRange[1], selectedCurrency)}`;
-      })();
-
-      return {
-        key: preset.key,
-        label,
-        range: convertedRange,
-      };
-    });
-  }, [filters.currency]);
-
-  const currencySymbol = getCurrencySymbol(filters.currency);
+  const currencySymbol = getCurrencySymbol(DEFAULT_CURRENCY);
 
   const setMinPrice = (value: number) => {
     const safeMin = Math.max(PRICE_MIN, Math.min(value, filters.priceRange[1]));
@@ -243,7 +234,6 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
   };
 
   const handleSearch = () => {
-    void setCurrency(filters.currency, true);
     onSearch(filters);
     onClose();
   };
@@ -251,9 +241,9 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
   const handleClearAll = () => {
     const cleared: FilterState = {
       services: [],
-      priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
+      priceRange: DEFAULT_PRICE_RANGE,
       locations: [],
-      currency: normalizedPreferredCurrency,
+      currency: DEFAULT_CURRENCY,
       nearMe: null,
       minRating: null,
     };
@@ -264,8 +254,8 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
     setShowOtherInput(false);
     setOtherLocationDraft('');
     setLocateError(null);
-    void setCurrency(cleared.currency, true);
     onSearch(cleared);
+    onClearAll?.();
     onClose();
   };
 
