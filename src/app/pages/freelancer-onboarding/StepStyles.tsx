@@ -8,6 +8,7 @@ interface StepStylesProps {
   minorCategories: string[];
   minorCategoryStylesByCategory: Record<string, string[]>;
   onMinorCategoryStylesChange: (category: string, styles: string[]) => void;
+  onRemoveMinorCategory: (category: string) => void;
   performerType?: string[];
   onPerformerTypeChange?: (performerType: string[]) => void;
   minorCategoryPerformerTypeByCategory: Record<string, string[]>;
@@ -21,6 +22,7 @@ export function StepStyles({
   minorCategories,
   minorCategoryStylesByCategory,
   onMinorCategoryStylesChange,
+  onRemoveMinorCategory,
   performerType = [],
   onPerformerTypeChange,
   minorCategoryPerformerTypeByCategory,
@@ -54,7 +56,16 @@ export function StepStyles({
 
       {minorCategories.map((minorCategory) => (
         <div key={minorCategory}>
-          <p className="mb-1 text-sm font-semibold text-gray-700">Styles for {minorCategory}</p>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-gray-700">Styles for {minorCategory}</p>
+            <button
+              type="button"
+              onClick={() => onRemoveMinorCategory(minorCategory)}
+              className="text-xs font-semibold text-gray-400 hover:text-red-600"
+            >
+              Not a specialty? Remove
+            </button>
+          </div>
           <p className="mb-4 text-xs text-gray-500">The specialty you're also skilled in — select the styles that apply here too.</p>
           <TagSelector
             suggestions={suggestedStylesForCategory(minorCategory)}

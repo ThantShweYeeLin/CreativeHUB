@@ -5,10 +5,9 @@ import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LocationChipList } from '../../components/common/LocationChipList';
 import { TagSelector } from '../../components/common/TagSelector';
-import { MinorSkillsPicker, type MinorSkillSelection } from '../../components/common/MinorSkillsPicker';
 import { ExperienceLevelPicker } from '../../components/common/ExperienceLevelPicker';
+import { TimeOfDayPicker } from '../../components/common/TimeOfDayPicker';
 import { FREELANCER_CATEGORIES, isFreelancerCategory, MUSICIAN_CATEGORY_LABEL, suggestedPerformerTypesForCategory, suggestedSkillsForCategory, suggestedStylesForCategory } from '../../lib/categories';
-import { MAX_MINOR_SKILLS } from '../../lib/skillsTaxonomy';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -86,7 +85,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
   });
   const [pendingCategoryChange, setPendingCategoryChange] = useState<string | null>(null);
   const [categoryExperienceLevel, setCategoryExperienceLevel] = useState<string | null>(null);
-  const [minorSkills, setMinorSkills] = useState<MinorSkillSelection[]>([]);
 
   const [workingForm, setWorkingForm] = useState({
     studio_name: '',
@@ -145,9 +143,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         if (freelancerProfile?.id) {
           const skillsResponse = await DataService.getFreelancerSkills(freelancerProfile.id);
           if (!isMounted) return;
-          setMinorSkills(
-            (skillsResponse.data?.minor || []).map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel }))
-          );
           setCategoryExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
         }
       }
@@ -338,7 +333,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
   // clears everything and lets suggestedSkillsForCategory/
   // suggestedStylesForCategory populate the new category's chips.
   const applyCategoryChange = (nextCategory: string) => {
-    setMinorSkills((current) => current.filter((entry) => entry.name !== nextCategory));
     setCategoryExperienceLevel(null);
     if (freelancerForm.title && freelancerForm.title !== nextCategory && (freelancerForm.skills.length > 0 || freelancerForm.styles.length > 0)) {
       setPendingCategoryChange(nextCategory);
@@ -347,23 +341,10 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     setFreelancerForm((current) => ({ ...current, title: nextCategory, performer_type: [] }));
   };
 
-  // moveOldMajorToMinor lets the freelancer keep their old specialty (and
-  // its experience level) as a minor skill instead of losing it outright
-  // when switching majors — capped at MAX_MINOR_SKILLS and never
-  // duplicated if it's already there.
-  const confirmCategoryChange = (moveOldMajorToMinor: boolean) => {
+  const confirmCategoryChange = () => {
     if (!pendingCategoryChange) return;
-    const oldMajor = freelancerForm.title;
-    const oldMajorLevel = categoryExperienceLevel;
     setFreelancerForm((current) => ({ ...current, title: pendingCategoryChange, skills: [], styles: [], performer_type: [] }));
     setCategoryExperienceLevel(null);
-    if (moveOldMajorToMinor && oldMajor) {
-      setMinorSkills((current) =>
-        current.some((entry) => entry.name === oldMajor) || current.length >= MAX_MINOR_SKILLS
-          ? current
-          : [...current, { name: oldMajor, experienceLevel: oldMajorLevel }]
-      );
-    }
     setPendingCategoryChange(null);
   };
 
@@ -464,8 +445,8 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         title: freelancerForm.title,
         description: basicForm.bio,
         hourly_rate: freelancerForm.hourly_rate,
-        // Experience is captured per-skill now (see categoryExperienceLevel /
-        // minorSkills below), not as one freelancer-wide years field.
+        // Experience is captured per-skill now (see categoryExperienceLevel),
+        // not as one freelancer-wide years field.
         is_available: freelancerForm.is_available,
         skills: freelancerForm.skills,
         styles: freelancerForm.styles,
@@ -517,13 +498,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
           const links = (refreshedLinks.data || []).map((link: any) => ({ id: link.id as string, platform: link.platform, url: link.url }));
           setSocialLinks(links);
           setOriginalSocialLinkIds(links.map((link) => link.id));
-        }
-
-        const skillsUpdate = await DataService.updateFreelancerSkills(user.id, { minorSkills });
-        if (skillsUpdate.error) {
-          setError((skillsUpdate.error as any)?.message || 'Profile saved, but additional skills could not be saved.');
-        } else if (skillsUpdate.data) {
-          setMinorSkills(skillsUpdate.data.minor.map((skill) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
         }
       }
     }
@@ -710,23 +684,13 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                       <p className="mt-1 text-xs text-amber-700">
                         Your current Skills and Styles don't apply to {pendingCategoryChange} and will be cleared.
                       </p>
-                      <p className="mt-2 text-xs text-amber-700">
-                        Would you like to keep {freelancerForm.title || 'your current specialty'} as an additional skill instead of losing it?
-                      </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => confirmCategoryChange(true)}
+                          onClick={() => confirmCategoryChange()}
                           className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-xs font-semibold text-white hover:shadow-lg"
                         >
-                          Move to minor skills
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => confirmCategoryChange(false)}
-                          className="rounded-lg border border-sky-200 px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50"
-                        >
-                          Remove {freelancerForm.title}
+                          Change specialty
                         </button>
                         <button
                           type="button"
@@ -785,16 +749,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                     />
                   </div>
                 )}
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-700">Additional skills</label>
-                  <p className="mb-2 text-xs text-gray-500">
-                    Other capabilities you offer beyond {freelancerForm.title || 'your primary category'} — optional, up to {MAX_MINOR_SKILLS}.
-                  </p>
-                  {minorSkills.length === 0 && (
-                    <p className="mb-2 text-xs text-gray-400">No additional skills added yet.</p>
-                  )}
-                  <MinorSkillsPicker majorSkill={freelancerForm.title || null} selected={minorSkills} onChange={setMinorSkills} />
-                </div>
                 <label className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                   <input
                     type="checkbox"
@@ -898,20 +852,18 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours start</label>
-                    <input
-                      type="time"
+                    <TimeOfDayPicker
                       value={workingForm.working_hours_start}
-                      onChange={(event) => setWorkingForm((current) => ({ ...current, working_hours_start: event.target.value }))}
-                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      onChange={(value) => setWorkingForm((current) => ({ ...current, working_hours_start: value }))}
+                      className="w-full"
                     />
                   </div>
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700">Working hours end</label>
-                    <input
-                      type="time"
+                    <TimeOfDayPicker
                       value={workingForm.working_hours_end}
-                      onChange={(event) => setWorkingForm((current) => ({ ...current, working_hours_end: event.target.value }))}
-                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      onChange={(value) => setWorkingForm((current) => ({ ...current, working_hours_end: value }))}
+                      className="w-full"
                     />
                   </div>
                 </div>

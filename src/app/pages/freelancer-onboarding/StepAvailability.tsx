@@ -1,3 +1,4 @@
+import { TimeOfDayPicker } from '../../../components/common/TimeOfDayPicker';
 import { AVAILABILITY_OPTIONS, WORKING_DAY_OPTIONS, toggle } from './types';
 
 const AVAILABILITY_DOT: Record<string, string> = {
@@ -77,21 +78,11 @@ export function StepAvailability({
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-xs font-semibold text-gray-600">From</label>
-            <input
-              type="time"
-              value={workingHoursStart}
-              onChange={(event) => onWorkingHoursStartChange(event.target.value)}
-              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
-            />
+            <TimeOfDayPicker value={workingHoursStart} onChange={onWorkingHoursStartChange} className="w-full" />
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-gray-600">To</label>
-            <input
-              type="time"
-              value={workingHoursEnd}
-              onChange={(event) => onWorkingHoursEndChange(event.target.value)}
-              className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-sky-400"
-            />
+            <TimeOfDayPicker value={workingHoursEnd} onChange={onWorkingHoursEndChange} className="w-full" />
           </div>
         </div>
       </div>
