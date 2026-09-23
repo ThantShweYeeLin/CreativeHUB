@@ -20,19 +20,19 @@ insert into public.users (id, full_name, role, account_status) values
   (:NP2,'No-premium-category Videog 2','freelancer','active');
 
 insert into public.freelancer_profiles (user_id, title, is_available, visibility)
-  values (:P1,'Musicians',true,'public'), (:F1,'Musicians',true,'public'), (:F2,'Musicians',true,'public');
+  values (:P1,'Musician',true,'public'), (:F1,'Musician',true,'public'), (:F2,'Musician',true,'public');
 insert into public.freelancer_profiles (user_id, title, is_available, visibility)
   values (:NP1,'Videographer',true,'public'), (:NP2,'Videographer',true,'public');
 
--- Only P1 (of the 3 Musicians) has an active subscription; neither Videographer does.
+-- Only P1 (of the 3 Musician freelancers) has an active subscription; neither Videographer does.
 insert into public.freelancer_subscriptions (user_id, plan, current_period_end)
   values (:P1,'monthly', now() + interval '10 days');
 
 set role authenticated; select public.as_user(:K);
 
 select public.ok(
-  'Musicians (one Premium exists): only the Premium freelancer is returned',
-  (select jsonb_agg(c->>'user_id' order by c->>'user_id') from jsonb_array_elements(public.get_event_matcher_candidates('Musicians')) c) = jsonb_build_array(:P1::text)
+  'Musician (one Premium exists): only the Premium freelancer is returned',
+  (select jsonb_agg(c->>'user_id' order by c->>'user_id') from jsonb_array_elements(public.get_event_matcher_candidates('Musician')) c) = jsonb_build_array(:P1::text)
 );
 
 select public.ok(
@@ -48,16 +48,16 @@ select public.ok(
 
 reset role;
 -- Once F1 also buys Premium, the fallback category's Premium tier grows -
--- but Musicians (which already had P1) was never affected by the fallback.
+-- but Musician (which already had P1) was never affected by the fallback.
 insert into public.freelancer_subscriptions (user_id, plan, current_period_end) values (:F1,'monthly', now() + interval '10 days');
 set role authenticated; select public.as_user(:K);
 select public.ok(
-  'Musicians now returns both Premium freelancers (P1 and the newly-subscribed F1), never F2',
-  (select jsonb_agg(c->>'user_id' order by c->>'user_id') from jsonb_array_elements(public.get_event_matcher_candidates('Musicians')) c)
+  'Musician now returns both Premium freelancers (P1 and the newly-subscribed F1), never F2',
+  (select jsonb_agg(c->>'user_id' order by c->>'user_id') from jsonb_array_elements(public.get_event_matcher_candidates('Musician')) c)
     = (select jsonb_agg(x order by x) from jsonb_array_elements_text(jsonb_build_array(:P1::text, :F1::text)) x)
 );
 reset role;
 
-select public.ok('anon still cannot call the fallback-aware function', public.err_of('set role anon; select public.get_event_matcher_candidates(''Musicians'')') ilike '%permission denied%');
+select public.ok('anon still cannot call the fallback-aware function', public.err_of('set role anon; select public.get_event_matcher_candidates(''Musician'')') ilike '%permission denied%');
 reset role;
 \echo ALL CHECKS PASSED

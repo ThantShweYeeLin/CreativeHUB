@@ -14,9 +14,9 @@ const CATEGORIES = [
   'Makeup Artist',
   'Hair Stylist',
   'Fashion Designer',
-  'Decorators',
+  'Decorator',
   'Cake/Dessert Maker',
-  'Musicians',
+  'Musician',
 ];
 
 const BASE_SYSTEM_INSTRUCTION = `

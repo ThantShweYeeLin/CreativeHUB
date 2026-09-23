@@ -44,9 +44,9 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Makeup Artist': 3,
     'Hair Stylist': 3,
     'Fashion Designer': 2,
-    'Decorators': 3,
+    'Decorator': 3,
     'Cake/Dessert Maker': 2,
-    'Musicians': 2,
+    'Musician': 2,
   },
   'Birthday Party': {
     Photographer: 2,
@@ -54,9 +54,9 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Makeup Artist': 1,
     'Hair Stylist': 1,
     'Fashion Designer': 1,
-    'Decorators': 3,
+    'Decorator': 3,
     'Cake/Dessert Maker': 3,
-    'Musicians': 2,
+    'Musician': 2,
   },
   Proposal: {
     Photographer: 3,
@@ -64,9 +64,9 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Makeup Artist': 2,
     'Hair Stylist': 1,
     'Fashion Designer': 1,
-    'Decorators': 2,
+    'Decorator': 2,
     'Cake/Dessert Maker': 1,
-    'Musicians': 1,
+    'Musician': 1,
   },
   'Graduation Celebration': {
     Photographer: 3,
@@ -74,9 +74,9 @@ const BASE_PRIORITY_TABLE: Record<EventType, Partial<Record<EventMatcherCategory
     'Makeup Artist': 2,
     'Hair Stylist': 2,
     'Fashion Designer': 1,
-    'Decorators': 2,
+    'Decorator': 2,
     'Cake/Dessert Maker': 2,
-    'Musicians': 1,
+    'Musician': 1,
   },
 };
 
@@ -96,7 +96,7 @@ const LOW_BUDGET_USD_THRESHOLD: Record<EventType, number> = {
 // Styles that make a Fashion Designer/Stylist more relevant than the base
 // table alone assumes.
 const FASHION_NUDGE_STYLES = new Set(['Luxury', 'Elegant', 'Avant-Garde', 'Glamorous', 'Formal', 'Editorial']);
-// Styles/settings that make a Decorators listing more relevant.
+// Styles/settings that make a Decorator listing more relevant.
 const DECOR_NUDGE_STYLES = new Set(['Garden', 'Bohemian', 'Rustic', 'Romantic']);
 const OUTDOOR_SETTING_PATTERN = /outdoor|garden|beach|park/i;
 
@@ -141,7 +141,7 @@ export function recommendCategories(input: RecommendCategoriesInput): Recommende
     if (category === 'Fashion Designer' && hasFashionNudge) {
       level = clampTier(level + 1);
     }
-    if (category === 'Decorators' && hasDecorNudge) {
+    if (category === 'Decorator' && hasDecorNudge) {
       level = clampTier(level + 1);
     }
 
@@ -264,7 +264,7 @@ export interface EventMatcherCandidate {
   userId: string;
   freelancerProfileId: string;
   fullName: string;
-  // Aesthetic descriptors only — for Musicians this is
+  // Aesthetic descriptors only — for Musician this is
   // genre (Pop, Jazz, Rock, ...), never performer format (Band, DJ, ...).
   // Performer format isn't an aesthetic match signal the way genre or
   // visual style is, so it's deliberately not part of this candidate shape
