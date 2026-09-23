@@ -1517,8 +1517,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
 
           <div className="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4">
-            <p className="text-gray-700 leading-7">{bio}</p>
-            {shouldDisplayGender(gender) && <p className="mt-1 text-sm text-gray-500">{genderLabel(gender)}</p>}
+            {shouldDisplayGender(gender) && <p className="text-sm text-gray-500">{genderLabel(gender)}</p>}
+            <p className="mt-1 text-gray-700 leading-7">{bio}</p>
 
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
