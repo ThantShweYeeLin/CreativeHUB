@@ -20,7 +20,6 @@ import { StepPricing } from './freelancer-onboarding/StepPricing';
 import { StepBilling } from './freelancer-onboarding/StepBilling';
 import { StepRequirements } from './freelancer-onboarding/StepRequirements';
 import { StepContactPreferences } from './freelancer-onboarding/StepContactPreferences';
-import { StepVerification } from './freelancer-onboarding/StepVerification';
 import { isValidSocialUrl, type SocialPlatform } from '../../lib/socialPlatforms';
 
 interface BecomeFreelancerPageProps {
@@ -36,7 +35,7 @@ interface StoredLocation {
   district: string | null;
 }
 
-const TOTAL_STEPS = 12;
+const TOTAL_STEPS = 11;
 
 // A blob: object URL only resolves in the exact browser tab that created
 // it — never a value worth persisting to the database.
@@ -54,7 +53,6 @@ const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Billing information', description: 'Add your payout details so you can get paid.' },
   { title: 'Requirements & limitations', description: 'Set expectations up front.' },
   { title: 'Contact preferences', description: 'How should clients reach you?' },
-  { title: 'Verification', description: 'Build trust with a verified badge.' },
 ];
 
 const REQUIRED_STEPS = new Set([1, 2, 3, 4, 9]);
@@ -143,10 +141,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
 
   // (k) Contact preferences
   const [contactPreference, setContactPreference] = useState<string[]>(['creativehub_messages']);
-
-  // (l) Verification
-  const [phoneVerified, setPhoneVerified] = useState(false);
-  const [identityStatus, setIdentityStatus] = useState<'not_submitted' | 'pending' | 'verified'>('not_submitted');
 
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -492,8 +486,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
       limitation_days: limitationDays,
       limitation_note: limitationNote.trim() || null,
       contact_preference: contactPreference,
-      phone_verified: phoneVerified,
-      identity_status: identityStatus,
       portfolio_count: Object.values(portfolioLinks).filter((url) => url && isValidSocialUrl(url)).length,
       updated_at: new Date().toISOString(),
     };
@@ -747,15 +739,6 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
         <StepContactPreferences contactPreference={contactPreference} onContactPreferenceChange={setContactPreference} />
       )}
 
-      {step === 12 && (
-        <StepVerification
-          emailVerified={Boolean(user?.emailConfirmedAt)}
-          phoneVerified={phoneVerified}
-          onPhoneVerifiedChange={setPhoneVerified}
-          identityStatus={identityStatus}
-          onIdentityStatusChange={setIdentityStatus}
-        />
-      )}
     </OnboardingStepShell>
     </>
   );
