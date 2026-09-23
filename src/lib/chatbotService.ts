@@ -1,6 +1,11 @@
 import { supabase } from './supabase';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
+// On the live site the chatbot is served by the website's own Vercel function
+// (api/chatbot/message.js), so it's always same-origin there. In local dev it
+// goes to the Express server, which runs the same shared code.
+const API_BASE = import.meta.env.DEV
+  ? (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api'
+  : '/api';
 
 export interface ChatTurn {
   role: 'user' | 'model';
@@ -13,8 +18,8 @@ export async function sendChatbotMessage(message: string, history: ChatTurn[]): 
 
   // Sent so the backend can answer account-specific questions (e.g. "what's
   // the status of my booking?") by looking up the caller's own data — see
-  // server/src/routes/chatbot.ts's get_my_bookings tool. Chat still works
-  // signed out; the tool is simply unavailable then.
+  // api/_lib/chatbot.js's get_my_bookings tool. The endpoint only answers
+  // signed-in users.
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
 
