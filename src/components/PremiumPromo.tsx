@@ -14,7 +14,7 @@ const snoozeKey = (userId: string) => `creativehub.premiumPromo.snoozedUntil.${u
 const sessionKey = (userId: string) => `creativehub.premiumPromo.shown.${userId}`;
 
 const BENEFITS = [
-  { icon: Sparkles, title: 'Event Matching', text: 'Show up when clients plan events that fit you' },
+  { icon: Sparkles, title: 'Priority Event Matching', text: 'Get matched first when clients plan events that fit you' },
   { icon: Bell, title: 'Instant alerts', text: 'Hear about new Group Requests in your area first' },
   { icon: Megaphone, title: 'Apply with your price', text: 'Respond to open requests on your own terms' },
 ];

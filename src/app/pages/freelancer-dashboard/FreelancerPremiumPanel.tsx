@@ -24,7 +24,7 @@ import {
 const PENDING_CHARGE_KEY = 'creativehub.premium.pendingCharge';
 
 const INCLUDED = [
-  'Appear in Event Matcher results when a client is planning an event that fits you',
+  'Get matched first in Event Matcher',
   'Get notified about relevant new Group Requests in your category and area',
   'Discover open Group Requests and apply to them with your own price',
   'Track every application and get notified when a client responds',
