@@ -44,6 +44,23 @@ export const MINOR_SKILL_GROUPS: SkillGroup[] = [
   },
 ];
 
+// Maps each FREELANCER_CATEGORIES major-skill label (src/lib/categories.ts)
+// to the MINOR_SKILL_GROUPS group it belongs to, so the "Additional skills"
+// picker (MinorSkillsPicker) only shows groups relevant to the freelancer's
+// own selected specialty, instead of every group regardless of what they
+// do. Plain string keys (not imported from categories.ts) to avoid a
+// circular import; keep in sync with FREELANCER_CATEGORY_LABELS by hand.
+export const MINOR_SKILL_GROUP_FOR_MAJOR_CATEGORY: Record<string, string> = {
+  Photographer: 'Photography',
+  Videographer: 'Videography',
+  'Makeup Artist': 'Beauty',
+  'Hair Stylist': 'Beauty',
+  'Fashion Designer': 'Fashion',
+  Decorators: 'Events',
+  'Cake/Dessert Maker': 'Events',
+  Musicians: 'Events',
+};
+
 export const MAX_MINOR_SKILLS = 5;
 
 export const ALL_MINOR_SKILLS = MINOR_SKILL_GROUPS.flatMap((group) => group.skills);

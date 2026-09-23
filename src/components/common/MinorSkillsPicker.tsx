@@ -1,6 +1,6 @@
 import { TagSelector } from './TagSelector';
 import { ExperienceLevelPicker } from './ExperienceLevelPicker';
-import { MINOR_SKILL_GROUPS, MAX_MINOR_SKILLS } from '../../lib/skillsTaxonomy';
+import { MINOR_SKILL_GROUPS, MINOR_SKILL_GROUP_FOR_MAJOR_CATEGORY, MAX_MINOR_SKILLS } from '../../lib/skillsTaxonomy';
 
 export interface MinorSkillSelection {
   name: string;
@@ -25,6 +25,13 @@ interface MinorSkillsPickerProps {
 export function MinorSkillsPicker({ majorSkill, selected, onChange }: MinorSkillsPickerProps) {
   const selectedNames = selected.map((entry) => entry.name);
 
+  // Only the group matching the freelancer's own selected specialty — e.g.
+  // a Photographer sees other Photography job-title skills (Wedding
+  // Photographer, Photo Editor, ...), not Beauty, Writing, Audio, etc. from
+  // fields they haven't indicated anything to do with.
+  const relevantGroupCategory = majorSkill ? MINOR_SKILL_GROUP_FOR_MAJOR_CATEGORY[majorSkill] : undefined;
+  const visibleGroups = MINOR_SKILL_GROUPS.filter((group) => group.category === relevantGroupCategory);
+
   const handleToggle = (nextNames: string[]) => {
     onChange(nextNames.map((name) => selected.find((entry) => entry.name === name) ?? { name, experienceLevel: null }));
   };
@@ -33,10 +40,14 @@ export function MinorSkillsPicker({ majorSkill, selected, onChange }: MinorSkill
     onChange(selected.map((entry) => (entry.name === name ? { ...entry, experienceLevel: level } : entry)));
   };
 
+  if (visibleGroups.length === 0) {
+    return <p className="text-xs text-gray-400">No additional skill suggestions for this specialty yet.</p>;
+  }
+
   return (
     <div>
       <div className="space-y-5">
-        {MINOR_SKILL_GROUPS.map((group) => {
+        {visibleGroups.map((group) => {
           const groupSuggestions = group.skills.filter((skill) => skill !== majorSkill);
           if (groupSuggestions.length === 0) return null;
           return (
