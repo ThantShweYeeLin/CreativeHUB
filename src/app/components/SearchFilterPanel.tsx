@@ -264,6 +264,27 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
     onClose();
   };
 
+  const handleClearAll = () => {
+    const cleared: FilterState = {
+      services: [],
+      priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
+      locations: [],
+      currency: normalizedPreferredCurrency,
+      nearMe: null,
+      minRating: null,
+    };
+    // setFilters(cleared) alone wouldn't be visible to onSearch below until
+    // the next render — pass `cleared` directly so Clear All both resets and
+    // applies in one tap instead of needing a separate Apply Filters click.
+    setFilters(cleared);
+    setShowOtherInput(false);
+    setOtherLocationDraft('');
+    setLocateError(null);
+    void setCurrency(cleared.currency, true);
+    onSearch(cleared);
+    onClose();
+  };
+
   return createPortal(
     // Portaled to document.body — ExplorePage wraps its whole page in a
     // `relative z-10` div, which (like any positioned element with an
@@ -564,20 +585,8 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
         {/* Footer */}
         <div className="mt-8 flex items-center justify-between border-t border-sky-100 pt-6">
           <button
-            onClick={() => {
-              setFilters({
-                services: [],
-                priceRange: defaultRangeForCurrency(normalizedPreferredCurrency),
-                locations: [],
-                currency: normalizedPreferredCurrency,
-                nearMe: null,
-                minRating: null,
-              });
-              setShowOtherInput(false);
-              setOtherLocationDraft('');
-              setLocateError(null);
-            }}
-            className="rounded-xl px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-sky-50"
+            onClick={handleClearAll}
+            className="rounded-xl border border-sky-200 bg-white px-6 py-3.5 font-semibold text-gray-700 transition-colors hover:bg-sky-50"
           >
             Clear All
           </button>
