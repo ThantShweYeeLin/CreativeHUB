@@ -16,13 +16,7 @@ import { PRONOUN_OPTIONS } from '../../lib/pronouns';
 import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialPlatform } from '../../lib/socialPlatforms';
 import { LIMITATION_DAY_OPTIONS, WORKING_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
 import type { Gender } from '../../lib/database.types';
-
-const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'lgbtq_plus', label: 'LGBTQ+' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
+import { GENDER_OPTIONS } from '../../lib/gender';
 
 interface SocialLinkFormEntry {
   id: string | null;

@@ -4,6 +4,7 @@ import logoImage from '../../imports/logo.png';
 import { AuthShowcase } from './AuthShowcase';
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import type { Gender } from '../../lib/database.types';
+import { GENDER_OPTIONS } from '../../lib/gender';
 import { CountrySelect } from '../../components/common/CountrySelect';
 import { CitySelect } from '../../components/common/CitySelect';
 import { PhoneInput } from '../../components/common/PhoneInput';
@@ -34,13 +35,6 @@ interface SignUpPageProps {
   onValidateEmail?: (email: string) => Promise<string | null>;
   onOAuthSignUp?: (provider: 'google' | 'facebook', role: AccountType) => Promise<void>;
 }
-
-const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'lgbtq_plus', label: 'LGBTQ+' },
-  { value: 'prefer_not_to_say', label: 'Prefer not to say' },
-];
 
 export function SignUpPage({ onSignUp, onGoToLogin, onValidateEmail, onOAuthSignUp }: SignUpPageProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);

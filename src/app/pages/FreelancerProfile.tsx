@@ -16,6 +16,7 @@ import { TrustBadge } from '../../components/common/TrustBadge';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { shouldDisplayPronouns } from '../../lib/pronouns';
+import { genderLabel, shouldDisplayGender } from '../../lib/gender';
 import FollowersModal from '../components/FollowersModal';
 import {
   appendBudgetMeta,
@@ -445,6 +446,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const bookingLocations = bookingLocationOptions;
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
+  const gender = profile?.gender;
   const todayDateString = new Date().toISOString().slice(0, 10);
   const allTimeSlots = useMemo(
     () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
@@ -1288,6 +1290,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       <h1 className="text-2xl font-bold md:text-3xl">
                         {displayName}
                         {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
+                        {shouldDisplayGender(gender) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {genderLabel(gender)}</span>}
                       </h1>
                       {bandPerformerTypes.map((type: string) => (
                         <span key={type} className="rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold text-white md:text-sm">
@@ -1426,6 +1429,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 <h1 className="text-xl font-bold text-gray-900">
                   {displayName}
                   {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
+                  {shouldDisplayGender(gender) && <span className="ml-2 text-sm font-normal text-gray-500">· {genderLabel(gender)}</span>}
                 </h1>
                 {bandPerformerTypes.map((type: string) => (
                   <span key={type} className="rounded-full border border-purple-300 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-900">
