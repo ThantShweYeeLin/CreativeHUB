@@ -441,6 +441,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const gender = profile?.gender;
+  // "(she/her · Female)" beside the name - either half can be absent (unset,
+  // or gender is "Prefer not to say") without leaving a stray "()" or "· ".
+  const identityTag = [shouldDisplayPronouns(pronouns) ? pronouns : null, shouldDisplayGender(gender) ? genderLabel(gender) : null]
+    .filter(Boolean)
+    .join(' · ');
   const todayDateString = new Date().toISOString().slice(0, 10);
   const allTimeSlots = useMemo(
     () => generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end),
@@ -1283,7 +1288,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                     <div className="flex flex-wrap items-center gap-2">
                       <h1 className="text-2xl font-bold md:text-3xl">
                         {displayName}
-                        {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">· {pronouns}</span>}
+                        {identityTag && <span className="ml-2 text-base font-normal text-white/70 md:text-lg">({identityTag})</span>}
                       </h1>
                     </div>
                     <p className="mt-1 text-base text-white/90 md:text-lg">{title}</p>
@@ -1416,7 +1421,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-xl font-bold text-gray-900">
                   {displayName}
-                  {shouldDisplayPronouns(pronouns) && <span className="ml-2 text-sm font-normal text-gray-500">· {pronouns}</span>}
+                  {identityTag && <span className="ml-2 text-sm font-normal text-gray-500">({identityTag})</span>}
                 </h1>
               </div>
               <p className="mt-1 text-sm text-gray-600">{title}</p>
@@ -1517,8 +1522,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           </div>
 
           <div className="px-6 pb-6 pt-3 md:px-8 md:pb-8 md:pt-4">
-            {shouldDisplayGender(gender) && <p className="text-sm text-gray-500">{genderLabel(gender)}</p>}
-            <p className="mt-1 text-gray-700 leading-7">{bio}</p>
+            <p className="text-gray-700 leading-7">{bio}</p>
 
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
