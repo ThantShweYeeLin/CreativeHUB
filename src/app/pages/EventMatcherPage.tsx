@@ -10,11 +10,15 @@ import {
   Landmark,
   List,
   MapPin,
+  Megaphone,
+  Minus,
   PackageX,
   PartyPopper,
+  Plus,
   Sparkles,
   Sun,
   TreePine,
+  Trash2,
   Users,
   Waves,
   type LucideIcon,
@@ -68,7 +72,11 @@ interface CategoryMatch {
   category: string;
   tier: ServiceTier;
   candidates: RankedCandidate[];
-  selectedIndex: number;
+  // null = no freelancer assigned to this service (either none were found,
+  // or the user cleared their selection) — the service still stays in the
+  // plan so it can be filled in later, or left open for Premium freelancers
+  // to apply to if the plan is opened up.
+  selectedIndex: number | null;
 }
 
 interface PlanLineItem extends BudgetLineItem {
@@ -122,6 +130,76 @@ function formatEventDate(value: string): string {
   return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// Builds the same ranked-candidate list from whichever profile set was
+// fetched (Premium-only, or the no-Premium-filter fallback) - date
+// availability, location coverage, having a set price, and scoring are
+// identical either way; only which freelancers were fetched differs.
+function buildRankedCandidates(
+  profiles: any[],
+  blockedDates: any[],
+  bookings: any[],
+  category: string,
+  date: string,
+  eventLocation: LocationPointLike,
+  currency: string,
+  styles: string[],
+  budgetForCategory: number
+): RankedCandidate[] {
+  const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
+  for (const row of blockedDates) {
+    const list = blockedByProfile.get(row.freelancer_id) || [];
+    list.push(row);
+    blockedByProfile.set(row.freelancer_id, list);
+  }
+  const bookingsByUser = new Map<string, any[]>();
+  for (const row of bookings) {
+    const list = bookingsByUser.get(row.freelancer_id) || [];
+    list.push(row);
+    bookingsByUser.set(row.freelancer_id, list);
+  }
+
+  const candidates: RankedCandidate[] = [];
+  for (const profile of profiles) {
+    const isFree = isFreelancerFreeOnDate(bookingsByUser.get(profile.user_id) || [], blockedByProfile.get(profile.id) || [], date);
+    if (!isFree) continue;
+
+    const providerLocations: LocationPointLike[] = [
+      ...(Array.isArray(profile.locations) ? profile.locations : []),
+      ...(Array.isArray(profile.studio_locations) ? profile.studio_locations : []),
+    ];
+    if (!locationCovers(providerLocations, eventLocation)) continue;
+
+    let packagePrice: number | null = null;
+    let serviceName = category;
+    if (profile.hourly_rate != null) {
+      const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
+      packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
+      serviceName = 'Hourly rate';
+    }
+    if (packagePrice == null) continue;
+
+    const candidate: RankedCandidate = {
+      userId: profile.user_id,
+      freelancerProfileId: profile.id,
+      fullName: profile.users?.full_name || 'Freelancer',
+      avatarUrl: profile.users?.avatar_url || null,
+      styles: Array.isArray(profile.styles) ? profile.styles : [],
+      rating: Number(profile.users?.rating) || 0,
+      totalReviews: Number(profile.users?.total_reviews) || 0,
+      experienceYears: profile.experience_years ?? null,
+      packagePrice,
+      packageCurrency: currency,
+      serviceName,
+      score: 0,
+    };
+    candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
+    candidates.push(candidate);
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+
 export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -155,6 +233,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   // but each provider may need to be there at a different time (e.g. the
   // makeup artist arrives hours before the ceremony itself).
   const [categoryTimes, setCategoryTimes] = useState<Record<string, string>>({});
+  const [addingCategories, setAddingCategories] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -207,6 +286,58 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     });
   };
 
+  // Fetches and ranks candidates for one category - shared by the initial
+  // "Find My Event Team" match and by adding a service after the fact from
+  // the plan step, so both go through the same Premium-first/fallback logic.
+  const matchCategory = async (category: string, tier: ServiceTier, categoryCount: number): Promise<CategoryMatch> => {
+    if (!location) return { category, tier, candidates: [], selectedIndex: 0 };
+
+    const eventLocation: LocationPointLike = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      formattedAddress: location.formattedAddress,
+      city: location.city ?? null,
+      district: location.district ?? null,
+    };
+    const budgetForCategory = budgetNumber / Math.max(1, categoryCount);
+
+    const premiumResponse = await DataService.getEventMatcherCandidates(category, date);
+    let candidates = buildRankedCandidates(
+      premiumResponse.data.profiles as any[],
+      premiumResponse.data.blockedDates,
+      premiumResponse.data.bookings,
+      category,
+      date,
+      eventLocation,
+      currency,
+      styles,
+      budgetForCategory
+    );
+
+    // No Premium freelancer survived date/location/price filtering for
+    // this category (whether because none exist, or the ones that do
+    // are busy or too far) - fill in with everyone else who qualifies,
+    // so the plan never shows "no providers" while a free freelancer
+    // nearby is actually available that day.
+    if (candidates.length === 0) {
+      const anyResponse = await DataService.getEventMatcherCandidatesAny(category, date);
+      candidates = buildRankedCandidates(
+        anyResponse.data.profiles as any[],
+        anyResponse.data.blockedDates,
+        anyResponse.data.bookings,
+        category,
+        date,
+        eventLocation,
+        currency,
+        styles,
+        budgetForCategory
+      );
+    }
+
+    const ranked = candidates.slice(0, 5);
+    return { category, tier, candidates: ranked, selectedIndex: ranked.length > 0 ? 0 : null };
+  };
+
   const handleFindEventTeam = async () => {
     if (!location) return;
     const confirmedCategories = Array.from(selectedCategories);
@@ -221,108 +352,30 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     setCategoryTimes(Object.fromEntries(confirmedCategories.map((category) => [category, eventTime])));
     setStep('plan');
 
-    const eventLocation: LocationPointLike = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      formattedAddress: location.formattedAddress,
-      city: location.city ?? null,
-      district: location.district ?? null,
-    };
-    const budgetForCategory = budgetNumber / confirmedCategories.length;
-
-    // Builds the same ranked-candidate list from whichever profile set was
-    // fetched (Premium-only, or the no-Premium-filter fallback) - date
-    // availability, location coverage, having a set price, and scoring are
-    // identical either way; only which freelancers were fetched differs.
-    const buildCandidates = (profiles: any[], blockedDates: any[], bookings: any[], category: string): RankedCandidate[] => {
-      const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
-      for (const row of blockedDates) {
-        const list = blockedByProfile.get(row.freelancer_id) || [];
-        list.push(row);
-        blockedByProfile.set(row.freelancer_id, list);
-      }
-      const bookingsByUser = new Map<string, any[]>();
-      for (const row of bookings) {
-        const list = bookingsByUser.get(row.freelancer_id) || [];
-        list.push(row);
-        bookingsByUser.set(row.freelancer_id, list);
-      }
-
-      const candidates: RankedCandidate[] = [];
-      for (const profile of profiles) {
-        const isFree = isFreelancerFreeOnDate(bookingsByUser.get(profile.user_id) || [], blockedByProfile.get(profile.id) || [], date);
-        if (!isFree) continue;
-
-        const providerLocations: LocationPointLike[] = [
-          ...(Array.isArray(profile.locations) ? profile.locations : []),
-          ...(Array.isArray(profile.studio_locations) ? profile.studio_locations : []),
-        ];
-        if (!locationCovers(providerLocations, eventLocation)) continue;
-
-        let packagePrice: number | null = null;
-        let serviceName = category;
-        if (profile.hourly_rate != null) {
-          const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
-          packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
-          serviceName = 'Hourly rate';
-        }
-        if (packagePrice == null) continue;
-
-        const candidate: RankedCandidate = {
-          userId: profile.user_id,
-          freelancerProfileId: profile.id,
-          fullName: profile.users?.full_name || 'Freelancer',
-          avatarUrl: profile.users?.avatar_url || null,
-          styles: Array.isArray(profile.styles) ? profile.styles : [],
-          rating: Number(profile.users?.rating) || 0,
-          totalReviews: Number(profile.users?.total_reviews) || 0,
-          experienceYears: profile.experience_years ?? null,
-          packagePrice,
-          packageCurrency: currency,
-          serviceName,
-          score: 0,
-        };
-        candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
-        candidates.push(candidate);
-      }
-
-      candidates.sort((a, b) => b.score - a.score);
-      return candidates;
-    };
-
     const results = await Promise.all(
-      confirmedCategories.map(async (category): Promise<CategoryMatch> => {
-        const tier = categoryTier.get(category) || 'optional';
-
-        const premiumResponse = await DataService.getEventMatcherCandidates(category, date);
-        let candidates = buildCandidates(
-          premiumResponse.data.profiles as any[],
-          premiumResponse.data.blockedDates,
-          premiumResponse.data.bookings,
-          category
-        );
-
-        // No Premium freelancer survived date/location/price filtering for
-        // this category (whether because none exist, or the ones that do
-        // are busy or too far) - fill in with everyone else who qualifies,
-        // so the plan never shows "no providers" while a free freelancer
-        // nearby is actually available that day.
-        if (candidates.length === 0) {
-          const anyResponse = await DataService.getEventMatcherCandidatesAny(category, date);
-          candidates = buildCandidates(
-            anyResponse.data.profiles as any[],
-            anyResponse.data.blockedDates,
-            anyResponse.data.bookings,
-            category
-          );
-        }
-
-        return { category, tier, candidates: candidates.slice(0, 5), selectedIndex: 0 };
-      })
+      confirmedCategories.map((category) => matchCategory(category, categoryTier.get(category) || 'optional', confirmedCategories.length))
     );
 
     setCategoryMatches(results);
     setIsMatching(false);
+  };
+
+  // Adds a service to an already-matched plan (from the plan step itself),
+  // fetching and ranking its candidates the same way the initial match did.
+  const addCategoryToPlan = async (category: string) => {
+    if (!location || addingCategories.has(category)) return;
+    setAddingCategories((current) => new Set(current).add(category));
+    setCategoryTimes((current) => (current[category] ? current : { ...current, [category]: eventTime }));
+    const tier = categoryTier.get(category) || 'optional';
+    const match = await matchCategory(category, tier, categoryMatches.length + 1);
+    setCategoryMatches((current) => [...current.filter((existing) => existing.category !== category), match]);
+    setSelectedCategories((current) => new Set(current).add(category));
+    setCategoryTier((current) => (current.has(category) ? current : new Map(current).set(category, tier)));
+    setAddingCategories((current) => {
+      const next = new Set(current);
+      next.delete(category);
+      return next;
+    });
   };
 
   const selectCandidate = (category: string, index: number) => {
@@ -332,6 +385,32 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     setExpandedCategory(null);
   };
 
+  // Clears the freelancer assigned to a service without dropping the
+  // service itself — the card goes back to an empty state where the user
+  // can pick a different candidate from the same ranked list, or leave it
+  // empty (it's then skipped when sending direct requests, but still open
+  // for Premium freelancers to apply to if the plan is posted).
+  const clearSelection = (category: string) => {
+    setCategoryMatches((current) =>
+      current.map((match) => (match.category === category ? { ...match, selectedIndex: null } : match))
+    );
+    setExpandedCategory(null);
+  };
+
+  // Drops a service from the plan entirely — not just its currently
+  // matched freelancer. Also unchecks it in selectedCategories so it
+  // stays dropped if the user goes back to the recommendations step,
+  // and so it's excluded from the open-to-Premium-freelancers request too.
+  const removeCategory = (category: string) => {
+    setCategoryMatches((current) => current.filter((match) => match.category !== category));
+    setSelectedCategories((current) => {
+      const next = new Set(current);
+      next.delete(category);
+      return next;
+    });
+    setExpandedCategory((current) => (current === category ? null : current));
+  };
+
   const sortedCategoryMatches = useMemo(
     () => [...categoryMatches].sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier)),
     [categoryMatches]
@@ -339,9 +418,9 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
   const budgetFit = useMemo(() => {
     const items: PlanLineItem[] = categoryMatches
-      .filter((match) => match.candidates.length > 0)
+      .filter((match) => match.selectedIndex !== null && match.candidates[match.selectedIndex])
       .map((match) => {
-        const candidate = match.candidates[match.selectedIndex];
+        const candidate = match.candidates[match.selectedIndex as number];
         return { category: match.category, tier: match.tier, price: candidate.packagePrice as number, userId: candidate.userId, fullName: candidate.fullName };
       });
     return computeBudgetFit(items, budgetNumber);
@@ -730,104 +809,176 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
                 <div className="space-y-4">
                   {sortedCategoryMatches.map((match) => {
-                    const candidate = match.candidates[match.selectedIndex];
+                    const candidate = match.selectedIndex !== null ? match.candidates[match.selectedIndex] : undefined;
+                    const hasOptions = match.candidates.length > 0;
                     const dropped = isDropped(match.category);
                     const isExpanded = expandedCategory === match.category;
+                    const cardClass = candidate
+                      ? `relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-sky-100'}`
+                      : 'relative rounded-2xl border-2 border-dashed border-sky-200 bg-white/60 p-4';
 
                     return (
                       <div key={match.category}>
-                        <p className="mb-1.5 px-1 text-xs font-semibold text-gray-500">
-                          {match.category} · {TIER_LABEL[match.tier]}
-                        </p>
+                        <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+                          <p className="text-xs font-semibold text-gray-500">
+                            {match.category} · {TIER_LABEL[match.tier]}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => removeCategory(match.category)}
+                            title="Remove this service"
+                            aria-label="Remove this service"
+                            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-red-100 text-red-500 hover:border-red-300 hover:bg-red-50"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                        </div>
 
-                        {!candidate ? (
-                          <div className="flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-sky-200 bg-white/60 p-6 text-center">
-                            <PackageX className="h-6 w-6 text-gray-400" />
-                            <p className="text-sm text-gray-500">No providers available for this service yet.</p>
-                          </div>
-                        ) : (
-                          <div className={`relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-sky-100'}`}>
-                            {match.candidates.length > 1 && (
+                        <div className={cardClass}>
+                          {candidate ? (
+                            <>
+                              <div className="absolute right-3 top-3 flex items-center gap-1.5">
+                                {hasOptions && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedCategory((current) => (current === match.category ? null : match.category))}
+                                    title="See all options"
+                                    aria-label="See all options"
+                                    aria-expanded={isExpanded}
+                                    className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-sky-100 text-gray-600 hover:border-sky-300 hover:text-gray-900"
+                                  >
+                                    <List className="h-4 w-4" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => clearSelection(match.category)}
+                                  title="Remove this freelancer"
+                                  aria-label="Remove this freelancer"
+                                  className="flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-red-100 text-red-500 hover:border-red-300 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+
+                              <div className="flex items-center gap-3 pr-20">
+                                <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-semibold text-gray-900">{candidate.fullName}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {candidate.serviceName} · {formatCurrencyAmount(candidate.packagePrice || 0, currency)}
+                                    {candidate.rating > 0 && ` · ★ ${candidate.rating.toFixed(1)}`}
+                                  </p>
+                                  {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                                <label htmlFor={`time-${match.category}`} className="text-xs font-semibold text-gray-600">
+                                  Arrival time
+                                </label>
+                                <select
+                                  id={`time-${match.category}`}
+                                  value={categoryTimes[match.category] || eventTime}
+                                  onChange={(event) =>
+                                    setCategoryTimes((current) => ({ ...current, [match.category]: event.target.value }))
+                                  }
+                                  className="rounded-lg border border-sky-100 bg-sky-50/50 px-2 py-1.5 text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                                >
+                                  {EVENT_TIME_SLOTS.map((slot) => (
+                                    <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </>
+                          ) : hasOptions ? (
+                            <div className="flex flex-col items-center gap-2 py-2 text-center">
                               <button
                                 type="button"
                                 onClick={() => setExpandedCategory((current) => (current === match.category ? null : match.category))}
-                                title="See all options"
-                                aria-label="See all options"
+                                title="Choose a freelancer"
+                                aria-label="Choose a freelancer"
                                 aria-expanded={isExpanded}
-                                className="absolute right-3 top-3 flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-full border border-sky-100 text-gray-600 hover:border-sky-300 hover:text-gray-900"
+                                className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-sky-300 text-sky-600 hover:bg-sky-50"
                               >
-                                <List className="h-4 w-4" />
+                                <Plus className="h-5 w-5" />
                               </button>
-                            )}
-
-                            <div className="flex items-center gap-3 pr-9">
-                              <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold text-gray-900">{candidate.fullName}</p>
-                                <p className="text-xs text-gray-500">
-                                  {candidate.serviceName} · {formatCurrencyAmount(candidate.packagePrice || 0, currency)}
-                                  {candidate.rating > 0 && ` · ★ ${candidate.rating.toFixed(1)}`}
-                                </p>
-                                {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
-                              </div>
+                              <p className="text-sm text-gray-500">
+                                No freelancer selected. Choose one, or leave it open for Premium freelancers to apply.
+                              </p>
                             </div>
-
-                            <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
-                              <label htmlFor={`time-${match.category}`} className="text-xs font-semibold text-gray-600">
-                                Arrival time
-                              </label>
-                              <select
-                                id={`time-${match.category}`}
-                                value={categoryTimes[match.category] || eventTime}
-                                onChange={(event) =>
-                                  setCategoryTimes((current) => ({ ...current, [match.category]: event.target.value }))
-                                }
-                                className="rounded-lg border border-sky-100 bg-sky-50/50 px-2 py-1.5 text-xs font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                              >
-                                {EVENT_TIME_SLOTS.map((slot) => (
-                                  <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
-                                ))}
-                              </select>
+                          ) : (
+                            <div className="flex flex-col items-center gap-2 py-2 text-center">
+                              <PackageX className="h-6 w-6 text-gray-400" />
+                              <p className="text-sm text-gray-500">No providers available for this service yet.</p>
+                              <p className="text-xs text-gray-400">
+                                Left open — Premium freelancers can still apply here if you open this plan.
+                              </p>
                             </div>
+                          )}
 
-                            {isExpanded && (
-                              <div className="mt-3 space-y-2 border-t border-gray-100 pt-3">
-                                {match.candidates.map((option, index) => {
-                                  const isSelected = index === match.selectedIndex;
-                                  return (
-                                    <div key={option.userId} className="flex items-center gap-3">
-                                      <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
-                                      <div className="min-w-0 flex-1">
-                                        <p className="truncate text-sm font-semibold text-gray-900">{option.fullName}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
-                                          {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
-                                        </p>
-                                      </div>
-                                      {isSelected ? (
-                                        <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
-                                          Selected
-                                        </span>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => selectCandidate(match.category, index)}
-                                          className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
-                                        >
-                                          Select
-                                        </button>
-                                      )}
+                          {isExpanded && hasOptions && (
+                            <div className={`space-y-2 ${candidate ? 'mt-3 border-t border-gray-100 pt-3' : 'mt-2'}`}>
+                              {match.candidates.map((option, index) => {
+                                const isSelected = index === match.selectedIndex;
+                                return (
+                                  <div key={option.userId} className="flex items-center gap-3">
+                                    <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-sm font-semibold text-gray-900">{option.fullName}</p>
+                                      <p className="text-xs text-gray-500">
+                                        {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
+                                        {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
+                                      </p>
                                     </div>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                                    {isSelected ? (
+                                      <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                        Selected
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => selectCandidate(match.category, index)}
+                                        className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
+                                      >
+                                        Select
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
                 </div>
+
+                {(() => {
+                  const availableToAdd = EVENT_MATCHER_CATEGORY_LABELS.filter(
+                    (category) => !categoryMatches.some((match) => match.category === category)
+                  );
+                  if (availableToAdd.length === 0) return null;
+                  return (
+                    <div>
+                      <p className="mb-2 px-1 text-xs font-semibold text-gray-500">Add another service</p>
+                      <div className="flex flex-wrap gap-2">
+                        {availableToAdd.map((category) => (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => void addCategoryToPlan(category)}
+                            disabled={addingCategories.has(category)}
+                            className="rounded-full border-2 border-sky-100 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-all hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {addingCategories.has(category) ? 'Adding...' : `+ ${category}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <button
                   type="button"
@@ -842,9 +993,15 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   type="button"
                   onClick={() => void handlePostOpenRequest()}
                   disabled={isSubmitting}
-                  className="w-full rounded-xl border-2 border-sky-200 px-4 py-3 text-sm font-semibold text-sky-700 transition-colors hover:bg-sky-50 disabled:opacity-50"
+                  className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-sky-300 bg-sky-50 px-4 py-3.5 text-center transition-colors hover:border-sky-400 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Or open this plan to Premium freelancers to apply
+                  <span className="flex items-center gap-2 text-sm font-bold text-sky-700">
+                    <Megaphone className="h-4 w-4" />
+                    Or open this plan to Premium freelancers to apply
+                  </span>
+                  <span className="text-xs font-medium text-sky-600">
+                    Matching Premium freelancers get notified and can apply themselves — no need to pick one yourself
+                  </span>
                 </button>
               </>
             )}

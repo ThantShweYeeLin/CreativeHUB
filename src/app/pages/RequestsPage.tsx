@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search, Clock, MapPin } from 'lucide-react';
+import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search, Clock, MapPin, Megaphone } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +52,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const navigate = useNavigate();
   const { user } = useAuth();
   const [requests, setRequests] = useState<any[]>([]);
+  const [groupOpportunities, setGroupOpportunities] = useState<any[]>([]);
   const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +115,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       setIsLoading(true);
       setError(null);
 
-      const response = await DataService.getClientRequestsWithProgress(user.id);
+      const [response, groupOppsResponse] = await Promise.all([
+        DataService.getClientRequestsWithProgress(user.id),
+        DataService.getMyGroupOpportunities(user.id),
+      ]);
       if (!isMounted) return;
 
       if (response.error) {
@@ -122,6 +126,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         setRequests([]);
       } else {
         setRequests(response.data || []);
+      }
+      if (!groupOppsResponse.error) {
+        setGroupOpportunities(groupOppsResponse.data || []);
       }
 
       setIsLoading(false);
@@ -261,6 +268,48 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       })),
     [requests, groupMemberNamesByRequest]
   );
+
+  // Every request id that's actually a freelancer's application to one of
+  // this client's Open Group Requests, not a request the client sent
+  // themselves — these render grouped by event/role below instead of mixed
+  // into the flat list, so three photographers applying to one role no
+  // longer look like three unrelated bookings.
+  const groupApplicationRequestIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const opportunity of groupOpportunities) {
+      for (const role of opportunity.roles || []) {
+        for (const application of role.applications || []) {
+          if (application.request_id) ids.add(application.request_id);
+        }
+      }
+    }
+    return ids;
+  }, [groupOpportunities]);
+
+  const flatRequests = useMemo(
+    () => normalizedRequests.filter((request) => !groupApplicationRequestIds.has(request.id)),
+    [normalizedRequests, groupApplicationRequestIds]
+  );
+
+  // Reuses the same normalized request objects the flat list renders from
+  // (same .raw/.status/.counterBy/etc shape), just organized under the
+  // event + role they were an application to.
+  const openGroupSections = useMemo(() => {
+    const requestsById = new Map(normalizedRequests.map((request) => [request.id, request]));
+    // Shows every posted Open Group Request, including ones with zero
+    // applicants so far — otherwise a request the client just sent (and
+    // that no Premium freelancer has applied to yet) was invisible
+    // everywhere on this page, with no confirmation it actually went out.
+    return groupOpportunities.map((opportunity) => ({
+      ...opportunity,
+      roles: (opportunity.roles || []).map((role: any) => ({
+        ...role,
+        applicants: (role.applications || [])
+          .map((application: any) => requestsById.get(application.request_id))
+          .filter(Boolean),
+      })),
+    }));
+  }, [groupOpportunities, normalizedRequests]);
 
   const openEditRequest = async (request: any) => {
     if (request.status !== 'pending') {
@@ -403,9 +452,15 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
 
   const reloadRequests = async () => {
     if (!user?.id) return;
-    const reload = await DataService.getClientRequestsWithProgress(user.id);
+    const [reload, groupOppsReload] = await Promise.all([
+      DataService.getClientRequestsWithProgress(user.id),
+      DataService.getMyGroupOpportunities(user.id),
+    ]);
     if (!reload.error) {
       setRequests(reload.data || []);
+    }
+    if (!groupOppsReload.error) {
+      setGroupOpportunities(groupOppsReload.data || []);
     }
   };
 
@@ -668,8 +723,121 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             <div className="h-12 w-12 rounded-full border-4 border-sky-100 border-t-sky-500 animate-spin" />
           </div>
         ) : (
+        <>
+        {openGroupSections.length > 0 && (
+          <div className="mb-6 space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">Open Group Requests</h2>
+            {openGroupSections.map((opportunity) => (
+              <div
+                key={opportunity.id}
+                className="bg-white/90 backdrop-blur-xl rounded-xl md:rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden"
+              >
+                <div className="p-4 md:p-6">
+                  <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <div className="mb-1 flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-gray-900">{opportunity.title}</h3>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+                          <Megaphone className="h-3 w-3" />
+                          Open to Premium
+                        </span>
+                      </div>
+                      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs md:text-sm text-gray-500">
+                        <span>{new Date(opportunity.event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        {opportunity.location_city && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {opportunity.location_city}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-3 py-1 rounded-full text-xs font-bold border-2 whitespace-nowrap ${
+                        opportunity.status === 'open' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-gray-100 text-gray-500 border-gray-200'
+                      }`}
+                    >
+                      {opportunity.status === 'open' ? 'Open' : 'Closed'}
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-gray-100">
+                    {opportunity.roles.map((role: any) => {
+                      const acceptedCount = role.applicants.filter((applicant: any) => applicant.status === 'accepted').length;
+                      const roleIsFull = acceptedCount >= role.slots;
+                      return (
+                        <div key={role.id} className="py-3 first:pt-0 last:pb-0">
+                          <p className="mb-2 text-sm font-bold text-gray-900">
+                            {role.category}
+                            <span className="ml-2 text-xs font-medium text-gray-400">{acceptedCount}/{role.slots} filled</span>
+                          </p>
+
+                          {role.applicants.length === 0 ? (
+                            <p className="text-xs italic text-gray-400">Waiting for Premium freelancers to apply.</p>
+                          ) : (
+                            <div className="space-y-2.5">
+                              {role.applicants.map((applicant: any) => (
+                                <div key={applicant.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full ring-2 ring-white shadow-sm">
+                                      <ImageWithFallback src={applicant.freelancer.avatar} alt={applicant.freelancer.name} className="h-full w-full object-cover" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => applicant.freelancer.id && navigate(`/profile/${applicant.freelancer.id}`)}
+                                        className="truncate text-sm font-semibold text-gray-900 hover:text-black"
+                                      >
+                                        {applicant.freelancer.name}
+                                      </button>
+                                      <p className="text-xs text-gray-500">
+                                        {formatCurrencyAmount(applicant.counterPrice ?? applicant.budget, applicant.budgetMeta?.currency || 'THB')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-shrink-0 items-center gap-2 pl-11 sm:pl-0">
+                                    <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold whitespace-nowrap ${getStatusColor(applicant.status)}`}>
+                                      {getStatusText(applicant.status)}
+                                    </span>
+                                    {applicant.status === 'countered' && applicant.counterBy === 'freelancer' && (
+                                      <>
+                                        {roleIsFull ? (
+                                          <span className="text-xs font-medium text-gray-400">Role filled</span>
+                                        ) : (
+                                          <button
+                                            onClick={() => setConfirmAction({ type: 'accept', request: applicant })}
+                                            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+                                          >
+                                            <Check className="h-3.5 w-3.5" />
+                                            Accept
+                                          </button>
+                                        )}
+                                        <button
+                                          onClick={() => setConfirmAction({ type: 'reject', request: applicant })}
+                                          className="flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-100 transition-colors"
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                          Decline
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-4">
-          {normalizedRequests.map((request) => (
+          {flatRequests.map((request) => (
             <div
               key={request.id}
               onClick={() => request.status === 'accepted' && void handleOpenAcceptedRequest(request)}
@@ -953,10 +1121,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             </div>
           ))}
         </div>
+        </>
         )}
 
         {/* Empty State */}
-        {!isLoading && normalizedRequests.length === 0 && (
+        {!isLoading && normalizedRequests.length === 0 && openGroupSections.length === 0 && (
           <div className="text-center py-16">
             <div className="w-24 h-24 bg-gradient-to-br from-sky-100 to-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertCircle className="w-12 h-12 text-sky-400" />

@@ -8,10 +8,15 @@
 -- "Decorator/Florist" (major or minor) now shows "Decorators" automatically.
 --
 -- Run this once against your Supabase project's SQL editor. Safe to re-run.
+--
+-- Note: the live project's rows were actually titled plain 'Decorator' (not
+-- 'Decorator/Florist' as this file originally assumed), so the first version
+-- of this migration silently matched zero rows. Both old labels are handled
+-- here so this stays correct regardless of which one a given environment has.
 
-update public.freelancer_profiles set title = 'Decorators' where title = 'Decorator/Florist';
+update public.freelancer_profiles set title = 'Decorators' where title in ('Decorator/Florist', 'Decorator');
 
-update public.skills set name = 'Decorators' where name = 'Decorator/Florist';
+update public.skills set name = 'Decorators' where name in ('Decorator/Florist', 'Decorator');
 
 insert into public.skills (name, category)
 select 'Florist', 'Events'

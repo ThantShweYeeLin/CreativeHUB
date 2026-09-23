@@ -4101,6 +4101,30 @@ export class DataService {
     return { data: data as string | null, error };
   }
 
+  /**
+   * The client's own posted Open Group Requests, with each role's applicant
+   * count and which `requests` row each application maps to — enough to
+   * group applications by event/role in the UI (see RequestsPage.tsx's
+   * "Open Group Requests" section). Doesn't embed freelancer/request detail
+   * itself; the caller already has those from getClientRequestsWithProgress
+   * and just needs to know which request ids belong to which role. RLS
+   * ("Owners read their opportunities/roles/applications" in
+   * supabase/freelancer_premium.sql) already limits this to the caller's
+   * own opportunities, so no new SQL migration is needed for this read.
+   */
+  static async getMyGroupOpportunities(clientId: string) {
+    const { data, error } = await (supabase as any)
+      .from('group_opportunities')
+      .select(
+        `id, title, event_date, start_time, location_city, location_text, status,
+         roles:group_opportunity_roles ( id, category, budget, currency, slots,
+           applications:group_opportunity_applications ( id, request_id ) )`
+      )
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false });
+    return { data: (data || []) as any[], error };
+  }
+
   /** Non-null when this request came from an open Group Request application (RLS: only its client / applicant can see the link). */
   static async getGroupApplicationIdForRequest(requestId: string): Promise<string | null> {
     const { data } = await (supabase as any)
