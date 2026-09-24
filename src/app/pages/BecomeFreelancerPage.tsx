@@ -55,7 +55,7 @@ const STEP_META: Array<{ title: string; description: string }> = [
   { title: 'Contact preferences', description: 'How should clients reach you?' },
 ];
 
-const REQUIRED_STEPS = new Set([1, 2, 3, 4, 9]);
+const REQUIRED_STEPS = new Set([1, 2, 3, 4, 7, 9]);
 const TRAVEL_ANYWHERE = 'Open to travel anywhere';
 
 export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
@@ -266,10 +266,19 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     if (current === 2 && !isFreelancerCategory(category)) return 'Select a freelancer category.';
     if (current === 3 && skills.length === 0 && minorCategorySkillsCount === 0) return 'Select or add at least one skill.';
     if (current === 4 && styles.length === 0 && minorCategoryStylesCount === 0) return 'Select or add at least one style.';
-    // Studio name is optional, but a named studio needs a real location —
-    // can't have one without the other.
-    if (current === 7 && studioName.trim() && studioLocations.length === 0) {
-      return `Add at least one location for ${studioName.trim()}, or clear the studio name.`;
+    // Matching (Event Assistant, Open Group Requests) only ever looks at
+    // declared locations - a freelancer with none set is silently invisible
+    // to every opportunity forever, even once they're Premium, with no
+    // error or explanation anywhere. "Open to travel anywhere" counts.
+    if (current === 7) {
+      if (preferredLocations.length === 0 && studioLocations.length === 0) {
+        return 'Add at least one location you can serve, so clients and open requests can find you.';
+      }
+      // Studio name is optional, but a named studio needs a real location —
+      // can't have one without the other.
+      if (studioName.trim() && studioLocations.length === 0) {
+        return `Add at least one location for ${studioName.trim()}, or clear the studio name.`;
+      }
     }
     // Billing details are required so a freelancer can actually be paid —
     // unlike every other post-basics step, this one can't be skipped.

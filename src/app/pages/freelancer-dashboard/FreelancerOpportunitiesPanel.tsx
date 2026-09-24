@@ -36,7 +36,7 @@ function formatTimes(opportunity: Pick<GroupOpportunity, 'start_time' | 'end_tim
     : formatTimeLabel(opportunity.start_time);
 }
 
-export function FreelancerOpportunitiesPanel() {
+export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServiceLocation: boolean }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tab, setTab] = useState<'open' | 'applications'>('open');
@@ -157,6 +157,20 @@ export function FreelancerOpportunitiesPanel() {
               className="mt-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
             >
               {subscription ? 'Renew Premium' : 'See Premium plans'}
+            </button>
+          </div>
+        ) : !hasServiceLocation ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-6 text-center">
+            <MapPin className="mx-auto mb-2 h-8 w-8 text-amber-500" />
+            <p className="font-bold text-gray-900">Add a service location to be matched</p>
+            <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
+              Open Group Requests are matched by area — you haven't set one yet, so no request can find you, no matter how well you fit. Add at least one location (or pick "Open to travel anywhere") in Settings.
+            </p>
+            <button
+              onClick={() => navigate('/edit-profile')}
+              className="mt-4 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
+            >
+              Add a service location
             </button>
           </div>
         ) : opportunities.length === 0 ? (
