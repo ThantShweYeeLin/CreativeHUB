@@ -421,13 +421,27 @@ export function MapView({ onViewProfile }: MapViewProps) {
   }, [freelancers, selectedProfessions, selectedAvailability, budgetBand]);
 
   const filteredFreelancers = useMemo(() => {
-    if (!distanceLimitKm || !clientLocation) {
-      return mapFreelancers;
+    const inRange = !distanceLimitKm || !clientLocation
+      ? mapFreelancers
+      : mapFreelancers.filter((freelancer) => {
+          const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
+          return freelancerDistance !== undefined && Number.isFinite(freelancerDistance) && freelancerDistance <= distanceLimitKm;
+        });
+
+    if (!clientLocation) {
+      return inRange;
     }
 
-    return mapFreelancers.filter((freelancer) => {
-      const freelancerDistance = distanceByFreelancerId.get(freelancer.id);
-      return freelancerDistance !== undefined && Number.isFinite(freelancerDistance) && freelancerDistance <= distanceLimitKm;
+    // Nearest first - a freelancer with no resolvable coordinates (so no
+    // known distance) sorts after every freelancer whose distance IS known,
+    // rather than at an arbitrary spot among them.
+    return [...inRange].sort((a, b) => {
+      const distanceA = distanceByFreelancerId.get(a.id);
+      const distanceB = distanceByFreelancerId.get(b.id);
+      if (distanceA === undefined && distanceB === undefined) return 0;
+      if (distanceA === undefined) return 1;
+      if (distanceB === undefined) return -1;
+      return distanceA - distanceB;
     });
   }, [mapFreelancers, distanceLimitKm, clientLocation, distanceByFreelancerId]);
 

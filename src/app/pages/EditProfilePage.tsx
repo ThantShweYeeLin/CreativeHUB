@@ -1,4 +1,5 @@
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router';
 import { Camera, ChevronLeft, ImagePlus, Plus, Save, Trash2 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -41,6 +42,7 @@ interface EditProfilePageProps {
 
 export function EditProfilePage({ onBack }: EditProfilePageProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const coverInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -50,7 +52,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
   const [isResolvingLocation, setIsResolvingLocation] = useState(false);
   const [locationPickerTarget, setLocationPickerTarget] = useState<'basic' | 'studio' | 'preferred' | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   const [isFreelancer, setIsFreelancer] = useState(false);
   const [freelancerProfileId, setFreelancerProfileId] = useState<string | null>(null);
@@ -395,7 +396,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
 
     setIsSaving(true);
     setError(null);
-    setSuccess(null);
 
     const locationText = basicForm.location.trim();
     let locationLatitude = basicForm.location_latitude;
@@ -496,8 +496,8 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       }
     }
 
-    setSuccess('Profile saved.');
     setIsSaving(false);
+    navigate(`/profile/${user.id}`);
   };
 
   if (isLoading) {
@@ -530,7 +530,6 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
             </button>
           </div>
           {error && <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
-          {success && <div className="mt-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{success}</div>}
         </div>
       </div>
 
