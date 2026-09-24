@@ -769,6 +769,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         <div key={role.id} className="py-3 first:pt-0 last:pb-0">
                           <p className="mb-2 text-sm font-bold text-gray-900">
                             {role.category}
+                            <span className="ml-2 font-semibold text-sky-700">{formatCurrencyAmount(role.budget, role.currency || 'THB')}</span>
                             <span className="ml-2 text-xs font-medium text-gray-400">{acceptedCount}/{role.slots} filled</span>
                           </p>
 

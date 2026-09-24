@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Building2,
@@ -15,6 +15,7 @@ import {
   PackageX,
   PartyPopper,
   Plus,
+  Search,
   Sparkles,
   Sun,
   TreePine,
@@ -66,6 +67,7 @@ interface RankedCandidate extends EventMatcherCandidate {
   avatarUrl: string | null;
   serviceName: string;
   score: number;
+  isPremium: boolean;
 }
 
 interface CategoryMatch {
@@ -130,10 +132,11 @@ function formatEventDate(value: string): string {
   return parsed.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// Builds the same ranked-candidate list from whichever profile set was
-// fetched (Premium-only, or the no-Premium-filter fallback) - date
+// Builds a ranked-candidate list from one fetched profile set (either the
+// Premium-only response or the no-Premium-filter "any" one) - date
 // availability, location coverage, having a set price, and scoring are
-// identical either way; only which freelancers were fetched differs.
+// identical either way; only which freelancers were fetched (and the
+// isPremium tag applied here) differs.
 function buildRankedCandidates(
   profiles: any[],
   blockedDates: any[],
@@ -143,7 +146,8 @@ function buildRankedCandidates(
   eventLocation: LocationPointLike,
   currency: string,
   styles: string[],
-  budgetForCategory: number
+  budgetForCategory: number,
+  isPremium: boolean
 ): RankedCandidate[] {
   const blockedByProfile = new Map<string, Array<{ blocked_date: string }>>();
   for (const row of blockedDates) {
@@ -191,6 +195,7 @@ function buildRankedCandidates(
       packageCurrency: currency,
       serviceName,
       score: 0,
+      isPremium,
     };
     candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
     candidates.push(candidate);
@@ -200,39 +205,108 @@ function buildRankedCandidates(
   return candidates;
 }
 
+// Restores an in-progress plan after navigating away (e.g. tapping a
+// matched freelancer's avatar to view their profile) and back - without
+// this, EventMatcherPage is plain component state that fully resets on
+// every remount, silently discarding whatever the client had already
+// built. sessionStorage (not localStorage) so a truly new browser session
+// starts clean; cleared once the plan is actually acted on (sent, or
+// opened to Premium freelancers to apply).
+const DRAFT_STORAGE_KEY = 'creativehub.eventMatcher.draft';
+// Bumped whenever a change would make an old cached draft behave
+// differently than a fresh match would (e.g. the picker's candidate cap) -
+// otherwise a draft saved before such a change keeps replaying its old
+// results indefinitely, since resuming never re-fetches on its own.
+const DRAFT_SCHEMA_VERSION = 2;
+
+interface EventMatcherDraft {
+  version: number;
+  step: WizardStep;
+  eventType: EventType | '';
+  date: string;
+  eventTime: string;
+  budget: string;
+  currency: string;
+  styles: string[];
+  setting: string;
+  location: LocationPoint | null;
+  recommended: RecommendedCategories | null;
+  categoryTierEntries: Array<[string, ServiceTier]>;
+  selectedCategories: string[];
+  categoryMatches: CategoryMatch[];
+  categoryTimes: Record<string, string>;
+  categoryOffers: Record<string, number>;
+}
+
+function loadEventMatcherDraft(): EventMatcherDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as EventMatcherDraft;
+    return parsed.version === DRAFT_SCHEMA_VERSION ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function clearEventMatcherDraft() {
+  try {
+    sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
 
-  const [step, setStep] = useState<WizardStep>('input');
+  // Parsed once per mount (including a fresh mount after navigating back
+  // from a profile page) - every initial state below reads from this same
+  // snapshot instead of each re-parsing sessionStorage independently.
+  const draft = useMemo(() => loadEventMatcherDraft(), []);
+
+  const [step, setStep] = useState<WizardStep>(draft?.step || 'input');
 
   // Event input
-  const [eventType, setEventType] = useState<EventType | ''>('');
-  const [date, setDate] = useState('');
-  const [eventTime, setEventTime] = useState('12:00');
-  const [budget, setBudget] = useState(String(BUDGET_QUICK_AMOUNTS[2]));
-  const [currency, setCurrency] = useState(normalizeCurrencyCode(preferredCurrency));
-  const [styles, setStyles] = useState<string[]>([]);
-  const [setting, setSetting] = useState('');
-  const [location, setLocation] = useState<LocationPoint | null>(null);
+  const [eventType, setEventType] = useState<EventType | ''>(draft?.eventType || '');
+  const [date, setDate] = useState(draft?.date || '');
+  const [eventTime, setEventTime] = useState(draft?.eventTime || '12:00');
+  const [budget, setBudget] = useState(draft?.budget || String(BUDGET_QUICK_AMOUNTS[2]));
+  const [currency, setCurrency] = useState(draft?.currency || normalizeCurrencyCode(preferredCurrency));
+  const [styles, setStyles] = useState<string[]>(draft?.styles || []);
+  const [setting, setSetting] = useState(draft?.setting || '');
+  const [location, setLocation] = useState<LocationPoint | null>(draft?.location || null);
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [inputError, setInputError] = useState<string | null>(null);
 
   // Recommendations
-  const [recommended, setRecommended] = useState<RecommendedCategories | null>(null);
-  const [categoryTier, setCategoryTier] = useState<Map<string, ServiceTier>>(new Map());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [recommended, setRecommended] = useState<RecommendedCategories | null>(draft?.recommended || null);
+  const [categoryTier, setCategoryTier] = useState<Map<string, ServiceTier>>(new Map(draft?.categoryTierEntries || []));
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set(draft?.selectedCategories || []));
 
   // Matching / plan
   const [isMatching, setIsMatching] = useState(false);
   const [matchError, setMatchError] = useState<string | null>(null);
-  const [categoryMatches, setCategoryMatches] = useState<CategoryMatch[]>([]);
+  const [categoryMatches, setCategoryMatches] = useState<CategoryMatch[]>(draft?.categoryMatches || []);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   // Per-category arrival time — defaults to eventTime when matching runs,
   // but each provider may need to be there at a different time (e.g. the
   // makeup artist arrives hours before the ceremony itself).
-  const [categoryTimes, setCategoryTimes] = useState<Record<string, string>>({});
+  const [categoryTimes, setCategoryTimes] = useState<Record<string, string>>(draft?.categoryTimes || {});
+  // What the client is offering to pay for each service - set as soon as a
+  // category is matched (defaulting to the top candidate's rate, or an
+  // even budget share if nobody matched at all) and freely editable from
+  // there, independent of which candidate is selected or whether anyone is
+  // selected at all - a category with no one picked can still carry a
+  // price, since it may go out as an open request with no assigned
+  // freelancer. Never auto-changed when switching candidates or clearing
+  // one; only the client's own typing changes it (see setOfferAmount).
+  const [categoryOffers, setCategoryOffers] = useState<Record<string, number>>(draft?.categoryOffers || {});
+  // Filters the expanded "choose a freelancer" list by name - reset
+  // whenever a different category's list is opened.
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [addingCategories, setAddingCategories] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -243,6 +317,34 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }, []);
   const budgetNumber = Number(budget) || 0;
+
+  // Persists the whole in-progress plan on every change so it survives a
+  // navigation away and back (see loadEventMatcherDraft above).
+  useEffect(() => {
+    const toSave: EventMatcherDraft = {
+      version: DRAFT_SCHEMA_VERSION,
+      step,
+      eventType,
+      date,
+      eventTime,
+      budget,
+      currency,
+      styles,
+      setting,
+      location,
+      recommended,
+      categoryTierEntries: Array.from(categoryTier.entries()),
+      selectedCategories: Array.from(selectedCategories),
+      categoryMatches,
+      categoryTimes,
+      categoryOffers,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(toSave));
+    } catch {
+      /* ignore */
+    }
+  }, [step, eventType, date, eventTime, budget, currency, styles, setting, location, recommended, categoryTier, selectedCategories, categoryMatches, categoryTimes, categoryOffers]);
 
   const handleLocationPicked = (point: LocationPoint) => {
     setLocation(point);
@@ -288,7 +390,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
   // Fetches and ranks candidates for one category - shared by the initial
   // "Find My Event Team" match and by adding a service after the fact from
-  // the plan step, so both go through the same Premium-first/fallback logic.
+  // the plan step. Always fetches both the Premium-only set and the
+  // no-Premium-filter "any" set, then merges Premium candidates first
+  // (by score) followed by free candidates (also by score, and only those
+  // not already counted as Premium) - so Premium freelancers are always
+  // recommended first, and free ones only fill in the rest of the list
+  // when there aren't enough (or any) Premium options, rather than either
+  // showing Premium-only or free-only depending on which fetch happened
+  // to run.
   const matchCategory = async (category: string, tier: ServiceTier, categoryCount: number): Promise<CategoryMatch> => {
     if (!location) return { category, tier, candidates: [], selectedIndex: 0 };
 
@@ -301,8 +410,12 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     };
     const budgetForCategory = budgetNumber / Math.max(1, categoryCount);
 
-    const premiumResponse = await DataService.getEventMatcherCandidates(category, date);
-    let candidates = buildRankedCandidates(
+    const [premiumResponse, anyResponse] = await Promise.all([
+      DataService.getEventMatcherCandidates(category, date),
+      DataService.getEventMatcherCandidatesAny(category, date),
+    ]);
+
+    const premiumCandidates = buildRankedCandidates(
       premiumResponse.data.profiles as any[],
       premiumResponse.data.blockedDates,
       premiumResponse.data.bookings,
@@ -311,30 +424,28 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       eventLocation,
       currency,
       styles,
-      budgetForCategory
+      budgetForCategory,
+      true
+    );
+    const premiumIds = new Set(premiumCandidates.map((c) => c.userId));
+
+    const freeCandidates = buildRankedCandidates(
+      (anyResponse.data.profiles as any[]).filter((profile) => !premiumIds.has(profile.user_id)),
+      anyResponse.data.blockedDates,
+      anyResponse.data.bookings,
+      category,
+      date,
+      eventLocation,
+      currency,
+      styles,
+      budgetForCategory,
+      false
     );
 
-    // No Premium freelancer survived date/location/price filtering for
-    // this category (whether because none exist, or the ones that do
-    // are busy or too far) - fill in with everyone else who qualifies,
-    // so the plan never shows "no providers" while a free freelancer
-    // nearby is actually available that day.
-    if (candidates.length === 0) {
-      const anyResponse = await DataService.getEventMatcherCandidatesAny(category, date);
-      candidates = buildRankedCandidates(
-        anyResponse.data.profiles as any[],
-        anyResponse.data.blockedDates,
-        anyResponse.data.bookings,
-        category,
-        date,
-        eventLocation,
-        currency,
-        styles,
-        budgetForCategory
-      );
-    }
-
-    const ranked = candidates.slice(0, 5);
+    // Premium first, free only filling in what's left - capped at 3 so the
+    // picker stays a short, real "who should I pick" choice instead of a
+    // long list to scroll.
+    const ranked = [...premiumCandidates, ...freeCandidates].slice(0, 3);
     return { category, tier, candidates: ranked, selectedIndex: ranked.length > 0 ? 0 : null };
   };
 
@@ -408,6 +519,12 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       next.delete(category);
       return next;
     });
+    setCategoryOffers((current) => {
+      if (!(category in current)) return current;
+      const next = { ...current };
+      delete next[category];
+      return next;
+    });
     setExpandedCategory((current) => (current === category ? null : current));
   };
 
@@ -416,15 +533,74 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     [categoryMatches]
   );
 
+  // Fills in a starting offer for any category that doesn't have one yet
+  // (a fresh match, or a newly added service) - the top candidate's own
+  // rate if one was found, else an even share of the total budget so an
+  // empty card still starts from something reasonable. Never overwrites a
+  // category that already has a value, so the client's own typing (or a
+  // value restored from the draft) is never clobbered by a re-match.
+  useEffect(() => {
+    if (categoryMatches.length === 0) return;
+    setCategoryOffers((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const match of categoryMatches) {
+        if (next[match.category] !== undefined) continue;
+        const candidate = match.selectedIndex !== null ? match.candidates[match.selectedIndex] : undefined;
+        next[match.category] = candidate?.packagePrice ?? Math.max(1, Math.round(budgetNumber / categoryMatches.length));
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [categoryMatches, budgetNumber]);
+
+  const getOfferPrice = (category: string): number => categoryOffers[category] ?? 0;
+
+  // The client can type any offer, including one below the freelancer's
+  // listed rate - it's caught and shown as an error instead of silently
+  // clamped, so they can see exactly which freelancer needs a higher offer
+  // rather than have their typed number quietly overwritten. (See
+  // belowMinimumCategories/handleSendRequests below for where that's
+  // actually enforced.)
+  const setOfferAmount = (category: string, amount: number) => {
+    const safeAmount = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+    setCategoryOffers((current) => ({ ...current, [category]: safeAmount }));
+  };
+
+  // A search left over from a different category's list shouldn't hide
+  // everyone the next time a (possibly different) list opens.
+  useEffect(() => {
+    setCandidateSearch('');
+  }, [expandedCategory]);
+
   const budgetFit = useMemo(() => {
     const items: PlanLineItem[] = categoryMatches
       .filter((match) => match.selectedIndex !== null && match.candidates[match.selectedIndex])
       .map((match) => {
         const candidate = match.candidates[match.selectedIndex as number];
-        return { category: match.category, tier: match.tier, price: candidate.packagePrice as number, userId: candidate.userId, fullName: candidate.fullName };
+        const price = categoryOffers[match.category] ?? (candidate.packagePrice as number);
+        return { category: match.category, tier: match.tier, price, userId: candidate.userId, fullName: candidate.fullName };
       });
     return computeBudgetFit(items, budgetNumber);
-  }, [categoryMatches, budgetNumber]);
+  }, [categoryMatches, budgetNumber, categoryOffers]);
+
+  // Every category whose currently-typed offer undercuts that freelancer's
+  // own listed rate - shown as a per-card error, and blocks sending
+  // requests entirely until fixed (see handleSendRequests). Only applies
+  // when someone is actually selected — an empty card has no minimum to
+  // undercut.
+  const belowMinimumCategories = useMemo(() => {
+    const categories = new Set<string>();
+    for (const match of categoryMatches) {
+      if (match.selectedIndex === null) continue;
+      const candidate = match.candidates[match.selectedIndex];
+      if (!candidate) continue;
+      if (getOfferPrice(match.category) < (candidate.packagePrice ?? 0)) {
+        categories.add(match.category);
+      }
+    }
+    return categories;
+  }, [categoryMatches, categoryOffers]);
 
   const isDropped = (category: string) => budgetFit.dropped.some((item) => item.category === category);
 
@@ -438,7 +614,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
 
     setIsSubmitting(true);
     setSubmitError(null);
-    const perRoleBudget = Math.max(1, Math.round(budgetNumber / categories.length));
+    const fallbackPerRoleBudget = Math.max(1, Math.round(budgetNumber / categories.length));
     const { error } = await DataService.createGroupOpportunity({
       title: `${eventType} team`,
       description: `Posted from CreativeHUB's Event Assistant.${styles.length ? ` Style: ${styles.join(', ')}.` : ''}${setting ? ` Setting: ${setting}.` : ''}`,
@@ -448,7 +624,16 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       locationText: location.formattedAddress,
       latitude: location.latitude,
       longitude: location.longitude,
-      roles: categories.map((category) => ({ category, budget: perRoleBudget, currency, styles })),
+      // Each role's own offer, set (and editable) right on its card in the
+      // plan below - not an even split of the total budget, so a freelancer
+      // browsing this opportunity sees the actual price the client chose
+      // for that specific service.
+      roles: categories.map((category) => ({
+        category,
+        budget: Math.max(1, Math.round(categoryOffers[category] ?? fallbackPerRoleBudget)),
+        currency,
+        styles,
+      })),
     });
     setIsSubmitting(false);
 
@@ -456,6 +641,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       setSubmitError((error as any).message || 'Unable to post your request.');
       return;
     }
+    clearEventMatcherDraft();
     navigate('/requests');
   };
 
@@ -463,6 +649,10 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     if (!user?.id || !location || !eventType) return;
     if (budgetFit.kept.length === 0) {
       setSubmitError('No matched providers to send requests to.');
+      return;
+    }
+    if (belowMinimumCategories.size > 0) {
+      setSubmitError('One or more offers are below the freelancer\'s minimum rate — fix them before sending requests.');
       return;
     }
 
@@ -502,6 +692,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     }
 
     await DataService.notifyEventMatcherPlanSent(user.id, recipientIds.length);
+    clearEventMatcherDraft();
     navigate('/requests');
   };
 
@@ -813,8 +1004,11 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                     const hasOptions = match.candidates.length > 0;
                     const dropped = isDropped(match.category);
                     const isExpanded = expandedCategory === match.category;
+                    const isBelowMinimum = belowMinimumCategories.has(match.category);
                     const cardClass = candidate
-                      ? `relative rounded-2xl border bg-white p-4 shadow-lg ${dropped ? 'border-amber-300 opacity-60' : 'border-sky-100'}`
+                      ? `relative rounded-2xl border bg-white p-4 shadow-lg ${
+                          isBelowMinimum ? 'border-red-300' : dropped ? 'border-amber-300 opacity-60' : 'border-sky-100'
+                        }`
                       : 'relative rounded-2xl border-2 border-dashed border-sky-200 bg-white/60 p-4';
 
                     return (
@@ -862,18 +1056,31 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                               </div>
 
                               <div className="flex items-center gap-3 pr-20">
-                                <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/profile/${candidate.userId}`)}
+                                  title={`View ${candidate.fullName}'s profile`}
+                                  className="flex-shrink-0 rounded-full"
+                                >
+                                  <Avatar src={candidate.avatarUrl || DEFAULT_AVATAR_URL} alt={candidate.fullName} sizeClassName="w-12 h-12" />
+                                </button>
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate font-semibold text-gray-900">{candidate.fullName}</p>
+                                  <button
+                                    type="button"
+                                    onClick={() => navigate(`/profile/${candidate.userId}`)}
+                                    className="truncate text-left font-semibold text-gray-900 hover:underline"
+                                  >
+                                    {candidate.fullName}
+                                  </button>
                                   <p className="text-xs text-gray-500">
-                                    {candidate.serviceName} · {formatCurrencyAmount(candidate.packagePrice || 0, currency)}
+                                    {candidate.serviceName}
                                     {candidate.rating > 0 && ` · ★ ${candidate.rating.toFixed(1)}`}
                                   </p>
                                   {dropped && <p className="mt-1 text-xs font-semibold text-amber-700">Dropped — over budget</p>}
                                 </div>
                               </div>
 
-                              <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                              <div className="mt-2 flex items-center justify-between gap-2">
                                 <label htmlFor={`time-${match.category}`} className="text-xs font-semibold text-gray-600">
                                   Arrival time
                                 </label>
@@ -917,36 +1124,108 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                             </div>
                           )}
 
+                          {/* The offer is always settable, whether or not anyone is
+                              selected - an empty service can still go out with a
+                              price attached when the plan is opened to Premium
+                              freelancers (see handlePostOpenRequest). */}
+                          <div className={`flex items-center justify-between gap-2 ${candidate ? 'mt-3 border-t border-gray-100 pt-3' : 'mt-3'}`}>
+                            <label htmlFor={`offer-${match.category}`} className="text-xs font-semibold text-gray-600">
+                              Your offer
+                              {candidate && (
+                                <span className="font-normal text-gray-400"> (min {formatCurrencyAmount(candidate.packagePrice || 0, currency)})</span>
+                              )}
+                            </label>
+                            <div
+                              className={`flex items-center gap-1 rounded-lg border px-2 py-1 ${
+                                isBelowMinimum ? 'border-red-300 bg-red-50' : 'border-sky-100 bg-sky-50/50'
+                              }`}
+                            >
+                              <span className={`text-xs font-semibold ${isBelowMinimum ? 'text-red-600' : 'text-gray-500'}`}>{currency}</span>
+                              <input
+                                id={`offer-${match.category}`}
+                                type="number"
+                                min={candidate?.packagePrice ?? 0}
+                                step={50}
+                                value={getOfferPrice(match.category)}
+                                onChange={(event) => setOfferAmount(match.category, Number(event.target.value))}
+                                aria-invalid={isBelowMinimum}
+                                className={`w-20 bg-transparent text-right text-xs font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                                  isBelowMinimum ? 'text-red-700' : 'text-gray-900'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                          {isBelowMinimum && candidate && (
+                            <p className="mt-1 text-right text-[11px] font-semibold text-red-600">
+                              Below {candidate.fullName}'s minimum rate — raise your offer to at least {formatCurrencyAmount(candidate.packagePrice || 0, currency)}.
+                            </p>
+                          )}
+
                           {isExpanded && hasOptions && (
                             <div className={`space-y-2 ${candidate ? 'mt-3 border-t border-gray-100 pt-3' : 'mt-2'}`}>
-                              {match.candidates.map((option, index) => {
-                                const isSelected = index === match.selectedIndex;
-                                return (
-                                  <div key={option.userId} className="flex items-center gap-3">
-                                    <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
-                                    <div className="min-w-0 flex-1">
-                                      <p className="truncate text-sm font-semibold text-gray-900">{option.fullName}</p>
-                                      <p className="text-xs text-gray-500">
-                                        {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
-                                        {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
-                                      </p>
-                                    </div>
-                                    {isSelected ? (
-                                      <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
-                                        Selected
-                                      </span>
-                                    ) : (
+                              {match.candidates.length > 1 && (
+                                <div className="relative mb-1">
+                                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                                  <input
+                                    type="text"
+                                    value={candidateSearch}
+                                    onChange={(event) => setCandidateSearch(event.target.value)}
+                                    placeholder="Search by name..."
+                                    className="w-full rounded-lg border border-sky-100 bg-sky-50/40 py-1.5 pl-8 pr-2 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                                  />
+                                </div>
+                              )}
+                              {(() => {
+                                const filtered = match.candidates
+                                  .map((option, index) => ({ option, index }))
+                                  .filter(({ option }) => option.fullName.toLowerCase().includes(candidateSearch.trim().toLowerCase()));
+
+                                if (filtered.length === 0) {
+                                  return <p className="py-2 text-center text-xs text-gray-400">No freelancers match "{candidateSearch}".</p>;
+                                }
+
+                                return filtered.map(({ option, index }) => {
+                                  const isSelected = index === match.selectedIndex;
+                                  return (
+                                    <div key={option.userId} className="flex items-center gap-3">
                                       <button
                                         type="button"
-                                        onClick={() => selectCandidate(match.category, index)}
-                                        className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
+                                        onClick={() => navigate(`/profile/${option.userId}`)}
+                                        title={`View ${option.fullName}'s profile`}
+                                        className="flex-shrink-0 rounded-full"
                                       >
-                                        Select
+                                        <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
                                       </button>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                      <div className="min-w-0 flex-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => navigate(`/profile/${option.userId}`)}
+                                          className="truncate text-left text-sm font-semibold text-gray-900 hover:underline"
+                                        >
+                                          {option.fullName}
+                                        </button>
+                                        <p className="text-xs text-gray-500">
+                                          {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
+                                          {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
+                                        </p>
+                                      </div>
+                                      {isSelected ? (
+                                        <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                          Selected
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => selectCandidate(match.category, index)}
+                                          className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
+                                        >
+                                          Select
+                                        </button>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
                             </div>
                           )}
                         </div>
@@ -980,9 +1259,15 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   );
                 })()}
 
+                {belowMinimumCategories.size > 0 && (
+                  <p className="text-center text-xs font-semibold text-red-600">
+                    Fix the offer{belowMinimumCategories.size > 1 ? 's' : ''} below minimum on{' '}
+                    {Array.from(belowMinimumCategories).join(', ')} before sending requests.
+                  </p>
+                )}
                 <button
                   type="button"
-                  disabled={isSubmitting || budgetFit.kept.length === 0}
+                  disabled={isSubmitting || budgetFit.kept.length === 0 || belowMinimumCategories.size > 0}
                   onClick={handleSendRequests}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-3.5 font-semibold text-white transition-colors hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50"
                 >
