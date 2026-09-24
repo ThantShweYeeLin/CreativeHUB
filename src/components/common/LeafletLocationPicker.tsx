@@ -160,8 +160,12 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
   };
 
   return (
-    <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4">
+      {/* max-h + flex column so this never overflows a short phone screen -
+          the header/search/map area scrolls internally while Cancel/Save
+          stay pinned at the bottom, always reachable without scrolling. */}
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="border-b border-sky-100 px-5 py-4">
           <h3 className="text-lg font-bold text-gray-900">Pick a Location</h3>
           <p className="text-sm text-gray-600">
@@ -236,8 +240,9 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
             )}
           </MapContainer>
         </div>
+        </div>
 
-        <div className="flex items-center justify-end gap-3 px-5 py-4">
+        <div className="flex flex-shrink-0 items-center justify-end gap-3 border-t border-sky-100 px-5 py-4">
           <button
             type="button"
             onClick={onCancel}
