@@ -1448,7 +1448,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   </button>
                 ) : (
                   <>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                       <button
                         onClick={handleFavoriteToggle}
                         className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-blue-50 text-blue-500 hover:bg-blue-100' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'}`}
