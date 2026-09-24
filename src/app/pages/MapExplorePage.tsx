@@ -397,6 +397,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
     const allProfessionsSelected = selectedProfessions.length === professionFilters.length;
 
     return freelancers.filter((freelancer) => {
+      if (user?.id && freelancer.userId === user.id) {
+        return false;
+      }
+
       const profession = detectProfession(freelancer);
       const status = availabilityStatus(freelancer);
 
@@ -418,7 +422,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       return true;
     });
-  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand]);
+  }, [freelancers, selectedProfessions, selectedAvailability, budgetBand, user?.id]);
 
   const filteredFreelancers = useMemo(() => {
     const inRange = !distanceLimitKm || !clientLocation
