@@ -77,6 +77,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
+  const [cancellingOpportunityId, setCancellingOpportunityId] = useState<string | null>(null);
+  const [isClosingOpportunity, setIsClosingOpportunity] = useState(false);
   const [historyModalRequestId, setHistoryModalRequestId] = useState<string | null>(null);
   const [openingBookingForRequestId, setOpeningBookingForRequestId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -258,6 +260,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         status: request.status as RequestStatus,
         counterPrice: request.counter_price != null ? Number(request.counter_price) : null,
         counterMessage: request.counter_message || null,
+        attachmentUrls: Array.isArray(request.attachment_urls) ? request.attachment_urls : [],
         counterBy: request.counter_by || null,
         counterRound: Number(request.counter_round || 1),
         counterDate: request.counter_date || null,
@@ -310,6 +313,25 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       })),
     }));
   }, [groupOpportunities, normalizedRequests]);
+
+  // Both lists render together in one chronological feed instead of Open
+  // Group Requests always sitting above every regular request regardless of
+  // when either was actually sent - each item just carries its own kind so
+  // the existing, differently-shaped card JSX for each can still render as
+  // before.
+  const timelineItems = useMemo(() => {
+    const groupItems = openGroupSections.map((opportunity: any) => ({
+      kind: 'group' as const,
+      sortKey: opportunity.created_at ? new Date(opportunity.created_at).getTime() : 0,
+      opportunity,
+    }));
+    const flatItems = flatRequests.map((request) => ({
+      kind: 'flat' as const,
+      sortKey: request.date ? new Date(request.date).getTime() : 0,
+      request,
+    }));
+    return [...groupItems, ...flatItems].sort((a, b) => b.sortKey - a.sortKey);
+  }, [openGroupSections, flatRequests]);
 
   const openEditRequest = async (request: any) => {
     if (request.status !== 'pending') {
@@ -462,6 +484,19 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     if (!groupOppsReload.error) {
       setGroupOpportunities(groupOppsReload.data || []);
     }
+  };
+
+  const handleCloseOpportunity = async (opportunityId: string) => {
+    setIsClosingOpportunity(true);
+    setError(null);
+    const { error: closeError } = await DataService.closeGroupOpportunity(opportunityId);
+    setIsClosingOpportunity(false);
+    setCancellingOpportunityId(null);
+    if (closeError) {
+      setError((closeError as any).message || 'Unable to cancel this open request.');
+      return;
+    }
+    await reloadRequests();
   };
 
   const openAddReplacement = (normalizedRequest: any) => {
@@ -724,10 +759,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           </div>
         ) : (
         <>
-        {openGroupSections.length > 0 && (
-          <div className="mb-6 space-y-4">
-            <h2 className="text-lg font-bold text-gray-900">Open Group Requests</h2>
-            {openGroupSections.map((opportunity) => (
+        <div className="space-y-4">
+          {timelineItems.map((item) => item.kind === 'group' ? (() => {
+            const opportunity = item.opportunity;
+            return (
               <div
                 key={opportunity.id}
                 className="bg-white/90 backdrop-blur-xl rounded-xl md:rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 overflow-hidden"
@@ -761,6 +796,36 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     </span>
                   </div>
 
+                  {opportunity.status === 'open' && (
+                    cancellingOpportunityId === opportunity.id ? (
+                      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">
+                        <span>Cancel this open request? Every applicant will be notified the event was cancelled.</span>
+                        <div className="ml-auto flex gap-2">
+                          <button
+                            onClick={() => void handleCloseOpportunity(opportunity.id)}
+                            disabled={isClosingOpportunity}
+                            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                          >
+                            {isClosingOpportunity ? 'Cancelling…' : 'Yes, cancel'}
+                          </button>
+                          <button
+                            onClick={() => setCancellingOpportunityId(null)}
+                            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                          >
+                            Keep it
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setCancellingOpportunityId(opportunity.id)}
+                        className="mb-4 text-xs font-semibold text-red-600 hover:text-red-700"
+                      >
+                        Cancel this open request
+                      </button>
+                    )
+                  )}
+
                   <div className="divide-y divide-gray-100">
                     {opportunity.roles.map((role: any) => {
                       const acceptedCount = role.applicants.filter((applicant: any) => applicant.status === 'accepted').length;
@@ -778,51 +843,63 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           ) : (
                             <div className="space-y-2.5">
                               {role.applicants.map((applicant: any) => (
-                                <div key={applicant.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                  <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full ring-2 ring-white shadow-sm">
-                                      <ImageWithFallback src={applicant.freelancer.avatar} alt={applicant.freelancer.name} className="h-full w-full object-cover" />
-                                    </div>
-                                    <div className="min-w-0">
-                                      <button
-                                        type="button"
-                                        onClick={() => applicant.freelancer.id && navigate(`/profile/${applicant.freelancer.id}`)}
-                                        className="truncate text-sm font-semibold text-gray-900 hover:text-black"
-                                      >
-                                        {applicant.freelancer.name}
-                                      </button>
-                                      <p className="text-xs text-gray-500">
-                                        {formatCurrencyAmount(applicant.counterPrice ?? applicant.budget, applicant.budgetMeta?.currency || 'THB')}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex flex-shrink-0 items-center gap-2 pl-11 sm:pl-0">
-                                    <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold whitespace-nowrap ${getStatusColor(applicant.status)}`}>
-                                      {getStatusText(applicant.status)}
-                                    </span>
-                                    {applicant.status === 'countered' && applicant.counterBy === 'freelancer' && (
-                                      <>
-                                        {roleIsFull ? (
-                                          <span className="text-xs font-medium text-gray-400">Role filled</span>
-                                        ) : (
+                                <div key={applicant.id} className="flex flex-col gap-2">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <button
+                                      type="button"
+                                      onClick={() => applicant.freelancer.id && navigate(`/profile/${applicant.freelancer.id}`)}
+                                      className="flex min-w-0 items-center gap-2.5 text-left"
+                                    >
+                                      <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full ring-2 ring-white shadow-sm">
+                                        <ImageWithFallback src={applicant.freelancer.avatar} alt={applicant.freelancer.name} className="h-full w-full object-cover" />
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="truncate text-sm font-semibold text-gray-900 hover:text-black">{applicant.freelancer.name}</p>
+                                        <p className="text-xs text-gray-500">
+                                          {formatCurrencyAmount(applicant.counterPrice ?? applicant.budget, applicant.budgetMeta?.currency || 'THB')}
+                                        </p>
+                                      </div>
+                                    </button>
+                                    <div className="flex flex-shrink-0 items-center gap-2 pl-11 sm:pl-0">
+                                      <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold whitespace-nowrap ${getStatusColor(applicant.status)}`}>
+                                        {getStatusText(applicant.status)}
+                                      </span>
+                                      {applicant.status === 'countered' && applicant.counterBy === 'freelancer' && (
+                                        <>
+                                          {roleIsFull ? (
+                                            <span className="text-xs font-medium text-gray-400">Role filled</span>
+                                          ) : (
+                                            <button
+                                              onClick={() => setConfirmAction({ type: 'accept', request: applicant })}
+                                              className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+                                            >
+                                              <Check className="h-3.5 w-3.5" />
+                                              Accept
+                                            </button>
+                                          )}
                                           <button
-                                            onClick={() => setConfirmAction({ type: 'accept', request: applicant })}
-                                            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700 transition-colors"
+                                            onClick={() => setConfirmAction({ type: 'reject', request: applicant })}
+                                            className="flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-100 transition-colors"
                                           >
-                                            <Check className="h-3.5 w-3.5" />
-                                            Accept
+                                            <X className="h-3.5 w-3.5" />
+                                            Decline
                                           </button>
-                                        )}
-                                        <button
-                                          onClick={() => setConfirmAction({ type: 'reject', request: applicant })}
-                                          className="flex items-center gap-1.5 rounded-lg bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-sky-100 transition-colors"
-                                        >
-                                          <X className="h-3.5 w-3.5" />
-                                          Decline
-                                        </button>
-                                      </>
-                                    )}
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
+                                  {applicant.counterMessage && (
+                                    <p className="pl-11 text-xs italic text-gray-500">"{applicant.counterMessage}"</p>
+                                  )}
+                                  {applicant.attachmentUrls.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pl-11">
+                                      {applicant.attachmentUrls.map((url: string) => (
+                                        <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block h-14 w-14 overflow-hidden rounded-lg border border-gray-100">
+                                          <ImageWithFallback src={url} alt="Attached photo" className="h-full w-full object-cover" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -833,12 +910,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {flatRequests.map((request) => (
+            );
+          })() : (() => {
+            const request = item.request;
+            return (
             <div
               key={request.id}
               onClick={() => request.status === 'accepted' && void handleOpenAcceptedRequest(request)}
@@ -1120,7 +1195,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })())}
         </div>
         </>
         )}
