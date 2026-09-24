@@ -62,6 +62,7 @@ export interface GroupOpportunity {
   created_at: string;
   has_applied: boolean;
   roles: OpportunityRole[];
+  client: { id: string; full_name: string | null; avatar_url: string | null } | null;
 }
 
 export interface GroupApplication {
@@ -91,7 +92,7 @@ export function applicationStatusLabel(app: Pick<GroupApplication, 'request_stat
     case 'rejected':
       return { label: 'Declined', tone: 'red' };
     case 'cancelled':
-      return { label: 'Withdrawn by client', tone: 'gray' };
+      return { label: 'Event cancelled by client', tone: 'gray' };
     case 'countered':
       return app.counter_by === 'client' ? { label: 'Counter-offer received', tone: 'blue' } : { label: 'Under review', tone: 'amber' };
     default:

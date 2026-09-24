@@ -617,7 +617,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     const fallbackPerRoleBudget = Math.max(1, Math.round(budgetNumber / categories.length));
     const { error } = await DataService.createGroupOpportunity({
       title: `${eventType} team`,
-      description: `Posted from CreativeHUB's Event Assistant.${styles.length ? ` Style: ${styles.join(', ')}.` : ''}${setting ? ` Setting: ${setting}.` : ''}`,
+      description: [styles.length ? `Style: ${styles.join(', ')}.` : null, setting ? `Setting: ${setting}.` : null].filter(Boolean).join(' ') || undefined,
       eventDate: date,
       startTime: eventTime,
       locationCity: location.city || location.district || null,

@@ -1149,6 +1149,31 @@ export class DataService {
     return { publicUrl: data.publicUrl, error: null };
   }
 
+  // Public bucket (see supabase/add_application_attachments.sql) — a
+  // freelancer's photo attached to an Open Group Request application needs
+  // to be viewable by the client reviewing it, same reasoning as post-media.
+  static async uploadApplicationAttachment(userId: string, file: File) {
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('application-attachments')
+      .upload(filePath, file, {
+        contentType: file.type,
+        upsert: true,
+      });
+
+    if (error) {
+      return { publicUrl: null, error };
+    }
+
+    const { data } = supabase.storage
+      .from('application-attachments')
+      .getPublicUrl(filePath);
+
+    return { publicUrl: data.publicUrl, error: null };
+  }
+
   // SOCIAL LINKS
   static async getFreelancerSocialLinks(freelancerId: string) {
     const { data, error } = await supabase
@@ -4125,11 +4150,12 @@ export class DataService {
     return { data: (data || null) as GroupOpportunity | null, error };
   }
 
-  static async applyToGroupOpportunity(roleId: string, price: number, message: string) {
+  static async applyToGroupOpportunity(roleId: string, price: number, message: string, attachmentUrls?: string[]) {
     const { data, error } = await (supabase as any).rpc('apply_to_group_opportunity', {
       p_role_id: roleId,
       p_price: price,
       p_message: message || null,
+      p_attachment_urls: attachmentUrls && attachmentUrls.length > 0 ? attachmentUrls : null,
     });
     return { data, error };
   }
@@ -4183,7 +4209,7 @@ export class DataService {
     const { data, error } = await (supabase as any)
       .from('group_opportunities')
       .select(
-        `id, title, event_date, start_time, location_city, location_text, status,
+        `id, title, event_date, start_time, location_city, location_text, status, created_at,
          roles:group_opportunity_roles ( id, category, budget, currency, slots,
            applications:group_opportunity_applications ( id, request_id ) )`
       )

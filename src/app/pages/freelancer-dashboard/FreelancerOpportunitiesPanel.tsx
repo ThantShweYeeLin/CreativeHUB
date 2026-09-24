@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
-import { Calendar, ChevronLeft, Crown, MapPin } from 'lucide-react';
+import { Calendar, ChevronLeft, Crown, ImagePlus, MapPin, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { Avatar } from '../../../components/common/Avatar';
+import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
 import { formatCurrencyAmount } from '../../../lib/currency';
 import { DataService } from '../../../lib/dataService';
 import {
@@ -34,6 +36,27 @@ function formatTimes(opportunity: Pick<GroupOpportunity, 'start_time' | 'end_tim
   return opportunity.end_time
     ? `${formatTimeLabel(opportunity.start_time)} – ${formatTimeLabel(opportunity.end_time)}`
     : formatTimeLabel(opportunity.start_time);
+}
+
+// Shared by the card and the detail view so clicking the poster's name/photo
+// always behaves the same way.
+function PosterLink({ client, size = 'sm' }: { client: GroupOpportunity['client']; size?: 'sm' | 'md' }) {
+  const navigate = useNavigate();
+  if (!client) {
+    return <span className="text-sm text-gray-500">Posted by a CreativeHUB member</span>;
+  }
+  const avatarSize = size === 'md' ? 'h-9 w-9' : 'h-6 w-6';
+  return (
+    <button
+      type="button"
+      onClick={() => navigate(`/profile/${client.id}`)}
+      className="flex items-center gap-2 text-sm text-gray-700 transition-colors hover:text-sky-700"
+    >
+      <span className="text-gray-500">Posted by</span>
+      <Avatar src={client.avatar_url || DEFAULT_AVATAR_URL} alt={client.full_name || 'Client'} sizeClassName={avatarSize} />
+      <span className="font-semibold">{client.full_name || 'View profile'}</span>
+    </button>
+  );
 }
 
 export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServiceLocation: boolean }) {
@@ -199,6 +222,9 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
                       </span>
                     )}
                   </div>
+                  <div className="mt-2">
+                    <PosterLink client={opportunity.client} />
+                  </div>
                   <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />
                     {formatEventDate(opportunity.event_date)}
@@ -209,6 +235,9 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
                       <MapPin className="h-4 w-4" />
                       {opportunity.location_city}
                     </p>
+                  )}
+                  {opportunity.description && (
+                    <p className="mt-2 line-clamp-2 text-sm text-gray-600">{opportunity.description}</p>
                   )}
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {myRoles.map((role) => (
@@ -281,16 +310,48 @@ function OpportunityDetail({
   onApplied: () => void | Promise<void>;
   onUpgrade: () => void;
 }) {
+  const { user } = useAuth();
   const applyable = opportunity.roles.filter((role) => role.eligible);
   const [roleId, setRoleId] = useState<string>(applyable[0]?.id || '');
   const role: OpportunityRole | undefined = opportunity.roles.find((item) => item.id === roleId);
   const [price, setPrice] = useState<string>(applyable[0] ? String(applyable[0].budget) : '');
   const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState<{ file: File; previewUrl: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const MAX_ATTACHMENTS = 6;
+
+  // Preview URLs are local object URLs (URL.createObjectURL) - never
+  // revoked automatically, so leaving this view (submitted or not) must
+  // clean them up itself. Kept in a ref so the unmount cleanup always sees
+  // the latest list instead of whatever it was on the first render.
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach((attachment) => URL.revokeObjectURL(attachment.previewUrl));
+    };
+  }, []);
+
+  const addAttachments = (files: FileList | null) => {
+    if (!files) return;
+    const next = Array.from(files)
+      .filter((file) => file.type.startsWith('image/'))
+      .slice(0, MAX_ATTACHMENTS - attachments.length)
+      .map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setAttachments((current) => [...current, ...next]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((current) => {
+      URL.revokeObjectURL(current[index].previewUrl);
+      return current.filter((_, i) => i !== index);
+    });
+  };
 
   const handleSubmit = async () => {
-    if (!role) return;
+    if (!role || !user?.id) return;
     const amount = Number(price);
     if (!Number.isFinite(amount) || amount <= 0) {
       setError('Enter the price you would charge for this role.');
@@ -298,7 +359,17 @@ function OpportunityDetail({
     }
     setIsSubmitting(true);
     setError(null);
-    const { error: applyError } = await DataService.applyToGroupOpportunity(role.id, amount, message.trim());
+
+    const uploads = await Promise.all(attachments.map(({ file }) => DataService.uploadApplicationAttachment(user.id, file)));
+    const failedUpload = uploads.find((upload) => upload.error || !upload.publicUrl);
+    if (failedUpload) {
+      setIsSubmitting(false);
+      setError('Unable to upload one of your photos. Please try again.');
+      return;
+    }
+    const attachmentUrls = uploads.map((upload) => upload.publicUrl as string);
+
+    const { error: applyError } = await DataService.applyToGroupOpportunity(role.id, amount, message.trim(), attachmentUrls);
     setIsSubmitting(false);
     if (applyError) {
       const code = opportunityErrorCode(applyError.message);
@@ -317,7 +388,10 @@ function OpportunityDetail({
 
       <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
         <h2 className="text-xl font-bold text-gray-900">{opportunity.title}</h2>
-        <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-600">
+        <div className="mt-2">
+          <PosterLink client={opportunity.client} size="md" />
+        </div>
+        <p className="mt-3 flex items-center gap-1.5 text-sm text-gray-600">
           <Calendar className="h-4 w-4" />
           {formatEventDate(opportunity.event_date)}
           {formatTimes(opportunity) ? ` · ${formatTimes(opportunity)}` : ''}
@@ -397,6 +471,43 @@ function OpportunityDetail({
             placeholder="Tell them why you're a good fit…"
             className="mb-3 min-h-[90px] w-full rounded-lg border border-sky-100 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
           />
+          <label className="mb-1 block text-xs font-semibold text-gray-600">Photos to show the client (optional)</label>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {attachments.map((attachment, index) => (
+              <div key={attachment.previewUrl} className="group relative h-16 w-16 overflow-hidden rounded-lg border border-sky-100">
+                <img src={attachment.previewUrl} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(index)}
+                  className="absolute right-0.5 top-0.5 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-label="Remove photo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {attachments.length < MAX_ATTACHMENTS && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-sky-200 text-sky-500 hover:bg-sky-50"
+              >
+                <ImagePlus className="h-5 w-5" />
+                <span className="text-[10px] font-semibold">Add</span>
+              </button>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                addAttachments(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </div>
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
           <button
             onClick={() => void handleSubmit()}
