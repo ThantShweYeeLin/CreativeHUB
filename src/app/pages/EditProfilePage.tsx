@@ -252,7 +252,14 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     setIsResolvingLocation(true);
     setError(null);
 
-    const resolved = await geocodeAddress(nextLocation);
+    let resolved;
+    try {
+      resolved = await geocodeAddress(nextLocation);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to resolve that location. Try again.');
+      setIsResolvingLocation(false);
+      return;
+    }
     if (!resolved) {
       setError('Unable to resolve that location. Try a more specific address.');
       setIsResolvingLocation(false);
@@ -403,7 +410,14 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     let locationPlaceId = basicForm.location_place_id;
 
     if (locationText && (locationLatitude === null || locationLongitude === null)) {
-      const resolved = await geocodeAddress(locationText);
+      let resolved;
+      try {
+        resolved = await geocodeAddress(locationText);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to resolve your location. Please try again.');
+        setIsSaving(false);
+        return;
+      }
       if (!resolved) {
         setError('Unable to resolve your location. Please use a more specific address.');
         setIsSaving(false);

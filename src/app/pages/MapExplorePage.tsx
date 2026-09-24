@@ -246,21 +246,26 @@ export function MapView({ onViewProfile }: MapViewProps) {
           .map(normalizeFreelancer)
           .filter((freelancer) => freelancer.id && (freelancer.latitude === null || freelancer.longitude === null) && freelancer.location);
 
-        const resolved = await Promise.all(
-          missingCoordinates.slice(0, 30).map(async (freelancer) => {
+        // Sequential, not Promise.all: up to 30 of these can fire in a
+        // single page load, and Nominatim's usage policy caps requests at
+        // roughly one per second - firing them all in parallel gets some
+        // rate-limited (429) almost immediately. A caught failure on any
+        // one of them must never take the whole batch (and this page's
+        // loading spinner) down with it - it just leaves that freelancer
+        // without a pin.
+        const resolved: typeof missingCoordinates = [];
+        for (const freelancer of missingCoordinates.slice(0, 30)) {
+          try {
             const geocoded = await geocodeAddress(freelancer.location || '', mapLanguage);
-            if (!geocoded) {
-              return freelancer;
-            }
-
-            return {
-              ...freelancer,
-              latitude: geocoded.latitude,
-              longitude: geocoded.longitude,
-              location: geocoded.formattedAddress || freelancer.location,
-            };
-          })
-        );
+            resolved.push(
+              geocoded
+                ? { ...freelancer, latitude: geocoded.latitude, longitude: geocoded.longitude, location: geocoded.formattedAddress || freelancer.location }
+                : freelancer
+            );
+          } catch {
+            resolved.push(freelancer);
+          }
+        }
 
         normalized = resolved.filter((freelancer) => freelancer.latitude !== null && freelancer.longitude !== null);
       }
@@ -285,7 +290,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
       } else {
         const userLocationText = userResponse.data?.location || '';
         if (userLocationText) {
-          const geocodedUserLocation = await geocodeAddress(userLocationText, mapLanguage);
+          const geocodedUserLocation = await geocodeAddress(userLocationText, mapLanguage).catch(() => null);
           if (geocodedUserLocation) {
             setClientLocation({
               lat: geocodedUserLocation.latitude,
@@ -524,7 +529,14 @@ export function MapView({ onViewProfile }: MapViewProps) {
     setIsSearchingLocation(true);
     setLocationSearchError(null);
 
-    const result = await geocodeAddress(query, mapLanguage);
+    let result;
+    try {
+      result = await geocodeAddress(query, mapLanguage);
+    } catch (err) {
+      setIsSearchingLocation(false);
+      setLocationSearchError(err instanceof Error ? err.message : translateMapText(mapLanguage, 'Unable to search right now. Try again.', 'ไม่สามารถค้นหาได้ในขณะนี้ ลองอีกครั้ง'));
+      return;
+    }
 
     setIsSearchingLocation(false);
 

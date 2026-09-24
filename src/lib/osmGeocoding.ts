@@ -3,6 +3,15 @@
 // touching any call site. Nominatim's public usage policy forbids
 // client-side autocomplete-on-keystroke, so this stays explicit
 // search-on-submit only — see LeafletLocationPicker's "Find Address" button.
+//
+// Requests go through this app's own server (server/src/routes/geocode.ts)
+// rather than calling nominatim.openstreetmap.org directly from the
+// browser: a browser fetch() can't set a real User-Agent (Nominatim's
+// usage policy requires one) and is routinely blocked/fails outright
+// depending on network/browser — that's what a raw "Load failed"/"Failed to
+// fetch" error in the location picker actually was.
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api';
 
 export interface GeocodeResult {
   latitude: number;
@@ -74,24 +83,23 @@ function toGeocodeResult(place: NominatimPlace): GeocodeResult | null {
 class NominatimProvider implements GeocodingProvider {
   private async fetchSearch(query: string, language: 'en' | 'th', limit: number, countryCodes?: string) {
     const params = new URLSearchParams({
-      format: 'json',
-      addressdetails: '1',
       limit: String(limit),
       q: query,
+      lang: language,
     });
     if (countryCodes) {
       params.set('countrycodes', countryCodes);
     }
 
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?${params.toString()}`, {
-      headers: {
-        Accept: 'application/json',
-        'Accept-Language': language === 'th' ? 'th' : 'en',
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/geocode/search?${params.toString()}`);
+    } catch {
+      throw new Error('Unable to reach the location search service. Check your connection and try again.');
+    }
 
     if (!response.ok) {
-      throw new Error('Unable to contact OpenStreetMap geocoding service.');
+      throw new Error('Unable to contact the location search service. Please try again.');
     }
 
     const results = (await response.json()) as NominatimPlace[];
@@ -137,21 +145,20 @@ class NominatimProvider implements GeocodingProvider {
     }
 
     const params = new URLSearchParams({
-      format: 'json',
-      addressdetails: '1',
       lat: String(latitude),
       lon: String(longitude),
+      lang: language,
     });
 
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
-      headers: {
-        Accept: 'application/json',
-        'Accept-Language': language === 'th' ? 'th' : 'en',
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/geocode/reverse?${params.toString()}`);
+    } catch {
+      throw new Error('Unable to reach the location search service.');
+    }
 
     if (!response.ok) {
-      throw new Error('Unable to contact OpenStreetMap reverse geocoding service.');
+      throw new Error('Unable to contact the location search service.');
     }
 
     const result = (await response.json()) as NominatimPlace & { lat?: string; lon?: string };

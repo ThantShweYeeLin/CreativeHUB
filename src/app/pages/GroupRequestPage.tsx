@@ -159,18 +159,22 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     // show a real pin instead of making the client re-enter it from scratch.
     if (state.prefillLocation) {
       const prefillText = state.prefillLocation;
-      geocodeAddress(prefillText).then((result) => {
-        if (result) {
-          setLocation({
-            latitude: result.latitude,
-            longitude: result.longitude,
-            formattedAddress: result.formattedAddress,
-            placeId: result.placeId,
-            city: result.city,
-            district: result.district,
-          });
-        }
-      });
+      geocodeAddress(prefillText)
+        .then((result) => {
+          if (result) {
+            setLocation({
+              latitude: result.latitude,
+              longitude: result.longitude,
+              formattedAddress: result.formattedAddress,
+              placeId: result.placeId,
+              city: result.city,
+              district: result.district,
+            });
+          }
+        })
+        .catch(() => {
+          // Best-effort prefill only — the client can still pick a location manually below.
+        });
     }
     if (state.prefillNotes) setNotes(state.prefillNotes);
     if (state.prefillScheduleDate) setScheduleDate(state.prefillScheduleDate);
