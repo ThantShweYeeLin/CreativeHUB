@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { setAppGuideOpen, setAppGuidePending } from '../lib/appGuideGate';
 
 // First-run walkthrough of what each part of the app is for. Each step
 // points at an element tagged `data-tour="<target>"` elsewhere in the app
@@ -175,6 +176,11 @@ export function AppGuide() {
     if (!userId || location.pathname !== '/explore' || hasSeenGuide(userId)) {
       return;
     }
+    // Marked pending immediately (synchronously, before the async eligibility
+    // check below) so other first-run overlays - e.g. PremiumPromo - that
+    // mount alongside this component can already see the guide might show
+    // and wait for it, instead of racing it.
+    setAppGuidePending(true);
     let cancelled = false;
     let timer = 0;
     void supabase.auth.getUser().then(({ data }) => {
@@ -185,10 +191,12 @@ export function AppGuide() {
       const isNewUser = new Date(authUser.created_at) >= GUIDE_RELEASED_AT;
       if (!isNewUser || authUser.user_metadata?.app_guide_seen) {
         markGuideSeen(userId);
+        setAppGuidePending(false);
         return;
       }
       timer = window.setTimeout(() => {
         open();
+        setAppGuidePending(false);
         markGuideSeen(userId);
         void supabase.auth.updateUser({ data: { app_guide_seen: true } });
       }, 900);
@@ -196,8 +204,15 @@ export function AppGuide() {
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      setAppGuidePending(false);
     };
   }, [user?.id, location.pathname, open]);
+
+  // Reports whether the tour is currently on screen, so other first-run
+  // overlays know when it's safe to appear.
+  useEffect(() => {
+    setAppGuideOpen(isOpen);
+  }, [isOpen]);
 
   // Leaving the page mid-tour would leave the spotlight pointing at
   // elements that no longer exist.

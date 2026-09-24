@@ -1,17 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Bell, Check, Crown, Megaphone, Sparkles, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePremiumPromoAudience } from '../lib/usePremiumEligibility';
+import { isAppGuideBlocking, onAppGuideBlockingChange } from '../lib/appGuideGate';
 
-// A one-time-per-visit "advertisement" for freelancers who don't have Premium.
-// Deliberately gentle: shown once per browser session, and once dismissed it
-// stays away for a week. Never shown to clients, admins, Premium freelancers,
-// or on the Premium page itself.
-const SNOOZE_DAYS = 7;
+// A recurring "advertisement" for freelancers who don't have Premium: it
+// waits for the first-run app guide tour to finish (if it's showing at all),
+// then flashes, and keeps re-flashing every REPEAT_INTERVAL_MS for as long
+// as the freelancer stays on the free plan. The next allowed time lives in
+// localStorage so the cadence survives page reloads and new tabs. Never
+// shown to clients, admins, Premium freelancers, or on the Premium page
+// itself.
+const REPEAT_INTERVAL_MS = 10 * 60 * 1000;
 const SHOW_DELAY_MS = 1800;
-const snoozeKey = (userId: string) => `creativehub.premiumPromo.snoozedUntil.${userId}`;
-const sessionKey = (userId: string) => `creativehub.premiumPromo.shown.${userId}`;
+const RECHECK_MS = 30000;
+const nextShowKey = (userId: string) => `creativehub.premiumPromo.nextShowAt.${userId}`;
 
 const BENEFITS = [
   { icon: Sparkles, title: 'Priority Event Matching', text: 'Get matched first when clients plan events that fit you' },
@@ -28,36 +32,77 @@ export function PremiumPromo() {
 
   const onExcludedPage = location.pathname.startsWith('/freelancer-dashboard/premium') || location.pathname.startsWith('/admin');
 
+  // Read inside the timer loop below instead of being effect dependencies,
+  // so the recurring schedule isn't torn down and rebuilt on every
+  // navigation or audience recheck - it just reads the current values.
+  const audienceRef = useRef(audience);
+  audienceRef.current = audience;
+  const excludedRef = useRef(onExcludedPage);
+  excludedRef.current = onExcludedPage;
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const attemptRef = useRef<() => void>(() => {});
+
   useEffect(() => {
-    if (!audience || !user?.id || onExcludedPage || visible) return;
-    try {
-      if (sessionStorage.getItem(sessionKey(user.id))) return;
-      if (Number(localStorage.getItem(snoozeKey(user.id)) || 0) > Date.now()) return;
-    } catch {
-      return; // storage blocked: skip rather than nag on every page
-    }
-    const timer = window.setTimeout(() => {
+    const userId = user?.id;
+    if (!userId) return;
+    let cancelled = false;
+    let timer = 0;
+
+    const armNext = (delayMs: number) => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(attempt, delayMs);
+    };
+
+    const attempt = () => {
+      if (cancelled) return;
+      if (!audienceRef.current || excludedRef.current || visibleRef.current) {
+        armNext(RECHECK_MS);
+        return;
+      }
+      let nextAt = 0;
       try {
-        sessionStorage.setItem(sessionKey(user.id), '1');
+        nextAt = Number(localStorage.getItem(nextShowKey(userId)) || 0);
       } catch {
         /* ignore */
       }
+      const remaining = nextAt - Date.now();
+      if (remaining > 0) {
+        armNext(Math.min(remaining, REPEAT_INTERVAL_MS));
+        return;
+      }
+      if (isAppGuideBlocking()) {
+        const unsubscribe = onAppGuideBlockingChange((blocking) => {
+          if (!blocking) {
+            unsubscribe();
+            armNext(SHOW_DELAY_MS);
+          }
+        });
+        return;
+      }
       setVisible(true);
-    }, SHOW_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [audience, user?.id, onExcludedPage, visible]);
+    };
+
+    attemptRef.current = attempt;
+    armNext(SHOW_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [user?.id]);
 
   if (!visible || !user?.id || onExcludedPage) return null;
 
-  const dismiss = (snooze: boolean) => {
-    if (snooze) {
-      try {
-        localStorage.setItem(snoozeKey(user.id), String(Date.now() + SNOOZE_DAYS * 86400000));
-      } catch {
-        /* ignore */
-      }
+  const dismiss = () => {
+    try {
+      localStorage.setItem(nextShowKey(user.id), String(Date.now() + REPEAT_INTERVAL_MS));
+    } catch {
+      /* ignore */
     }
     setVisible(false);
+    visibleRef.current = false;
+    attemptRef.current();
   };
 
   return (
@@ -65,7 +110,7 @@ export function PremiumPromo() {
       <div className="relative w-full max-w-[420px] overflow-hidden rounded-[28px] border border-sky-100 bg-white p-7 shadow-[0_24px_70px_rgba(14,116,144,0.25)]">
         {/* soft glow */}
         <div className="pointer-events-none absolute -right-16 -top-16 h-52 w-52 rounded-full bg-sky-100/80 blur-3xl" aria-hidden="true" />
-        <button onClick={() => dismiss(false)} className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Close">
+        <button onClick={dismiss} className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Close">
           <X className="h-5 w-5" />
         </button>
 
@@ -110,14 +155,14 @@ export function PremiumPromo() {
 
           <button
             onClick={() => {
-              dismiss(true);
+              dismiss();
               navigate('/freelancer-dashboard/premium');
             }}
             className="mt-5 w-full rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-3.5 font-semibold text-white shadow-lg shadow-sky-500/30 transition-shadow hover:shadow-xl"
           >
             Get Premium
           </button>
-          <button onClick={() => dismiss(true)} className="mt-1.5 w-full rounded-2xl px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800">
+          <button onClick={dismiss} className="mt-1.5 w-full rounded-2xl px-5 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800">
             Maybe later
           </button>
         </div>
