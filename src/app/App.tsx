@@ -154,22 +154,75 @@ export default function App() {
     <Routes>
       {/* Make reset-password always available so recovery links open the reset UI even when a session is present */}
       <Route path="/reset-password" element={<ResetPasswordPage />} />
-      {/* Shared-post links now require a session like every other deep
-          link - a logged-out visitor falls through to the /login redirect. */}
-      {isAuthenticated && <Route path="/post/:postId" element={<PublicPostPage />} />}
-      {/* Same reasoning — a prospective signer-upper must be able to read
-          these before creating an account, so they can't sit behind the
-          logged-out block's own catch-all either. */}
+      {/* PublicPostPage handles a missing viewer internally (guest-safe
+          like/share via AuthPromptModal), so a shared post link works for
+          anyone, logged in or not. */}
+      <Route path="/post/:postId" element={<PublicPostPage />} />
+      {/* A prospective signer-upper must be able to read these before
+          creating an account, so they can't sit behind any auth gate. */}
       <Route path="/terms" element={<TermsOfServicePage />} />
       <Route path="/privacy" element={<PrivacyPolicyPage />} />
+
+      {/* Guest-browsable pages: Explore, Map, For You and profile pages all
+          already handle a missing viewer internally (see their own
+          `user?.id` guards + AuthPromptModal), so anyone can browse without
+          an account - only account-specific actions (message, book, save,
+          apply) soft-gate into sign up/login. Withheld during onboarding so
+          a signed-up-but-incomplete user still finishes onboarding first. */}
+      {(!isAuthenticated || user?.onboardingCompleted) && (
+        <>
+          <Route path="/" element={<Navigate to="/explore" replace />} />
+          <Route
+            path="/explore"
+            element={
+              <MainLayout>
+                <ExplorePage />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/map"
+            element={
+              <MainLayout>
+                <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
+              </MainLayout>
+            }
+          />
+          <Route path="/freelancers" element={<Navigate to="/explore" replace />} />
+          <Route
+            path="/for-you"
+            element={
+              <MainLayout>
+                <ForYouPage
+                  onViewProfile={(id) => navigate(`/profile/${id}`)}
+                  onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
+                />
+              </MainLayout>
+            }
+          />
+          <Route
+            path="/profile/:id"
+            element={
+              <FreelancerProfile
+                onBack={() => navigate(-1)}
+                requestStatus={null}
+                onOpenChat={(targetUserId) => navigate('/messages', { state: { openConversationWithUserId: targetUserId } })}
+              />
+            }
+          />
+          <Route path="/team/:id" element={<TeamProfilePage />} />
+        </>
+      )}
+
       {/* Public Routes */}
       {!isAuthenticated && (
         <>
           <Route path="/login" element={<LoginPageWithRouting />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/signup" element={<SignUpPageWithRouting />} />
-          {/* Every other URL (Explore, profiles, bookings, tickets, ... any
-              deep link) needs a session: a logged-out visitor is sent to the
+          {/* Every other URL that isn't one of the guest-browsable pages
+              above (bookings, messages, dashboards, admin, ... any deep
+              link) needs a session: a logged-out visitor is sent to the
               sign-in page, remembering where they were headed so logging in
               lands them back there. */}
           <Route
@@ -206,70 +259,8 @@ export default function App() {
       {/* Protected Routes */}
       {isAuthenticated && user?.onboardingCompleted && (
         <>
-          {/* Explore pages */}
-          <Route
-            path="/explore"
-            element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <ExplorePage />
-                </MainLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/map"
-            element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <MapView onViewProfile={(id: string) => navigate(`/profile/${id}`)} />
-                </MainLayout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/freelancers"
-            element={
-              <ProtectedRoute>
-                <Navigate to="/explore" replace />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/for-you"
-            element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <ForYouPage
-                    onViewProfile={(id) => navigate(`/profile/${id}`)}
-                    onOpenMessages={(recipientId) => navigate('/messages', { state: recipientId ? { openConversationWithUserId: recipientId } : undefined })}
-                  />
-                </MainLayout>
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Profile pages */}
-          <Route
-            path="/profile/:id"
-            element={
-              <ProtectedRoute>
-                <FreelancerProfile
-                  onBack={() => navigate(-1)}
-                  requestStatus={null}
-                  onOpenChat={(targetUserId) => navigate('/messages', { state: { openConversationWithUserId: targetUserId } })}
-                />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/team/:id"
-            element={
-              <ProtectedRoute>
-                <TeamProfilePage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Explore, Map, For You and profile pages are registered above,
+              outside this auth-gated block, so guests can browse them too. */}
           <Route
             path="/client-profile"
             element={
@@ -539,8 +530,7 @@ export default function App() {
           <Route path="/admin/tickets/:id" element={<AdminRoute><AdminTicketDetailPage /></AdminRoute>} />
           <Route path="/admin/audit-logs" element={<AdminRoute><AdminAuditLogPage /></AdminRoute>} />
 
-          {/* Default redirect */}
-          <Route path="/" element={<Navigate to="/explore" replace />} />
+          {/* Default redirect ("/" is handled by the guest-browsable block above) */}
           <Route path="*" element={<Navigate to="/explore" replace />} />
         </>
       )}

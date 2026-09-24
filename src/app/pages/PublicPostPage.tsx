@@ -91,7 +91,7 @@ export function PublicPostPage() {
 
   const authorName = post?.client?.full_name || 'CreativeHUB Member';
   const authorRole = post?.client?.role === 'freelancer' ? 'Freelancer' : 'Client';
-  const shareTitle = `CreativeHUB post by @${(post?.client?.email || 'creativehub').split('@')[0]}`;
+  const shareTitle = `CreativeHUB post by ${authorName}`;
 
   return (
     <div className="relative min-h-screen pb-16">

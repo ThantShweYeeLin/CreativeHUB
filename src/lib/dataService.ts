@@ -139,10 +139,16 @@ export class DataService {
 
   private static hasMissingLocationColumnError(error: unknown) {
     const message = (error as { message?: string } | null)?.message?.toLowerCase() || '';
+    // Named-column errors (an older DB missing these columns) and a bare
+    // "permission denied for table users" (anon only has column-scoped
+    // access, and precise coordinates aren't granted to it - see
+    // supabase/grant_anon_public_browsing.sql) both mean the same fix:
+    // retry the same query without asking for these columns.
     return (
       message.includes('location_latitude') ||
       message.includes('location_longitude') ||
-      message.includes('location_place_id')
+      message.includes('location_place_id') ||
+      (message.includes('permission denied') && message.includes('users'))
     );
   }
 
@@ -152,12 +158,17 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
-      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
+      ? 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
+      : 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
 
     return supabase
       .from('freelancer_profiles')
-      .select(`*, users:user_id!inner(${userFields})`)
+      // Explicit columns, not '*': this list is shared by every browse/
+      // discovery surface (Explore, Map, Group Request matching, ...), none
+      // of which have any legitimate reason to read a freelancer's own
+      // billing/payout details - see getFreelancerProfile's public variant
+      // for the same list used on the profile detail page.
+      .select(`${this.PUBLIC_FREELANCER_PROFILE_COLUMNS}, users:user_id!inner(${userFields})`)
       .eq('is_available', true)
       .neq('visibility', 'limited')
       .eq('users.account_status', 'active')
@@ -231,6 +242,21 @@ export class DataService {
     return { data, error };
   }
 
+  // Guest-safe counterpart for viewing SOMEONE ELSE's profile (e.g. a
+  // logged-out visitor on FreelancerProfile.tsx): explicit public columns
+  // only, never email/phone, so it keeps working for anon instead of
+  // failing outright the way select('*') would once anon only has
+  // column-scoped access. Signed-in viewers still get the full getUser()
+  // row (e.g. FreelancerProfile.tsx's visible "contact email" line).
+  static async getPublicUser(userId: string) {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, role, account_status, created_at')
+      .eq('id', userId)
+      .single();
+    return { data, error };
+  }
+
   // Fallback: search users table directly and synthesize minimal profile-like objects
   static async searchUsersFallback(query: string) {
     const cleaned = typeof query === 'string' ? query.trim() : '';
@@ -239,9 +265,13 @@ export class DataService {
     const stripDiacritics = (s: string) => s.normalize ? s.normalize('NFD').replace(/\p{Diacritic}/gu, '') : s;
     const normQuery = stripDiacritics(cleaned).replace(/\s+/g, '').toLowerCase();
 
+    // Explicit safe columns, not '*' - email/phone are private (same
+    // convention as everywhere else a name search or public card shows
+    // another user), and matching by email substring would also let this
+    // public search box be used to probe for an account by email.
     const usersResp = await supabase
       .from('users')
-      .select('*')
+      .select('id, full_name, avatar_url, gender, role, rating, total_reviews, location, account_status')
       .ilike('full_name', `%${cleaned}%`)
       .limit(200);
 
@@ -249,9 +279,8 @@ export class DataService {
 
     const nameMatched = users.filter((u) => {
       const name = stripDiacritics((u.full_name || '')).replace(/\s+/g, '').toLowerCase();
-      const emailLocal = stripDiacritics(((u.email || '').split('@')[0] || '')).replace(/\s+/g, '').toLowerCase();
       const initials = (u.full_name || '').split(/\s+/).map((p: string) => (p[0] || '')).join('').toLowerCase();
-      return name.includes(normQuery) || emailLocal.includes(normQuery) || initials.includes(normQuery) || (u.email || '').toLowerCase().includes(cleaned.toLowerCase());
+      return name.includes(normQuery) || initials.includes(normQuery);
     });
 
     // This is an Explore-search-box helper, so it should also respect a
@@ -268,7 +297,7 @@ export class DataService {
     if (freelancerIds.length > 0) {
       const profilesResp = await supabase
         .from('freelancer_profiles')
-        .select('*')
+        .select(this.PUBLIC_FREELANCER_PROFILE_COLUMNS)
         .in('user_id', freelancerIds);
       for (const row of (profilesResp.data || []) as Array<any>) {
         profileByUserId.set(row.user_id, row);
@@ -289,7 +318,7 @@ export class DataService {
         styles: profile?.styles || [],
         hourly_rate: profile?.hourly_rate ?? null,
         is_available: profile?.is_available ?? false,
-        users: { id: u.id, email: u.email, full_name: u.full_name, avatar_url: u.avatar_url, gender: u.gender, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
+        users: { id: u.id, full_name: u.full_name, avatar_url: u.avatar_url, gender: u.gender, rating: u.rating, total_reviews: u.total_reviews, location: u.location },
       };
     });
 
@@ -327,10 +356,13 @@ export class DataService {
 
     const limit = options?.limit ?? 12;
 
+    // No email in the select or match: this box is reachable by anyone,
+    // logged in or not (Explore/For You search, @-mentions), and searching
+    // or returning by email would let it be used to probe for an account.
     let usersQuery = supabase
       .from('users')
-      .select('id, email, full_name, avatar_url, gender, role, location')
-      .or(`full_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
+      .select('id, full_name, avatar_url, gender, role, location')
+      .ilike('full_name', `%${trimmedQuery}%`)
       .limit(limit);
 
     if (options?.excludeUserId) {
@@ -583,7 +615,7 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
+      .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('user_id', userId)
       .single();
     return { data, error };
@@ -596,12 +628,47 @@ export class DataService {
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
-      .select('*, users:user_id(id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
+      .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('id', id)
       .single();
     return { data, error };
   }
-  
+
+  // Guest-safe counterparts for viewing SOMEONE ELSE's profile: an explicit
+  // column allow-list instead of '*', so the query still works once anon
+  // only has column-scoped access (see supabase/grant_anon_public_browsing.sql)
+  // - and, more importantly, so it can never return billing_bank_name /
+  // billing_account_holder_name / billing_account_number no matter what the
+  // database grants allow, since those never appear in the list below.
+  // Signed-in viewers keep using getFreelancerProfile/getFreelancerById
+  // above (e.g. a freelancer editing their own billing details in Settings).
+  private static readonly PUBLIC_FREELANCER_PROFILE_COLUMNS = [
+    'id', 'user_id', 'title', 'description', 'hourly_rate', 'skills', 'styles', 'locations',
+    'experience_years', 'experience_level', 'portfolio_count', 'is_available', 'visibility',
+    'working_hours_start', 'working_hours_end', 'working_days', 'studio_name', 'studio_locations',
+    'contact_preference', 'pricing_type', 'min_price', 'max_price', 'service_area_type',
+    'service_radius_km', 'requirements', 'limitation_days', 'limitation_note',
+    'minor_category', 'minor_categories', 'minor_category_experience_levels', 'performer_type',
+    'phone_verified', 'identity_status', 'created_at', 'updated_at',
+  ].join(', ');
+
+  static async getPublicFreelancerProfile(userId: string) {
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select(`${this.PUBLIC_FREELANCER_PROFILE_COLUMNS}, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)`)
+      .eq('user_id', userId)
+      .single();
+    return { data, error };
+  }
+
+  static async getPublicFreelancerById(id: string) {
+    const { data, error } = await supabase
+      .from('freelancer_profiles')
+      .select(`${this.PUBLIC_FREELANCER_PROFILE_COLUMNS}, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)`)
+      .eq('id', id)
+      .single();
+    return { data, error };
+  }
 
   static async getAllFreelancers(limit = 20, offset = 0) {
     const firstAttempt = await this.getAllFreelancersQuery(limit, offset, true);
@@ -4702,7 +4769,7 @@ export class DataService {
   static async getClientPosts(limit = 30, userId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location, role)')
+      .select('*, client:client_id(id, full_name, avatar_url, gender, location, role)')
       .eq('is_published', true)
       .order('created_at', { ascending: false })
       .limit(limit);
@@ -4726,7 +4793,7 @@ export class DataService {
   static async getClientPostById(postId: string, viewerUserId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location, role)')
+      .select('*, client:client_id(id, full_name, avatar_url, gender, location, role)')
       .eq('id', postId)
       .eq('is_published', true)
       .maybeSingle();
@@ -4742,7 +4809,7 @@ export class DataService {
   static async getClientPostsByClientId(clientId: string, limit = 20, viewerUserId?: string) {
     const { data, error } = await supabase
       .from('client_posts')
-      .select('*, client:client_id(id, email, full_name, avatar_url, gender, location)')
+      .select('*, client:client_id(id, full_name, avatar_url, gender, location)')
       .eq('client_id', clientId)
       .eq('is_published', true)
       .order('created_at', { ascending: false })

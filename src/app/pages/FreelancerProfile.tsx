@@ -239,17 +239,25 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setSuccessMessage(null);
 
       // Independent of each other — fetching them one at a time (as this
-      // used to) doubles this first round-trip for no reason.
+      // used to) doubles this first round-trip for no reason. A logged-out
+      // viewer uses the public-columns variants (no email/phone, no billing
+      // fields) since anon only has column-scoped access — see
+      // getPublicUser/getPublicFreelancerProfile's own doc comments.
+      const fetchUser = (targetId: string) => (user?.id ? DataService.getUser(targetId) : DataService.getPublicUser(targetId));
+      const fetchFreelancerProfile = (targetUserId: string) =>
+        user?.id ? DataService.getFreelancerProfile(targetUserId) : DataService.getPublicFreelancerProfile(targetUserId);
+      const fetchFreelancerById = (profileId: string) =>
+        user?.id ? DataService.getFreelancerById(profileId) : DataService.getPublicFreelancerById(profileId);
       let [userResponse, freelancerResponse] = await Promise.all([
-        DataService.getUser(id),
-        DataService.getFreelancerProfile(id),
+        fetchUser(id),
+        fetchFreelancerProfile(id),
       ]);
 
       if (!userResponse.data && freelancerResponse.error) {
-        const profileIdResponse = await DataService.getFreelancerById(id);
+        const profileIdResponse = await fetchFreelancerById(id);
         if (profileIdResponse.data?.user_id) {
           freelancerResponse = profileIdResponse;
-          userResponse = await DataService.getUser(profileIdResponse.data.user_id);
+          userResponse = await fetchUser(profileIdResponse.data.user_id);
         }
       }
 
@@ -314,7 +322,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         freelancerResponse.data?.id ? DataService.getFreelancerBlockedDates(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         freelancerResponse.data?.id ? DataService.getFreelancerSkills(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         DataService.getFreelancerReviews(targetId),
-        DataService.getFreelancerBookings(targetId),
+        // Booking rows carry the client's identity - a guest can't book
+        // anyway until they sign up (gated below), so there's nothing for
+        // them to see here; only fetch once there's an actual viewer.
+        user?.id ? DataService.getFreelancerBookings(targetId) : Promise.resolve({ data: [], error: null }),
         user?.id && user.id !== targetId ? DataService.isFavorited(user.id, targetId) : Promise.resolve({ isFavorited: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(user.id, targetId) : Promise.resolve({ isFollowing: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),

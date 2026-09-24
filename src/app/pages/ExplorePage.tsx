@@ -1110,14 +1110,13 @@ export function ExplorePage() {
   // header search box's own copy of it, so a suggestion looks and behaves
   // identically in either place.
   const renderSearchSuggestion = (s: any, idx: number) => {
-    // DataService.searchUsers returns flat rows (full_name/email directly
-    // on the row); DataService.searchUsersFallback returns
-    // freelancer_profiles-shaped rows (name/email nested under `.users`) —
-    // a suggestion can be either shape, so every field needs both a flat
-    // and a nested fallback.
+    // DataService.searchUsers returns flat rows (full_name directly on the
+    // row); DataService.searchUsersFallback returns freelancer_profiles-shaped
+    // rows (name nested under `.users`) — a suggestion can be either shape,
+    // so every field needs both a flat and a nested fallback.
     const id = s.user_id || s.users?.id || s.id;
-    const name = s.users?.full_name || s.full_name || s.title || s.users?.email || s.email || 'Unknown';
-    const subtitle = s.users?.email || s.email || s.users?.username || s.title || '';
+    const name = s.users?.full_name || s.full_name || s.title || 'Unknown';
+    const subtitle = s.title || s.users?.location || s.location || '';
     const avatar = s.users?.avatar_url || s.avatar_url || DEFAULT_AVATAR_URL;
     const suggestionGender = s.users?.gender || s.gender || null;
     return (

@@ -168,7 +168,7 @@ function toTimeAgo(timestamp: string | undefined) {
 
 function mapClientPostRowToFeedPost(post: any): FeedPost {
   const authorName = post.client?.full_name || 'Client';
-  const username = (post.client?.email || 'client').split('@')[0];
+  const username = authorName.toLowerCase().replace(/\s+/g, '_');
   // client_posts.client_id can belong to a client OR a freelancer —
   // the table name is legacy, not a role guarantee — so the actual
   // poster's role decides the label/behavior, same as a freshly
@@ -1125,10 +1125,10 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
           }}
           className="flex w-full items-center gap-3 border-b border-sky-50 px-3 py-3 text-left transition-colors hover:bg-sky-50 last:border-b-0"
         >
-          <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || result.email} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
+          <Avatar src={result.avatar_url || fallbackProfileImage} alt={result.full_name || 'User'} gender={result.gender} sizeClassName="h-9 w-9 ring-1 ring-sky-100 rounded-full" />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || result.email}</p>
-            <p className="truncate text-xs text-gray-500">{result.email}</p>
+            <p className="truncate text-sm font-semibold text-gray-900">{result.full_name || 'Someone'}</p>
+            <p className="truncate text-xs text-gray-500">{result.location || (result.role === 'freelancer' ? 'Freelancer' : '')}</p>
           </div>
         </button>
       ))
