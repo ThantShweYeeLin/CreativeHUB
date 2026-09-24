@@ -1,3 +1,9 @@
+// This is its own standalone Vercel project (Root Directory: server/), not
+// bundled with the frontend — see api/index.ts for the serverless
+// entrypoint that wraps the Express app exported below. Deploys install
+// dependencies from this directory in isolation, so nothing here should
+// import a file that lives outside server/ (see src/routes/chatbot.ts for
+// the local-copy pattern used to avoid exactly that).
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
