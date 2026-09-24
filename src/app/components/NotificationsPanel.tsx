@@ -50,6 +50,7 @@ interface NotificationsPanelProps {
 }
 
 const DESKTOP_BREAKPOINT = 768; // Tailwind's `md`
+const PANEL_WIDTH = 384; // matches md:w-96
 
 const getNotificationIcon = (type: string) => {
   switch (type) {
@@ -206,7 +207,7 @@ export function NotificationsPanel({
   // much wider the viewport is than the container. null on mobile (and
   // before the first measurement) leaves the static Tailwind classes
   // (inset-x-0 top-16) in charge instead.
-  const [desktopPosition, setDesktopPosition] = useState<{ top: number; right: number } | null>(null);
+  const [desktopPosition, setDesktopPosition] = useState<{ top: number; left: number } | null>(null);
 
   useLayoutEffect(() => {
     if (!triggerRef?.current || window.innerWidth < DESKTOP_BREAKPOINT) {
@@ -222,12 +223,18 @@ export function NotificationsPanel({
       const rect = triggerRef.current.getBoundingClientRect();
       const gap = 12;
       const edgeMargin = 8;
-      // Flush with the bell's own right edge — simplest anchor that's
-      // guaranteed to track the button itself, regardless of how the
-      // header lays out everything to either side of it.
+      // Flush with the bell's own right edge by default — but computed as
+      // a `left` (not `right`) and clamped to the viewport, since a bell
+      // near the LEFT edge of the screen (e.g. the admin sidebar, as
+      // opposed to the main app's right-aligned header) would otherwise
+      // push the panel's left edge off-screen entirely: `right: innerWidth
+      // - rect.right` grows huge for a bell that's far from the right
+      // edge, and this fixed-width panel doesn't reflow around that.
+      const idealLeft = rect.right - PANEL_WIDTH;
+      const maxLeft = Math.max(edgeMargin, window.innerWidth - PANEL_WIDTH - edgeMargin);
       setDesktopPosition({
         top: rect.bottom + gap,
-        right: Math.max(edgeMargin, window.innerWidth - rect.right),
+        left: Math.min(Math.max(idealLeft, edgeMargin), maxLeft),
       });
     };
 
@@ -270,7 +277,7 @@ export function NotificationsPanel({
           position once this is portaled away from where the button lives. */}
       <div
         className="fixed inset-x-0 top-16 md:inset-x-auto z-[1501] bg-white md:rounded-2xl shadow-[0_20px_60px_rgba(56,189,248,0.25)] border-t md:border border-sky-100 overflow-hidden animate-fadeIn max-h-[calc(100vh-4rem)] md:max-h-[600px] md:w-96 flex flex-col"
-        style={desktopPosition ? { top: desktopPosition.top, right: desktopPosition.right } : undefined}
+        style={desktopPosition ? { top: desktopPosition.top, left: desktopPosition.left } : undefined}
       >
         {/* Header */}
         <div className="px-6 py-4 border-b border-sky-100 bg-gradient-to-r from-sky-50 to-blue-50">
