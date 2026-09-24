@@ -1437,95 +1437,101 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
               <p className="mt-1 text-sm text-gray-600">{title}</p>
 
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-col gap-2">
                 {isOwner ? (
                   <button
                     onClick={() => navigate('/edit-profile')}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
+                    className="flex w-fit items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
                   >
                     <Edit className="h-4 w-4" />
                     Edit Profile
                   </button>
                 ) : (
                   <>
-                    <button
-                      onClick={handleFavoriteToggle}
-                      className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-blue-50 text-blue-500 hover:bg-blue-100' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'}`}
-                    >
-                      <Heart className={`h-5 w-5 ${isFavorited ? 'fill-current' : ''}`} />
-                    </button>
-
-                    <button
-                      onClick={() => void handleBlockUser()}
-                      disabled={isBlockingUser}
-                      className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100 disabled:opacity-60"
-                      title="Block this user"
-                    >
-                      <Ban className="h-5 w-5" />
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        if (!user?.id) {
-                          setAuthPromptMessage('Create an account to block or report other users.');
-                          return;
-                        }
-                        setReportSubmitted(false);
-                        setShowReportModal(true);
-                      }}
-                      className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100"
-                      title="Report this user"
-                    >
-                      <Flag className="h-5 w-5" />
-                    </button>
-
-                    {showMessageButton && (
+                    <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => targetFreelancerUserId && onOpenChat?.(targetFreelancerUserId)}
-                        className="flex items-center gap-2 rounded-xl bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-100"
+                        onClick={handleFavoriteToggle}
+                        className={`rounded-full p-2.5 transition-all ${isFavorited ? 'bg-blue-50 text-blue-500 hover:bg-blue-100' : 'bg-sky-50 text-gray-700 hover:bg-sky-100'}`}
                       >
-                        <MessageCircle className="h-4 w-4" />
-                        Message
+                        <Heart className={`h-5 w-5 ${isFavorited ? 'fill-current' : ''}`} />
                       </button>
-                    )}
 
-                    {isBookableFreelancer && (
+                      <button
+                        onClick={() => void handleBlockUser()}
+                        disabled={isBlockingUser}
+                        className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100 disabled:opacity-60"
+                        title="Block this user"
+                      >
+                        <Ban className="h-5 w-5" />
+                      </button>
+
                       <button
                         onClick={() => {
                           if (!user?.id) {
-                            setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                            setAuthPromptMessage('Create an account to block or report other users.');
                             return;
                           }
-                          setFormData((current) => ({
-                            ...current,
-                            offerAmount: current.offerAmount || (minimumOffer > 0 ? String(minimumOffer) : ''),
-                          }));
-                          setShowBookingForm(true);
+                          setReportSubmitted(false);
+                          setShowReportModal(true);
                         }}
-                        className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
+                        className="rounded-full bg-sky-50 p-2.5 text-gray-700 transition-all hover:bg-sky-100"
+                        title="Report this user"
                       >
-                        Request Booking
+                        <Flag className="h-5 w-5" />
                       </button>
-                    )}
+                    </div>
 
-                    <button
-                      onClick={() => void handleFollowToggle()}
-                      disabled={isFollowLoading}
-                      className={
-                        isFollowing
-                          ? 'rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-50 disabled:opacity-60'
-                          : 'rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60'
-                      }
-                    >
-                      {isFollowLoading
-                        ? 'Updating...'
-                        : isFollowing
-                        ? 'Following'
-                        : isFollowedByTarget
-                        ? 'Follow back'
-                        : 'Follow'
-                      }
-                    </button>
+                    {/* Primary actions kept in their own row so a narrow
+                        phone never wraps Request Booking away from Follow. */}
+                    <div className="flex flex-wrap gap-2">
+                      {showMessageButton && (
+                        <button
+                          onClick={() => targetFreelancerUserId && onOpenChat?.(targetFreelancerUserId)}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-100"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                          Message
+                        </button>
+                      )}
+
+                      {isBookableFreelancer && (
+                        <button
+                          onClick={() => {
+                            if (!user?.id) {
+                              setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                              return;
+                            }
+                            setFormData((current) => ({
+                              ...current,
+                              offerAmount: current.offerAmount || (minimumOffer > 0 ? String(minimumOffer) : ''),
+                            }));
+                            setShowBookingForm(true);
+                          }}
+                          className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
+                        >
+                          Request Booking
+                        </button>
+                      )}
+
+                      <button
+                        onClick={() => void handleFollowToggle()}
+                        disabled={isFollowLoading}
+                        className={
+                          isFollowing
+                            ? 'flex-1 rounded-xl border border-sky-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 transition-all hover:bg-sky-50 disabled:opacity-60'
+                            : 'flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:opacity-60'
+                        }
+                      >
+                        {isFollowLoading
+                          ? 'Updating...'
+                          : isFollowing
+                          ? 'Following'
+                          : isFollowedByTarget
+                          ? 'Follow back'
+                          : 'Follow'
+                        }
+                      </button>
+                    </div>
                   </>
                 )}
               </div>

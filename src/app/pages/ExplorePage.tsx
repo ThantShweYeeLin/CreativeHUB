@@ -301,7 +301,12 @@ function FeaturedShuffle({ candidates, index, direction, onOpenProfile, favorite
     slot: offset,
   }));
 
-  const deckWidth = isMobile ? cardWidth + gap * 4 : cardWidth * 2 + gap;
+  // Mobile's peek cards are only offset vertically (see SLOT_STYLE above),
+  // never sideways, so the deck's real width is just the front card's own
+  // width - it used to reserve 4 extra gaps of unused space on the right,
+  // which left the front card sitting flush-left inside a centered-but-
+  // oversized box instead of actually appearing centered.
+  const deckWidth = isMobile ? cardWidth : cardWidth * 2 + gap;
   // Distinguishes an actual swipe from a tap that also nudges the pointer a
   // few pixels — onDragStart only fires once framer-motion's own movement
   // threshold is crossed, so a clean tap never sets this at all; a real
@@ -1417,7 +1422,15 @@ export function ExplorePage() {
             too narrow for that plus a reasonable text column, the text
             side gives up the space instead. */}
         <div className="relative grid gap-10 lg:grid-cols-[1.1fr_minmax(680px,0.9fr)] lg:items-center">
-          <div>
+          {/* min-w-0: a grid item's default min-width is "auto" (its
+              content's intrinsic width), not 0 - without this, a long
+              single-word rotating category label (e.g. "Videographers")
+              couldn't shrink below its own unbroken width, so it forced
+              this whole column - and the featured-card column beside it -
+              wider than the viewport on mobile, shifting everything right
+              of center regardless of how well-centered the card itself is
+              within its own column. */}
+          <div className="min-w-0">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-white/80 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-sky-700">
               <Sparkles className="h-3.5 w-3.5" />
               Thailand's Creative Marketplace
@@ -1435,7 +1448,7 @@ export function ExplorePage() {
               <div className="flex min-h-[2.2em] items-center">
                 <span
                   key={heroCategoryIndex}
-                  className={`hero-word-in inline-block bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text leading-[1.25] text-transparent ${
+                  className={`hero-word-in inline-block min-w-0 break-words bg-gradient-to-r from-sky-500 to-blue-600 bg-clip-text leading-[1.25] text-transparent ${
                     // leading-[1.25] (looser than the h1's own leading-[1.1])
                     // is required here, not cosmetic — at these larger
                     // sizes, 1.1 doesn't leave enough room below the
@@ -1486,7 +1499,7 @@ export function ExplorePage() {
               (navigateHeroFeatured) so the rotation isn't only ever
               automatic — a manual click also resets that 3s timer so it
               doesn't fight the person who just navigated. */}
-          <div className="group/hero relative mx-auto w-full max-w-2xl">
+          <div className="group/hero relative mx-auto w-full min-w-0 max-w-2xl">
             <div className="hero-ring-spin pointer-events-none absolute -inset-4 rounded-[36px] border-2 border-dashed border-sky-200/70" aria-hidden="true" />
             {(() => {
               const candidates = heroData?.featuredCandidates;
