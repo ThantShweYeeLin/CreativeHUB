@@ -595,13 +595,17 @@ export function SettingsPage() {
             </div>
           </section>
 
-          {role === 'client' && user?.id && (
+          {user?.id && (
             <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
               <div className="mb-3 flex items-center gap-2 text-gray-900">
                 <CreditCard className="h-5 w-5" />
                 <h2 className="text-lg font-bold">Payment Methods</h2>
               </div>
-              <p className="mb-4 text-sm text-gray-600">Cards saved here can be used to pay booking deposits.</p>
+              <p className="mb-4 text-sm text-gray-600">
+                {role === 'client'
+                  ? 'Cards saved here can be used to pay booking deposits.'
+                  : 'Cards saved here can be reused across CreativeHUB, including Freelancer Premium checkout.'}
+              </p>
               <PaymentMethodPicker userId={user.id} />
             </section>
           )}

@@ -4,7 +4,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import {
   BRAND_LABEL,
-  createDemoToken,
+  createDemoTokenFromSaved,
   cvcLength,
   detectBrand,
   digitsOnly,
@@ -14,6 +14,8 @@ import {
   validateCardForm,
   type CardFormErrors,
 } from '../../../lib/demoCard';
+import { detectCardBrand, formatCardLabel, last4Of } from '../../../lib/paymentCard';
+import { PaymentMethodPicker, type PaymentMethod } from '../../components/payments/PaymentMethodPicker';
 import {
   isSubscriptionActive,
   PREMIUM_PLANS,
@@ -55,6 +57,8 @@ export function FreelancerPremiumPanel() {
   const [plan, setPlan] = useState<PremiumPlan>('monthly');
   const [card, setCard] = useState({ name: '', number: '', expiry: '', cvc: '' });
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [savedMethods, setSavedMethods] = useState<PaymentMethod[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState('');
   const [processingStep, setProcessingStep] = useState<number | null>(null);
   const [message, setMessage] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -68,9 +72,14 @@ export function FreelancerPremiumPanel() {
 
   const load = async () => {
     if (!user?.id) return;
-    const [{ data }, history] = await Promise.all([DataService.getMySubscription(user.id), DataService.getPaymentHistory(user.id)]);
+    const [{ data }, history, methods] = await Promise.all([
+      DataService.getMySubscription(user.id),
+      DataService.getPaymentHistory(user.id),
+      DataService.getPaymentMethods(user.id),
+    ]);
     setSubscription(data);
     setPayments(history.data);
+    setSavedMethods((methods.data || []) as PaymentMethod[]);
     setIsLoading(false);
   };
 
@@ -105,10 +114,41 @@ export function FreelancerPremiumPanel() {
 
   const showError = (field: keyof CardFormErrors) => (touched[field] ? errors[field] : undefined);
 
+  const selectedMethod = savedMethods.find((m) => m.id === selectedMethodId) || null;
+
+  // Any card typed into a real (Omise) payment also becomes the shared saved
+  // card used by Settings and booking deposits, so it only needs entering once.
+  const saveCardIfNew = async () => {
+    if (!user?.id) return;
+    const cardBrand = detectCardBrand(card.number);
+    const cardLast4 = last4Of(card.number);
+    const exp = parseExpiry(card.expiry);
+    if (!exp) return;
+    const alreadySaved = savedMethods.some(
+      (m) => m.brand === cardBrand && m.last4 === cardLast4 && m.exp_month === exp.month && m.exp_year === exp.year
+    );
+    if (alreadySaved) return;
+    const response = await DataService.addPaymentMethod(user.id, {
+      cardholderName: card.name.trim(),
+      brand: cardBrand,
+      last4: cardLast4,
+      expMonth: exp.month,
+      expYear: exp.year,
+    });
+    if (response.data) setSavedMethods((current) => [...current, response.data as PaymentMethod]);
+  };
+
   const handlePay = async () => {
     setMessage(null);
-    setTouched({ name: true, number: true, expiry: true, cvc: true });
-    if (Object.keys(errors).length > 0) return;
+
+    if (mode === 'demo' && !selectedMethod) {
+      setMessage({ tone: 'error', text: 'Add or select a card to pay with.' });
+      return;
+    }
+    if (mode === 'omise') {
+      setTouched({ name: true, number: true, expiry: true, cvc: true });
+      if (Object.keys(errors).length > 0) return;
+    }
 
     // A realistic pause with progress messages, never shorter than the request itself.
     setProcessingStep(0);
@@ -119,15 +159,15 @@ export function FreelancerPremiumPanel() {
     }, 900);
     const minimum = new Promise((resolve) => setTimeout(resolve, 2400));
 
-    const exp = parseExpiry(card.expiry)!;
+    const exp = mode === 'omise' ? parseExpiry(card.expiry)! : null;
     const request =
       mode === 'demo'
-        ? DataService.startPremiumCheckout(plan, { demoToken: createDemoToken(card) })
+        ? DataService.startPremiumCheckout(plan, { demoToken: createDemoTokenFromSaved(selectedMethod!) })
         : DataService.startPremiumCheckout(plan, {
             name: card.name.trim(),
             number: card.number,
-            expirationMonth: exp.month,
-            expirationYear: exp.year,
+            expirationMonth: exp!.month,
+            expirationYear: exp!.year,
             securityCode: card.cvc,
           });
     const [{ data, error }] = await Promise.all([request, minimum]);
@@ -151,16 +191,21 @@ export function FreelancerPremiumPanel() {
     }
 
     const r = data.receipt;
+    const fallbackCardLabel = mode === 'demo' && selectedMethod ? formatCardLabel(selectedMethod) : `${BRAND_LABEL[brand]} •••• ${digitsOnly(card.number).slice(-4)}`;
     setReceipt({
       reference: shortRef(data.chargeId),
       plan,
       amountThb: (r?.amountSatang ?? PREMIUM_PLANS[plan].priceThb * 100) / 100,
       paidAt: r?.paidAt ?? new Date().toISOString(),
       validUntil: r?.validUntil ?? null,
-      cardLabel: r?.card ? `${r.card.brand} •••• ${r.card.last4}` : `${BRAND_LABEL[brand]} •••• ${digitsOnly(card.number).slice(-4)}`,
+      cardLabel: r?.card ? `${r.card.brand} •••• ${r.card.last4}` : fallbackCardLabel,
     });
-    setCard({ name: '', number: '', expiry: '', cvc: '' });
-    setTouched({});
+
+    if (mode === 'omise') {
+      await saveCardIfNew();
+      setCard({ name: '', number: '', expiry: '', cvc: '' });
+      setTouched({});
+    }
     await load();
   };
 
@@ -299,71 +344,85 @@ export function FreelancerPremiumPanel() {
           >
             <div className="flex items-center justify-between">
               <p className="flex items-center gap-2 text-sm font-semibold text-gray-900"><CreditCard className="h-4 w-4" /> Pay by card</p>
-              <div className="flex gap-1 text-[10px] font-bold text-gray-400">
-                {(['visa', 'mastercard', 'amex', 'jcb'] as const).map((b) => (
-                  <span key={b} className={`rounded border px-1.5 py-0.5 uppercase ${brand === b ? 'border-sky-500 text-sky-600' : 'border-gray-200'}`}>{b === 'mastercard' ? 'MC' : b === 'amex' ? 'AMEX' : b}</span>
-                ))}
-              </div>
+              {mode === 'omise' && (
+                <div className="flex gap-1 text-[10px] font-bold text-gray-400">
+                  {(['visa', 'mastercard', 'amex', 'jcb'] as const).map((b) => (
+                    <span key={b} className={`rounded border px-1.5 py-0.5 uppercase ${brand === b ? 'border-sky-500 text-sky-600' : 'border-gray-200'}`}>{b === 'mastercard' ? 'MC' : b === 'amex' ? 'AMEX' : b}</span>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Name on card</label>
-              <input
-                value={card.name}
-                onChange={(e) => setCard((c) => ({ ...c, name: e.target.value }))}
-                onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-                autoComplete="cc-name"
-                placeholder="As shown on your card"
-                className={inputClass('name')}
+            {mode === 'demo' ? (
+              <PaymentMethodPicker
+                userId={user!.id}
+                selectable
+                selectedId={selectedMethodId}
+                onSelectedIdChange={setSelectedMethodId}
+                onMethodsChange={setSavedMethods}
               />
-              {showError('name') && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-semibold text-gray-600">Card number</label>
-              <div className="relative">
-                <input
-                  value={card.number}
-                  onChange={(e) => setCard((c) => ({ ...c, number: formatCardNumber(e.target.value) }))}
-                  onBlur={() => setTouched((t) => ({ ...t, number: true }))}
-                  inputMode="numeric"
-                  autoComplete="cc-number"
-                  placeholder="1234 1234 1234 1234"
-                  className={`${inputClass('number')} pr-24`}
-                />
-                {brand !== 'card' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-sky-600">{BRAND_LABEL[brand]}</span>}
-              </div>
-              {showError('number') && <p className="mt-1 text-xs text-red-600">{errors.number}</p>}
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Expiry</label>
-                <input
-                  value={card.expiry}
-                  onChange={(e) => setCard((c) => ({ ...c, expiry: formatExpiry(e.target.value) }))}
-                  onBlur={() => setTouched((t) => ({ ...t, expiry: true }))}
-                  inputMode="numeric"
-                  autoComplete="cc-exp"
-                  placeholder="MM/YY"
-                  className={inputClass('expiry')}
-                />
-                {showError('expiry') && <p className="mt-1 text-xs text-red-600">{errors.expiry}</p>}
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold text-gray-600">Security code</label>
-                <input
-                  value={card.cvc}
-                  onChange={(e) => setCard((c) => ({ ...c, cvc: digitsOnly(e.target.value).slice(0, cvcLength(brand)) }))}
-                  onBlur={() => setTouched((t) => ({ ...t, cvc: true }))}
-                  inputMode="numeric"
-                  autoComplete="cc-csc"
-                  placeholder={brand === 'amex' ? '4 digits' : '3 digits'}
-                  className={inputClass('cvc')}
-                />
-                {showError('cvc') && <p className="mt-1 text-xs text-red-600">{errors.cvc}</p>}
-              </div>
-            </div>
+            ) : (
+              <>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Name on card</label>
+                  <input
+                    value={card.name}
+                    onChange={(e) => setCard((c) => ({ ...c, name: e.target.value }))}
+                    onBlur={() => setTouched((t) => ({ ...t, name: true }))}
+                    autoComplete="cc-name"
+                    placeholder="As shown on your card"
+                    className={inputClass('name')}
+                  />
+                  {showError('name') && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Card number</label>
+                  <div className="relative">
+                    <input
+                      value={card.number}
+                      onChange={(e) => setCard((c) => ({ ...c, number: formatCardNumber(e.target.value) }))}
+                      onBlur={() => setTouched((t) => ({ ...t, number: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                      placeholder="1234 1234 1234 1234"
+                      className={`${inputClass('number')} pr-24`}
+                    />
+                    {brand !== 'card' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-sky-600">{BRAND_LABEL[brand]}</span>}
+                  </div>
+                  {showError('number') && <p className="mt-1 text-xs text-red-600">{errors.number}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Expiry</label>
+                    <input
+                      value={card.expiry}
+                      onChange={(e) => setCard((c) => ({ ...c, expiry: formatExpiry(e.target.value) }))}
+                      onBlur={() => setTouched((t) => ({ ...t, expiry: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      placeholder="MM/YY"
+                      className={inputClass('expiry')}
+                    />
+                    {showError('expiry') && <p className="mt-1 text-xs text-red-600">{errors.expiry}</p>}
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Security code</label>
+                    <input
+                      value={card.cvc}
+                      onChange={(e) => setCard((c) => ({ ...c, cvc: digitsOnly(e.target.value).slice(0, cvcLength(brand)) }))}
+                      onBlur={() => setTouched((t) => ({ ...t, cvc: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      placeholder={brand === 'amex' ? '4 digits' : '3 digits'}
+                      className={inputClass('cvc')}
+                    />
+                    {showError('cvc') && <p className="mt-1 text-xs text-red-600">{errors.cvc}</p>}
+                  </div>
+                </div>
+              </>
+            )}
             <button
               type="submit"
-              disabled={isProcessing}
+              disabled={isProcessing || (mode === 'demo' && !selectedMethod)}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 font-semibold text-white hover:shadow-lg disabled:opacity-60"
             >
               <Lock className="h-4 w-4" />
@@ -372,8 +431,8 @@ export function FreelancerPremiumPanel() {
             <p className="flex items-start gap-1.5 text-xs text-gray-500">
               <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                We never store your card number.
-                {mode === 'demo' && ' Demo checkout — no real payment is taken, so try 4242 4242 4242 4242 with any future expiry.'}
+                We never store your full card number or CVC — only the brand and last 4 digits, so this card is also ready to use for booking deposits and other payments.
+                {mode === 'demo' && ' Demo checkout — no real payment is taken, so try 4242 4242 4242 4242 with any future expiry when adding a card.'}
               </span>
             </p>
           </form>

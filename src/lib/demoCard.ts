@@ -96,3 +96,20 @@ export function createDemoToken(values: CardFormValues): string {
   const b64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   return `demo_tok_${b64}`;
 }
+
+// A saved payment method (src/app/components/payments/PaymentMethodPicker.tsx)
+// only ever keeps brand/last4/expiry - never the full number or CVC needed to
+// replay one of the DEMO_OUTCOMES test numbers above. Paying with one always
+// simulates a successful charge, matching how a real saved/vaulted card
+// wouldn't require the CVC to be re-entered either.
+export function createDemoTokenFromSaved(method: { brand: string; last4: string; exp_month: number; exp_year: number }): string {
+  const payload = {
+    brand: method.brand,
+    last4: method.last4,
+    expMonth: method.exp_month,
+    expYear: method.exp_year,
+    outcome: 'success' as const,
+  };
+  const b64 = btoa(JSON.stringify(payload)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `demo_tok_${b64}`;
+}

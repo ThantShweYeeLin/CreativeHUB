@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Calendar,
@@ -11,15 +11,19 @@ import {
   Crown,
   DollarSign,
   Edit,
+  Landmark,
   Layers,
+  Lock,
   MapPin,
   Megaphone,
   Percent,
   Plus,
   Settings,
+  ShieldCheck,
   Star,
   Trash2,
   TrendingUp,
+  User,
   Users,
   X,
 } from 'lucide-react';
@@ -38,6 +42,7 @@ import { extractScheduleMeta, formatScheduleMeta } from '../../lib/requestSchedu
 import { extractLocationMeta } from '../../lib/requestLocation';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { getBookingEscrowState, formatCountdown, getBookingEarningsBreakdown } from '../../lib/bookingEscrow';
+import { BANK_OPTIONS, formatAccountNumber } from './freelancer-onboarding/StepBilling';
 import { CalendarView } from './freelancer-dashboard/CalendarView';
 import { FreelancerOpportunitiesPanel } from './freelancer-dashboard/FreelancerOpportunitiesPanel';
 import { FreelancerPremiumPanel } from './freelancer-dashboard/FreelancerPremiumPanel';
@@ -60,8 +65,22 @@ interface FreelancerDashboardProps {
   initialOpenRequestId?: string | undefined;
 }
 
+// Each tab is its own route (see App.tsx), so switching tabs unmounts and
+// remounts this whole component - a plain useState/useRef for the tab bar's
+// scroll position wouldn't survive that. Kept at module scope instead, so
+// clicking a tab that's scrolled off-screen doesn't snap the bar back to
+// the start.
+let savedTabBarScrollLeft = 0;
+
 export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: FreelancerDashboardProps) {
   const navigate = useNavigate();
+  const tabBarRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (tabBarRef.current) {
+      tabBarRef.current.scrollLeft = savedTabBarScrollLeft;
+    }
+  }, []);
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [freelancerProfile, setFreelancerProfile] = useState<any | null>(null);
@@ -83,6 +102,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [counterTimeInput, setCounterTimeInput] = useState('');
   const [counterEndTimeInput, setCounterEndTimeInput] = useState('');
   const [isEditingBilling, setIsEditingBilling] = useState(false);
+  const [showOtherBank, setShowOtherBank] = useState(false);
   const [isSavingBilling, setIsSavingBilling] = useState(false);
   const [billingBankName, setBillingBankName] = useState('');
   const [billingAccountHolderName, setBillingAccountHolderName] = useState('');
@@ -791,7 +811,13 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       </div>
 
       <div className="mx-auto max-w-[1400px] px-4 md:px-8">
-        <div className="mb-6 flex gap-2 overflow-x-auto rounded-xl border border-sky-100 bg-white p-2 shadow-lg md:mb-8 md:rounded-2xl">
+        <div
+          ref={tabBarRef}
+          onScroll={(e) => {
+            savedTabBarScrollLeft = e.currentTarget.scrollLeft;
+          }}
+          className="mb-6 flex gap-2 overflow-x-auto rounded-xl border border-sky-100 bg-white p-2 shadow-lg md:mb-8 md:rounded-2xl"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -1342,7 +1368,9 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
             )}
           </div>
         ) : section === 'opportunities' ? (
-          <FreelancerOpportunitiesPanel />
+          <FreelancerOpportunitiesPanel
+            hasServiceLocation={Boolean((freelancerProfile?.locations || []).length || (freelancerProfile?.studio_locations || []).length)}
+          />
         ) : section === 'premium' ? (
           <FreelancerPremiumPanel />
         ) : section === 'earnings' ? (
@@ -1595,7 +1623,10 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 </div>
                 {!isEditingBilling && (
                   <button
-                    onClick={() => setIsEditingBilling(true)}
+                    onClick={() => {
+                      setShowOtherBank(billingBankName !== '' && !BANK_OPTIONS.includes(billingBankName));
+                      setIsEditingBilling(true);
+                    }}
                     className="flex flex-shrink-0 items-center gap-2 rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
                   >
                     <Edit className="h-4 w-4" />
@@ -1607,33 +1638,72 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               {isEditingBilling ? (
                 <div className="space-y-3">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-gray-600">Bank name</label>
-                    <input
-                      value={billingBankName}
-                      onChange={(event) => setBillingBankName(event.target.value)}
-                      placeholder="e.g. Kasikorn Bank"
-                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                    />
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Bank</label>
+                    <div className="relative">
+                      <Landmark className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <select
+                        value={showOtherBank ? 'Other' : billingBankName}
+                        onChange={(event) => {
+                          if (event.target.value === 'Other') {
+                            setShowOtherBank(true);
+                            setBillingBankName('');
+                          } else {
+                            setShowOtherBank(false);
+                            setBillingBankName(event.target.value);
+                          }
+                        }}
+                        className="w-full appearance-none rounded-lg border border-sky-100 bg-sky-50/50 py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      >
+                        <option value="" disabled>
+                          Select your bank
+                        </option>
+                        {BANK_OPTIONS.map((bank) => (
+                          <option key={bank} value={bank}>
+                            {bank}
+                          </option>
+                        ))}
+                        <option value="Other">Other bank</option>
+                      </select>
+                    </div>
+                    {showOtherBank && (
+                      <input
+                        value={billingBankName}
+                        onChange={(event) => setBillingBankName(event.target.value)}
+                        placeholder="Enter your bank's name"
+                        className="mt-2 w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      />
+                    )}
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-600">Account holder name</label>
-                    <input
-                      value={billingAccountHolderName}
-                      onChange={(event) => setBillingAccountHolderName(event.target.value)}
-                      placeholder="Name on the bank account"
-                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                    />
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={billingAccountHolderName}
+                        onChange={(event) => setBillingAccountHolderName(event.target.value)}
+                        placeholder="Name on the bank account"
+                        className="w-full rounded-lg border border-sky-100 bg-sky-50/50 py-2.5 pl-9 pr-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs font-semibold text-gray-600">Account number</label>
-                    <input
-                      value={billingAccountNumber}
-                      onChange={(event) => setBillingAccountNumber(event.target.value)}
-                      placeholder="Bank account number"
-                      inputMode="numeric"
-                      className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                    />
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={billingAccountNumber}
+                        onChange={(event) => setBillingAccountNumber(formatAccountNumber(event.target.value))}
+                        placeholder="e.g. 123-4567-8901"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        className="w-full rounded-lg border border-sky-100 bg-sky-50/50 py-2.5 pl-9 pr-3 font-mono text-sm tracking-wide text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                      />
+                    </div>
                   </div>
+                  <p className="flex items-start gap-1.5 text-xs text-gray-500">
+                    <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>Encrypted and used only to send your payouts — clients never see your bank details.</span>
+                  </p>
                   <div className="flex justify-end gap-2 pt-1">
                     <button
                       onClick={() => {
