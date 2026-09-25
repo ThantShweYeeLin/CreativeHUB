@@ -163,8 +163,14 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
     <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4">
       {/* max-h + flex column so this never overflows a short phone screen -
           the header/search/map area scrolls internally while Cancel/Save
-          stay pinned at the bottom, always reachable without scrolling. */}
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
+          stay pinned at the bottom, always reachable without scrolling.
+          `dvh` (dynamic viewport height), not `vh`: mobile browsers size
+          `vh` off the LARGEST possible viewport (address bar hidden), so
+          with the address bar actually showing, 90vh can compute taller
+          than what's really visible on screen — pushing the footer behind
+          the browser's own UI bar. `dvh` tracks the real, currently visible
+          height instead. */}
+      <div className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-[0_20px_60px_rgba(56,189,248,0.25)]">
         <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="border-b border-sky-100 px-5 py-4">
           <h3 className="text-lg font-bold text-gray-900">Pick a Location</h3>
