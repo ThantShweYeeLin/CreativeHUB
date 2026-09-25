@@ -231,7 +231,12 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
           )}
         </div>
 
-        <div className="h-[420px] w-full">
+        {/* Shorter on mobile — a full 420px map plus the header, search bar,
+            and selected-address text (which can wrap to several lines for a
+            long address) leaves too little room on a phone screen, pushing
+            the Cancel/Save footer down where it's easy to lose track of.
+            Unchanged on sm+ screens, which have the room to spare. */}
+        <div className="h-[260px] w-full sm:h-[420px]">
           <MapContainer center={center} zoom={13} className="h-full w-full">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
