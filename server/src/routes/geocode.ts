@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 
 // Proxies Nominatim (OpenStreetMap geocoding) server-side instead of the
 // browser calling it directly. A browser fetch() can't set a real
@@ -11,23 +12,38 @@ const router = Router();
 const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org';
 const USER_AGENT = 'CreativeHUB-App/1.0 (location picker; contact via app support)';
 
+const searchQuerySchema = z.object({
+  q: z.string().trim().min(1).max(200),
+  // Nominatim itself caps useful results well below this; bounding it stops
+  // a caller from asking for an arbitrarily large upstream response.
+  limit: z.coerce.number().int().min(1).max(10).optional().default(5),
+  countrycodes: z.string().trim().max(100).optional(),
+  lang: z.string().trim().max(10).optional(),
+});
+const reverseQuerySchema = z.object({
+  lat: z.coerce.number().min(-90).max(90),
+  lon: z.coerce.number().min(-180).max(180),
+  lang: z.string().trim().max(10).optional(),
+});
+
 router.get('/search', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  if (!q) return res.status(422).json({ message: 'q is required.' });
+  const parsed = searchQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(422).json({ message: 'q is required.' });
+  const { q, limit, countrycodes, lang } = parsed.data;
 
   const params = new URLSearchParams({
     format: 'json',
     addressdetails: '1',
-    limit: String(req.query.limit || 5),
+    limit: String(limit),
     q,
   });
-  if (req.query.countrycodes) params.set('countrycodes', String(req.query.countrycodes));
+  if (countrycodes) params.set('countrycodes', countrycodes);
 
   try {
     const response = await fetch(`${NOMINATIM_BASE}/search?${params.toString()}`, {
       headers: {
         Accept: 'application/json',
-        'Accept-Language': req.query.lang === 'th' ? 'th' : 'en',
+        'Accept-Language': lang === 'th' ? 'th' : 'en',
         'User-Agent': USER_AGENT,
       },
     });
@@ -39,9 +55,9 @@ router.get('/search', async (req, res) => {
 });
 
 router.get('/reverse', async (req, res) => {
-  const lat = Number(req.query.lat);
-  const lon = Number(req.query.lon);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return res.status(422).json({ message: 'lat and lon are required.' });
+  const parsed = reverseQuerySchema.safeParse(req.query);
+  if (!parsed.success) return res.status(422).json({ message: 'lat and lon are required.' });
+  const { lat, lon, lang } = parsed.data;
 
   const params = new URLSearchParams({ format: 'json', addressdetails: '1', lat: String(lat), lon: String(lon) });
 
@@ -49,7 +65,7 @@ router.get('/reverse', async (req, res) => {
     const response = await fetch(`${NOMINATIM_BASE}/reverse?${params.toString()}`, {
       headers: {
         Accept: 'application/json',
-        'Accept-Language': req.query.lang === 'th' ? 'th' : 'en',
+        'Accept-Language': lang === 'th' ? 'th' : 'en',
         'User-Agent': USER_AGENT,
       },
     });

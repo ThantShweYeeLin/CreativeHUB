@@ -6,6 +6,7 @@
 // the local-copy pattern used to avoid exactly that).
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import dotenv from 'dotenv';
 import apiRouter from './routes/index.js';
 import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
@@ -20,6 +21,12 @@ const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 // caller instead of the real client IP, making IP-based rate limiting
 // either broken or a single shared bucket for all traffic.
 app.set('trust proxy', 1);
+// Helmet's defaults are aimed at apps that serve HTML, but they're still
+// the right call here, not just harmless: default-src 'none' CSP is exactly
+// correct for a JSON-only API (there's no page content for it to restrict),
+// and HSTS/nosniff/frameguard/referrer-policy all apply regardless of
+// content type. No per-route tuning needed - this API never serves HTML.
+app.use(helmet());
 app.use(cors(corsOptions));
 // Omise signs the exact request bytes, so the webhook gets the RAW body and
 // must be registered before express.json() consumes it. It is deliberately

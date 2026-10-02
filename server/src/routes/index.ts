@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import authRouter from './auth.js';
 import freelancersRouter from './freelancers.js';
-import bookingsRouter from './bookings.js';
-import feedRouter from './feed.js';
 import accountRouter from './account.js';
 import chatbotRouter from './chatbot.js';
 import paymentsRouter from './payments.js';
@@ -23,8 +21,7 @@ router.use('/geocode', geocodeRateLimit, geocodeRouter);
 router.use(requireAuth);
 router.use(generalApiRateLimit);
 router.use('/freelancers', freelancersRouter);
-router.use('/bookings', bookingsRouter);
-router.use('/feed', feedRouter);
+//router.use('/feed', feedRouter);
 router.use('/account', accountRouter);
 router.use('/chatbot', chatbotRateLimit, chatbotRouter);
 router.use('/payments', paymentsRouter);

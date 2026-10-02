@@ -1,7 +1,20 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { createSupabaseAdminClient, createSupabaseForRequest } from '../lib/supabase.js';
 
 const router = Router();
+
+const checkEmailSchema = z.object({ email: z.string().trim().min(1).max(320) });
+const signupSchema = z.object({
+  email: z.string().trim().min(1).max(320),
+  password: z.string().min(1).max(200),
+  name: z.string().trim().min(1).max(200),
+  role: z.enum(['client', 'freelancer']).optional().default('client'),
+});
+const loginSchema = z.object({
+  email: z.string().trim().min(1).max(320),
+  password: z.string().min(1).max(200),
+});
 
 // Public (no session yet): the sign-up form needs to know whether an email is
 // already taken before the user has an account. supabase/lock_down_anonymous_access.sql
@@ -10,8 +23,9 @@ const router = Router();
 // boolean, never the row.
 router.post('/check-email', async (req, res) => {
   try {
-    const email = String(req.body?.email || '').trim();
-    if (!email) return res.status(400).json({ message: 'Email is required.' });
+    const parsed = checkEmailSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: 'Email is required.' });
+    const { email } = parsed.data;
 
     const { data, error } = await createSupabaseAdminClient()
       .from('users')
@@ -123,14 +137,11 @@ router.get('/showcase', async (_req, res) => {
 
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, name, role = 'client' } = req.body;
-    if (!email || !password || !name) {
+    const parsed = signupSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({ message: 'Email, password, and name are required.' });
     }
-
-    if (role !== 'client' && role !== 'freelancer') {
-      return res.status(400).json({ message: 'Role must be client or freelancer.' });
-    }
+    const { email, password, name, role } = parsed.data;
 
     const supabase = createSupabaseForRequest();
     const { data, error } = await supabase.auth.signUp({
@@ -168,10 +179,11 @@ router.post('/signup', async (req, res) => {
 
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
+    const { email, password } = parsed.data;
 
     const supabase = createSupabaseForRequest();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
