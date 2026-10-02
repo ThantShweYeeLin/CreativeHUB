@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search, Clock, MapPin, Megaphone } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { RequestChatThread } from '../../components/common/RequestChatThread';
+import { CounterOfferModal } from '../../components/common/CounterOfferModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { FeedService } from '../../lib/feedService';
@@ -996,6 +998,12 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       </p>
                     )}
 
+                    {request.status !== 'rejected' && user?.id && (
+                      <div className="mb-4">
+                        <RequestChatThread currentUserId={user.id} otherUserId={request.freelancer.id} otherUserName={request.freelancer.name} otherUserAvatar={request.freelancer.avatar} />
+                      </div>
+                    )}
+
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
                       {request.status === 'pending' && (
@@ -1110,87 +1118,6 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       </div>
                     )}
 
-                    {counterFormOpenForId === request.id && (
-                      <div className="mt-4 rounded-xl border border-sky-100 bg-sky-50/60 p-4">
-                        <p className="mb-3 text-sm font-semibold text-gray-900">Propose a different price</p>
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">My proposed price (optional — keeps the current price if left blank)</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={counterPriceInput}
-                              onChange={(event) => setCounterPriceInput(event.target.value)}
-                              placeholder="e.g. 6000"
-                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Message (optional)</label>
-                            <input
-                              value={counterMessageInput}
-                              onChange={(event) => setCounterMessageInput(event.target.value)}
-                              placeholder="Message (optional)"
-                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                          <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed date (optional — keeps the current date if left blank)</label>
-                            <input
-                              type="date"
-                              value={counterDateInput}
-                              onChange={(event) => setCounterDateInput(event.target.value)}
-                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed start time (optional — keeps the current time if left blank)</label>
-                            <input
-                              type="time"
-                              value={counterTimeInput}
-                              onChange={(event) => setCounterTimeInput(event.target.value)}
-                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs font-semibold text-gray-600">Proposed end time (optional — keeps the current end time if left blank)</label>
-                            <input
-                              type="time"
-                              value={counterEndTimeInput}
-                              onChange={(event) => setCounterEndTimeInput(event.target.value)}
-                              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                            />
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <label className="mb-1 block text-xs font-semibold text-gray-600">What's included (optional, one per line)</label>
-                          <textarea
-                            value={counterIncludesInput}
-                            onChange={(event) => setCounterIncludesInput(event.target.value)}
-                            rows={3}
-                            placeholder={'8 hours photography\nEdited photos\nOnline gallery'}
-                            className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                          />
-                        </div>
-                        <div className="mt-3 flex justify-end gap-2">
-                          <button
-                            onClick={() => setCounterFormOpenForId(null)}
-                            className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-white"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => void handleSendCounterOffer(request.id)}
-                            disabled={isSubmittingCounter}
-                            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                          >
-                            {isSubmittingCounter ? 'Sending...' : 'Send Counter Offer'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1200,6 +1127,35 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         </div>
         </>
         )}
+
+        {counterFormOpenForId && (() => {
+          const counterRequest = normalizedRequests.find((r) => r.id === counterFormOpenForId);
+          if (!counterRequest) return null;
+          return (
+            <CounterOfferModal
+              recipientName={counterRequest.freelancer.name}
+              projectName={counterRequest.projectName}
+              currentPrice={counterRequest.counterPrice ?? counterRequest.budget ?? null}
+              pricePlaceholder="e.g. 6000"
+              priceValue={counterPriceInput}
+              onPriceChange={setCounterPriceInput}
+              messagePlaceholder="Message (optional)"
+              messageValue={counterMessageInput}
+              onMessageChange={setCounterMessageInput}
+              dateValue={counterDateInput}
+              onDateChange={setCounterDateInput}
+              timeValue={counterTimeInput}
+              onTimeChange={setCounterTimeInput}
+              endTimeValue={counterEndTimeInput}
+              onEndTimeChange={setCounterEndTimeInput}
+              includesValue={counterIncludesInput}
+              onIncludesChange={setCounterIncludesInput}
+              isSubmitting={isSubmittingCounter}
+              onCancel={() => setCounterFormOpenForId(null)}
+              onSubmit={() => void handleSendCounterOffer(counterFormOpenForId)}
+            />
+          );
+        })()}
 
         {/* Empty State */}
         {!isLoading && normalizedRequests.length === 0 && openGroupSections.length === 0 && (

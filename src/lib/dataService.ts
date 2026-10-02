@@ -12,7 +12,7 @@ import {
 } from './groupRequest';
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
-import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS } from './bookingEscrow';
+import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS, getBookingEscrowState } from './bookingEscrow';
 import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import type { DisputeFlowCategory } from './disputeCategories';
 import { tokenizeCard, type CardDetails } from './omiseClient';
@@ -3165,6 +3165,89 @@ export class DataService {
     return { data: data || [], error };
   }
 
+  // Each event-team group chat's members are each independently booked for
+  // one role on the same event (checkGroupDepositsAndCreateChat creates the
+  // chat once every sibling booking's deposit is paid) - group_id links
+  // those sibling bookings, same id as the chat's own
+  // related_group_request_id. Both the direct Group Request flow
+  // (GroupRequestPage.tsx) and Open Group Request applications
+  // (apply_to_group_opportunity) name each booking "{Event} — {Role}", so
+  // the role is just the text after that separator.
+  // groupRequestId (bookings.group_id, when set) is the precise source -
+  // every sibling booking from the same group-request submission shares it.
+  // It's only ever set by the direct Group Request flow (GroupRequestPage.tsx)
+  // though: Open Group Request applications (apply_to_group_opportunity)
+  // never populate it, and a group chat created manually via "New group
+  // chat" has no group_id at all to begin with. For any member group_id
+  // doesn't resolve, this falls back to that member's own most recent
+  // booking with the group's creator - same "{Event} — {Role}" naming
+  // convention either flow uses, just looked up per-person instead of by a
+  // shared id.
+  static async getGroupMemberCategories(input: { groupRequestId: string | null; memberIds: string[] }) {
+    const categories: Record<string, string> = {};
+    const extractRole = (projectName: string) => {
+      const parts = String(projectName || '').split(' — ');
+      return parts.length > 1 ? parts.slice(1).join(' — ').trim() : null;
+    };
+    const applyRows = (rows: any[]) => {
+      rows.forEach((row) => {
+        if (categories[row.freelancer_id]) return; // keep the first (most recent, once sorted) match
+        const role = extractRole(row.project_name);
+        if (role) categories[row.freelancer_id] = role;
+      });
+    };
+
+    let error: any = null;
+
+    if (input.groupRequestId) {
+      const response = await supabase
+        .from('bookings')
+        .select('freelancer_id, project_name, created_at')
+        .eq('group_id', input.groupRequestId)
+        .order('created_at', { ascending: true });
+      error = response.error;
+      applyRows(response.data || []);
+    }
+
+    // Fallback for members group_id doesn't cover (manually-created group
+    // chats, or Open Group Request applications, which never set group_id) -
+    // rather than guessing which member is "the client", this just looks
+    // for any booking where the freelancer is one of our uncategorized
+    // members AND the client is ALSO someone else in this same group chat.
+    // The actual client is always a member (checkGroupDepositsAndCreateChat
+    // adds booking.client_id to the chat), so this needs no assumption
+    // about who that is.
+    const uncategorized = input.memberIds.filter((id) => !categories[id]);
+    if (uncategorized.length) {
+      const fallback = await supabase
+        .from('bookings')
+        .select('freelancer_id, project_name, created_at')
+        .in('freelancer_id', uncategorized)
+        .in('client_id', input.memberIds)
+        .order('created_at', { ascending: false });
+      error = error || fallback.error;
+      applyRows(fallback.data || []);
+    }
+
+    return { data: categories, error };
+  }
+
+  // One representative sibling booking for a group-request team chat, used
+  // for the shared event summary (title/schedule/location) shown at the
+  // top of the chat - deliberately NOT each person's price/deposit, which
+  // stays private between the client and that one freelancer (same reason
+  // Open Group Request applicants never see each other's identity/terms).
+  static async getGroupBookingEventSummary(groupRequestId: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('group_id', groupRequestId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return { data, error };
+  }
+
   static async createGroupConversation(input: {
     title: string;
     createdBy: string;
@@ -3314,18 +3397,119 @@ export class DataService {
     return { data, error };
   }
 
-  static subscribeToMessages(conversationId: string, onChange: () => void): RealtimeChannel {
-    return supabase
-      .channel(`messages-${conversationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, onChange)
+  // Supabase throws ("cannot add `postgres_changes` callbacks ... after
+  // `subscribe()`") if a channel with this exact topic is already active,
+  // which happens whenever two components independently open a thread for
+  // the same conversation — e.g. RequestChatThread rendered on two separate
+  // request cards with the same counterpart (very normal: anyone with more
+  // than one request/negotiation going with the same person), or a React
+  // StrictMode double-mount in dev. An earlier fix here made a second
+  // subscribe() force-remove the first subscriber's channel to dodge the
+  // crash — which stopped the crash, but silently killed that first
+  // subscriber's live updates too (it just never got told its channel was
+  // gone), which is exactly the "only shows up after a refresh" bug this
+  // was rewritten to fix. This keeps ONE real channel per topic and shares
+  // it across every caller via reference counting: each subscribe() adds a
+  // listener and bumps a count; each unsubscribe() removes its listener and
+  // only tears down the real channel once the count reaches zero. No
+  // caller's updates ever get silently dropped by another caller's
+  // subscribe/unsubscribe.
+  private static realtimeChannelRegistry = new Map<
+    string,
+    { channel: RealtimeChannel; changeListeners: Set<(payload: any) => void>; typingListeners: Set<(userId: string) => void> }
+  >();
+
+  private static getSharedChannel(
+    topic: string,
+    postgresChangesConfigs: Array<{ event: '*'; schema: 'public'; table: string; filter: string }>
+  ) {
+    let entry = this.realtimeChannelRegistry.get(topic);
+    if (entry) return entry;
+
+    const changeListeners = new Set<(payload: any) => void>();
+    const typingListeners = new Set<(userId: string) => void>();
+    let channelBuilder = supabase.channel(topic);
+    postgresChangesConfigs.forEach((config) => {
+      channelBuilder = channelBuilder.on('postgres_changes', config, (payload: any) => {
+        changeListeners.forEach((fn) => fn(payload));
+      });
+    });
+    const channel = channelBuilder
+      .on('broadcast', { event: 'typing' }, (payload: any) => {
+        typingListeners.forEach((fn) => fn(payload.payload?.userId));
+      })
       .subscribe();
+
+    entry = { channel, changeListeners, typingListeners };
+    this.realtimeChannelRegistry.set(topic, entry);
+    return entry;
+  }
+
+  // Returns a lightweight stand-in, not the real RealtimeChannel — every
+  // caller in this codebase only ever calls .unsubscribe() (cleanup) and
+  // .send() (DataService.sendTyping), both of which this covers; nothing
+  // relies on any other RealtimeChannel method on the returned value.
+  static subscribeToMessages(conversationId: string, onChange: () => void, onTyping?: (userId: string) => void): RealtimeChannel {
+    const topic = `messages-${conversationId}`;
+    const entry = this.getSharedChannel(topic, [{ event: '*', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }]);
+    entry.changeListeners.add(onChange);
+    if (onTyping) entry.typingListeners.add(onTyping);
+
+    return {
+      unsubscribe: () => {
+        entry.changeListeners.delete(onChange);
+        if (onTyping) entry.typingListeners.delete(onTyping);
+        if (entry.changeListeners.size === 0 && entry.typingListeners.size === 0) {
+          supabase.removeChannel(entry.channel);
+          this.realtimeChannelRegistry.delete(topic);
+        }
+      },
+      send: (args: any) => entry.channel.send(args),
+    } as unknown as RealtimeChannel;
+  }
+
+  // MessagesPage.tsx's pinned booking-summary card picks the newest booking
+  // between the two participants (getActiveOrLatestBookingBetweenUsers
+  // already orders by created_at desc) - that query just never re-ran on
+  // its own while the chat sat open, so a new booking created with the same
+  // person while the old (now-finished) chat was still open kept showing
+  // the stale one until the page was reloaded. Two filters on one channel
+  // since either participant could be client or freelancer on the new
+  // booking (same both-directions reasoning as getActiveOrLatestBookingBetweenUsers).
+  static subscribeToBookingsBetweenUsers(userId: string, otherUserId: string, onChange: () => void): RealtimeChannel {
+    const topic = `bookings-${[userId, otherUserId].sort().join('-')}`;
+    const entry = this.getSharedChannel(topic, [
+      { event: '*', schema: 'public', table: 'bookings', filter: `client_id=eq.${userId}` },
+      { event: '*', schema: 'public', table: 'bookings', filter: `freelancer_id=eq.${userId}` },
+    ]);
+    entry.changeListeners.add(onChange);
+
+    return {
+      unsubscribe: () => {
+        entry.changeListeners.delete(onChange);
+        if (entry.changeListeners.size === 0 && entry.typingListeners.size === 0) {
+          supabase.removeChannel(entry.channel);
+          this.realtimeChannelRegistry.delete(topic);
+        }
+      },
+    } as unknown as RealtimeChannel;
   }
 
   static subscribeToGroupMessages(conversationId: string, onChange: () => void): RealtimeChannel {
-    return supabase
-      .channel(`group-messages-${conversationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_messages', filter: `conversation_id=eq.${conversationId}` }, onChange)
-      .subscribe();
+    const topic = `group-messages-${conversationId}`;
+    const entry = this.getSharedChannel(topic, [{ event: '*', schema: 'public', table: 'group_messages', filter: `conversation_id=eq.${conversationId}` }]);
+    entry.changeListeners.add(onChange);
+
+    return {
+      unsubscribe: () => {
+        entry.changeListeners.delete(onChange);
+        if (entry.changeListeners.size === 0 && entry.typingListeners.size === 0) {
+          supabase.removeChannel(entry.channel);
+          this.realtimeChannelRegistry.delete(topic);
+        }
+      },
+      send: (args: any) => entry.channel.send(args),
+    } as unknown as RealtimeChannel;
   }
 
   static async getClientPostPreviews(postIds: string[]) {
@@ -3447,13 +3631,118 @@ export class DataService {
     return { error };
   }
 
+  // CHAT: attachments, reactions, reply-to-message, typing — see
+  // supabase/chat_features.sql for the schema/storage/RLS these rely on.
+
+  static async uploadMessageAttachment(userId: string, conversationId: string, file: File) {
+    const path = `${userId}/${conversationId}/${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from('message-attachments').upload(path, file, {
+      contentType: file.type,
+      upsert: true,
+    });
+    if (error) {
+      return { path: null, error };
+    }
+    return { path, error: null };
+  }
+
+  static async getMessageAttachmentSignedUrl(path: string) {
+    const { data, error } = await supabase.storage.from('message-attachments').createSignedUrl(path, 3600);
+    return { url: data?.signedUrl || null, error };
+  }
+
+  // One reaction per user per message — picking a new emoji replaces the
+  // old one, picking the same one again removes it (tap-to-toggle, same as
+  // Messenger/iMessage).
+  static async toggleMessageReaction(messageId: string, userId: string, emoji: string) {
+    const existing = await supabase
+      .from('message_reactions' as any)
+      .select('id, emoji')
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if ((existing.data as any)?.emoji === emoji) {
+      const { error } = await supabase.from('message_reactions' as any).delete().eq('message_id', messageId).eq('user_id', userId);
+      return { removed: true, error };
+    }
+
+    const { error } = await supabase
+      .from('message_reactions' as any)
+      .upsert({ message_id: messageId, user_id: userId, emoji } as any, { onConflict: 'message_id,user_id' });
+    return { removed: false, error };
+  }
+
+  static async getMessageReactions(messageIds: string[]) {
+    if (!messageIds.length) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('message_reactions' as any)
+      .select('id, message_id, user_id, emoji')
+      .in('message_id', messageIds);
+    return { data: data || [], error };
+  }
+
+  // Typing indicator: rides the same channel subscribeToMessages already
+  // opens, as an ephemeral Realtime broadcast rather than a database write —
+  // a row per keystroke would be pure churn for state nobody needs a
+  // record of a few seconds later. The channel has to be the same instance
+  // for both listening and sending, so this is a thin wrapper around the
+  // RealtimeChannel the caller already holds from subscribeToMessages,
+  // rather than a method that creates its own (unsubscribed, and so unable
+  // to reliably send) channel per call.
+  static sendTyping(channel: RealtimeChannel, userId: string) {
+    return channel.send({ type: 'broadcast', event: 'typing', payload: { userId } });
+  }
+
   static async getUserConversations(userId: string) {
     const { data, error } = await supabase
       .from('conversations')
       .select('*, participant_1:participant_1_id(id, email, full_name, avatar_url, gender), participant_2:participant_2_id(id, email, full_name, avatar_url, gender)')
       .or(`participant_1_id.eq.${userId},participant_2_id.eq.${userId}`)
       .order('last_message_at', { ascending: false });
-    return { data, error };
+    if (error) return { data, error };
+
+    // ensureConversation() (RequestChatThread, the admin "Message" buttons,
+    // createRequest's negotiation-chat hookup) creates the conversations
+    // row the moment a chat surface is opened/a request is sent, before
+    // either side has actually typed anything — otherwise there'd be
+    // nothing for a first message to attach to. Rather than filtering those
+    // out here (which would make the conversation the caller just navigated
+    // to unresolvable — MessagesPage.tsx/AdminMessagesPage.tsx look up the
+    // active conversation's header info from this same list), every row is
+    // annotated with has_messages so each page can hide empty threads from
+    // its sidebar LIST while still rendering the one actively selected.
+    // messages.conversation_id has no FK Supabase can embed on (it's a
+    // plain column, see supabase/schema.sql), so this is a second query
+    // rather than a `messages!inner(id)` embed.
+    const conversations = data || [];
+    if (!conversations.length) return { data: conversations, error: null };
+
+    const conversationIds = conversations.map((c: any) => c.id);
+    const { data: messageRows } = await supabase
+      .from('messages')
+      .select('conversation_id')
+      .in('conversation_id', conversationIds);
+    const idsWithMessages = new Set((messageRows || []).map((m: any) => m.conversation_id));
+
+    return {
+      data: conversations.map((c: any) => {
+        const myHiddenAt = c.participant_1_id === userId ? c.participant_1_hidden_at : c.participant_2_hidden_at;
+        // "Delete chat" (hide_conversation_for_me) is per-viewer and
+        // un-hides itself once a newer message arrives — last_message_at
+        // is kept current by sendMessage(), so comparing against it is
+        // enough; no separate "latest message" lookup needed. See
+        // supabase/conversation_hide_for_me.sql.
+        const isHiddenForMe = Boolean(myHiddenAt) && new Date(c.last_message_at).getTime() <= new Date(myHiddenAt).getTime();
+        return { ...c, has_messages: idsWithMessages.has(c.id), is_hidden_for_me: isHiddenForMe };
+      }),
+      error: null,
+    };
+  }
+
+  static async hideConversationForMe(conversationId: string) {
+    const { error } = await (supabase as any).rpc('hide_conversation_for_me', { p_conversation_id: conversationId });
+    return { error };
   }
 
   // FAVORITES
@@ -4300,6 +4589,12 @@ export class DataService {
     }
 
     if (!error && request.freelancer_id && request.client_id) {
+      // Light-touch negotiation chat: ensures the client/freelancer thread
+      // exists the moment a request is sent, forced-accepted so it's usable
+      // immediately (not sitting behind the mutual-follow pending gate) -
+      // see RequestChatThread.tsx, embedded on the request card itself.
+      await this.ensureConversation(String(request.client_id), String(request.freelancer_id), { forceAccepted: true });
+
       const clientUser = await this.getUser(String(request.client_id));
       const clientName = clientUser.data?.full_name || 'CreativeHUB';
 
@@ -4391,6 +4686,32 @@ export class DataService {
       return {
         data: [],
         error: new Error(`You can't send a request to ${(blockedRecipient as any)?.full_name || 'this freelancer'}.`),
+      };
+    }
+
+    // A second concurrent booking with the same freelancer is exactly what
+    // was causing real confusion: two active bookings sharing one chat
+    // thread, with the booking-summary card and "who's this message about"
+    // both only ever resolving to whichever one getActiveOrLatestBookingBetweenUsers
+    // happens to pick. Blocked here, the one place every client-initiated
+    // request path (direct profile booking, Event Assistant, Group Request)
+    // goes through — finish or resolve the existing one first.
+    const unfinishedBookingChecks = await Promise.all(
+      recipients.map((recipientId) => this.getActiveOrLatestBookingBetweenUsers(input.clientId, recipientId))
+    );
+    const unfinishedIndex = unfinishedBookingChecks.findIndex((check) => {
+      if (!check.data) return false;
+      const state = getBookingEscrowState(check.data);
+      return !['released', 'refunded', 'annulled'].includes(state);
+    });
+    if (unfinishedIndex !== -1) {
+      const unfinishedRecipientId = recipients[unfinishedIndex];
+      const unfinishedRecipient = (pausedCheck.data || []).find((row: any) => row.id === unfinishedRecipientId);
+      return {
+        data: [],
+        error: new Error(
+          `You already have an unfinished booking with ${(unfinishedRecipient as any)?.full_name || 'this freelancer'}. Finish or resolve it before sending a new request.`
+        ),
       };
     }
 
@@ -5226,12 +5547,34 @@ export class DataService {
     return { data, error };
   }
 
-  static async completeBookingSession(bookingId: string) {
-    return this.updateBooking(bookingId, {
-      status: 'completed',
-      updated_at: new Date().toISOString(),
-    } as any);
+  // Powers MessagesPage.tsx's Friends/Work inbox split. "Work" means there's
+  // ever been an actual booking relationship (requests or bookings) with
+  // that person, not just a conversation — a plain social DM from a
+  // profile's Message button never touches either table, so it correctly
+  // falls into "Friends" instead. Batched into two queries (one per table)
+  // across every candidate at once rather than one round trip per
+  // conversation.
+  static async getWorkRelationshipUserIds(userId: string, otherUserIds: string[]) {
+    const candidates = Array.from(new Set(otherUserIds.filter(Boolean)));
+    if (!candidates.length) return { data: new Set<string>(), error: null };
+
+    const [reqAsClient, reqAsFreelancer, bookAsClient, bookAsFreelancer] = await Promise.all([
+      supabase.from('requests').select('freelancer_id').eq('client_id', userId).in('freelancer_id', candidates),
+      supabase.from('requests').select('client_id').eq('freelancer_id', userId).in('client_id', candidates),
+      supabase.from('bookings').select('freelancer_id').eq('client_id', userId).in('freelancer_id', candidates),
+      supabase.from('bookings').select('client_id').eq('freelancer_id', userId).in('client_id', candidates),
+    ]);
+
+    const workUserIds = new Set<string>();
+    (reqAsClient.data || []).forEach((r: any) => workUserIds.add(r.freelancer_id));
+    (reqAsFreelancer.data || []).forEach((r: any) => workUserIds.add(r.client_id));
+    (bookAsClient.data || []).forEach((r: any) => workUserIds.add(r.freelancer_id));
+    (bookAsFreelancer.data || []).forEach((r: any) => workUserIds.add(r.client_id));
+
+    const error = reqAsClient.error || reqAsFreelancer.error || bookAsClient.error || bookAsFreelancer.error || null;
+    return { data: workUserIds, error };
   }
+
 
   static async hasReviewForBooking(bookingId: string, reviewerId: string) {
     const { data, error } = await supabase

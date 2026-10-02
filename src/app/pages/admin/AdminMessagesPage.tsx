@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Send } from 'lucide-react';
+import { Check, Send, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
@@ -26,6 +26,8 @@ export function AdminMessagesPage() {
   const [listError, setListError] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [isLoadingThread, setIsLoadingThread] = useState(false);
   const [reply, setReply] = useState('');
@@ -121,6 +123,28 @@ export function AdminMessagesPage() {
   const selectedConversation = conversations.find((c) => c.id === selectedId) || null;
   const selectedOther = otherParticipant(selectedConversation);
 
+  // Same reasoning as MessagesPage.tsx's normalizedConversations filter:
+  // ensureConversation() creates the row the moment "Message" is clicked,
+  // before anything's actually been sent - hide it from the list until a
+  // message exists, except the one currently open (so the admin's own
+  // in-progress composer doesn't vanish from the sidebar while typing).
+  const visibleConversations = conversations
+    .filter((c) => !c.is_hidden_for_me)
+    .filter((c) => c.has_messages !== false || c.id === selectedId);
+
+  // "Delete chat" - hides it from this admin's own inbox only; the other
+  // person's copy is untouched, and it reappears if they message again.
+  // See supabase/conversation_hide_for_me.sql.
+  const handleDelete = async (conversationId: string) => {
+    setIsDeleting(true);
+    const response = await DataService.hideConversationForMe(conversationId);
+    setIsDeleting(false);
+    setPendingDeleteId(null);
+    if (response.error) return;
+    setConversations((current) => current.map((c) => (c.id === conversationId ? { ...c, is_hidden_for_me: true } : c)));
+    if (selectedId === conversationId) setSelectedId(null);
+  };
+
   const handleSend = async () => {
     if (!user?.id || !selectedId || !selectedOther?.id || !reply.trim() || isSending) return;
     setIsSending(true);
@@ -151,26 +175,64 @@ export function AdminMessagesPage() {
           {listError && <p className="px-1 text-xs text-red-600">{listError}</p>}
           {isLoadingList ? (
             <p className="px-1 text-sm text-gray-500">Loading...</p>
-          ) : conversations.length === 0 ? (
+          ) : visibleConversations.length === 0 ? (
             <p className="px-1 text-sm text-gray-500">No conversations yet. Message a user from their profile to start one.</p>
           ) : (
             <div className="space-y-1">
-              {conversations.map((c) => {
+              {visibleConversations.map((c) => {
                 const other = otherParticipant(c);
                 return (
-                  <button
+                  <div
                     key={c.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setSelectedId(c.id)}
-                    className={`flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') setSelectedId(c.id);
+                    }}
+                    className={`group flex w-full cursor-pointer items-center gap-2 rounded-xl px-2 py-2 text-left ${
                       selectedId === c.id ? 'bg-sky-100' : 'hover:bg-sky-50'
                     }`}
                   >
                     <img src={other?.avatar_url || DEFAULT_AVATAR_URL} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-gray-900">{other?.full_name || 'Unnamed'}</p>
                       <p className="truncate text-xs text-gray-500">{other?.email}</p>
                     </div>
-                  </button>
+                    {pendingDeleteId === c.id ? (
+                      <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          disabled={isDeleting}
+                          onClick={() => void handleDelete(c.id)}
+                          aria-label="Confirm delete"
+                          className="rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700 disabled:opacity-50"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteId(null)}
+                          aria-label="Cancel delete"
+                          className="rounded-full bg-gray-200 p-1.5 text-gray-700 hover:bg-gray-300"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPendingDeleteId(c.id);
+                        }}
+                        aria-label="Delete conversation"
+                        className="shrink-0 rounded-full p-1.5 text-gray-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 );
               })}
             </div>

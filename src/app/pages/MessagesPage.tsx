@@ -1,6 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router';
-import { ChevronLeft, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react';
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  ClipboardList,
+  Clock,
+  DollarSign,
+  MapPin,
+  MessageCircle,
+  Paperclip,
+  Plus,
+  Reply,
+  Search,
+  Send,
+  Smile,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -8,6 +28,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { dispatchClientPostUpdated, subscribeClientPostUpdated } from '../../lib/clientPostSync';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { formatCurrencyAmount } from '../../lib/currency';
+import { extractLocationMeta } from '../../lib/requestLocation';
+import { getBookingEscrowState } from '../../lib/bookingEscrow';
 import type { Gender } from '../../lib/database.types';
 
 interface MessagesPageProps {
@@ -16,6 +39,7 @@ interface MessagesPageProps {
 }
 
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
+const QUICK_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
 
 function parseSharedPostMessage(content: string) {
   const trimmedContent = content.trim();
@@ -97,10 +121,27 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [newGroupError, setNewGroupError] = useState<string | null>(null);
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [pendingDeleteConversationId, setPendingDeleteConversationId] = useState<string | null>(null);
+  const [isDeletingConversation, setIsDeletingConversation] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [messageInput, setMessageInput] = useState('');
+  const [replyTarget, setReplyTarget] = useState<any | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentSignedUrls, setAttachmentSignedUrls] = useState<Record<string, string>>({});
+  const [reactionsByMessageId, setReactionsByMessageId] = useState<Record<string, Array<{ id: string; user_id: string; emoji: string }>>>({});
+  const [openReactionPickerFor, setOpenReactionPickerFor] = useState<string | null>(null);
+  const [otherIsTyping, setOtherIsTyping] = useState(false);
+  const messagesChannelRef = useRef<ReturnType<typeof DataService.subscribeToMessages> | null>(null);
+  const typingClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentAtRef = useRef(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'friends' | 'work'>('all');
+  const [workUserIds, setWorkUserIds] = useState<Set<string>>(new Set());
+  const [showGroupMembers, setShowGroupMembers] = useState(false);
+  const [groupMemberCategories, setGroupMemberCategories] = useState<Record<string, string>>({});
+  const [showBookingSummaryDetails, setShowBookingSummaryDetails] = useState(false);
+  const [groupEventBooking, setGroupEventBooking] = useState<any | null>(null);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -108,7 +149,6 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [hasSubmittedReview, setHasSubmittedReview] = useState(false);
-  const [isEndingSession, setIsEndingSession] = useState(false);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isHandlingRequest, setIsHandlingRequest] = useState(false);
@@ -138,6 +178,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const fromGroupConversationKey = (value: string) => value.replace(/^group:/, '');
 
   const getClientPostId = (postId: string | null) => postId ? postId.replace(/^client-post-/, '') : null;
+
+  useEffect(() => {
+    setShowGroupMembers(false);
+    setShowBookingSummaryDetails(false);
+  }, [selectedConversationId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -311,6 +356,35 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     };
   }, [groupConversations]);
 
+  // Friends/Work classification needs every person who could plausibly be
+  // "work" as a candidate - both 1:1 conversation partners AND every member
+  // of every group chat (e.g. an event team chat like "Decorator/Florist
+  // team" should read as Work because its members are, even though the
+  // group itself isn't a 1:1 relationship with anyone in particular).
+  // Waits on groupMembersByConversationId since that loads a tick after
+  // groupConversations itself.
+  useEffect(() => {
+    let isMounted = true;
+    if (!user?.id) {
+      setWorkUserIds(new Set());
+      return;
+    }
+
+    const directIds = conversations.map((c: any) => (c.participant_1_id === user.id ? c.participant_2_id : c.participant_1_id));
+    const groupMemberIds = Object.values(groupMembersByConversationId)
+      .flat()
+      .map((m: any) => m.user_id);
+    const candidates = [...directIds, ...groupMemberIds].filter((id) => id && id !== user.id);
+
+    void DataService.getWorkRelationshipUserIds(user.id, candidates).then((response) => {
+      if (isMounted && !response.error) setWorkUserIds(response.data);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [conversations, groupMembersByConversationId, user?.id]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -411,12 +485,41 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             setSharedPostFallbackByMessageId(fallbackByMessageId);
           }
         }
+
+        if (!isGroupConversation && items.length) {
+          const messageIds = items.map((item: any) => String(item.id));
+          const reactionsResponse = await DataService.getMessageReactions(messageIds);
+          if (!reactionsResponse.error && isMounted) {
+            const grouped: Record<string, Array<{ id: string; user_id: string; emoji: string }>> = {};
+            (reactionsResponse.data || []).forEach((row: any) => {
+              const key = String(row.message_id);
+              (grouped[key] = grouped[key] || []).push({ id: row.id, user_id: row.user_id, emoji: row.emoji });
+            });
+            setReactionsByMessageId(grouped);
+          }
+
+          const attachmentPaths = Array.from(new Set(items.map((item: any) => item.attachment_path).filter(Boolean)));
+          if (attachmentPaths.length && isMounted) {
+            const urlEntries = await Promise.all(
+              attachmentPaths.map(async (path: any) => {
+                const signed = await DataService.getMessageAttachmentSignedUrl(path);
+                return [path, signed.url] as const;
+              })
+            );
+            if (isMounted) {
+              setAttachmentSignedUrls(Object.fromEntries(urlEntries.filter(([, url]) => !!url)));
+            }
+          }
+        }
       }
 
       setIsLoadingMessages(false);
     }
 
     loadMessages();
+    setReplyTarget(null);
+    setAttachmentFile(null);
+    setOtherIsTyping(false);
 
     if (!selectedConversationId || !user?.id) {
       return () => {
@@ -432,11 +535,23 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       : selectedConversationId;
     const channel = isGroupConversation
       ? DataService.subscribeToGroupMessages(rawConversationId, () => loadMessages())
-      : DataService.subscribeToMessages(rawConversationId, () => loadMessages());
+      : DataService.subscribeToMessages(
+          rawConversationId,
+          () => loadMessages(),
+          (typingUserId) => {
+            if (typingUserId === user.id) return;
+            setOtherIsTyping(true);
+            if (typingClearTimeoutRef.current) clearTimeout(typingClearTimeoutRef.current);
+            typingClearTimeoutRef.current = setTimeout(() => setOtherIsTyping(false), 3000);
+          }
+        );
+    messagesChannelRef.current = isGroupConversation ? null : (channel as any);
 
     return () => {
       isMounted = false;
       channel.unsubscribe();
+      messagesChannelRef.current = null;
+      if (typingClearTimeoutRef.current) clearTimeout(typingClearTimeoutRef.current);
     };
   }, [selectedConversationId, user?.id]);
 
@@ -626,8 +741,27 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
     loadBookingSession();
 
+    if (!selectedConversationId || isGroupConversationKey(selectedConversationId) || !user?.id) {
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    const selectedRawConversation = conversations.find((item: any) => item.id === selectedConversationId);
+    const participant1 = selectedRawConversation?.participant_1;
+    const participant2 = selectedRawConversation?.participant_2;
+    const otherParticipantId = participant1?.id === user.id ? participant2?.id : participant1?.id;
+
+    // Picks up a new booking created with the same person while this
+    // (possibly now-finished) chat is still open on screen, without
+    // requiring a reload - see subscribeToBookingsBetweenUsers.
+    const bookingChannel = otherParticipantId
+      ? DataService.subscribeToBookingsBetweenUsers(user.id, otherParticipantId, () => loadBookingSession())
+      : null;
+
     return () => {
       isMounted = false;
+      bookingChannel?.unsubscribe();
     };
   }, [selectedConversationId, conversations, user?.id]);
 
@@ -653,6 +787,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             avatarGender: coverMember?.gender || null,
             memberCount: (groupMembersByConversationId[groupId] || []).length,
             lastMessageAt: conversation.last_message_at,
+            relatedGroupRequestId: conversation.related_group_request_id || null,
           };
         }
 
@@ -682,8 +817,35 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       })()
     : null;
 
+  // The group-chat counterpart of bookingSession above - one representative
+  // sibling booking, used only for the shared event summary (title/
+  // schedule/location), never price (kept private per-person).
+  useEffect(() => {
+    let isMounted = true;
+    const groupRequestId = activeConversation?.isGroup ? activeConversation.relatedGroupRequestId : null;
+    if (!groupRequestId) {
+      setGroupEventBooking(null);
+      return;
+    }
+    void DataService.getGroupBookingEventSummary(groupRequestId).then((response) => {
+      if (isMounted && !response.error) setGroupEventBooking(response.data);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [activeConversation?.isGroup, activeConversation?.relatedGroupRequestId]);
+
   const normalizedConversations = useMemo(() => {
     const directConversations = conversations
+      // A conversation ensureConversation() created but nobody has actually
+      // sent a message in yet shouldn't appear as a saved thread in either
+      // person's inbox - except the one currently open, so the person who
+      // just clicked "Message" still sees their own in-progress composer.
+      // is_hidden_for_me reflects "Delete chat" (hide_conversation_for_me) -
+      // always hide it regardless of selection, since deleting the open
+      // conversation also closes it (see handleDeleteConversation).
+      .filter((conversation) => !conversation.is_hidden_for_me)
+      .filter((conversation) => conversation.has_messages !== false || conversation.id === selectedConversationId)
       .map((conversation) => {
         const participant1 = conversation.participant_1;
         const participant2 = conversation.participant_2;
@@ -729,36 +891,74 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       const bTime = new Date(b.lastMessageAt || 0).getTime();
       return bTime - aTime;
     });
-  }, [conversations, groupConversations, groupMembersByConversationId, user?.id]);
+  }, [conversations, groupConversations, groupMembersByConversationId, user?.id, selectedConversationId]);
 
   const showBookingSessionControls = !activeConversation?.isGroup && !!bookingSession && bookingSession.status !== 'completed';
+  // mutualUsers already holds every mutual-follow regardless of
+  // conversation history (see loadMutualUsers) - shared here between the
+  // header's Close Chat/Block choice and the Friends/Work tab split below.
+  const mutualUserIds = new Set(mutualUsers.map((m: any) => String(m.id)));
+  const isActiveConversationMutualFriend =
+    !activeConversation?.isGroup && !!activeConversation?.otherParticipantId && mutualUserIds.has(String(activeConversation.otherParticipantId));
+  // Once a booking wraps up, the header defaulted to "Block" even for a
+  // perfectly normal, successfully completed transaction with a stranger -
+  // Close Chat is the better default there; Block only makes sense to keep
+  // front-and-center for someone who isn't a mutual friend. A genuine
+  // friend you happened to also book keeps the normal (no special button)
+  // experience once the booking's done, same as any other friend chat.
+  const showCloseChatButton = !activeConversation?.isGroup && !!bookingSession && !(bookingSession.status === 'completed' && isActiveConversationMutualFriend);
+  const showBlockButton = !activeConversation?.isGroup && !activeConversation?.isRequestForMe && !showCloseChatButton;
 
-  const handleEndSession = async () => {
-    if (!bookingSession?.id || !user?.id || !activeConversation?.otherParticipantId || !selectedConversationId) {
-      return;
-    }
+  // Reminder card at the top of the thread: "what did we actually agree
+  // to" for a chat tied to a booking, so neither side has to scroll back
+  // through the whole negotiation to check the price/schedule/deliverables.
+  // confirmed_agreement is the immutable snapshot taken at booking creation
+  // (supabase/booking_agreement_lock.sql) - preferred over the live booking
+  // row's own fields, which can be edited afterward, for the same reason
+  // AdminBookingDetail.tsx's "Locked Agreement" card prefers it.
+  const bookingAgreement = bookingSession?.confirmed_agreement || null;
+  // Only once the deposit is actually secured - 'awaiting_deposit' is still
+  // effectively the request stage (accepted but not yet funded, still
+  // cancellable within the 24h window), and 'annulled' never happened at
+  // all, so neither has a real "what was required" worth surfacing yet.
+  const isBookingConfirmed = bookingSession ? !['awaiting_deposit', 'annulled'].includes(getBookingEscrowState(bookingSession)) : false;
+  const bookingSummary = bookingSession && isBookingConfirmed
+    ? {
+        service: bookingAgreement?.service || bookingSession.project_name || 'Booking',
+        price: bookingAgreement?.price ?? bookingSession.budget ?? null,
+        deposit: bookingAgreement?.deposit_amount ?? bookingSession.deposit_amount ?? null,
+        scheduledAt: bookingAgreement?.scheduled_start_at
+          ? new Date(bookingAgreement.scheduled_start_at)
+          : bookingSession.start_date
+          ? new Date(`${bookingSession.start_date}T${bookingSession.start_time || '00:00'}`)
+          : null,
+        location: extractLocationMeta(bookingAgreement?.description) || bookingSession.location_address || null,
+        // acceptRequest.ts writes a literal "Auto-created from request <id>"
+        // placeholder onto bookingSession.deliverables when the original
+        // request had none - not real content, see AdminBookingDetail.tsx's
+        // identical guard.
+        deliverables:
+          bookingAgreement?.deliverables ||
+          (bookingSession.deliverables && !/^Auto-created from request /.test(bookingSession.deliverables) ? bookingSession.deliverables : null),
+      }
+    : null;
 
-    setIsEndingSession(true);
-    setError(null);
-
-    const response = await DataService.completeBookingSession(bookingSession.id);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to end this session.');
-      setIsEndingSession(false);
-      return;
-    }
-
-    await DataService.sendMessage({
-      conversation_id: selectedConversationId,
-      sender_id: user.id,
-      recipient_id: activeConversation.otherParticipantId,
-      content: 'Session ended. Booking marked as completed. Please leave a review for each other.',
-      read: false,
-    } as any);
-
-    setBookingSession(response.data || { ...bookingSession, status: 'completed' });
-    setIsEndingSession(false);
-  };
+  // Group-chat version: title/schedule/location only, deliberately no
+  // price/deliverables - each member's own terms with the client stay
+  // private to their own 1:1 chat, same reasoning as
+  // getGroupBookingEventSummary's comment.
+  const groupAgreement = groupEventBooking?.confirmed_agreement || null;
+  const groupBookingSummary = groupEventBooking
+    ? {
+        title: String(groupAgreement?.service || groupEventBooking.project_name || 'Event').split(' — ')[0],
+        scheduledAt: groupAgreement?.scheduled_start_at
+          ? new Date(groupAgreement.scheduled_start_at)
+          : groupEventBooking.start_date
+          ? new Date(`${groupEventBooking.start_date}T${groupEventBooking.start_time || '00:00'}`)
+          : null,
+        location: extractLocationMeta(groupAgreement?.description) || groupEventBooking.location_address || null,
+      }
+    : null;
 
   const handleSubmitReview = async () => {
     if (!bookingSession?.id || !user?.id || !activeConversation?.otherParticipantId) {
@@ -787,14 +987,35 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     setIsSubmittingReview(false);
   };
 
-  const filteredConversations = normalizedConversations.filter((conversation) =>
-    conversation.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+  // Friends vs Work split: "work" means there's ever been an actual
+  // requests/bookings row with that person (see
+  // DataService.getWorkRelationshipUserIds) - a plain social DM from a
+  // profile's Message button never touches either table, so it lands in
+  // Friends instead. A group chat is classified by its members only: if any
+  // other member has a work relationship with you, the whole group reads
+  // as Work-only (an event team chat like "Decorator/Florist team" should
+  // never show under Friends, even if one of its members also happens to
+  // be a mutual-follow friend of yours) - a group with no such member reads
+  // as Friends. A 1:1 conversation is more forgiving: a genuine mutual-
+  // follow friend you've also booked still belongs in Friends too, not just
+  // Work - booking someone doesn't retroactively un-friend them.
+  const filteredConversations = normalizedConversations
+    .filter((conversation) => conversation.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
+    .filter((conversation) => {
+      if (inboxFilter === 'all') return true;
+      if (conversation.isGroup) {
+        const isWork = (groupMembersByConversationId[String(conversation.rawId)] || []).some((m: any) => workUserIds.has(m.user_id));
+        return inboxFilter === 'work' ? isWork : !isWork;
+      }
+      const isWork = workUserIds.has(conversation.otherParticipantId);
+      if (inboxFilter === 'work') return isWork;
+      return !isWork || mutualUserIds.has(conversation.otherParticipantId);
+    });
   const filteredMessages = filteredConversations.filter((conversation) => !conversation.isRequestForMe);
   const filteredRequests = filteredConversations.filter((conversation) => conversation.isRequestForMe);
 
   const handleSendMessage = async () => {
-    if (!user?.id || !selectedConversationId || !messageInput.trim()) {
+    if (!user?.id || !selectedConversationId || (!messageInput.trim() && !attachmentFile)) {
       return;
     }
 
@@ -806,6 +1027,19 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     const rawConversationId = isGroupConversation
       ? fromGroupConversationKey(selectedConversationId)
       : selectedConversationId;
+
+    let attachmentPath: string | null = null;
+    let attachmentType: string | null = null;
+    if (!isGroupConversation && attachmentFile) {
+      const uploadResponse = await DataService.uploadMessageAttachment(user.id, rawConversationId, attachmentFile);
+      if (uploadResponse.error || !uploadResponse.path) {
+        setError('Unable to upload the attachment.');
+        setIsSending(false);
+        return;
+      }
+      attachmentPath = uploadResponse.path;
+      attachmentType = attachmentFile.type;
+    }
 
     const response = isGroupConversation
       ? await DataService.sendGroupMessage({
@@ -819,6 +1053,9 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           recipient_id: activeConversation?.otherParticipantId,
           content: trimmedMessage,
           read: false,
+          attachment_path: attachmentPath,
+          attachment_type: attachmentType,
+          reply_to_message_id: replyTarget?.id || null,
         } as any);
 
     if (response.error || !response.data) {
@@ -827,7 +1064,16 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       return;
     }
 
+    if (attachmentPath) {
+      const signed = await DataService.getMessageAttachmentSignedUrl(attachmentPath);
+      if (signed.url) {
+        setAttachmentSignedUrls((current) => ({ ...current, [attachmentPath as string]: signed.url as string }));
+      }
+    }
+
     setMessages((current) => (current.some((item) => item.id === response.data.id) ? current : [...current, response.data]));
+    setReplyTarget(null);
+    setAttachmentFile(null);
 
     if (isGroupConversation) {
       setGroupConversations((current) =>
@@ -853,6 +1099,22 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
     setMessageInput('');
     setIsSending(false);
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    if (!user?.id) return;
+    setOpenReactionPickerFor(null);
+    // Optimistic: toggleMessageReaction's own semantics (same emoji again =
+    // remove, different emoji = replace) are mirrored here so the UI
+    // doesn't wait on a round trip before showing the tap registered.
+    setReactionsByMessageId((current) => {
+      const existing = current[messageId] || [];
+      const mine = existing.find((r) => r.user_id === user.id);
+      const withoutMine = existing.filter((r) => r.user_id !== user.id);
+      const next = mine?.emoji === emoji ? withoutMine : [...withoutMine, { id: `optimistic-${messageId}`, user_id: user.id, emoji }];
+      return { ...current, [messageId]: next };
+    });
+    await DataService.toggleMessageReaction(messageId, user.id, emoji);
   };
 
   const openMutualConversation = async (mutualUserId: string) => {
@@ -927,6 +1189,26 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     }
     setConversations((current) => current.filter((conversation) => conversation.id !== selectedConversationId));
     setSelectedConversationId(null);
+  };
+
+  // "Delete chat" - hides it from this user's own inbox only (never
+  // blocks, never deletes the other person's copy); it quietly comes back
+  // once they send something new. See supabase/conversation_hide_for_me.sql.
+  const handleDeleteConversation = async (conversationId: string) => {
+    setIsDeletingConversation(true);
+    const response = await DataService.hideConversationForMe(conversationId);
+    setIsDeletingConversation(false);
+    setPendingDeleteConversationId(null);
+    if (response.error) {
+      setError((response.error as any)?.message || 'Unable to delete this conversation.');
+      return;
+    }
+    setConversations((current) =>
+      current.map((conversation) => (conversation.id === conversationId ? { ...conversation, is_hidden_for_me: true } : conversation))
+    );
+    if (selectedConversationId === conversationId) {
+      setSelectedConversationId(null);
+    }
   };
 
   const handleAcceptRequest = async () => {
@@ -1049,7 +1331,51 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   <Users className="h-5 w-5" />
                 </button>
               </div>
+              <div className="mt-2.5 flex gap-1.5">
+                {([
+                  { id: 'all', label: 'All' },
+                  { id: 'friends', label: 'Friends' },
+                  { id: 'work', label: 'Work' },
+                ] as const).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setInboxFilter(tab.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      inboxFilter === tab.id ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'bg-sky-50 text-gray-600 hover:bg-sky-100'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {!searchQuery.trim() && mutualUsers.length > 0 && (
+              <div className="border-b border-sky-100 bg-sky-50/40 px-4 py-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Start a chat</p>
+                <div className="flex gap-3 overflow-x-auto pb-1">
+                  {mutualUsers.map((mutual) => (
+                    <button
+                      key={mutual.id}
+                      type="button"
+                      onClick={() => void openMutualConversation(mutual.id)}
+                      className="flex w-16 shrink-0 flex-col items-center gap-1 group"
+                    >
+                      <Avatar
+                        src={mutual.avatar_url || fallbackProfileImage}
+                        alt={mutual.full_name || mutual.email}
+                        gender={mutual.gender}
+                        sizeClassName="h-14 w-14 rounded-full ring-2 ring-white shadow-sm transition-all group-hover:ring-sky-300"
+                      />
+                      <span className="w-full truncate text-center text-[11px] font-medium text-gray-700">
+                        {(mutual.full_name || mutual.email || '').split(' ')[0]}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto">
               {isLoadingConversations && (
@@ -1059,7 +1385,13 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               )}
 
               {!isLoadingConversations && filteredConversations.length === 0 && (
-                <div className="p-6 text-center text-sm text-gray-600">No conversations yet. Pick a mutual below to start one.</div>
+                <div className="p-6 text-center text-sm text-gray-600">
+                  {inboxFilter === 'work'
+                    ? 'No work conversations yet — these show up once you have a request or booking with someone.'
+                    : inboxFilter === 'friends'
+                    ? 'No friend conversations yet.'
+                    : 'No conversations yet. Pick a mutual below to start one.'}
+                </div>
               )}
 
               {filteredRequests.length > 0 && (
@@ -1091,10 +1423,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               )}
 
               {filteredMessages.map((conversation) => (
-                <button
+                <div
                   key={conversation.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setSelectedConversationId(conversation.id)}
-                  className={`w-full p-4 flex items-center gap-3 text-left border-b border-sky-50 hover:bg-sky-50 transition-colors ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') setSelectedConversationId(conversation.id);
+                  }}
+                  className={`group w-full p-4 flex items-center gap-3 text-left border-b border-sky-50 hover:bg-sky-50 transition-colors cursor-pointer ${
                     selectedConversationId === conversation.id ? 'bg-sky-50 border-l-4 border-l-sky-500' : ''
                   }`}
                 >
@@ -1112,35 +1449,42 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                         : 'No messages yet'}
                     </p>
                   </div>
-                </button>
+                  {pendingDeleteConversationId === conversation.id ? (
+                    <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        disabled={isDeletingConversation}
+                        onClick={() => void handleDeleteConversation(conversation.id)}
+                        aria-label="Confirm delete"
+                        className="rounded-full bg-red-600 p-1.5 text-white hover:bg-red-700 disabled:opacity-50"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteConversationId(null)}
+                        aria-label="Cancel delete"
+                        className="rounded-full bg-gray-200 p-1.5 text-gray-700 hover:bg-gray-300"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPendingDeleteConversationId(conversation.id);
+                      }}
+                      aria-label="Delete conversation"
+                      className="shrink-0 rounded-full p-1.5 text-gray-300 opacity-0 hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               ))}
 
-              {!searchQuery.trim() && mutualUsers.length > 0 && (
-                <div className="border-t border-sky-100">
-                  <div className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">Mutuals</div>
-                  {mutualUsers.map((mutual) => (
-                    <button
-                      key={mutual.id}
-                      type="button"
-                      onClick={() => void openMutualConversation(mutual.id)}
-                      className="w-full border-b border-sky-50 px-4 py-3 text-left hover:bg-sky-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          src={mutual.avatar_url || fallbackProfileImage}
-                          alt={mutual.full_name || mutual.email}
-                          gender={mutual.gender}
-                          sizeClassName="h-10 w-10 ring-2 ring-white shadow-sm rounded-full"
-                        />
-                        <div className="min-w-0">
-                          <h3 className="truncate font-semibold text-gray-900">{mutual.full_name || mutual.email}</h3>
-                          <p className="truncate text-xs text-gray-500">Tap to message</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
@@ -1189,23 +1533,39 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   </button>
                   <div>
                     <h2 className="font-bold text-gray-900">{activeConversation.name}</h2>
-                    <p className="text-sm text-gray-600">
-                      {activeConversation.isGroup
-                        ? `${Math.max(0, Number(activeConversation.memberCount || 0))} members`
-                        : 'Direct conversation'}
-                    </p>
+                    {activeConversation.isGroup ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowGroupMembers(true);
+                          const memberIds = (groupMembersByConversationId[String(activeConversation.rawId)] || []).map((m: any) => m.user_id);
+                          void DataService.getGroupMemberCategories({
+                            groupRequestId: activeConversation.relatedGroupRequestId,
+                            memberIds,
+                          }).then((response) => {
+                            if (!response.error) setGroupMemberCategories(response.data);
+                          });
+                        }}
+                        className="text-sm text-sky-600 underline-offset-2 hover:underline"
+                      >
+                        {Math.max(0, Number(activeConversation.memberCount || 0))} members · View
+                      </button>
+                    ) : (
+                      <p className="text-sm text-gray-600">Direct conversation</p>
+                    )}
                   </div>
-                  {showBookingSessionControls && (
+                  {showCloseChatButton && selectedConversationId && (
                     <button
                       type="button"
-                      onClick={() => void handleEndSession()}
-                      disabled={isEndingSession}
-                      className="ml-auto rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+                      onClick={() => void handleDeleteConversation(selectedConversationId)}
+                      disabled={isDeletingConversation}
+                      title="Hides this chat from your inbox - the booking itself is only finished through its own tracking page, never from here"
+                      className="ml-auto rounded-lg border border-sky-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-sky-50 disabled:opacity-60"
                     >
-                      {isEndingSession ? 'Ending...' : 'End Session'}
+                      {isDeletingConversation ? 'Closing...' : 'Close Chat'}
                     </button>
                   )}
-                  {!activeConversation?.isGroup && !activeConversation?.isRequestForMe && !showBookingSessionControls && (
+                  {showBlockButton && (
                     <button
                       type="button"
                       onClick={() => void handleBlockContact()}
@@ -1216,6 +1576,89 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     </button>
                   )}
                 </div>
+
+                {!activeConversation?.isGroup && bookingSummary && (
+                  <div className="border-b border-sky-100 bg-sky-50/60 px-4 py-2.5 sm:px-6">
+                    <button
+                      type="button"
+                      onClick={() => setShowBookingSummaryDetails((v) => !v)}
+                      className="flex w-full items-center justify-between gap-2 text-left"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <ClipboardList className="h-4 w-4 shrink-0 text-sky-600" />
+                        <span className="truncate text-sm font-semibold text-gray-900">{bookingSummary.service}</span>
+                        <span className="hidden shrink-0 text-xs text-gray-500 sm:inline">
+                          {bookingSummary.price != null && `· ${formatCurrencyAmount(Number(bookingSummary.price), 'THB')}`}
+                          {bookingSummary.scheduledAt && ` · ${bookingSummary.scheduledAt.toLocaleDateString()}`}
+                        </span>
+                      </div>
+                      {showBookingSummaryDetails ? (
+                        <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+                      )}
+                    </button>
+                    {showBookingSummaryDetails && (
+                      <div className="mt-2.5 grid grid-cols-1 gap-2 text-xs text-gray-700 sm:grid-cols-2">
+                        {bookingSummary.price != null && (
+                          <div className="flex items-center gap-1.5">
+                            <DollarSign className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span>
+                              {formatCurrencyAmount(Number(bookingSummary.price), 'THB')}
+                              {bookingSummary.deposit != null && ` (deposit ${formatCurrencyAmount(Number(bookingSummary.deposit), 'THB')})`}
+                            </span>
+                          </div>
+                        )}
+                        {bookingSummary.scheduledAt && (
+                          <div className="flex items-center gap-1.5">
+                            <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span>{bookingSummary.scheduledAt.toLocaleDateString()}</span>
+                            <Clock className="ml-1 h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span>{bookingSummary.scheduledAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                        {bookingSummary.location && (
+                          <div className="flex items-center gap-1.5 sm:col-span-2">
+                            <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                            <span className="truncate">{bookingSummary.location}</span>
+                          </div>
+                        )}
+                        {bookingSummary.deliverables && (
+                          <div className="sm:col-span-2">
+                            <p className="font-semibold text-gray-900">What's included:</p>
+                            <p className="whitespace-pre-wrap text-gray-600">{bookingSummary.deliverables}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeConversation?.isGroup && groupBookingSummary && (
+                  <div className="border-b border-sky-100 bg-sky-50/60 px-4 py-2.5 sm:px-6">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-700">
+                      <span className="flex items-center gap-1.5 font-semibold text-gray-900">
+                        <ClipboardList className="h-4 w-4 text-sky-600" />
+                        {groupBookingSummary.title}
+                      </span>
+                      {groupBookingSummary.scheduledAt && (
+                        <span className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                          {groupBookingSummary.scheduledAt.toLocaleDateString()}
+                          <Clock className="ml-1 h-3.5 w-3.5 text-gray-400" />
+                          {groupBookingSummary.scheduledAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {groupBookingSummary.location && (
+                        <span className="flex min-w-0 items-center gap-1.5 text-xs text-gray-600">
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          <span className="truncate">{groupBookingSummary.location}</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-gray-400">Each member's price and deliverables stay private to their own chat with the client.</p>
+                  </div>
+                )}
 
                 {!activeConversation?.isGroup && activeConversation?.isRequestForMe ? (
                   <div className="border-b border-amber-200 bg-amber-50 px-6 py-3">
@@ -1316,7 +1759,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     <div className="text-center text-sm text-gray-600">No messages yet. Start the conversation below.</div>
                   )}
 
-                  {messages.map((message) => {
+                  {messages.map((message, messageIndex) => {
                     const isMine = message.sender_id === user?.id;
                     const sharedPost = parseSharedPostMessage(String(message.content || ''));
                     const sharedPostAuthorId = sharedPost?.authorId;
@@ -1344,8 +1787,64 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                       || fallbackProfileImage;
                     const resolvedAuthorGender = previewFromDb?.author_gender ?? fallbackFromAuthorCaption?.author_gender ?? senderGender ?? null;
                     const resolvedAuthorName = sharedPost?.authorName || previewFromDb?.author_name || fallbackFromAuthorCaption?.author_name || 'Shared post';
+                    const replyToMessage = message.reply_to_message_id
+                      ? messages.find((item) => String(item.id) === String(message.reply_to_message_id))
+                      : null;
+                    const messageReactions = reactionsByMessageId[String(message.id)] || [];
+                    const myReactionEmoji = messageReactions.find((r) => r.user_id === user?.id)?.emoji;
+                    const groupedReactions = messageReactions.reduce((acc: Record<string, number>, r) => {
+                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                      return acc;
+                    }, {});
+                    const isLastOwnMessage = isMine && !activeConversation?.isGroup && messages[messages.length - 1]?.id === message.id;
+                    const attachmentUrl = message.attachment_path ? attachmentSignedUrls[message.attachment_path] : null;
+                    const isImageAttachment = message.attachment_type?.startsWith('image/');
+                    // Only on the first message of a consecutive run from the
+                    // same sender - showing it on every single bubble would
+                    // be clutter, but in a group chat especially, not
+                    // showing it at all made it genuinely ambiguous who sent
+                    // what once more than one other person was in the thread.
+                    const showSenderAvatar = !isMine && (messageIndex === 0 || messages[messageIndex - 1].sender_id !== message.sender_id);
                     return (
-                      <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                      <div key={message.id} className={`group/msg flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+                        {!isMine && activeConversation?.isGroup && showSenderAvatar && (
+                          <p className="ml-9 mb-0.5 text-[11px] font-semibold text-gray-500">
+                            {senderMember?.users?.full_name || 'Member'}
+                          </p>
+                        )}
+                        <div className="flex max-w-[85%] items-end gap-1">
+                          {!isMine && (
+                            <div className="h-7 w-7 shrink-0 self-end">
+                              {showSenderAvatar && (
+                                <Avatar
+                                  src={senderAvatar || fallbackProfileImage}
+                                  alt={activeConversation?.isGroup ? senderMember?.users?.full_name || 'Member' : activeConversation?.name || 'Member'}
+                                  gender={senderGender}
+                                  sizeClassName="h-7 w-7 rounded-full ring-2 ring-white shadow-sm"
+                                />
+                              )}
+                            </div>
+                          )}
+                          {!isMine && !activeConversation?.isGroup && (
+                            <div className="mb-1 flex shrink-0 gap-0.5 opacity-0 group-hover/msg:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() => setReplyTarget(message)}
+                                aria-label="Reply"
+                                className="rounded-full p-1.5 text-gray-300 hover:bg-sky-50 hover:text-sky-600"
+                              >
+                                <Reply className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setOpenReactionPickerFor((current) => (current === message.id ? null : message.id))}
+                                aria-label="React"
+                                className="rounded-full p-1.5 text-gray-300 hover:bg-sky-50 hover:text-sky-600"
+                              >
+                                <Smile className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
                         <div
                           className={`max-w-xl px-4 py-3 rounded-2xl ${
                             // Both "white", but a shade apart so sent vs received bubbles
@@ -1355,6 +1854,33 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               : 'bg-white text-gray-900 border border-sky-100 rounded-tl-none shadow-sm'
                           }`}
                         >
+                          {replyToMessage && (
+                            <div className={`mb-2 rounded-lg border-l-2 px-2 py-1 ${isMine ? 'border-white/50 bg-white/10' : 'border-sky-300 bg-sky-50'}`}>
+                              <p className={`truncate text-xs ${isMine ? 'text-white/80' : 'text-gray-600'}`}>
+                                {replyToMessage.content || (replyToMessage.attachment_path ? 'Attachment' : '')}
+                              </p>
+                            </div>
+                          )}
+                          {message.attachment_path && (
+                            <div className="mb-2">
+                              {isImageAttachment && attachmentUrl ? (
+                                <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                                  <img src={attachmentUrl} alt="Attachment" className="max-h-64 rounded-xl object-cover" />
+                                </a>
+                              ) : attachmentUrl ? (
+                                <a
+                                  href={attachmentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold underline ${isMine ? 'text-white' : 'text-sky-700'}`}
+                                >
+                                  <Paperclip className="h-3.5 w-3.5" /> View attachment
+                                </a>
+                              ) : (
+                                <p className="text-xs italic opacity-70">Loading attachment…</p>
+                              )}
+                            </div>
+                          )}
                           {sharedPost && (
                             <div className={`mb-3 overflow-hidden rounded-3xl border shadow-lg ${isMine ? 'border-sky-200 bg-white text-gray-900' : 'border-sky-100 bg-white text-gray-900'}`}>
                               <div className="flex items-start justify-between gap-3 px-4 py-3">
@@ -1431,7 +1957,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               </div>
                             </div>
                           )}
-                          {!sharedPost ? (
+                          {!sharedPost && message.content ? (
                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                           ) : null}
                           <p className={`mt-2 text-xs ${isMine ? 'text-white/70' : 'text-gray-500'}`}>
@@ -1443,6 +1969,64 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                               : ''}
                           </p>
                         </div>
+                          {isMine && !activeConversation?.isGroup && (
+                            <div className="mb-1 flex shrink-0 gap-0.5 opacity-0 group-hover/msg:opacity-100">
+                              <button
+                                type="button"
+                                onClick={() => setOpenReactionPickerFor((current) => (current === message.id ? null : message.id))}
+                                aria-label="React"
+                                className="rounded-full p-1.5 text-gray-300 hover:bg-sky-50 hover:text-sky-600"
+                              >
+                                <Smile className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setReplyTarget(message)}
+                                aria-label="Reply"
+                                className="rounded-full p-1.5 text-gray-300 hover:bg-sky-50 hover:text-sky-600"
+                              >
+                                <Reply className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {openReactionPickerFor === message.id && (
+                          <div className={`mt-1 flex gap-1 rounded-full border border-sky-100 bg-white px-2 py-1 shadow-sm ${isMine ? 'mr-1' : 'ml-1'}`}>
+                            {QUICK_REACTION_EMOJIS.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => void handleToggleReaction(String(message.id), emoji)}
+                                className={`rounded-full p-1 text-base hover:bg-sky-50 ${myReactionEmoji === emoji ? 'bg-sky-100' : ''}`}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {Object.keys(groupedReactions).length > 0 && (
+                          <div className={`mt-1 flex gap-1 ${isMine ? 'mr-1' : 'ml-1'}`}>
+                            {Object.entries(groupedReactions).map(([emoji, count]) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => void handleToggleReaction(String(message.id), emoji)}
+                                className={`flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-xs ${
+                                  myReactionEmoji === emoji ? 'border-sky-300 bg-sky-50' : 'border-sky-100 bg-white'
+                                }`}
+                              >
+                                <span>{emoji}</span>
+                                {count > 1 && <span className="text-gray-500">{count}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
+                        {isLastOwnMessage && message.read && (
+                          <p className="mr-1 mt-0.5 text-[10px] text-gray-400">Seen</p>
+                        )}
                       </div>
                     );
                   })}
@@ -1450,11 +2034,54 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                 </div>
 
                 <div className="p-4 border-t border-sky-100 bg-white">
+                  {otherIsTyping && !activeConversation?.isGroup && (
+                    <p className="mb-2 px-1 text-xs font-medium text-sky-600">{activeConversation?.name} is typing…</p>
+                  )}
+                  {replyTarget && (
+                    <div className="mb-2 flex items-start justify-between gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-sky-700">Replying to {replyTarget.sender_id === user?.id ? 'yourself' : activeConversation?.name}</p>
+                        <p className="truncate text-xs text-gray-600">{replyTarget.content || (replyTarget.attachment_path ? 'Attachment' : '')}</p>
+                      </div>
+                      <button onClick={() => setReplyTarget(null)} className="shrink-0 text-gray-400 hover:text-gray-700" aria-label="Cancel reply">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {attachmentFile && (
+                    <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2">
+                      <p className="truncate text-xs text-gray-700">{attachmentFile.name}</p>
+                      <button onClick={() => setAttachmentFile(null)} className="shrink-0 text-gray-400 hover:text-gray-700" aria-label="Remove attachment">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
+                    {!activeConversation?.isGroup && (
+                      <label className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-full border border-sky-100 text-gray-500 hover:bg-sky-50">
+                        <Paperclip className="h-5 w-5" />
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          disabled={!activeConversation}
+                          onChange={(event) => setAttachmentFile(event.target.files?.[0] || null)}
+                        />
+                      </label>
+                    )}
                     <input
                       type="text"
                       value={messageInput}
-                      onChange={(event) => setMessageInput(event.target.value)}
+                      onChange={(event) => {
+                        setMessageInput(event.target.value);
+                        // Throttled, not debounced - at most once every 2s
+                        // while actively typing, not just once at the end.
+                        const now = Date.now();
+                        if (messagesChannelRef.current && now - lastTypingSentAtRef.current > 2000 && user?.id) {
+                          lastTypingSentAtRef.current = now;
+                          DataService.sendTyping(messagesChannelRef.current, user.id);
+                        }
+                      }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault();
@@ -1467,7 +2094,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     />
                     <button
                       onClick={() => void handleSendMessage()}
-                      disabled={!activeConversation || !messageInput.trim() || isSending}
+                      disabled={!activeConversation || (!messageInput.trim() && !attachmentFile) || isSending}
                       className="p-3 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-full shadow-md shadow-sky-500/30 hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Send className="w-5 h-5" />
@@ -1624,6 +2251,56 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           </div>
         </div>
       </div>
+
+      {showGroupMembers && activeConversation?.isGroup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowGroupMembers(false)}>
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">{activeConversation.name}</h3>
+              <button onClick={() => setShowGroupMembers(false)} aria-label="Close" className="rounded-full p-1.5 text-gray-400 hover:bg-sky-50 hover:text-gray-700">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
+              {Math.max(0, Number(activeConversation.memberCount || 0))} members
+            </p>
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {(groupMembersByConversationId[String(activeConversation.rawId)] || []).map((member: any) => (
+                <button
+                  key={member.user_id}
+                  type="button"
+                  onClick={() => {
+                    setShowGroupMembers(false);
+                    onViewProfile?.(member.user_id);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-sky-50"
+                >
+                  <Avatar
+                    src={member.users?.avatar_url || fallbackProfileImage}
+                    alt={member.users?.full_name || member.users?.email || 'Member'}
+                    gender={member.users?.gender}
+                    sizeClassName="h-10 w-10 rounded-full ring-2 ring-white shadow-sm"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900">
+                      {member.users?.full_name || member.users?.email || 'Member'}
+                      {String(member.user_id) === String(user?.id) && <span className="ml-1 font-normal text-gray-400">(you)</span>}
+                    </p>
+                    {groupMemberCategories[member.user_id] ? (
+                      <p className="truncate text-xs text-sky-600">{groupMemberCategories[member.user_id]}</p>
+                    ) : workUserIds.has(member.user_id) ? (
+                      <p className="text-xs text-sky-600">Work contact</p>
+                    ) : null}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showNewGroupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
