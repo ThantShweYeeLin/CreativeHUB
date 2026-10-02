@@ -9,12 +9,18 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import apiRouter from './routes/index.js';
 import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
+import { corsOptions } from './lib/cors.js';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
-app.use(cors({ origin: true, credentials: true }));
+// Vercel sits in front of this as a proxy - without trust proxy, req.ip
+// (and every rate limiter keyed on it) sees Vercel's own address for every
+// caller instead of the real client IP, making IP-based rate limiting
+// either broken or a single shared bucket for all traffic.
+app.set('trust proxy', 1);
+app.use(cors(corsOptions));
 // Omise signs the exact request bytes, so the webhook gets the RAW body and
 // must be registered before express.json() consumes it. It is deliberately
 // outside requireAuth: Omise has no user session - the signature is the auth.
