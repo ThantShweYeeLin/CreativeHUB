@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  MessageCircle,
   ShieldAlert,
   ShieldCheck,
   CalendarClock,
@@ -20,7 +21,7 @@ import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
 import { PageBackdrop } from '../../../components/common/PageBackdrop';
 import { AdminNotificationBell, useAdminNotifications } from './AdminNotificationBell';
 
-export type AdminSection = 'overview' | 'users' | 'bookings' | 'earnings' | 'disputes' | 'attendance' | 'reports' | 'audit-logs';
+export type AdminSection = 'overview' | 'users' | 'bookings' | 'earnings' | 'disputes' | 'attendance' | 'reports' | 'messages' | 'audit-logs';
 
 export interface AdminBreadcrumbItem {
   label: string;
@@ -42,6 +43,7 @@ const NAV_GROUPS: Array<{ label: string | null; items: NavItem[] }> = [
       { id: 'users', label: 'Users', path: '/admin/users', icon: UsersIcon },
       { id: 'bookings', label: 'Bookings', path: '/admin/bookings', icon: CalendarClock },
       { id: 'earnings', label: 'Earnings', path: '/admin/earnings', icon: DollarSign },
+      { id: 'messages', label: 'Messages', path: '/admin/messages', icon: MessageCircle },
     ],
   },
   {

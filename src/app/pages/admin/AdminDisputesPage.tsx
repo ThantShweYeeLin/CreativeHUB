@@ -92,7 +92,11 @@ export function AdminDisputesPage() {
                       <p className="font-bold text-gray-900">
                         {b.project_name} — {b.client?.full_name || 'Client'} vs {b.freelancer?.full_name || 'Freelancer'}
                       </p>
-                      <p className="text-xs text-gray-500">Deposit {formatCurrencyAmount(deposit, 'THB')}</p>
+                      <p className="text-xs text-gray-500">
+                        Deposit {formatCurrencyAmount(deposit, 'THB')}
+                        {' · '}
+                        Reported by {b.dispute_reporter_role === 'client' ? (b.client?.full_name || 'the client') : b.dispute_reporter_role === 'freelancer' ? (b.freelancer?.full_name || 'the freelancer') : 'unknown'}
+                      </p>
                     </div>
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${

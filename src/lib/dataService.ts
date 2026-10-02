@@ -2199,7 +2199,8 @@ export class DataService {
       .in('dispute_status', ['open', 'under_admin_review'])
       .order('dispute_status', { ascending: true })
       .order('created_at', { ascending: false });
-    return { data: data || [], error };
+    if (error) return { data: [], error };
+    return { data: await this.withDisputeMeta(data || []), error: null };
   }
 
   static async getResolvedDisputesForAdmin() {
@@ -2212,28 +2213,41 @@ export class DataService {
       .eq('dispute_status', 'resolved')
       .order('created_at', { ascending: false })
       .limit(100);
-    return { data: data || [], error };
+    if (error) return { data: [], error };
+    return { data: await this.withDisputeMeta(data || []), error: null };
   }
 
-  // A dispute's category isn't a column on `bookings` itself — it lives on
-  // the initiating 'complain' booking_event (same lookup
-  // getUserDisputedBookings already does client-side).
-  private static async withDisputeCategory(bookings: any[]) {
+  // A dispute's category and reporter aren't columns on `bookings` itself —
+  // they live on the initiating 'complain' booking_event (same lookup
+  // getUserDisputedBookings already does client-side). The admin list pages
+  // (AdminDisputesPage, AttendanceReportsTab) need to show who filed each
+  // one without opening its detail page first — see AdminBookingDetail.tsx's
+  // own equivalent per-booking lookup for the detail view. Only a
+  // client/freelancer actor counts as the reporter — an admin's own
+  // 'complain' row (from admin_request_more_evidence) never set a category
+  // either, so ordering by created_at and skipping non-participant actors
+  // gets the real original filing even if an admin row sorts first.
+  private static async withDisputeMeta(bookings: any[]) {
     if (!bookings.length) return bookings;
     const bookingIds = bookings.map((b: any) => b.id);
     const { data: events } = await (supabase as any)
       .from('booking_events')
-      .select('booking_id, category')
+      .select('booking_id, category, actor, created_at')
       .eq('action', 'complain')
-      .in('booking_id', bookingIds);
+      .in('booking_id', bookingIds)
+      .order('created_at', { ascending: true });
 
-    const categoryByBooking: Record<string, string> = {};
+    const metaByBooking: Record<string, { category: string | null; reporterRole: 'client' | 'freelancer' }> = {};
     for (const event of events || []) {
-      if (!categoryByBooking[event.booking_id]) {
-        categoryByBooking[event.booking_id] = event.category;
+      if (!metaByBooking[event.booking_id] && (event.actor === 'client' || event.actor === 'freelancer')) {
+        metaByBooking[event.booking_id] = { category: event.category || null, reporterRole: event.actor };
       }
     }
-    return bookings.map((b: any) => ({ ...b, dispute_category: categoryByBooking[b.id] || null }));
+    return bookings.map((b: any) => ({
+      ...b,
+      dispute_category: metaByBooking[b.id]?.category || null,
+      dispute_reporter_role: metaByBooking[b.id]?.reporterRole || null,
+    }));
   }
 
   // No-show/late-arrival reports used to have their own separate
@@ -2248,11 +2262,12 @@ export class DataService {
   private static readonly ATTENDANCE_DISPUTE_CATEGORIES = ['no_show', 'late_arrival'];
 
   static async getAllAttendanceDisputesForAdmin() {
+    // getAllDisputedBookingsForAdmin() already attaches dispute_category via
+    // withDisputeMeta — no need to fetch booking_events a second time.
     const response = await this.getAllDisputedBookingsForAdmin();
     if (response.error) return response;
-    const withCategory = await this.withDisputeCategory(response.data);
     return {
-      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      data: response.data.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
       error: null,
     };
   }
@@ -2260,9 +2275,8 @@ export class DataService {
   static async getResolvedAttendanceDisputesForAdmin() {
     const response = await this.getResolvedDisputesForAdmin();
     if (response.error) return response;
-    const withCategory = await this.withDisputeCategory(response.data);
     return {
-      data: withCategory.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
+      data: response.data.filter((b: any) => this.ATTENDANCE_DISPUTE_CATEGORIES.includes(b.dispute_category)),
       error: null,
     };
   }

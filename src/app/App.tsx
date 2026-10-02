@@ -63,6 +63,7 @@ const AdminBookingsPage = lazy(() => import('./pages/admin/AdminBookingsPage').t
 const AdminBookingDetailPage = lazy(() => import('./pages/admin/AdminBookingDetailPage').then((m) => ({ default: m.AdminBookingDetailPage })));
 const AdminEarningsPage = lazy(() => import('./pages/admin/AdminEarningsPage').then((m) => ({ default: m.AdminEarningsPage })));
 const AdminDisputesPage = lazy(() => import('./pages/admin/AdminDisputesPage').then((m) => ({ default: m.AdminDisputesPage })));
+const AdminMessagesPage = lazy(() => import('./pages/admin/AdminMessagesPage').then((m) => ({ default: m.AdminMessagesPage })));
 const AdminDisputeDetailPage = lazy(() => import('./pages/admin/AdminDisputeDetailPage').then((m) => ({ default: m.AdminDisputeDetailPage })));
 const AdminAttendancePage = lazy(() => import('./pages/admin/AdminAttendancePage').then((m) => ({ default: m.AdminAttendancePage })));
 const AdminAttendanceDetailPage = lazy(() => import('./pages/admin/AdminAttendanceDetailPage').then((m) => ({ default: m.AdminAttendanceDetailPage })));
@@ -523,6 +524,7 @@ export default function App() {
           <Route path="/admin/earnings" element={<AdminRoute><AdminEarningsPage /></AdminRoute>} />
           <Route path="/admin/disputes" element={<AdminRoute><AdminDisputesPage /></AdminRoute>} />
           <Route path="/admin/disputes/:id" element={<AdminRoute><AdminDisputeDetailPage /></AdminRoute>} />
+          <Route path="/admin/messages" element={<AdminRoute><AdminMessagesPage /></AdminRoute>} />
           <Route path="/admin/attendance" element={<AdminRoute><AdminAttendancePage /></AdminRoute>} />
           <Route path="/admin/attendance/:id" element={<AdminRoute><AdminAttendanceDetailPage /></AdminRoute>} />
           <Route path="/admin/reports" element={<AdminRoute><AdminReportsPage /></AdminRoute>} />

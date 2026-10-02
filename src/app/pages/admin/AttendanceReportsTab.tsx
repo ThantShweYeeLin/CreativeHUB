@@ -98,6 +98,8 @@ export function AttendanceReportsTab() {
                     </p>
                     <p className="text-xs text-gray-500">
                       {DISPUTE_CATEGORY_LABEL[b.dispute_category] || b.dispute_category} · Deposit {formatCurrencyAmount(deposit, 'THB')}
+                      {' · '}
+                      Reported by {b.dispute_reporter_role === 'client' ? (b.client?.full_name || 'the client') : b.dispute_reporter_role === 'freelancer' ? (b.freelancer?.full_name || 'the freelancer') : 'unknown'}
                     </p>
                   </div>
                   <span

@@ -116,6 +116,14 @@ export function AdminUserDetailPage() {
 
   const isSelf = currentAdmin?.id === profile.id;
 
+  // Same forceAccepted reasoning as AdminUsersPage.tsx's list-row version -
+  // an admin message should never sit in the recipient's pending requests.
+  const handleMessage = async () => {
+    if (!currentAdmin?.id) return;
+    await DataService.ensureConversation(currentAdmin.id, profile.id, { forceAccepted: true });
+    navigate('/admin/messages', { state: { openConversationWithUserId: profile.id } });
+  };
+
   return (
     <AdminLayout section="users" breadcrumb={[{ label: 'Users', to: '/admin/users' }, { label: profile.full_name || 'Unnamed' }]}>
       <div className="space-y-6">
@@ -128,7 +136,17 @@ export function AdminUserDetailPage() {
                 <p className="text-sm text-gray-500">{profile.email}</p>
               </div>
             </div>
-            <AccountStatusActions userId={profile.id} currentStatus={profile.account_status} role={profile.role} onChanged={load} size="md" />
+            <div className="flex flex-wrap items-center gap-2">
+              {!isSelf && (
+                <button
+                  onClick={() => void handleMessage()}
+                  className="rounded-lg border border-sky-200 px-3 py-2 text-sm font-semibold text-sky-700 hover:bg-sky-50"
+                >
+                  Message
+                </button>
+              )}
+              <AccountStatusActions userId={profile.id} currentStatus={profile.account_status} role={profile.role} onChanged={load} size="md" />
+            </div>
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-4 border-t border-sky-100 pt-4 sm:grid-cols-4">

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { Search } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
+import { useAuth } from '../../../contexts/AuthContext';
 import { AdminLayout } from './AdminLayout';
 import { AccountStatusActions } from './AccountStatusActions';
 
@@ -12,6 +13,7 @@ const PAGE_SIZE = 20;
 
 export function AdminUsersPage() {
   const navigate = useNavigate();
+  const { user: currentAdmin } = useAuth();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<UserFilter>('all');
   const [users, setUsers] = useState<any[]>([]);
@@ -20,6 +22,16 @@ export function AdminUsersPage() {
   const [reportCounts, setReportCounts] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Forces an accepted conversation into existence before navigating, so an
+  // admin reaching out never lands in the recipient's pending "message
+  // requests" (the mutual-follow gate createConversation otherwise applies)
+  // - see ensureConversation's forceAccepted option.
+  const handleMessage = async (targetUserId: string) => {
+    if (!currentAdmin?.id) return;
+    await DataService.ensureConversation(currentAdmin.id, targetUserId, { forceAccepted: true });
+    navigate('/admin/messages', { state: { openConversationWithUserId: targetUserId } });
+  };
 
   const load = async () => {
     setIsLoading(true);
@@ -145,6 +157,14 @@ export function AdminUsersPage() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <AccountStatusActions userId={u.id} currentStatus={u.account_status} role={u.role} onChanged={load} />
+                        {u.id !== currentAdmin?.id && (
+                          <button
+                            onClick={() => void handleMessage(u.id)}
+                            className="rounded-lg border border-sky-200 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:bg-sky-50"
+                          >
+                            Message
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/admin/users/${u.id}`)}
                           className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:shadow-lg"

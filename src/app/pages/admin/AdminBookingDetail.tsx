@@ -4,6 +4,8 @@ import { Ban, CheckCircle, MessageCircle, Paperclip } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import { FeedService } from '../../../lib/feedService';
 import { formatCurrencyAmount } from '../../../lib/currency';
+import { stripRequestDisplayMeta } from '../../../lib/groupRequest';
+import { extractLocationMeta } from '../../../lib/requestLocation';
 import { getBookingEarningsBreakdown } from '../../../lib/bookingEscrow';
 import { DisputeTimeline, DISPUTE_CATEGORY_LABEL } from '../bookingTracking/DisputeTimeline';
 import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
@@ -203,11 +205,45 @@ export function AdminBookingDetail({
   const [messageError, setMessageError] = useState<string | null>(null);
 
   const deposit = booking.deposit_amount != null ? Number(booking.deposit_amount) : Math.round(Number(booking.budget || 0) * 0.3);
-  const clientClaim = events.find((e) => e.actor === 'client' && e.action === 'complain');
-  const freelancerResponse = [...events].reverse().find((e) => e.actor === 'freelancer' && e.action === 'evidence');
+  // openBookingDispute() (dataService.ts) lets EITHER party file - it's no
+  // longer only ever the client - so the report has to be found by action,
+  // not by hardcoding actor === 'client'. Doing that hid who reported it
+  // (and the whole PlatformRecordsPanel below it) any time a freelancer was
+  // the one who disputed, which is exactly what this looked up.
+  const disputeReport = events.find((e) => e.action === 'complain');
+  const reporterRole: 'client' | 'freelancer' | null = disputeReport?.actor ?? null;
+  const otherPartyRole = reporterRole === 'client' ? 'freelancer' : reporterRole === 'freelancer' ? 'client' : null;
+  const otherPartyResponse = otherPartyRole
+    ? [...events].reverse().find((e) => e.actor === otherPartyRole && (e.action === 'evidence' || e.action === 'conceded'))
+    : undefined;
+  // supabase/dispute_reporter_only_messaging.sql scopes admin_send_dispute_message()
+  // to notify (and dispute_evidence RLS to show) only the reporter now, not
+  // both parties - this label and the placeholder below need to say so,
+  // instead of promising a broadcast that no longer happens.
+  const reporterName = reporterRole === 'client' ? (booking.client?.full_name || 'the client') : reporterRole === 'freelancer' ? (booking.freelancer?.full_name || 'the freelancer') : 'the reporter';
   const hasDispute = booking.dispute_status && booking.dispute_status !== 'none';
   const canDecide = showResolutionControls && booking.dispute_status === 'under_admin_review';
   const agreement = booking.confirmed_agreement || null;
+  // Both of these raw text columns carry internal [[SCHEDULE_META:..]] /
+  // [[LOCATION_META:..]] / [GROUP_REQUEST]{...} tags that the schedule,
+  // location, and group-member fields elsewhere in this panel are already
+  // parsed from - showing them again verbatim is pure noise for an admin.
+  const agreementDescriptionText = stripRequestDisplayMeta(agreement?.description);
+  const bookingDescriptionText = stripRequestDisplayMeta(booking.description);
+  // location_address is only ever written by the check-in flow
+  // (supabase/booking_checkin.sql) - before check-in, and for the locked
+  // agreement snapshot (which has no location column at all), the actual
+  // address only exists as the [[LOCATION_META:..]] tag inside the
+  // description text, same fallback useBookingTracking.ts already relies on.
+  const agreementLocationText = extractLocationMeta(agreement?.description);
+  const bookingLocationText = booking.location_address || extractLocationMeta(booking.description);
+  // acceptRequest.ts writes this literal placeholder onto every booking
+  // that didn't have an explicit deliverables list on its originating
+  // request - it also doubles as an internal lookup key (DataService), so
+  // it can't just be left null, but it's not real content to show an admin.
+  const bookingDeliverablesText = booking.deliverables && !/^Auto-created from request /.test(booking.deliverables)
+    ? booking.deliverables
+    : null;
 
   // Message-type dispute_evidence items (client, freelancer, or admin - see
   // supabase/dispute_admin_messages.sql) are a running conversation, not
@@ -355,16 +391,20 @@ export function AdminBookingDetail({
                 <p className="text-xs font-semibold uppercase text-gray-500">Scheduled time</p>
                 <p className="mt-1 text-gray-900">{agreement.scheduled_start_at ? new Date(agreement.scheduled_start_at).toLocaleString() : '—'}</p>
               </div>
+              <div>
+                <p className="text-xs font-semibold uppercase text-gray-500">Location</p>
+                <p className="mt-1 text-gray-900">{agreementLocationText || '—'}</p>
+              </div>
               {agreement.deliverables && (
                 <div className="sm:col-span-2">
                   <p className="text-xs font-semibold uppercase text-gray-500">Deliverables</p>
                   <p className="mt-1 whitespace-pre-wrap text-gray-700">{agreement.deliverables}</p>
                 </div>
               )}
-              {agreement.description && (
+              {agreementDescriptionText && (
                 <div className="sm:col-span-2">
                   <p className="text-xs font-semibold uppercase text-gray-500">Description</p>
-                  <p className="mt-1 whitespace-pre-wrap text-gray-700">{agreement.description}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-gray-700">{agreementDescriptionText}</p>
                 </div>
               )}
             </div>
@@ -391,18 +431,18 @@ export function AdminBookingDetail({
           </div>
           <div>
             <p className="text-xs font-semibold uppercase text-gray-500">Location</p>
-            <p className="mt-1 text-gray-900">{booking.location_address || '—'}</p>
+            <p className="mt-1 text-gray-900">{bookingLocationText || '—'}</p>
           </div>
-          {booking.deliverables && (
+          {bookingDeliverablesText && (
             <div className="sm:col-span-2">
               <p className="text-xs font-semibold uppercase text-gray-500">Deliverables</p>
-              <p className="mt-1 whitespace-pre-wrap text-gray-700">{booking.deliverables}</p>
+              <p className="mt-1 whitespace-pre-wrap text-gray-700">{bookingDeliverablesText}</p>
             </div>
           )}
-          {booking.description && (
+          {bookingDescriptionText && (
             <div className="sm:col-span-2">
               <p className="text-xs font-semibold uppercase text-gray-500">Description</p>
-              <p className="mt-1 whitespace-pre-wrap text-gray-700">{booking.description}</p>
+              <p className="mt-1 whitespace-pre-wrap text-gray-700">{bookingDescriptionText}</p>
             </div>
           )}
           {booking.delivery_status && (
@@ -486,28 +526,33 @@ export function AdminBookingDetail({
           <h3 className="mb-3 text-lg font-bold text-gray-900">Dispute</h3>
           <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="rounded-xl bg-sky-50/50 p-4">
-              <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Client's report</p>
-              {clientClaim ? (
+              <p className="mb-1 text-xs font-semibold uppercase text-gray-500">
+                Reported by {reporterRole === 'client' ? (booking.client?.full_name || 'the client') : reporterRole === 'freelancer' ? (booking.freelancer?.full_name || 'the freelancer') : 'someone'}
+                {reporterRole ? ` (${reporterRole})` : ''}
+              </p>
+              {disputeReport ? (
                 <>
-                  <p className="text-sm font-semibold text-gray-900">{DISPUTE_CATEGORY_LABEL[clientClaim.category] || clientClaim.category}</p>
-                  <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{clientClaim.reason}</p>
+                  <p className="text-sm font-semibold text-gray-900">{DISPUTE_CATEGORY_LABEL[disputeReport.category] || disputeReport.category}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm text-gray-700">{disputeReport.reason}</p>
                 </>
               ) : (
                 <p className="text-sm text-gray-500">No report recorded.</p>
               )}
             </div>
             <div className="rounded-xl bg-sky-50/50 p-4">
-              <p className="mb-1 text-xs font-semibold uppercase text-gray-500">Freelancer's response</p>
-              {freelancerResponse ? (
-                <p className="text-sm text-gray-700">{freelancerResponse.evidence_text || '(no written response)'}</p>
+              <p className="mb-1 text-xs font-semibold uppercase text-gray-500">
+                {otherPartyRole === 'client' ? (booking.client?.full_name || 'The client') : otherPartyRole === 'freelancer' ? (booking.freelancer?.full_name || 'The freelancer') : 'Other party'}'s response
+              </p>
+              {otherPartyResponse ? (
+                <p className="text-sm text-gray-700">{otherPartyResponse.action === 'conceded' ? `Conceded${otherPartyResponse.reason ? ` — ${otherPartyResponse.reason}` : ''}` : (otherPartyResponse.evidence_text || '(no written response)')}</p>
               ) : (
                 <p className="text-sm text-gray-500">No response submitted.</p>
               )}
             </div>
           </div>
 
-          {clientClaim?.category && (
-            <PlatformRecordsPanel category={clientClaim.category} booking={booking} events={events} confirmations={confirmations} viewerRole="neutral" />
+          {disputeReport?.category && (
+            <PlatformRecordsPanel category={disputeReport.category} booking={booking} events={events} confirmations={confirmations} viewerRole="neutral" />
           )}
 
           <p className="mb-2 text-xs font-semibold uppercase text-gray-500">Dispute timeline &amp; evidence</p>
@@ -516,7 +561,7 @@ export function AdminBookingDetail({
           <div id="dispute-messages" className="mt-4 border-t border-sky-100 pt-4">
             <div className="mb-3 flex items-center gap-2 text-gray-900">
               <MessageCircle className="h-4 w-4" />
-              <p className="text-xs font-semibold uppercase text-gray-500">Message the client &amp; freelancer</p>
+              <p className="text-xs font-semibold uppercase text-gray-500">Message {reporterName} (reporter only)</p>
             </div>
             <div ref={conversationScrollRef} className="mb-3 max-h-64 space-y-3 overflow-y-auto rounded-xl bg-sky-50/50 p-3">
               {conversationItems.length === 0 ? (
@@ -556,7 +601,7 @@ export function AdminBookingDetail({
                     void handleSendMessage();
                   }
                 }}
-                placeholder="Send a message to both the client and the freelancer…"
+                placeholder={`Send a message to ${reporterName} only…`}
                 rows={1}
                 className="min-h-[38px] flex-1 resize-none rounded-lg border border-sky-100 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
               />
