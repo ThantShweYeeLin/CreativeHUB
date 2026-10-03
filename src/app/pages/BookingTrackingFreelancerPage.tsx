@@ -27,7 +27,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // Symmetric to BookingTrackingClientPage's redirect — a client landing on
   // this freelancer-facing route directly would otherwise see a confusing
@@ -253,6 +253,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               scheduledAt={bookingData.scheduledAt}
               role="freelancer"
               confirmations={confirmations}
+              arrivals={arrivals}
               report={attendanceReport}
               onRefresh={refresh}
               onReportProblem={() => {

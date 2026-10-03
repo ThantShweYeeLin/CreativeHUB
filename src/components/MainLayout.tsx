@@ -318,9 +318,12 @@ export function MainLayout({ children }: MainLayoutProps) {
                 'booking_cancelled',
                 'booking_completed',
                 'attendance_window_open',
+                'arrival_recorded',
                 'deposit_payment_required',
                 'booking_completion_submitted',
                 'attendance_remaining_balance',
+                'booking_reschedule_proposed',
+                'booking_reschedule_accepted',
               ].includes(String(row.type || ''))) {
                 const bookingResponse = await supabase
                   .from('bookings')
@@ -541,8 +544,10 @@ export function MainLayout({ children }: MainLayoutProps) {
     const isClient = String(bookingResponse.data.client_id) === String(user.id);
     const basePath = isClient ? `/booking/${bookingId}` : `/freelancer-booking/${bookingId}`;
     const section =
-      notification.type === 'attendance_window_open'
+      notification.type === 'attendance_window_open' || notification.type === 'arrival_recorded'
         ? 'attendance-check'
+        : notification.type === 'booking_reschedule_proposed' || notification.type === 'booking_reschedule_accepted'
+          ? 'reschedule-card'
         : notification.type === 'deposit_payment_required'
           ? 'deposit-section'
           : notification.type === 'booking_completion_submitted'

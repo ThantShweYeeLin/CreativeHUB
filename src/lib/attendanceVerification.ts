@@ -14,6 +14,31 @@ export interface AttendanceConfirmation {
   scheduled_at: string | null;
 }
 
+// Row as stored; coordinates are only ever returned to administrators.
+export interface AttendanceArrivalRecord {
+  id: string;
+  booking_id: string;
+  user_id: string;
+  role: AttendanceRole;
+  arrived_at: string;
+  location_status: 'provided' | 'not_provided';
+  not_provided_reason: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy_m: number | null;
+}
+
+// Participant-visible shape from get_booking_arrivals() — no coordinates.
+export interface AttendanceArrival {
+  id: string;
+  user_id: string;
+  role: AttendanceRole;
+  arrived_at: string;
+  location_status: 'provided' | 'not_provided';
+  not_provided_reason: string | null;
+  user_name: string | null;
+}
+
 export type AttendanceReportStatus = 'open' | 'under_review' | 'resolved';
 
 export type AttendanceReportDecision =

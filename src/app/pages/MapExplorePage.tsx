@@ -180,7 +180,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
   const [distanceLimitKm, setDistanceLimitKm] = useState<number | null>(null);
   const [clientLocation, setClientLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const hasAppliedDefaultDistance = useRef(false);
-  const [locationSource, setLocationSource] = useState<'profile' | 'device' | 'manual' | null>(null);
+  const [locationSource, setLocationSource] = useState<'profile' | 'manual' | null>(null);
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
@@ -318,53 +318,17 @@ export function MapView({ onViewProfile }: MapViewProps) {
     };
   }, [mapLanguage, user?.id]);
 
-  useEffect(() => {
-    if (!navigator.geolocation || clientLocation) {
-      return;
-    }
-
-    let cancelled = false;
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (cancelled) {
-          return;
-        }
-
-        setClientLocation({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          label: 'Current location',
-        });
-        setLocationSource('device');
-      },
-      () => {
-        // Keep profile-based location when device location is unavailable or denied.
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 120000,
-      }
-    );
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
-
   // distanceLimitKm defaults to null ("Any distance"), which showed every
   // matching freelancer regardless of how far away they actually were under
-  // a "Freelancers Near You" heading. Once we know where the user actually
-  // is (profile location or device geolocation, whichever resolves first),
-  // apply a sensible default radius so "near you" means something - but
-  // only the first time, so it never overrides an explicit later choice
+  // a "Freelancers Near You" heading. Once the user's saved profile location
+  // is known, apply a sensible default radius so "near you" means something -
+  // but only the first time, so it never overrides an explicit later choice
   // (including deliberately picking "Any distance").
   useEffect(() => {
     if (clientLocation && !hasAppliedDefaultDistance.current) {
       hasAppliedDefaultDistance.current = true;
       // Functional form so an explicit "Any distance" click that happened
-      // to land before geolocation resolved isn't clobbered.
+      // to land before the profile location resolved isn't clobbered.
       setDistanceLimitKm((current) => (current === null ? DEFAULT_DISTANCE_LIMIT_KM : current));
     }
   }, [clientLocation]);
@@ -470,7 +434,6 @@ export function MapView({ onViewProfile }: MapViewProps) {
     openStreetMap: translateMapText(mapLanguage, 'OpenStreetMap Live View', 'มุมมองแผนที่แบบสด OpenStreetMap'),
     matchingFreelancers: (count: number) => translateMapText(mapLanguage, `${count} freelancers match filters`, `${count} ฟรีแลนซ์ตรงกับตัวกรอง`),
     locationSourceProfile: translateMapText(mapLanguage, 'Profile location', 'ตำแหน่งตามโปรไฟล์'),
-    locationSourceDevice: translateMapText(mapLanguage, 'Current device GPS', 'พิกัด GPS ของอุปกรณ์ปัจจุบัน'),
     locationSourceManual: translateMapText(mapLanguage, 'Location you set', 'ตำแหน่งที่คุณตั้งค่า'),
     locationSearchPlaceholder: translateMapText(mapLanguage, 'Search a city or address...', 'ค้นหาเมืองหรือที่อยู่...'),
     locationSearchButton: translateMapText(mapLanguage, 'Search', 'ค้นหา'),
@@ -780,7 +743,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
               <Marker position={[clientLocation.lat, clientLocation.lng]} icon={clientMarkerIcon}>
                 <Popup>
                   <div className="text-sm">
-                    <p className="font-bold text-gray-900">{mapText.yourLocation} {locationSource === 'device' ? '(Live)' : locationSource === 'manual' ? '(Set by you)' : ''}</p>
+                    <p className="font-bold text-gray-900">{mapText.yourLocation} {locationSource === 'manual' ? '(Set by you)' : ''}</p>
                     <p className="text-gray-600">{clientLocation.label}</p>
                   </div>
                 </Popup>
@@ -858,11 +821,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
           {clientLocation ? (
             <p className="mt-0.5 text-xs text-gray-500">
               {translateMapText(mapLanguage, 'Location source: ', 'แหล่งที่มาของตำแหน่ง: ')}
-              {locationSource === 'device'
-                ? mapText.locationSourceDevice
-                : locationSource === 'manual'
-                  ? mapText.locationSourceManual
-                  : mapText.locationSourceProfile}
+              {locationSource === 'manual' ? mapText.locationSourceManual : mapText.locationSourceProfile}
             </p>
           ) : null}
         </div>

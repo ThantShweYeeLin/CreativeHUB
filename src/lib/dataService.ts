@@ -13,7 +13,8 @@ import {
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
 import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS, getBookingEscrowState } from './bookingEscrow';
-import type { AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
+import type { AttendanceArrival, AttendanceArrivalRecord, AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
+import type { ArrivalLocation } from './attendanceLocation';
 import type { DisputeFlowCategory } from './disputeCategories';
 import { tokenizeCard, type CardDetails } from './omiseClient';
 import { acceptApplicationErrorMessage, type FreelancerSubscription, type GroupApplication, type GroupOpportunity, type PremiumPlan } from './freelancerPremium';
@@ -1288,74 +1289,26 @@ export class DataService {
   // UPDATE changing start_at/end_at is re-validated against every *other*
   // row by Postgres automatically, so there's no separate "release the old
   // slot, then reserve the new one" step needed.
-  static async rescheduleBooking(bookingId: string, newStartAt: Date, newEndAt: Date) {
-    // start_date/start_time/end_time are kept as a mirror for existing
-    // readers (e.g. src/lib/availability.ts's client-side pre-check) — the
-    // canonical instant is start_at/end_at. Formatted in Asia/Bangkok
-    // wall-clock terms regardless of the caller's own timezone, matching
-    // supabase/booking_checkin.sql's existing interpretation.
-    const bangkokParts = (date: Date) => {
-      const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Bangkok',
-        year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
-      });
-      const parts = Object.fromEntries(formatter.formatToParts(date).map((p) => [p.type, p.value]));
-      return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
-    };
-    const startParts = bangkokParts(newStartAt);
-    const endParts = bangkokParts(newEndAt);
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        start_at: newStartAt.toISOString(),
-        end_at: newEndAt.toISOString(),
-        start_date: startParts.date,
-        start_time: startParts.time,
-        end_time: endParts.time,
-      } as any)
-      .eq('id', bookingId)
-      .select()
-      .single();
-    if (error && this.isBookingOverlapError(error)) {
-      return { data: null, error: new Error(this.BOOKING_SLOT_TAKEN_MESSAGE) };
-    }
-    return { data, error };
-  }
-
-  // RESCHEDULE HANDSHAKE — propose/accept/decline, so neither participant
-  // can unilaterally move an already-accepted booking (see
-  // supabase/booking_reschedule.sql for the full rationale). The actual
-  // move only ever happens inside acceptBookingReschedule, via
-  // rescheduleBooking() above — so it's re-checked against
-  // bookings_no_overlap at accept time, not just at propose time, and a
-  // proposal that's gone stale by then is safely rejected.
+  // RESCHEDULE HANDSHAKE — propose/accept/decline, so neither participant can
+  // unilaterally move an already-accepted booking (see
+  // supabase/booking_reschedule.sql). Propose and accept both run
+  // check_reschedule_window() server-side (supabase/booking_reschedule_availability.sql),
+  // so a time must be in the future, inside the freelancer's working hours,
+  // not a blocked date, and free of their other bookings — at both steps.
   static async proposeBookingReschedule(
     bookingId: string,
     input: { proposerId: string; proposerRole: 'client' | 'freelancer'; newStartAt: Date; newEndAt: Date; reason?: string }
   ) {
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        reschedule_proposed_start_at: input.newStartAt.toISOString(),
-        reschedule_proposed_end_at: input.newEndAt.toISOString(),
-        reschedule_proposed_by: input.proposerId,
-        reschedule_proposed_reason: input.reason?.trim() || null,
-      } as any)
-      .eq('id', bookingId)
-      .select()
-      .single();
+    const { data, error } = await (supabase as any).rpc('propose_booking_reschedule', {
+      p_booking_id: bookingId,
+      p_start_at: input.newStartAt.toISOString(),
+      p_end_at: input.newEndAt.toISOString(),
+      p_reason: input.reason?.trim() || null,
+    });
 
     if (error || !data) {
       return { data, error };
     }
-
-    await (supabase as any).from('booking_events').insert({
-      booking_id: bookingId,
-      actor: input.proposerRole,
-      action: 'reschedule_proposed',
-      reason: input.reason?.trim() || null,
-    });
 
     const otherUserId = input.proposerRole === 'client' ? (data as any).freelancer_id : (data as any).client_id;
     await this.notifyEvent({
@@ -1370,50 +1323,19 @@ export class DataService {
     return { data, error: null };
   }
 
-  static async acceptBookingReschedule(bookingId: string, accepterId: string, accepterRole: 'client' | 'freelancer') {
-    const { data: current, error: fetchError } = await supabase
+  static async acceptBookingReschedule(bookingId: string, accepterId: string) {
+    const { data: current } = await supabase
       .from('bookings')
-      .select('reschedule_proposed_start_at, reschedule_proposed_end_at, reschedule_proposed_by')
+      .select('reschedule_proposed_by')
       .eq('id', bookingId)
       .single();
+    const proposerId = (current as any)?.reschedule_proposed_by;
 
-    if (fetchError || !current) {
-      return { data: null, error: fetchError || new Error('Booking not found.') };
-    }
-    const proposedStart = (current as any).reschedule_proposed_start_at;
-    const proposedEnd = (current as any).reschedule_proposed_end_at;
-    if (!proposedStart || !proposedEnd) {
-      return { data: null, error: new Error('There is no pending reschedule proposal to accept.') };
-    }
-
-    const moveResponse = await this.rescheduleBooking(bookingId, new Date(proposedStart), new Date(proposedEnd));
-    if (moveResponse.error) {
-      return moveResponse;
-    }
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        reschedule_proposed_start_at: null,
-        reschedule_proposed_end_at: null,
-        reschedule_proposed_by: null,
-        reschedule_proposed_reason: null,
-      } as any)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
+    const { data, error } = await (supabase as any).rpc('accept_booking_reschedule', { p_booking_id: bookingId });
     if (error || !data) {
       return { data, error };
     }
 
-    await (supabase as any).from('booking_events').insert({
-      booking_id: bookingId,
-      actor: accepterRole,
-      action: 'reschedule_accepted',
-    });
-
-    const proposerId = (current as any).reschedule_proposed_by;
     if (proposerId) {
       await this.notifyEvent({
         userId: proposerId,
@@ -1563,6 +1485,33 @@ export class DataService {
     const { data, error } = await (supabase as any).rpc('confirm_attendance', { p_booking_id: bookingId });
     const row = Array.isArray(data) ? data[0] : data;
     return { data: row as (AttendanceConfirmation & { already_confirmed: boolean }) | null, error };
+  }
+
+  static async recordArrival(bookingId: string, location: ArrivalLocation) {
+    const { data, error } = await (supabase as any).rpc('record_arrival', {
+      p_booking_id: bookingId,
+      p_latitude: location.status === 'provided' ? location.latitude : null,
+      p_longitude: location.status === 'provided' ? location.longitude : null,
+      p_accuracy_m: location.status === 'provided' ? location.accuracyM : null,
+      p_not_provided_reason: location.status === 'not_provided' ? location.reason : null,
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    return { data: row as (AttendanceArrivalRecord & { already_recorded: boolean }) | null, error };
+  }
+
+  // Participant-safe: returns no coordinates (see attendance_arrival_check_in.sql).
+  static async getBookingArrivals(bookingId: string) {
+    const { data, error } = await (supabase as any).rpc('get_booking_arrivals', { p_booking_id: bookingId });
+    return { data: (data || []) as AttendanceArrival[], error };
+  }
+
+  static async getBookingArrivalsForAdmin(bookingId: string) {
+    const { data, error } = await (supabase as any)
+      .from('booking_arrivals')
+      .select('*')
+      .eq('booking_id', bookingId)
+      .order('arrived_at', { ascending: true });
+    return { data: (data || []) as AttendanceArrivalRecord[], error };
   }
 
   // No submit method here anymore — attendance/no-show reports now go

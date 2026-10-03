@@ -701,6 +701,7 @@ function LocationPickerSheet({
   onClose: () => void;
   onSelect: (location: string) => void;
 }) {
+  const { user } = useAuth();
   const [query, setQuery] = useState(selectedLocation);
   const [geoStatus, setGeoStatus] = useState('');
   const [liveLocations, setLiveLocations] = useState<PlaceSuggestion[]>([]);
@@ -810,22 +811,22 @@ function LocationPickerSheet({
     onClose();
   };
 
-  const useCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setGeoStatus('Current location is not available in this browser.');
+  const useSavedLocation = () => {
+    if (!user?.id) {
+      setGeoStatus('Sign in and set your location in your profile to use it here.');
       return;
     }
 
-    setGeoStatus('Finding your location...');
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const latitude = position.coords.latitude.toFixed(5);
-        const longitude = position.coords.longitude.toFixed(5);
-        selectLocation({ name: `Current location (${latitude}, ${longitude})`, detail: 'Using your device location' });
-      },
-      () => setGeoStatus('Could not access your location. Please search or select a place.'),
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
+    setGeoStatus('Loading your saved location...');
+    DataService.getUser(user.id)
+      .then(({ data }) => {
+        if (!data?.location) {
+          setGeoStatus('Set your location in your profile first.');
+          return;
+        }
+        selectLocation({ name: data.location, detail: 'Your saved profile location' });
+      })
+      .catch(() => setGeoStatus('Could not load your saved location. Please search or select a place.'));
   };
 
   return (
@@ -836,9 +837,9 @@ function LocationPickerSheet({
             <div className="mx-auto mb-5 h-1 w-12 rounded-full bg-gray-500" />
             <div className="mb-7 flex items-center justify-between">
               <button
-                onClick={useCurrentLocation}
+                onClick={useSavedLocation}
                 className="flex h-14 w-14 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white shadow-inner transition-colors hover:bg-white/10"
-                aria-label="Use current location"
+                aria-label="Use my saved location"
               >
                 <LocateFixed className="h-7 w-7 fill-white" />
               </button>

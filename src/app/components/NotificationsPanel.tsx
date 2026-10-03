@@ -347,6 +347,8 @@ export function NotificationsPanel({
                       'booking_completed',
                       'booking_completion_submitted',
                       'booking_disputed',
+                      'booking_reschedule_proposed',
+                      'booking_reschedule_accepted',
                     ].includes(notification.type)
                   ) {
                     onOpenBooking?.(notification);

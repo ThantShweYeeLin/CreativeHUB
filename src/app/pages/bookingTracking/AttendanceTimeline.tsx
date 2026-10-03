@@ -15,6 +15,7 @@ const EVENT_LABEL: Record<string, (actor: string) => string> = {
   attendance_report_submitted: (actor) => `${actor === 'client' ? 'Client' : 'Freelancer'} reported an attendance problem`,
   attendance_evidence_requested: () => 'CreativeHUB support requested additional evidence',
   attendance_report_resolved: () => 'CreativeHUB support resolved the attendance report',
+  arrival_recorded: (actor) => `${actor === 'client' ? 'Client' : 'Freelancer'} checked in on arrival`,
 };
 
 export function AttendanceTimeline({

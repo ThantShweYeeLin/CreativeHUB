@@ -29,7 +29,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -261,6 +261,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               scheduledAt={bookingData.scheduledAt}
               role="client"
               confirmations={confirmations}
+              arrivals={arrivals}
               report={attendanceReport}
               onRefresh={refresh}
               onReportProblem={() => {

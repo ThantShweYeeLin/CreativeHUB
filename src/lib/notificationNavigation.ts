@@ -20,6 +20,7 @@ export interface NotificationRoute {
 // routes to a booking's tracking page for.
 const BOOKING_STATUS_TYPES = new Set([
   'attendance_window_open',
+  'arrival_recorded',
   'deposit_payment_required',
   'payment_update',
   'deposit_secured',
@@ -29,6 +30,8 @@ const BOOKING_STATUS_TYPES = new Set([
   'booking_completed',
   'booking_completion_submitted',
   'booking_disputed',
+  'booking_reschedule_proposed',
+  'booking_reschedule_accepted',
 ]);
 
 // Mirrors MainLayout.tsx's own notification-click routing (the bell
@@ -128,8 +131,10 @@ export async function resolveNotificationRoute(
     const isClient = String((bookingResponse.data as any).client_id) === String(currentUser.id);
     const basePath = isClient ? `/booking/${bookingId}` : `/freelancer-booking/${bookingId}`;
     const section =
-      type === 'attendance_window_open'
+      type === 'attendance_window_open' || type === 'arrival_recorded'
         ? 'attendance-check'
+        : type === 'booking_reschedule_proposed' || type === 'booking_reschedule_accepted'
+          ? 'reschedule-card'
         : type === 'deposit_payment_required'
           ? 'deposit-section'
           : type === 'booking_completion_submitted'

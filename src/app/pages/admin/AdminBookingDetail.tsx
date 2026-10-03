@@ -12,7 +12,8 @@ import { AttendanceTimeline } from '../bookingTracking/AttendanceTimeline';
 import { PlatformRecordsPanel } from '../bookingTracking/PlatformRecordsPanel';
 import { AttachmentPreview } from '../../components/common/AttachmentPreview';
 import { useAuth } from '../../../contexts/AuthContext';
-import type { AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
+import type { AttendanceArrivalRecord, AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
+import { ARRIVAL_NOT_PROVIDED_LABEL, type ArrivalNotProvidedReason } from '../../../lib/attendanceLocation';
 
 // Loads a booking + its events/attendance/evidence-signed-urls once, shared
 // by both the general booking detail route and the dispute detail route so
@@ -24,6 +25,7 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
   const [disputeEvidence, setDisputeEvidence] = useState<any[]>([]);
   const [confirmations, setConfirmations] = useState<AttendanceConfirmation[]>([]);
   const [attendanceReport, setAttendanceReport] = useState<AttendanceReport | null>(null);
+  const [arrivals, setArrivals] = useState<AttendanceArrivalRecord[]>([]);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,11 +50,12 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     }
     setBooking(bookingResponse.data);
 
-    const [eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse] = await Promise.all([
+    const [eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse, arrivalsResponse] = await Promise.all([
       DataService.getBookingEvents(bookingId),
       DataService.getDisputeEvidence(bookingId),
       DataService.getBookingAttendanceConfirmations(bookingId),
       DataService.getBookingAttendanceReport(bookingId),
+      DataService.getBookingArrivalsForAdmin(bookingId),
     ]);
     const bookingEvents = eventsResponse.data || [];
     const bookingDisputeEvidence = disputeEvidenceResponse.data || [];
@@ -60,6 +63,7 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     setDisputeEvidence(bookingDisputeEvidence);
     setConfirmations(confirmationsResponse.data || []);
     setAttendanceReport(reportResponse.data || null);
+    setArrivals(arrivalsResponse.data || []);
 
     const paths = [
       ...bookingEvents.flatMap((e: any) => (e.evidence_photos as string[]) || []),
@@ -97,7 +101,7 @@ export function useAdminBookingDetail(bookingId: string | undefined) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookingId]);
 
-  return { booking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, refresh };
+  return { booking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, refresh };
 }
 
 const EVENT_LABEL: Record<string, string> = {
@@ -117,6 +121,7 @@ const EVENT_LABEL: Record<string, string> = {
   check_in_failed: 'Check-in attempt failed',
   location_set: 'Booking location set',
   presence_confirmed: "Confirmed the other party's presence",
+  arrival_recorded: 'Checked in on arrival',
   attendance_report_submitted: 'Reported an attendance problem',
   attendance_evidence_requested: 'Admin requested additional attendance evidence',
   attendance_report_resolved: 'Admin resolved the attendance report',
@@ -179,6 +184,7 @@ export function AdminBookingDetail({
   events,
   disputeEvidence = [],
   confirmations,
+  arrivals = [],
   attendanceReport,
   signedUrls,
   showResolutionControls,
@@ -188,6 +194,7 @@ export function AdminBookingDetail({
   events: any[];
   disputeEvidence?: any[];
   confirmations: AttendanceConfirmation[];
+  arrivals?: AttendanceArrivalRecord[];
   attendanceReport: AttendanceReport | null;
   signedUrls: Record<string, string>;
   showResolutionControls: boolean;
@@ -513,6 +520,44 @@ export function AdminBookingDetail({
         report={attendanceReport}
         scheduledAt={booking.start_at ? new Date(booking.start_at) : null}
       />
+
+      <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+        <h3 className="mb-3 text-lg font-bold text-gray-900">Arrival check-ins</h3>
+        {arrivals.length === 0 ? (
+          <p className="text-sm text-gray-500">No arrival check-ins recorded for this booking.</p>
+        ) : (
+          <div className="space-y-3">
+            {arrivals.map((arrival) => (
+              <div key={arrival.id} className="rounded-xl border border-gray-100 bg-gray-50/60 p-3 text-sm">
+                <p className="font-semibold text-gray-900">
+                  {arrival.role === 'client' ? 'Client' : 'Freelancer'} · {new Date(arrival.arrived_at).toLocaleString()}
+                </p>
+                {arrival.location_status === 'provided' && arrival.latitude !== null && arrival.longitude !== null ? (
+                  <p className="mt-1 text-gray-700">
+                    Location: {arrival.latitude.toFixed(6)}, {arrival.longitude.toFixed(6)}
+                    {arrival.accuracy_m !== null && <> · ±{Math.round(arrival.accuracy_m)} m</>}{' '}
+                    <a
+                      href={`https://www.openstreetmap.org/?mlat=${arrival.latitude}&mlon=${arrival.longitude}#map=17/${arrival.latitude}/${arrival.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sky-700 underline"
+                    >
+                      Open map
+                    </a>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-gray-500">
+                    Location not shared
+                    {arrival.not_provided_reason
+                      ? ` — ${ARRIVAL_NOT_PROVIDED_LABEL[arrival.not_provided_reason as ArrivalNotProvidedReason] ?? arrival.not_provided_reason}`
+                      : ''}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Booking timeline */}
       <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">

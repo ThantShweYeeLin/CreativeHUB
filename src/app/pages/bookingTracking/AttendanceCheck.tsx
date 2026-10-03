@@ -1,12 +1,18 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, MapPin, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
 import {
   getAttendanceState,
   getAttendanceWindow,
+  type AttendanceArrival,
   type AttendanceConfirmation,
   type AttendanceReport,
 } from '../../../lib/attendanceVerification';
+import {
+  ARRIVAL_NOT_PROVIDED_LABEL,
+  requestArrivalLocation,
+  type ArrivalNotProvidedReason,
+} from '../../../lib/attendanceLocation';
 
 type Role = 'client' | 'freelancer';
 
@@ -14,11 +20,19 @@ function formatTime(date: Date) {
   return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
+function describeArrival(arrival: AttendanceArrival) {
+  const time = formatTime(new Date(arrival.arrived_at));
+  if (arrival.location_status === 'provided') return `arrived at ${time} · location shared`;
+  const reason = ARRIVAL_NOT_PROVIDED_LABEL[arrival.not_provided_reason as ArrivalNotProvidedReason] || 'location not shared';
+  return `arrived at ${time} · ${reason}`;
+}
+
 export function AttendanceCheck({
   bookingId,
   scheduledAt,
   role,
   confirmations,
+  arrivals,
   report,
   onRefresh,
   onReportProblem,
@@ -27,6 +41,7 @@ export function AttendanceCheck({
   scheduledAt: Date | null;
   role: Role;
   confirmations: AttendanceConfirmation[];
+  arrivals: AttendanceArrival[];
   report: AttendanceReport | null;
   onRefresh: () => Promise<void>;
   /** No-shows/lateness/conduct issues are booking disputes, not support
@@ -39,6 +54,8 @@ export function AttendanceCheck({
 }) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [isArriving, setIsArriving] = useState(false);
+  const [arriveError, setArriveError] = useState<string | null>(null);
 
   // Opportunistic, cron-free notification that the window has opened —
   // safe no-op if already notified or not yet open.
@@ -51,6 +68,8 @@ export function AttendanceCheck({
   const selfConfirmation = role === 'client' ? clientConfirmation : freelancerConfirmation;
   const otherConfirmation = role === 'client' ? freelancerConfirmation : clientConfirmation;
   const otherRoleLabel = role === 'client' ? 'Freelancer' : 'Client';
+  const selfArrival = arrivals.find((a) => a.role === role) || null;
+  const otherArrival = arrivals.find((a) => a.role !== role) || null;
 
   const state = getAttendanceState({ scheduledAt, clientConfirmation, freelancerConfirmation, report });
   const window_ = getAttendanceWindow(scheduledAt);
@@ -62,6 +81,21 @@ export function AttendanceCheck({
     setIsConfirming(false);
     if (error) {
       setConfirmError((error as any)?.message || 'Unable to confirm attendance. Please try again.');
+      return;
+    }
+    await onRefresh();
+  };
+
+  // requestArrivalLocation() must be the first thing this handler does: the
+  // browser only shows its location prompt for a direct tap, not after an await.
+  const handleArrive = async () => {
+    setIsArriving(true);
+    setArriveError(null);
+    const location = await requestArrivalLocation();
+    const { error } = await DataService.recordArrival(bookingId, location);
+    setIsArriving(false);
+    if (error) {
+      setArriveError((error as any)?.message || 'Unable to record your arrival. Please try again.');
       return;
     }
     await onRefresh();
@@ -94,6 +128,15 @@ export function AttendanceCheck({
           <p>Client confirmed Freelancer ✓</p>
           <p>Freelancer confirmed Client ✓</p>
         </div>
+        {arrivals.length > 0 && (
+          <div className="mt-3 space-y-1 text-sm text-gray-700">
+            {arrivals.map((arrival) => (
+              <p key={arrival.id}>
+                {arrival.user_name || (arrival.role === 'client' ? 'Client' : 'Freelancer')} {describeArrival(arrival)}
+              </p>
+            ))}
+          </div>
+        )}
         <p className="mt-3 text-xs text-gray-500">Both parties have confirmed their presence.</p>
       </div>
     );
@@ -144,6 +187,33 @@ export function AttendanceCheck({
       <div className="flex items-center gap-2 mb-3">
         <ShieldCheck className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Attendance Check</h2>
+      </div>
+
+      <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50/40 p-4">
+        <p className="mb-1 text-sm font-semibold text-gray-900">Check in on arrival</p>
+        {selfArrival ? (
+          <p className="text-sm text-gray-700">✓ You {describeArrival(selfArrival)}.</p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-gray-600">
+              Tap when you arrive. Your browser will ask for your location once. If you decline, your arrival is still recorded.
+            </p>
+            {arriveError && <p className="mb-2 text-sm text-red-600">{arriveError}</p>}
+            <button
+              onClick={() => void handleArrive()}
+              disabled={isArriving}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-3 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
+            >
+              <MapPin className="w-4 h-4" />
+              {isArriving ? 'Checking in...' : "I've arrived"}
+            </button>
+          </>
+        )}
+        {otherArrival && (
+          <p className="mt-2 text-xs text-gray-600">
+            {otherArrival.user_name || otherRoleLabel} {describeArrival(otherArrival)}.
+          </p>
+        )}
       </div>
 
       {selfConfirmation ? (

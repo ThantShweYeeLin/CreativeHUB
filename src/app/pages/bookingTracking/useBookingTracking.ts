@@ -6,7 +6,7 @@ import { getBookingEscrowState, type EscrowState } from '../../../lib/bookingEsc
 import { extractScheduleMeta, formatTimeLabel } from '../../../lib/requestSchedule';
 import { extractLocationMeta } from '../../../lib/requestLocation';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
-import type { AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
+import type { AttendanceArrival, AttendanceConfirmation, AttendanceReport } from '../../../lib/attendanceVerification';
 
 export const fallbackProfileImage = DEFAULT_AVATAR_URL;
 
@@ -16,6 +16,7 @@ export function useBookingTracking() {
   const [events, setEvents] = useState<any[]>([]);
   const [disputeEvidence, setDisputeEvidence] = useState<any[]>([]);
   const [confirmations, setConfirmations] = useState<AttendanceConfirmation[]>([]);
+  const [arrivals, setArrivals] = useState<AttendanceArrival[]>([]);
   const [attendanceReport, setAttendanceReport] = useState<AttendanceReport | null>(null);
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -65,13 +66,15 @@ export function useBookingTracking() {
         setDisputeEvidence(disputeEvidenceResponse.data || []);
       }
 
-      const [confirmationsResponse, reportResponse] = await Promise.all([
+      const [confirmationsResponse, reportResponse, arrivalsResponse] = await Promise.all([
         DataService.getBookingAttendanceConfirmations(id),
         DataService.getBookingAttendanceReport(id),
+        DataService.getBookingArrivals(id),
       ]);
       if (isMounted) {
         setConfirmations(confirmationsResponse.data || []);
         setAttendanceReport(reportResponse.data || null);
+        setArrivals(arrivalsResponse.data || []);
       }
 
       setIsLoading(false);
@@ -131,18 +134,20 @@ export function useBookingTracking() {
 
   const refresh = async () => {
     if (!id) return;
-    const [bookingResponse, eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse] = await Promise.all([
+    const [bookingResponse, eventsResponse, disputeEvidenceResponse, confirmationsResponse, reportResponse, arrivalsResponse] = await Promise.all([
       DataService.getBooking(id),
       DataService.getBookingEvents(id),
       DataService.getDisputeEvidence(id),
       DataService.getBookingAttendanceConfirmations(id),
       DataService.getBookingAttendanceReport(id),
+      DataService.getBookingArrivals(id),
     ]);
     if (bookingResponse.data) setBooking(bookingResponse.data);
     setEvents(eventsResponse.data || []);
     setDisputeEvidence(disputeEvidenceResponse.data || []);
     setConfirmations(confirmationsResponse.data || []);
     setAttendanceReport(reportResponse.data || null);
+    setArrivals(arrivalsResponse.data || []);
   };
 
   const escrowState: EscrowState = useMemo(() => getBookingEscrowState(booking), [booking]);
@@ -215,5 +220,5 @@ export function useBookingTracking() {
     };
   }, [booking]);
 
-  return { id, booking, setBooking, events, disputeEvidence, confirmations, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
+  return { id, booking, setBooking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData };
 }

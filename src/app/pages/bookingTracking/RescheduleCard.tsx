@@ -1,15 +1,33 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CalendarClock, X } from 'lucide-react';
 import { DataService } from '../../../lib/dataService';
-import { combineBangkokDateTime, formatTimeLabel, generateTimeSlots } from '../../../lib/requestSchedule';
+import { isDateBlocked, isRangeAvailable, isTimeSlotTaken } from '../../../lib/availability';
+import { addMinutesToTime, combineBangkokDateTime, formatTimeLabel, generateTimeSlots } from '../../../lib/requestSchedule';
 
 type Role = 'client' | 'freelancer';
 
-const START_TIME_SLOTS = generateTimeSlots('08:00', '22:00');
+interface FreelancerAvailability {
+  workingStart: string;
+  workingEnd: string;
+  blockedDates: Array<{ blocked_date: string }>;
+  bookings: Array<any>;
+}
 
-function todayDateString() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+// Thailand has no DST, so shifting the clock by a fixed +7h gives the real
+// Bangkok wall-clock regardless of the viewer's own timezone.
+function bangkokNow() {
+  const shifted = new Date(Date.now() + BANGKOK_OFFSET_MS);
+  return {
+    date: shifted.toISOString().slice(0, 10),
+    minutes: shifted.getUTCHours() * 60 + shifted.getUTCMinutes(),
+  };
+}
+
+function toMinutes(value: string) {
+  const [hour, minute] = value.slice(0, 5).split(':').map(Number);
+  return (hour || 0) * 60 + (minute || 0);
 }
 
 function formatBangkokRange(startAt: string, endAt: string) {
@@ -48,13 +66,76 @@ export function RescheduleCard({
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<FreelancerAvailability | null>(null);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   const otherLabel = role === 'client' ? 'freelancer' : 'client';
   const hasPendingProposal = Boolean(booking.reschedule_proposed_start_at && booking.reschedule_proposed_end_at);
   const proposedByMe = hasPendingProposal && booking.reschedule_proposed_by === userId;
 
-  const endTimeSlots = startTime
-    ? generateTimeSlots(startTime, '23:30').filter((slot) => slot > startTime)
+  useEffect(() => {
+    if (!showForm || availability) return;
+    let cancelled = false;
+    setIsLoadingAvailability(true);
+    setAvailabilityError(null);
+
+    (async () => {
+      const profileResponse = await DataService.getFreelancerProfile(booking.freelancer_id);
+      const profile = profileResponse.data as any;
+      if (!profile) {
+        if (!cancelled) {
+          setAvailabilityError('Unable to load the freelancer\'s availability. Please try again.');
+          setIsLoadingAvailability(false);
+        }
+        return;
+      }
+
+      const [blockedResponse, bookingsResponse] = await Promise.all([
+        DataService.getFreelancerBlockedDates(profile.id),
+        DataService.getFreelancerBookings(booking.freelancer_id),
+      ]);
+      if (cancelled) return;
+
+      setAvailability({
+        workingStart: profile.working_hours_start || '09:00',
+        workingEnd: profile.working_hours_end || '18:00',
+        blockedDates: blockedResponse.data || [],
+        // The booking being moved must not block its own current slot.
+        bookings: (bookingsResponse.data || []).filter((b: any) => b.id !== booking.id),
+      });
+      setIsLoadingAvailability(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, availability, booking.id, booking.freelancer_id]);
+
+  const now = bangkokNow();
+  const isToday = date === now.date;
+  const isBlockedDate = availability && date ? isDateBlocked(availability.blockedDates, date) : false;
+  const allSlots = availability ? generateTimeSlots(availability.workingStart, availability.workingEnd) : [];
+
+  // Mirrors the request form: a start needs at least an hour before the
+  // working day ends, and on today's date only times still ahead are offered.
+  const startOptions = availability
+    ? allSlots
+        .filter((slot) => addMinutesToTime(slot, 60) <= availability.workingEnd)
+        .filter((slot) => !isToday || toMinutes(slot) > now.minutes)
+        .map((slot) => ({
+          value: slot,
+          taken: date ? isTimeSlotTaken(availability.bookings, date, slot) : false,
+        }))
+    : [];
+
+  const endOptions = availability && date && startTime
+    ? allSlots
+        .filter((slot) => slot > startTime)
+        .map((slot) => ({
+          value: slot,
+          unavailable: !isRangeAvailable(availability.bookings, availability.blockedDates, date, startTime, slot),
+        }))
     : [];
 
   const resetForm = () => {
@@ -64,23 +145,40 @@ export function RescheduleCard({
     setEndTime('');
     setReason('');
     setActionError(null);
+    setAvailability(null);
   };
 
   const handlePropose = async () => {
+    if (!availability) return;
     if (!date || !startTime || !endTime) {
       setActionError('Choose a date, start time, and end time.');
       return;
     }
+    if (isBlockedDate) {
+      setActionError('That date is blocked in the freelancer\'s calendar. Choose another date.');
+      return;
+    }
+    if (isToday && toMinutes(startTime) <= now.minutes) {
+      setActionError('That start time has already passed. Choose a later time.');
+      return;
+    }
+    if (endTime <= startTime) {
+      setActionError('The end time must be after the start time.');
+      return;
+    }
+    if (!isRangeAvailable(availability.bookings, availability.blockedDates, date, startTime, endTime)) {
+      setActionError('The freelancer already has a booking during that time. Please choose a different slot.');
+      return;
+    }
+
     setIsSubmitting(true);
     setActionError(null);
 
-    const newStartAt = combineBangkokDateTime(date, startTime);
-    const newEndAt = combineBangkokDateTime(date, endTime);
     const response = await DataService.proposeBookingReschedule(booking.id, {
       proposerId: userId,
       proposerRole: role,
-      newStartAt,
-      newEndAt,
+      newStartAt: combineBangkokDateTime(date, startTime),
+      newEndAt: combineBangkokDateTime(date, endTime),
       reason,
     });
 
@@ -96,7 +194,7 @@ export function RescheduleCard({
   const handleAccept = async () => {
     setIsSubmitting(true);
     setActionError(null);
-    const response = await DataService.acceptBookingReschedule(booking.id, userId, role);
+    const response = await DataService.acceptBookingReschedule(booking.id, userId);
     setIsSubmitting(false);
     if (response.error) {
       setActionError((response.error as any).message || 'Unable to accept the new time.');
@@ -130,7 +228,7 @@ export function RescheduleCard({
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+    <div id="reschedule-card" className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
       <div className="mb-3 flex items-center gap-2">
         <CalendarClock className="w-5 h-5 text-gray-900" />
         <h2 className="font-bold text-gray-900">Reschedule</h2>
@@ -194,20 +292,32 @@ export function RescheduleCard({
               <X className="h-4 w-4" />
             </button>
           </div>
+
+          {isLoadingAvailability && <p className="mb-3 text-xs text-gray-500">Loading the freelancer's availability...</p>}
+          {availabilityError && <p className="mb-3 text-sm text-red-600">{availabilityError}</p>}
+
+          {availability && (
+            <p className="mb-3 text-xs text-gray-500">
+              Working hours {formatTimeLabel(availability.workingStart)} – {formatTimeLabel(availability.workingEnd)} (Bangkok time).
+              Times already booked are unavailable.
+            </p>
+          )}
+
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             <input
               type="date"
-              min={todayDateString()}
+              min={now.date}
               value={date}
+              disabled={!availability}
               onChange={(event) => {
                 setDate(event.target.value);
                 setStartTime('');
                 setEndTime('');
               }}
-              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+              className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
             />
             <select
-              disabled={!date}
+              disabled={!date || !availability || Boolean(isBlockedDate)}
               value={startTime}
               onChange={(event) => {
                 setStartTime(event.target.value);
@@ -215,9 +325,13 @@ export function RescheduleCard({
               }}
               className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
             >
-              <option value="" disabled>{!date ? 'Choose a date first' : 'Start time'}</option>
-              {START_TIME_SLOTS.map((slot) => (
-                <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+              <option value="" disabled>
+                {!date ? 'Choose a date first' : isBlockedDate ? 'Unavailable on this date' : 'Start time'}
+              </option>
+              {startOptions.map((slot) => (
+                <option key={slot.value} value={slot.value} disabled={slot.taken}>
+                  {formatTimeLabel(slot.value)}{slot.taken ? ' — booked' : ''}
+                </option>
               ))}
             </select>
             <select
@@ -227,8 +341,10 @@ export function RescheduleCard({
               className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
             >
               <option value="" disabled>{!startTime ? 'Choose a start time first' : 'End time'}</option>
-              {endTimeSlots.map((slot) => (
-                <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+              {endOptions.map((slot) => (
+                <option key={slot.value} value={slot.value} disabled={slot.unavailable}>
+                  {formatTimeLabel(slot.value)}{slot.unavailable ? ' — unavailable' : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -243,7 +359,7 @@ export function RescheduleCard({
           </p>
           <button
             onClick={() => void handlePropose()}
-            disabled={isSubmitting || !date || !startTime || !endTime}
+            disabled={isSubmitting || !date || !startTime || !endTime || !availability}
             className="mt-3 w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
           >
             {isSubmitting ? 'Sending...' : 'Send proposal'}

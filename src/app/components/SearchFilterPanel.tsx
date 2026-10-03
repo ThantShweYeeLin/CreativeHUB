@@ -1,6 +1,8 @@
 import { X, Sparkles, MapPin, LocateFixed, Loader2, ChevronLeft, SlidersHorizontal, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { DataService } from '../../lib/dataService';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrencyAmount, getCurrencySymbol } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
 import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
@@ -87,6 +89,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
   // box so the input can show/hide and stay in sync with it.
   const [showOtherInput, setShowOtherInput] = useState(false);
   const [otherLocationDraft, setOtherLocationDraft] = useState('');
+  const { user } = useAuth();
   const [isLocating, setIsLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
 
@@ -206,27 +209,28 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
       return;
     }
 
-    if (!navigator.geolocation) {
-      setLocateError('Geolocation is not available in this browser.');
+    if (!user?.id) {
+      setLocateError('Sign in and set your location in your profile to filter near you.');
       return;
     }
 
     setLocateError(null);
     setIsLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    DataService.getUser(user.id)
+      .then(({ data }) => {
         setIsLocating(false);
-        setFilters((prev) => ({
-          ...prev,
-          nearMe: { latitude: position.coords.latitude, longitude: position.coords.longitude, radiusKm: 50 },
-        }));
-      },
-      (geoError) => {
+        const latitude = data?.location_latitude;
+        const longitude = data?.location_longitude;
+        if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+          setLocateError('Set your location in your profile to filter near you.');
+          return;
+        }
+        setFilters((prev) => ({ ...prev, nearMe: { latitude, longitude, radiusKm: 50 } }));
+      })
+      .catch(() => {
         setIsLocating(false);
-        setLocateError(geoError.code === geoError.PERMISSION_DENIED ? 'Location permission denied.' : 'Unable to get your location.');
-      },
-      { timeout: 10000 }
-    );
+        setLocateError('Unable to load your saved location.');
+      });
   };
 
   const setNearMeRadius = (radiusKm: number) => {
@@ -460,7 +464,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               <div className="flex items-center gap-2 p-4">
                 <LocateFixed className="h-4 w-4 flex-shrink-0 text-gray-500" />
                 <span className={filters.nearMe ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
-                  {isLocating ? 'Locating...' : filters.nearMe ? `Near me — within ${filters.nearMe.radiusKm} km` : 'Use my current location'}
+                  {isLocating ? 'Loading...' : filters.nearMe ? `Near me — within ${filters.nearMe.radiusKm} km` : 'Use my saved location'}
                 </span>
               </div>
             </button>
