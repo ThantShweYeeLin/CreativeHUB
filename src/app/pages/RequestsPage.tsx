@@ -18,6 +18,7 @@ import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
 import { ConfirmOfferDialog } from '../components/negotiation/ConfirmOfferDialog';
 import { NegotiationHistoryModal } from '../components/negotiation/NegotiationHistoryModal';
 import { MAX_NEGOTIATION_ROUNDS } from '../../lib/negotiation';
+import { isBookableLocation } from '../../lib/serviceLocations';
 
 interface RequestsPageProps {
   onBack: () => void;
@@ -362,7 +363,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     const studioLocations: Array<{ formattedAddress: string }> = freelancerProfile?.studio_locations || [];
     const preferredLocations: Array<{ formattedAddress: string }> = freelancerProfile?.locations || [];
     const studioLocationOptions = studioLocations.map((loc) => (studioName ? `${studioName} — ${loc.formattedAddress}` : loc.formattedAddress));
-    const locationOptions = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress)];
+    const locationOptions = [...studioLocationOptions, ...preferredLocations.map((loc) => loc.formattedAddress).filter(isBookableLocation)];
     const plainProfileLocation = freelancerProfile?.users?.location;
     if (plainProfileLocation && !locationOptions.includes(plainProfileLocation)) {
       locationOptions.unshift(plainProfileLocation);

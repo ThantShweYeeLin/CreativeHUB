@@ -36,6 +36,7 @@ import { AuthPromptModal } from '../components/AuthPromptModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
+import { isBookableLocation } from '../../lib/serviceLocations';
 
 interface FreelancerProfileProps {
   onBack: () => void;
@@ -449,6 +450,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     bookingLocationOptions.unshift(profile.location);
   }
   const bookingLocations = bookingLocationOptions;
+  const selectableBookingLocations = bookingLocations.filter(isBookableLocation);
   const socialLinks = freelancerProfile?.social_links || [];
   const pronouns = profile?.pronouns;
   const gender = profile?.gender;
@@ -2210,7 +2212,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                 >
                   <option value="" disabled>Select a location</option>
-                  {bookingLocations.map((option: string) => (
+                  {selectableBookingLocations.map((option: string) => (
                     <option key={option} value={option}>{option}</option>
                   ))}
                   <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
