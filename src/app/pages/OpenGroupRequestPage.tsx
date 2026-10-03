@@ -82,7 +82,7 @@ export function OpenGroupRequestPage() {
           <ChevronLeft className="h-5 w-5" />
           Back
         </button>
-        <h1 className="text-2xl font-bold text-gray-900">Post an open Group Request</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Post an Open Opportunity</h1>
         <p className="mb-6 text-sm text-gray-600">
           Describe the team you need. Premium freelancers who match your roles, area and date are notified and can apply — you review every application in My Requests before anything is booked.
         </p>

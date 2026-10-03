@@ -29,7 +29,7 @@ export function PremiumBanner() {
       </span>
       <p className="min-w-0 flex-1 text-sm text-gray-700">
         <span className="font-semibold text-gray-900">Get noticed by more clients.</span>{' '}
-        <span className="hidden sm:inline">Event Matching and open Group Requests with Premium — from ฿99/month.</span>
+        <span className="hidden sm:inline">Event Matching and Open Opportunities with Premium — from ฿99/month.</span>
       </p>
       <button
         onClick={() => navigate('/freelancer-dashboard/premium')}

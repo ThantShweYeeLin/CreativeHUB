@@ -144,7 +144,7 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Opportunities</h2>
-        <p className="text-sm text-gray-600 md:text-base">Open Group Requests that fit your category, area and availability.</p>
+        <p className="text-sm text-gray-600 md:text-base">Open Opportunities that fit your category, area and availability.</p>
       </div>
 
       {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
@@ -170,10 +170,10 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
           <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-6 text-center">
             <Crown className="mx-auto mb-2 h-8 w-8 text-amber-500" />
             <p className="font-bold text-gray-900">
-              {subscription ? 'Your Premium has ended' : 'Open Group Requests are a Premium feature'}
+              {subscription ? 'Your Premium has ended' : 'Open Opportunities are a Premium feature'}
             </p>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
-              Premium freelancers can discover and apply to open Group Requests. Your existing applications{subscription ? ' and bookings' : ''} stay visible in “My applications”.
+              Premium freelancers can discover and apply to Open Opportunities. Your existing applications{subscription ? ' and bookings' : ''} stay visible in “My applications”.
             </p>
             <button
               onClick={() => navigate('/freelancer-dashboard/premium')}
@@ -187,7 +187,7 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
             <MapPin className="mx-auto mb-2 h-8 w-8 text-amber-500" />
             <p className="font-bold text-gray-900">Add a service location to be matched</p>
             <p className="mx-auto mt-1 max-w-md text-sm text-gray-600">
-              Open Group Requests are matched by area — you haven't set one yet, so no request can find you, no matter how well you fit. Add at least one location (or pick "Open to travel anywhere") in Settings.
+              Open Opportunities are matched by area — you haven't set one yet, so no request can find you, no matter how well you fit. Add at least one location (or pick "Open to travel anywhere") in Settings.
             </p>
             <button
               onClick={() => navigate('/edit-profile')}
