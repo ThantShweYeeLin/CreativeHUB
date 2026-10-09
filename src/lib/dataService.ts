@@ -618,7 +618,7 @@ export class DataService {
       .from('freelancer_profiles')
       .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     return { data, error };
   }
 
@@ -631,7 +631,7 @@ export class DataService {
       .from('freelancer_profiles')
       .select('*, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)')
       .eq('id', id)
-      .single();
+      .maybeSingle();
     return { data, error };
   }
 
@@ -658,7 +658,7 @@ export class DataService {
       .from('freelancer_profiles')
       .select(`${this.PUBLIC_FREELANCER_PROFILE_COLUMNS}, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)`)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     return { data, error };
   }
 
@@ -667,7 +667,7 @@ export class DataService {
       .from('freelancer_profiles')
       .select(`${this.PUBLIC_FREELANCER_PROFILE_COLUMNS}, users:user_id(id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location), portfolios(*), social_links(*)`)
       .eq('id', id)
-      .single();
+      .maybeSingle();
     return { data, error };
   }
 
@@ -3603,22 +3603,31 @@ export class DataService {
   // One reaction per user per message — picking a new emoji replaces the
   // old one, picking the same one again removes it (tap-to-toggle, same as
   // Messenger/iMessage).
+  //
+  // The live message_reactions table's column is named `reaction`, not
+  // `emoji` as supabase/chat_features.sql's migration (and this function's
+  // own parameter/return names) call it - that rename was never applied to
+  // this project's database, so querying/writing `emoji` directly 400s
+  // ("column message_reactions.emoji does not exist") on every single
+  // reaction load. Every query below uses the real `reaction` column, and
+  // getMessageReactions() maps it back to `.emoji` on the way out so every
+  // caller (MessagesPage, etc.) keeps working unchanged.
   static async toggleMessageReaction(messageId: string, userId: string, emoji: string) {
     const existing = await supabase
       .from('message_reactions' as any)
-      .select('id, emoji')
+      .select('id, reaction')
       .eq('message_id', messageId)
       .eq('user_id', userId)
       .maybeSingle();
 
-    if ((existing.data as any)?.emoji === emoji) {
+    if ((existing.data as any)?.reaction === emoji) {
       const { error } = await supabase.from('message_reactions' as any).delete().eq('message_id', messageId).eq('user_id', userId);
       return { removed: true, error };
     }
 
     const { error } = await supabase
       .from('message_reactions' as any)
-      .upsert({ message_id: messageId, user_id: userId, emoji } as any, { onConflict: 'message_id,user_id' });
+      .upsert({ message_id: messageId, user_id: userId, reaction: emoji } as any, { onConflict: 'message_id,user_id' });
     return { removed: false, error };
   }
 
@@ -3626,9 +3635,10 @@ export class DataService {
     if (!messageIds.length) return { data: [], error: null };
     const { data, error } = await supabase
       .from('message_reactions' as any)
-      .select('id, message_id, user_id, emoji')
+      .select('id, message_id, user_id, reaction')
       .in('message_id', messageIds);
-    return { data: data || [], error };
+    const mapped = (data || []).map((row: any) => ({ id: row.id, message_id: row.message_id, user_id: row.user_id, emoji: row.reaction }));
+    return { data: mapped, error };
   }
 
   // Typing indicator: rides the same channel subscribeToMessages already
@@ -3780,12 +3790,14 @@ export class DataService {
   }
 
   static async isFavorited(userId: string, freelancerId: string) {
+    // Not-favorited (no row) is the common case here, not an error -
+    // .single() would turn every such check into a noisy 406.
     const { data, error } = await supabase
       .from('favorites')
       .select('id')
       .eq('user_id', userId)
       .eq('freelancer_id', freelancerId)
-      .single();
+      .maybeSingle();
     return { isFavorited: !!data, error };
   }
 
@@ -5593,6 +5605,10 @@ export class DataService {
       .eq(participantColumn, userId)
       .in('payment_status', ['paid', 'refunded'])
       .is(dismissedColumn, null)
+      // A plain cancellation (either party, no dispute) never involved any
+      // service - nothing to rate. Only a real completion (paid) or a
+      // dispute's refund belongs in this nudge.
+      .is('cancelled_by', null)
       .order('created_at', { ascending: true })
       .limit(10);
 

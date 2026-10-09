@@ -254,7 +254,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         fetchFreelancerProfile(id),
       ]);
 
-      if (!userResponse.data && freelancerResponse.error) {
+      if (!userResponse.data && !freelancerResponse.data) {
         const profileIdResponse = await fetchFreelancerById(id);
         if (profileIdResponse.data?.user_id) {
           freelancerResponse = profileIdResponse;

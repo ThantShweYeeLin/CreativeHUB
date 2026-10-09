@@ -46,12 +46,20 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Reactions: one emoji per user per message (tapping a different one
 -- replaces it, same as Messenger/iMessage, not a growing list of past
--- reactions from the same person).
+-- reactions from the same person). Column is named `reaction`, not `emoji`
+-- - an earlier draft of this migration used `emoji`, and dataService.ts
+-- (toggleMessageReaction/getMessageReactions) was written against that name
+-- while the table that actually got created on this project kept `reaction`.
+-- That mismatch made every reaction load 400 ("column
+-- message_reactions.emoji does not exist") until dataService.ts was fixed
+-- to query `reaction` and map it back to `.emoji` for its callers. Keeping
+-- this file's column name as `reaction` too, so a fresh database created
+-- from this migration matches what the application code now expects.
 create table if not exists public.message_reactions (
   id uuid default uuid_generate_v4() primary key,
   message_id uuid references public.messages(id) on delete cascade not null,
   user_id uuid references public.users on delete cascade not null,
-  emoji text not null,
+  reaction text not null,
   created_at timestamptz default timezone('utc', now()) not null,
   unique (message_id, user_id)
 );
