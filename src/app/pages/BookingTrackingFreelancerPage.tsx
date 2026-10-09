@@ -535,13 +535,17 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </div>
               <div>
                 <p className="font-bold text-gray-900">{formatMoney(bookingData.pricing.deposit)} Refunded</p>
-                <p className="text-xs text-gray-600">The deposit was refunded to the client following a dispute.</p>
+                <p className="text-xs text-gray-600">
+                  {booking.cancelled_by
+                    ? `The deposit was refunded to the client because this booking was cancelled${booking.cancelled_by === user?.id ? ' by you' : ' by the client'}.`
+                    : 'The deposit was refunded to the client following a dispute.'}
+                </p>
               </div>
             </div>
           </div>
         )}
 
-        {(escrowState === 'released' || escrowState === 'refunded') && user?.id && (
+        {(escrowState === 'released' || (escrowState === 'refunded' && !booking.cancelled_by)) && user?.id && (
           <BookingReviewPrompt
             bookingId={booking.id}
             viewerId={user.id}
