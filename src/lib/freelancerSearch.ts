@@ -151,10 +151,14 @@ export function scoreFreelancerMatch(
     return 1 + interestBonus + quality;
   }
 
-  // Actively searching: relevance (below) stays the primary signal, so
-  // quality only breaks ties between similarly-relevant results instead of
-  // being able to outrank a much better keyword/category match.
-  let score = interestBonus + quality * 0.2;
+  // Actively searching: relevance is tracked separately from quality/interest
+  // and must be positive on its own for a freelancer to pass at all — quality
+  // only breaks ties between already-relevant results once added back in
+  // below. Without this separation, a well-reviewed freelancer with zero
+  // actual match to the query (e.g. a one-letter or unmatched search term)
+  // could still end up with a positive total score purely from quality and
+  // wrongly pass the `score > 0` filter in ExplorePage.
+  let relevance = 0;
 
   if (category) {
     // A detected category (from a pill, or a word like "photographer") is a
@@ -167,11 +171,11 @@ export function scoreFreelancerMatch(
     // excluded just for having the category as a minor skill instead of major.
     const normCategory = category.toLowerCase();
     if (normTitle === normCategory) {
-      score += 10;
+      relevance += 10;
     } else if (normMinorSkills.includes(normCategory)) {
-      score += 6;
+      relevance += 6;
     } else if (normSkills.includes(normCategory) || normStyles.includes(normCategory)) {
-      score += 4;
+      relevance += 4;
     } else {
       return 0;
     }
@@ -179,11 +183,11 @@ export function scoreFreelancerMatch(
 
   for (const term of styleTerms) {
     const t = term.toLowerCase();
-    if (normStyles.includes(t) || normSkills.includes(t) || normPerformerType.includes(t) || normTitle.includes(t)) score += 4;
+    if (normStyles.includes(t) || normSkills.includes(t) || normPerformerType.includes(t) || normTitle.includes(t)) relevance += 4;
   }
 
   for (const term of remainingTerms) {
-    if (normLocation.includes(term)) score += 3;
+    if (normLocation.includes(term)) relevance += 3;
     if (
       normSkills.some((s) => s.includes(term)) ||
       normStyles.some((s) => s.includes(term)) ||
@@ -192,9 +196,11 @@ export function scoreFreelancerMatch(
       normTitle.includes(term) ||
       normName.includes(term)
     ) {
-      score += 2;
+      relevance += 2;
     }
   }
 
-  return score;
+  if (relevance <= 0) return 0;
+
+  return relevance + interestBonus + quality * 0.2;
 }
