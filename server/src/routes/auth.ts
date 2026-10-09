@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { createSupabaseAdminClient, createSupabaseForRequest } from '../lib/supabase.js';
+import { authRateLimit, authShowcaseRateLimit } from '../lib/rateLimit.js';
 
 const router = Router();
 
@@ -21,7 +22,7 @@ const loginSchema = z.object({
 // revoked anon's direct table access, so this can't be a client-side Supabase
 // query any more - the admin client checks it server-side and returns only a
 // boolean, never the row.
-router.post('/check-email', async (req, res) => {
+router.post('/check-email', authRateLimit, async (req, res) => {
   try {
     const parsed = checkEmailSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: 'Email is required.' });
@@ -47,7 +48,7 @@ router.post('/check-email', async (req, res) => {
 // key, back when the "viewable by everyone" policies actually applied to
 // anon - see supabase/lock_down_anonymous_access.sql. Only aggregate counts
 // and already-public profile/review fields are returned.
-router.get('/showcase', async (_req, res) => {
+router.get('/showcase', authShowcaseRateLimit, async (_req, res) => {
   try {
     const admin = createSupabaseAdminClient();
     const [
@@ -135,7 +136,7 @@ router.get('/showcase', async (_req, res) => {
   }
 });
 
-router.post('/signup', async (req, res) => {
+router.post('/signup', authRateLimit, async (req, res) => {
   try {
     const parsed = signupSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -177,7 +178,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimit, async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) {

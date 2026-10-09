@@ -23,6 +23,22 @@ export const authRateLimit = rateLimit({
   message: { message: 'Too many attempts. Please wait a few minutes and try again.' },
 });
 
+// The login/sign-up screens' public rotating stats/testimonials panel - no
+// credentials involved, and it's fetched on every mount of either screen
+// (including just switching between them), so it must NOT share
+// authRateLimit's budget: a handful of normal navigation back and forth
+// between login and sign-up could otherwise burn through the 20-per-15-min
+// quota meant to throttle brute-force login/signup attempts, locking a real
+// user (or everyone behind the same NAT'd IP) out of logging in without a
+// single real attempt being made.
+export const authShowcaseRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please slow down.' },
+});
+
 // The Nominatim geocoding proxy - also reachable without a session (guests
 // browsing Explore/Map), and proxies a third-party service with its own
 // usage policy this app could get blocked from if hammered.

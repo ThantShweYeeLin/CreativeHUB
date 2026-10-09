@@ -7,7 +7,7 @@ import paymentsRouter from './payments.js';
 import subscriptionsRouter from './subscriptions.js';
 import geocodeRouter from './geocode.js';
 import { requireAuth } from '../lib/requireAuth.js';
-import { authRateLimit, chatbotRateLimit, generalApiRateLimit, geocodeRateLimit } from '../lib/rateLimit.js';
+import { chatbotRateLimit, generalApiRateLimit, geocodeRateLimit } from '../lib/rateLimit.js';
 
 const router = Router();
 
@@ -16,7 +16,11 @@ const router = Router();
 // Explore/Map too - everything else needs a verified Supabase session, so
 // an unauthenticated caller gets a 401 rather than any data (freelancer
 // emails, feed, chatbot, payments, ...).
-router.use('/auth', authRateLimit, authRouter);
+// authRateLimit is applied per-route inside authRouter, not to the whole
+// mount - /auth/showcase has its own, much more generous limit (see
+// rateLimit.ts) so it never shares a budget with actual login/signup/
+// check-email attempts.
+router.use('/auth', authRouter);
 router.use('/geocode', geocodeRateLimit, geocodeRouter);
 router.use(requireAuth);
 router.use(generalApiRateLimit);
