@@ -122,11 +122,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [replyDraftByReviewId, setReplyDraftByReviewId] = useState<Record<string, string>>({});
   const [isSubmittingReplyForId, setIsSubmittingReplyForId] = useState<string | null>(null);
   const [isUpdatingPaymentForId, setIsUpdatingPaymentForId] = useState<string | null>(null);
-  // Team membership/invitations management moved out with the dedicated
-  // Teams tab — teamEarnings survives because the Earnings tab's "Team
-  // Earnings" section still needs it for whatever team bookings a
-  // freelancer already has, independent of that management UI.
-  const [teamEarnings, setTeamEarnings] = useState<Array<{ id: string; teamName: string; projectName: string; share: number }>>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -168,7 +163,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
       setBlockedDates(blockedDatesResponse.data || []);
       setReviews(reviewsResponse.data || []);
-      void loadTeamsData(user.id);
 
       setIsLoading(false);
     }
@@ -255,27 +249,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       isActive = false;
     };
   }, [requests]);
-
-  const loadTeamsData = async (userId: string) => {
-    const teamsResponse = await DataService.getUserTeams(userId);
-    const myTeams = teamsResponse.data || [];
-
-    const teamBookingLists = await Promise.all(myTeams.map((entry: any) => DataService.getTeamBookingsForTeam(entry.team_id || entry.team?.id)));
-    const earnings: Array<{ id: string; teamName: string; projectName: string; share: number }> = [];
-    myTeams.forEach((entry: any, index: number) => {
-      const sharePercent = Number(entry.revenue_share_percent || 0);
-      const confirmedBookings = (teamBookingLists[index]?.data || []).filter((tb: any) => tb.status === 'confirmed');
-      for (const tb of confirmedBookings) {
-        earnings.push({
-          id: tb.id,
-          teamName: entry.team?.name || 'Team',
-          projectName: tb.project_name,
-          share: (Number(tb.budget || 0) * sharePercent) / 100,
-        });
-      }
-    });
-    setTeamEarnings(earnings);
-  };
 
   // is_available is the same field FreelancerProfile.tsx, ExplorePage.tsx,
   // and MapExplorePage.tsx all read to show "Available"/"Unavailable" (or
@@ -1466,29 +1439,6 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     </div>
                   );
                 })}
-              </div>
-            )}
-
-            {teamEarnings.length > 0 && (
-              <div>
-                <h3 className="mb-3 text-lg font-bold text-gray-900">Team Earnings</h3>
-                <div className="space-y-2">
-                  {teamEarnings.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between rounded-2xl border border-sky-100 bg-white p-4 shadow-lg">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">{entry.projectName}</p>
-                        <p className="text-xs text-gray-500">{entry.teamName}</p>
-                      </div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        Your share:{' '}
-                        {formatCurrencyAmount(
-                          convertAmount(entry.share, 'THB', normalizeCurrencyCode(preferredCurrency, 'THB')),
-                          normalizeCurrencyCode(preferredCurrency, 'THB')
-                        )}
-                      </p>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
           </div>

@@ -23,7 +23,6 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 // bundle shipping every page (Explore, both dashboards, Admin, etc.)
 // upfront. Same components, same props, same behavior — just loaded later.
 const FreelancerProfile = lazy(() => import('./pages/FreelancerProfile').then((m) => ({ default: m.FreelancerProfile })));
-const TeamProfilePage = lazy(() => import('./pages/TeamProfilePage').then((m) => ({ default: m.TeamProfilePage })));
 const MapView = lazy(() => import('./pages/MapExplorePage').then((m) => ({ default: m.MapView })));
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
 const GroupRequestPage = lazy(() => import('./pages/GroupRequestPage').then((m) => ({ default: m.GroupRequestPage })));
@@ -211,7 +210,6 @@ export default function App() {
               />
             }
           />
-          <Route path="/team/:id" element={<TeamProfilePage />} />
         </>
       )}
 

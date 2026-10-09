@@ -76,10 +76,6 @@ const getNotificationIcon = (type: string) => {
       return <Check className="w-4 h-4 text-green-600" />;
     case 'review':
       return <MessageSquare className="w-4 h-4 text-gray-900" />;
-    case 'team_invitation':
-      return <Users className="w-4 h-4 text-blue-600" />;
-    case 'team_member_joined':
-      return <Users className="w-4 h-4 text-green-600" />;
     case 'account_security':
       return <Bell className="w-4 h-4 text-amber-600" />;
     case 'ai_match_results':

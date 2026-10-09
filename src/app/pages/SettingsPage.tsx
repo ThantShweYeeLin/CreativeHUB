@@ -34,7 +34,6 @@ interface PreferenceState {
 interface NotificationState {
   emailBookingRequests: boolean;
   emailMessages: boolean;
-  emailTeamInvites: boolean;
   emailPromotions: boolean;
   emailPaymentUpdates: boolean;
   appMessages: boolean;
@@ -62,7 +61,6 @@ const defaultPreferences: PreferenceState = {
 const defaultNotifications: NotificationState = {
   emailBookingRequests: true,
   emailMessages: true,
-  emailTeamInvites: true,
   emailPromotions: false,
   emailPaymentUpdates: true,
   appMessages: true,
@@ -562,7 +560,6 @@ export function SettingsPage() {
             <div className="grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.emailBookingRequests} onChange={(e) => setNotifications((c) => ({ ...c, emailBookingRequests: e.target.checked }))} /> Email: Booking requests</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.emailMessages} onChange={(e) => setNotifications((c) => ({ ...c, emailMessages: e.target.checked }))} /> Email: Messages</label>
-              <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.emailTeamInvites} onChange={(e) => setNotifications((c) => ({ ...c, emailTeamInvites: e.target.checked }))} /> Email: Team invitations</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.emailPromotions} onChange={(e) => setNotifications((c) => ({ ...c, emailPromotions: e.target.checked }))} /> Email: Promotions</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.emailPaymentUpdates} onChange={(e) => setNotifications((c) => ({ ...c, emailPaymentUpdates: e.target.checked }))} /> Email: Payment updates</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={notifications.appMessages} onChange={(e) => setNotifications((c) => ({ ...c, appMessages: e.target.checked }))} /> In-app: New messages</label>
