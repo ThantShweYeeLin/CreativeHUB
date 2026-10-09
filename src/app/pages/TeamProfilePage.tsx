@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ChevronLeft, Users } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { AuthPromptModal } from '../components/AuthPromptModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
@@ -19,6 +20,7 @@ export function TeamProfilePage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [isRequestFormOpen, setIsRequestFormOpen] = useState(false);
+  const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
@@ -146,7 +148,16 @@ export function TeamProfilePage() {
             ))}
           </div>
 
-          {user?.role === 'client' && (
+          {!user ? (
+            <div className="mt-6 border-t border-sky-100 pt-6">
+              <button
+                onClick={() => setAuthPromptMessage('Create an account to request this team.')}
+                className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 font-semibold text-white hover:shadow-lg"
+              >
+                Request This Team
+              </button>
+            </div>
+          ) : user.role === 'client' && (
             <div className="mt-6 border-t border-sky-100 pt-6">
               {!isRequestFormOpen ? (
                 <button
@@ -199,6 +210,10 @@ export function TeamProfilePage() {
           )}
         </div>
       </div>
+
+      {authPromptMessage && (
+        <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
     </div>
   );
 }

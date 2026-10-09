@@ -14,18 +14,12 @@ const EMAIL = process.env.AUTH_TEST_EMAIL;
 const PASSWORD = process.env.AUTH_TEST_PASSWORD;
 
 const DEEP_LINKS = [
-  '/explore',
-  '/map',
-  '/for-you',
   '/my-bookings',
   '/tickets',
   '/tickets/00000000-0000-0000-0000-000000000000',
   '/tickets/dispute/00000000-0000-0000-0000-000000000000',
   '/booking/00000000-0000-0000-0000-000000000000',
   '/freelancer-booking/00000000-0000-0000-0000-000000000000',
-  '/profile/00000000-0000-0000-0000-000000000000',
-  '/team/00000000-0000-0000-0000-000000000000',
-  '/post/00000000-0000-0000-0000-000000000000',
   '/messages',
   '/admin',
   '/admin/disputes',
@@ -43,6 +37,27 @@ test('public pages (terms, privacy) stay reachable while logged out', async ({ p
   await page.goto('/terms');
   await expect(page).toHaveURL(/\/terms$/);
 });
+
+// Explore, Map, For You, and the public profile pages are deliberately
+// guest-browsable (see the comment above their routes in App.tsx) - a logged
+// out visitor must land on the page itself, not get bounced to /login. Only
+// account-specific actions on them soft-gate into sign up/login.
+const GUEST_BROWSABLE_LINKS = [
+  '/explore',
+  '/map',
+  '/for-you',
+  '/profile/00000000-0000-0000-0000-000000000000',
+  '/team/00000000-0000-0000-0000-000000000000',
+  '/post/00000000-0000-0000-0000-000000000000',
+];
+
+for (const link of GUEST_BROWSABLE_LINKS) {
+  test(`logged-out visitor opening ${link} stays on the page (guest-browsable)`, async ({ page }) => {
+    await page.goto(link);
+    await expect(page).toHaveURL(new RegExp(`${link.replace(/\//g, '\\/')}$`));
+    await expect(page.locator('input[type="password"]')).toHaveCount(0);
+  });
+}
 
 test.describe('login returns to the deep link that was requested', () => {
   test.skip(!EMAIL || !PASSWORD, 'Requires AUTH_TEST_EMAIL/AUTH_TEST_PASSWORD.');
