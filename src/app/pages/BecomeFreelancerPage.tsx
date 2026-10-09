@@ -9,6 +9,7 @@ import { OnboardingStepShell } from '../../components/common/OnboardingStepShell
 import type { ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
+import { usePersistedOnboardingStep, clearPersistedOnboardingStep } from '../../lib/usePersistedOnboardingStep';
 import { StepProfessionalInfo } from './freelancer-onboarding/StepProfessionalInfo';
 import { StepCategory } from './freelancer-onboarding/StepCategory';
 import { StepSkills } from './freelancer-onboarding/StepSkills';
@@ -62,7 +63,12 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
   const { user } = useAuth();
   const { currency: preferredCurrency, setCurrency } = useCurrency();
   const [pendingProfile] = useState(() => getPendingSignupProfile());
-  const [step, setStep] = useState(1);
+  // Capped at the Specialty step (2): nothing here saves to the server until
+  // the final submit, so category/skills/styles/etc. are gone on any reload
+  // regardless of which step index is remembered - resuming any deeper than
+  // Specialty would silently skip re-asking for a category that's actually
+  // missing again. See usePersistedOnboardingStep's own comment.
+  const [step, setStep] = usePersistedOnboardingStep('freelancer_onboarding_step', user?.id, TOTAL_STEPS, 2);
 
   // (a) Profile
   const [displayName, setDisplayName] = useState(pendingProfile?.fullName || user?.fullName || '');
@@ -534,6 +540,7 @@ export function BecomeFreelancerPage({ onBack }: BecomeFreelancerPageProps) {
     await setCurrency(normalizeCurrencyCode(startingPriceCurrency, 'THB'), true);
 
     setIsSaving(false);
+    clearPersistedOnboardingStep('freelancer_onboarding_step', user?.id);
     // Full reload so AuthContext re-reads the updated user profile (role
     // change) and the freelancer dashboard button appears.
     window.location.href = '/explore';

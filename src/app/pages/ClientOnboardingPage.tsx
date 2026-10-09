@@ -10,6 +10,7 @@ import { OnboardingStepShell } from '../../components/common/OnboardingStepShell
 import { ProfileImageDropzone, type ImageUpload } from '../../components/common/ProfileImageDropzone';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { getPendingSignupProfile } from '../../lib/pendingSignupProfile';
+import { usePersistedOnboardingStep, clearPersistedOnboardingStep } from '../../lib/usePersistedOnboardingStep';
 
 const CLIENT_TYPE_CATALOG = ['Individual', 'Business', 'Event Planner', 'Wedding Organizer', 'Brand', 'Organization'];
 
@@ -49,7 +50,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   ];
 
   const [pendingProfile] = useState(() => getPendingSignupProfile());
-  const [step, setStep] = useState(1);
+  const [step, setStep] = usePersistedOnboardingStep('client_onboarding_step', user?.id, TOTAL_STEPS);
   const [displayName, setDisplayName] = useState(pendingProfile?.fullName || user?.fullName || '');
   const [location, setLocation] = useState('');
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
@@ -230,6 +231,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
     }
 
     setIsSaving(false);
+    clearPersistedOnboardingStep('client_onboarding_step', user?.id);
     // Full reload so AuthContext re-reads onboarding_completed and the
     // mandatory-onboarding route gate lets the user through to /explore.
     window.location.href = '/explore';
