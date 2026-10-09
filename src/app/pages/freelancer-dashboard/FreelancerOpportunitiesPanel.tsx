@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Calendar, ChevronLeft, Crown, ImagePlus, MapPin, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -70,8 +70,23 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<GroupOpportunity | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const active = isSubscriptionActive(subscription);
+
+  const filteredOpportunities = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return opportunities;
+    return opportunities.filter((opportunity) =>
+      `${opportunity.title} ${opportunity.client?.full_name || ''}`.toLowerCase().includes(query)
+    );
+  }, [opportunities, search]);
+
+  const filteredApplications = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return applications;
+    return applications.filter((application) => application.title.toLowerCase().includes(query));
+  }, [applications, search]);
 
   const load = async () => {
     if (!user?.id) return;
@@ -201,8 +216,15 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
             No open requests match you right now. We'll notify you when one does.
           </div>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {opportunities.map((opportunity) => {
+          <div className="space-y-4">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search by client or event name"
+              className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+            />
+            <div className="grid gap-4 md:grid-cols-2">
+            {filteredOpportunities.map((opportunity) => {
               const myRoles = opportunity.roles.filter((role) => role.eligible);
               // has_applied only ever means "I applied at some point" - it
               // doesn't say what happened since, so a declined application
@@ -255,13 +277,25 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
                 </div>
               );
             })}
+            </div>
+            {filteredOpportunities.length === 0 && (
+              <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center text-gray-600 shadow-lg">
+                No open requests match this search.
+              </div>
+            )}
           </div>
         )
       ) : applications.length === 0 ? (
         <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center text-gray-600 shadow-lg">You haven't applied to any Group Requests yet.</div>
       ) : (
         <div className="space-y-3">
-          {applications.map((application) => {
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by event name"
+            className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+          />
+          {filteredApplications.map((application) => {
             const status = applicationStatusLabel(application);
             return (
               <div key={application.id} className="rounded-2xl border border-sky-100 bg-white p-5 shadow-lg">
@@ -291,6 +325,12 @@ export function FreelancerOpportunitiesPanel({ hasServiceLocation }: { hasServic
               </div>
             );
           })}
+
+          {filteredApplications.length === 0 && (
+            <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center text-gray-600 shadow-lg">
+              No applications match this search.
+            </div>
+          )}
         </div>
       )}
     </div>

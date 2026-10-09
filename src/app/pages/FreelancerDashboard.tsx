@@ -95,7 +95,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected' | 'countered'>('all');
   const [requestSearch, setRequestSearch] = useState('');
-  const [requestMinBudget, setRequestMinBudget] = useState('');
+  const [bookingSearch, setBookingSearch] = useState('');
   const [counterFormOpenForId, setCounterFormOpenForId] = useState<string | null>(null);
   const [counterPriceInput, setCounterPriceInput] = useState('');
   const [counterMessageInput, setCounterMessageInput] = useState('');
@@ -706,22 +706,14 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   ];
 
   const filteredRequests = useMemo(() => {
-    const minBudget = Number(requestMinBudget || 0);
-
     return requests
       .filter((request) => (requestStatusFilter === 'all' ? true : request.status === requestStatusFilter))
       .filter((request) => {
         const searchable = `${request.project_name || ''} ${request.client?.full_name || ''} ${request.message || ''}`.toLowerCase();
         return requestSearch.trim().length === 0 || searchable.includes(requestSearch.trim().toLowerCase());
       })
-      .filter((request) => {
-        if (!requestMinBudget.trim()) return true;
-        const meta = extractBudgetMeta(request.message, request.description);
-        const effectiveMax = Number(meta?.max ?? request.budget ?? 0);
-        return effectiveMax >= minBudget;
-      })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [requests, requestStatusFilter, requestSearch, requestMinBudget]);
+  }, [requests, requestStatusFilter, requestSearch]);
 
   const bookingCards = useMemo(() => {
     const ESCROW_STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -773,6 +765,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
       };
     });
   }, [bookings]);
+
+  const filteredBookingCards = useMemo(() => {
+    const query = bookingSearch.trim().toLowerCase();
+    if (!query) return bookingCards;
+    return bookingCards.filter((booking) => `${booking.clientName} ${booking.projectName}`.toLowerCase().includes(query));
+  }, [bookingCards, bookingSearch]);
 
   return (
     <div className="relative min-h-screen pb-20 md:pb-12">
@@ -850,8 +848,8 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               <p className="text-sm text-gray-600 md:text-base">Manage incoming project requests</p>
             </div>
 
-            <div className="rounded-2xl border border-sky-100 bg-white p-4 shadow-lg md:p-5">
-              <div className="mb-4 flex flex-wrap gap-2">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
                 {(['all', 'pending', 'countered', 'accepted', 'rejected'] as const).map((status) => {
                   const count =
                     status === 'all'
@@ -874,21 +872,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                 })}
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <input
-                  value={requestSearch}
-                  onChange={(event) => setRequestSearch(event.target.value)}
-                  placeholder="Search by project, client, or message"
-                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                />
-                <input
-                  type="number"
-                  value={requestMinBudget}
-                  onChange={(event) => setRequestMinBudget(event.target.value)}
-                  placeholder="e.g. 2000"
-                  className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
-                />
-              </div>
+              <input
+                value={requestSearch}
+                onChange={(event) => setRequestSearch(event.target.value)}
+                placeholder="Search by project, client, or message"
+                className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+              />
             </div>
 
             {requests.length === 0 ? (
@@ -1143,13 +1132,20 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </p>
             </div>
 
+            <input
+              value={bookingSearch}
+              onChange={(event) => setBookingSearch(event.target.value)}
+              placeholder="Search by client or event name"
+              className="w-full rounded-lg border border-sky-100 bg-sky-50/50 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+            />
+
             {bookingCards.length === 0 ? (
               <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg">
                 <p className="text-sm text-gray-500">No bookings yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
-                {bookingCards.map((booking) => (
+                {filteredBookingCards.map((booking) => (
                   <button
                     key={booking.id}
                     onClick={() => navigate(`/freelancer-booking/${booking.id}`)}
@@ -1213,6 +1209,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                     ) : null}
                   </button>
                 ))}
+
+                {filteredBookingCards.length === 0 && (
+                  <div className="rounded-2xl border border-sky-100 bg-white p-8 text-center shadow-lg text-gray-600">
+                    No bookings match this search.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1490,7 +1492,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </div>
             )}
           </div>
-        ) : (
+        ) : section === 'settings' ? (
           <div className="space-y-6 md:space-y-8">
             <div>
               <h2 className="text-xl font-bold text-gray-900 md:text-2xl">Settings</h2>
@@ -1745,7 +1747,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
 
       {confirmAction && (
