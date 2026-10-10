@@ -100,9 +100,13 @@ export function SettingsPage() {
 
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
+
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPasswordForReset, setCurrentPasswordForReset] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordFormError, setPasswordFormError] = useState<string | null>(null);
 
   const [preferences, setPreferences] = useState(defaultPreferences);
   const [notifications, setNotifications] = useState(defaultNotifications);
@@ -161,21 +165,14 @@ export function SettingsPage() {
         return;
       }
 
-      if (userResponse.error) {
-        setErrorMessage((userResponse.error as any).message || 'Unable to load settings.');
-      } else {
-        setEmail(userResponse.data?.email || user.email || '');
-        setAccountStatus((userResponse.data as any)?.account_status === 'paused' ? 'paused' : 'active');
-        setPreferences((current) => ({
-          ...current,
-          currency: normalizeCurrencyCode((userResponse.data as any)?.preferred_currency || current.currency, 'THB'),
-        }));
-      }
-
-      if (freelancerResponse.data) {
-        setProfileVisibility(freelancerResponse.data.visibility === 'limited' ? 'limited' : 'public');
-      }
-
+      // Local-only fields first (language/theme/timezone/distanceUnit,
+      // notifications) - these have no server copy at all. Read before the
+      // DB response is applied below, not after: parsed.preferences/privacy
+      // replace the whole object wholesale, so applying this second would
+      // silently blow away the DB-authoritative currency/phone/privacy
+      // values with whatever (possibly stale, possibly never-set) copy
+      // happens to be sitting in this browser's localStorage - a real
+      // pre-existing bug for currency alone before phone/privacy joined it.
       const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
       if (raw) {
         try {
@@ -187,6 +184,35 @@ export function SettingsPage() {
         } catch {
           // Ignore malformed local settings.
         }
+      }
+
+      if (userResponse.error) {
+        setErrorMessage((userResponse.error as any).message || 'Unable to load settings.');
+      } else {
+        setEmail(userResponse.data?.email || user.email || '');
+        setAccountStatus((userResponse.data as any)?.account_status === 'paused' ? 'paused' : 'active');
+        setPreferences((current) => ({
+          ...current,
+          currency: normalizeCurrencyCode((userResponse.data as any)?.preferred_currency || current.currency, 'THB'),
+        }));
+        // Real columns, not the localStorage-only settings blob above - these
+        // describe what OTHER people see about you (your phone number, and
+        // whether it/your email show on your public profile), so they have
+        // to be readable from any device/session, not just this browser.
+        // Applied after the localStorage read on purpose, so the DB always
+        // wins for these three fields specifically.
+        if ((userResponse.data as any)?.phone) {
+          setPhoneNumber((userResponse.data as any).phone);
+        }
+        setPrivacy((current) => ({
+          ...current,
+          hideEmailFromPublic: !!(userResponse.data as any)?.hide_email_from_public,
+          hidePhoneFromPublic: !!(userResponse.data as any)?.hide_phone_from_public,
+        }));
+      }
+
+      if (freelancerResponse.data) {
+        setProfileVisibility(freelancerResponse.data.visibility === 'limited' ? 'limited' : 'public');
       }
 
       setIsLoading(false);
@@ -269,29 +295,67 @@ export function SettingsPage() {
       }
     }
 
-    if (newPassword) {
-      if (newPassword.length < 6) {
-        setErrorMessage('New password must be at least 6 characters.');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        setErrorMessage('Password confirmation does not match.');
-        return;
-      }
+    const contactResponse = await DataService.updateUser(user.id, {
+      phone: phoneNumber.trim() || null,
+      hide_email_from_public: privacy.hideEmailFromPublic,
+      hide_phone_from_public: privacy.hidePhoneFromPublic,
+      updated_at: new Date().toISOString(),
+    } as any);
 
-      const passwordResult = await authService.updatePassword(newPassword);
-      if (passwordResult.error) {
-        setErrorMessage((passwordResult.error as any).message || 'Password update failed.');
-        return;
-      }
-
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+    if (contactResponse.error) {
+      setErrorMessage((contactResponse.error as any).message || 'Unable to save contact/privacy settings.');
+      return;
     }
 
     persistLocalSettings();
     setStatusMessage('Account settings saved.');
+  };
+
+  const handleChangePassword = async () => {
+    if (!user?.email) return;
+
+    setPasswordFormError(null);
+
+    if (!currentPasswordForReset) {
+      setPasswordFormError('Enter your current password.');
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordFormError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordFormError('Password confirmation does not match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    // Supabase has no separate "verify this password" call - signing back in
+    // with the entered current password IS that check: signInWithPassword
+    // only succeeds if it actually matches, and since it's the same email,
+    // a successful call just re-issues a session for this same account
+    // rather than switching to a different one.
+    const verifyResult = await authService.signIn({ email: user.email, password: currentPasswordForReset });
+    if (verifyResult.error) {
+      setIsChangingPassword(false);
+      setPasswordFormError('Current password is incorrect.');
+      return;
+    }
+
+    const passwordResult = await authService.updatePassword(newPassword);
+    setIsChangingPassword(false);
+
+    if (passwordResult.error) {
+      setPasswordFormError((passwordResult.error as any).message || 'Password update failed.');
+      return;
+    }
+
+    setCurrentPasswordForReset('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPasswordForm(false);
+    setStatusMessage('Password changed.');
   };
 
   const handleSavePreferences = async () => {
@@ -416,13 +480,68 @@ export function SettingsPage() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e.g. jane@example.com" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
               <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="e.g. +66 81 234 5678" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
-              <input value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} type="password" placeholder="Current password (optional)" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
-              <input value={newPassword} onChange={(e) => setNewPassword(e.target.value)} type="password" placeholder="At least 6 characters" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
-              <input value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} type="password" placeholder="Re-enter new password" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300" />
             </div>
+
+            {!showPasswordForm ? (
+              <button
+                onClick={() => { setShowPasswordForm(true); setPasswordFormError(null); }}
+                className="mt-4 rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
+              >
+                Reset Password
+              </button>
+            ) : (
+              <div className="mt-4 rounded-xl border-2 border-sky-200 bg-sky-50/50 p-4">
+                <p className="mb-3 text-sm font-bold text-gray-900">Change your password</p>
+                {passwordFormError && <p className="mb-3 text-sm text-red-600">{passwordFormError}</p>}
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <input
+                    value={currentPasswordForReset}
+                    onChange={(e) => setCurrentPasswordForReset(e.target.value)}
+                    type="password"
+                    placeholder="Current password"
+                    className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  />
+                  <input
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    type="password"
+                    placeholder="New password (at least 6 characters)"
+                    className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  />
+                  <input
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    type="password"
+                    placeholder="Confirm new password"
+                    className="rounded-lg border border-sky-100 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-sky-300"
+                  />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowPasswordForm(false);
+                      setCurrentPasswordForReset('');
+                      setNewPassword('');
+                      setConfirmPassword('');
+                      setPasswordFormError(null);
+                    }}
+                    disabled={isChangingPassword}
+                    className="rounded-lg border border-sky-100 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => void handleChangePassword()}
+                    disabled={isChangingPassword}
+                    className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+                  >
+                    {isChangingPassword ? 'Verifying…' : 'Change Password'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg">Save Account</button>
-              <button onClick={handleLogout} className="rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Log out</button>
               {role === 'freelancer' && (
                 <button
                   onClick={() => void handleTogglePause()}
@@ -444,7 +563,13 @@ export function SettingsPage() {
                 Your account is paused: you're hidden from Explore and search, and clients can't send you new booking requests.
               </p>
             )}
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button onClick={handleSaveAccountSettings} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg">Save Account</button>
+              <button onClick={handleLogout} className="rounded-lg border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50">Log out</button>
+            </div>
           </section>
+
 
           {showDeleteConfirm && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
@@ -634,8 +759,6 @@ export function SettingsPage() {
             <div className="flex flex-wrap gap-2 text-sm">
               <button type="button" onClick={() => setLegalModalTab('privacy')} className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Privacy Policy</button>
               <button type="button" onClick={() => setLegalModalTab('terms')} className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Terms of Service</button>
-              <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">FAQ</a>
-              <a href="#" className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50">Contact Support</a>
               <button
                 onClick={() => navigate('/tickets')}
                 className="rounded-lg border border-sky-100 px-3 py-2 text-gray-700 hover:bg-sky-50"

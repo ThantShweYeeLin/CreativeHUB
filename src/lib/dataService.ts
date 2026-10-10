@@ -586,6 +586,30 @@ export class DataService {
     return { data: (data || []) as any[], error };
   }
 
+  // Both directions, unlike getBlockedUsers() above (which is just "people
+  // I blocked", for the Settings list where direction matters). Explore/For
+  // You need the mutual set - the rest of the app already treats blocking as
+  // symmetric for interaction purposes (isBlockedEither, used by messaging
+  // and booking-request creation), so someone who blocked you shouldn't
+  // surface in your browsing any more than someone you blocked should.
+  static async getMutualBlockIds(userId: string): Promise<{ data: string[]; error: unknown }> {
+    if (!userId) return { data: [], error: null };
+    const { data, error } = await supabase
+      .from('blocked_users' as any)
+      .select('blocker_id, blocked_id')
+      .or(`blocker_id.eq.${userId},blocked_id.eq.${userId}`);
+
+    if (error || !data) {
+      return { data: [], error };
+    }
+
+    const ids = new Set<string>();
+    for (const row of data as any[]) {
+      ids.add(row.blocker_id === userId ? row.blocked_id : row.blocker_id);
+    }
+    return { data: Array.from(ids), error: null };
+  }
+
   static async acceptMessageRequest(conversationId: string) {
     const { error } = await supabase
       .from('conversations')

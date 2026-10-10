@@ -9,6 +9,7 @@ import { AuthPromptModal } from '../app/components/AuthPromptModal';
 import { NotificationPanelItem, NotificationsPanel } from '../app/components/NotificationsPanel';
 import { DataService } from '../lib/dataService';
 import { FeedService } from '../lib/feedService';
+import { shouldShowInAppNotificationType } from '../lib/localPreferences';
 import { supabase } from '../lib/supabase';
 import { Avatar } from './common/Avatar';
 import { DEFAULT_AVATAR_URL } from '../lib/defaults';
@@ -453,7 +454,7 @@ export function MainLayout({ children }: MainLayoutProps) {
             })
           );
 
-          setNotifications(mapped);
+          setNotifications(mapped.filter((item) => shouldShowInAppNotificationType(item.type)));
         }
       } catch (err) {
         console.error('Error while loading notifications:', err);

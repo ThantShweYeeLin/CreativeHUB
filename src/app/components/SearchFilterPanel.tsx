@@ -5,6 +5,7 @@ import { DataService } from '../../lib/dataService';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrencyAmount, getCurrencySymbol } from '../../lib/currency';
 import { FREELANCER_CATEGORY_LABELS } from '../../lib/categories';
+import { getDistanceUnitPreference, kmToMiles } from '../../lib/localPreferences';
 import { chipClass, CHIP_BASE_CLASS, CHIP_SELECTED_CLASS, FIELD_LABEL_CLASS, INPUT_CONTAINER_CLASS } from '../../lib/formFieldStyles';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
@@ -51,6 +52,16 @@ const locationOptions = [
 ];
 
 const NEAR_ME_RADIUS_OPTIONS_KM = [10, 25, 50, 100];
+
+// Stored/compared radius stays in km either way (filters.nearMe.radiusKm,
+// the haversineDistanceKm comparison in ExplorePage.tsx) - this only
+// changes what the label says, per Settings' Distance Unit preference.
+function formatRadiusLabel(km: number): string {
+  if (getDistanceUnitPreference() === 'miles') {
+    return `${Math.round(kmToMiles(km))} mi`;
+  }
+  return `${km} km`;
+}
 
 const PRICE_MIN = 0;
 const PRICE_MAX = 100000;
@@ -464,7 +475,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
               <div className="flex items-center gap-2 p-4">
                 <LocateFixed className="h-4 w-4 flex-shrink-0 text-gray-500" />
                 <span className={filters.nearMe ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
-                  {isLocating ? 'Loading...' : filters.nearMe ? `Near me — within ${filters.nearMe.radiusKm} km` : 'Use my saved location'}
+                  {isLocating ? 'Loading...' : filters.nearMe ? `Near me — within ${formatRadiusLabel(filters.nearMe.radiusKm)}` : 'Use my saved location'}
                 </span>
               </div>
             </button>
@@ -478,7 +489,7 @@ export function SearchFilterPanel({ onClose, onSearch, initialFilters, userLocat
                     onClick={() => setNearMeRadius(km)}
                     className={chipClass(filters.nearMe?.radiusKm === km)}
                   >
-                    {km} km
+                    {formatRadiusLabel(km)}
                   </button>
                 ))}
               </div>

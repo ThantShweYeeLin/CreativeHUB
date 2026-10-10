@@ -447,6 +447,30 @@ export function ExplorePage() {
   const navigate = useNavigate();
   const [showSearchFilter, setShowSearchFilter] = useState(false);
   const [freelancers, setFreelancers] = useState<any[]>(() => cachedFreelancers || []);
+  // Either direction (someone you blocked, or who blocked you) - matches
+  // the rest of the app's isBlockedEither-based blocking behavior (used by
+  // messaging and booking-request creation) rather than just "people I
+  // blocked". A separate effect keyed on user?.id, not folded into
+  // loadFreelancers() below - that effect has an empty dependency array by
+  // design (runs once, independent of auth state resolving), so a fetch
+  // depending on user?.id placed inside it would silently use whatever
+  // user?.id was at that one moment, never re-running once the real session
+  // loads a beat later.
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!user?.id) {
+      setBlockedIds(new Set());
+      return;
+    }
+    DataService.getMutualBlockIds(user.id).then((response) => {
+      if (isMounted) setBlockedIds(new Set(response.data || []));
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
   const [minorSkillsByFreelancerId, setMinorSkillsByFreelancerId] = useState<Map<string, string[]>>(new Map());
   // Both searchQuery and selectedCategory below are kept in the URL (not
   // just component state) so the exact search a user was looking at
@@ -907,6 +931,7 @@ export function ExplorePage() {
   const profiles = useMemo<ProfileCardProps[]>(() => {
     return freelancers
       .filter((profile) => isFreelancerCategory(profile.title))
+      .filter((profile) => !blockedIds.has(profile.user_id || profile.users?.id || profile.id))
       .map((profile) => ({
         id: profile.user_id || profile.users?.id || profile.id,
         name: profile.users?.full_name || profile.title || 'Creative Freelancer',
@@ -918,7 +943,7 @@ export function ExplorePage() {
         gender: profile.users?.gender || null,
         location: profile.users?.location || undefined,
       }));
-  }, [freelancers, minorSkillsByFreelancerId]);
+  }, [freelancers, minorSkillsByFreelancerId, blockedIds]);
 
   // Unifies the category pill (a hard category filter) with whatever the
   // free-text search implies (service/style/location) into one query the
@@ -1502,7 +1527,7 @@ export function ExplorePage() {
           <div className="group/hero relative mx-auto w-full min-w-0 max-w-2xl">
             <div className="hero-ring-spin pointer-events-none absolute -inset-4 rounded-[36px] border-2 border-dashed border-sky-200/70" aria-hidden="true" />
             {(() => {
-              const candidates = heroData?.featuredCandidates;
+              const candidates = heroData?.featuredCandidates.filter((c) => !blockedIds.has(c.id));
 
               if (!candidates || candidates.length === 0) {
                 return <div className="h-[420px] w-full max-w-md mx-auto animate-pulse rounded-[24px] bg-sky-100/70" />;

@@ -71,6 +71,19 @@ class AuthService {
       return new Error('Password is too short. Use at least 6 characters.');
     }
 
+    // GoTrue's message text is identically "Current password required when
+    // setting new password." for BOTH "you left it blank" and "you typed
+    // the wrong one" - only the structured `code` tells them apart
+    // (confirmed live: a wrong password comes back as
+    // current_password_invalid, same message text either way).
+    if (error?.code === 'current_password_invalid') {
+      return new Error('Current password is incorrect.');
+    }
+
+    if (lower.includes('current password required')) {
+      return new Error('Enter your current password.');
+    }
+
     if (lower.includes('user already registered') || lower.includes('already been registered')) {
       return new Error('This email is already registered. Please sign in instead.');
     }
@@ -443,9 +456,27 @@ class AuthService {
     }
   }
 
-  async updatePassword(password: string) {
-    const { data, error } = await supabase.auth.updateUser({ password });
-    return { data, error };
+  // currentPassword is optional here, but required in practice for a normal
+  // logged-in password change (SettingsPage.tsx) - this project has GoTrue's
+  // GOTRUE_SECURITY_UPDATE_PASSWORD_REQUIRE_CURRENT_PASSWORD enabled, which
+  // rejects updateUser({password}) with "Current password required when
+  // setting new password" unless current_password is included in the same
+  // call (GoTrue validates it server-side; a separate signInWithPassword()
+  // beforehand does NOT satisfy this - confirmed live, it 400s regardless).
+  // Left out entirely for ResetPasswordPage.tsx's forgot-password flow -
+  // there is no current password to offer there; the emailed recovery
+  // token's PASSWORD_RECOVERY session is itself the proof of identity, and
+  // this call worked there unchanged before current_password existed at all.
+  async updatePassword(password: string, currentPassword?: string) {
+    const payload: any = { password };
+    if (currentPassword) {
+      payload.current_password = currentPassword;
+    }
+    const { data, error } = await supabase.auth.updateUser(payload);
+    if (error) {
+      return { data, error: this.toFriendlyAuthError(error, 'Password update failed.') };
+    }
+    return { data, error: null };
   }
 
   onAuthStateChange(callback: (user: AuthUser | null) => void) {

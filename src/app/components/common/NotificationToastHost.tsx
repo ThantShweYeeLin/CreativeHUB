@@ -5,6 +5,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import { FeedService } from '../../../lib/feedService';
 import { resolveNotificationRoute } from '../../../lib/notificationNavigation';
+import { shouldShowInAppNotificationType } from '../../../lib/localPreferences';
 
 interface ToastItem {
   id: string;
@@ -97,6 +98,9 @@ export function NotificationToastHost() {
     }
 
     const channel = FeedService.subscribeToNewNotifications(user.id, (row) => {
+      if (!shouldShowInAppNotificationType(String(row.type || ''))) {
+        return;
+      }
       setToasts((current) => [
         ...current,
         {

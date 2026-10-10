@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Briefcase, Check, ChevronDown, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, ChevronDown, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Phone, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import type { PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -1563,10 +1563,18 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                       <span>{availability}</span>
                     </div>
                   )}
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
-                    <span>{profile?.email || 'Email unavailable'}</span>
-                  </div>
+                  {(isOwner || !profile?.hide_email_from_public) && (
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                      <span>{profile?.email || 'Email unavailable'}</span>
+                    </div>
+                  )}
+                  {profile?.phone && (isOwner || !profile?.hide_phone_from_public) && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-gray-900 md:h-5 md:w-5" />
+                      <span>{profile.phone}</span>
+                    </div>
+                  )}
                   {isBookableFreelancer && (
                     <div>
                       <TrustBadge trust={trust} />

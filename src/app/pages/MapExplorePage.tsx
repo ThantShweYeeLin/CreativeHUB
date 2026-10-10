@@ -12,6 +12,7 @@ import { FreelancerMapProfile, normalizeFreelancer } from '../../lib/freelanceMa
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { FREELANCER_CATEGORY_LABELS, isFreelancerCategory } from '../../lib/categories';
 import { haversineDistanceKm } from '../../lib/geo';
+import { getDistanceUnitPreference, kmToMiles } from '../../lib/localPreferences';
 
 type Availability = 'available' | 'busy' | 'unavailable';
 type BudgetBand = 'all' | 'under-100' | '100-300' | '300-500' | '500-plus';
@@ -143,9 +144,21 @@ function formatDistanceAway(distance: number, language: 'en' | 'th') {
     return null;
   }
 
+  // Settings' Distance Unit toggle - kept in miles regardless of display
+  // language, same as how a Thai-language UI elsewhere in this app still
+  // shows Latin-script prices; there's no Thai convention for miles to
+  // switch to here.
+  if (getDistanceUnitPreference() === 'miles') {
+    const miles = kmToMiles(distance);
+    if (miles < 0.1) {
+      return `${Math.max(100, Math.round(miles * 5280))} ft away`;
+    }
+    return `${miles.toFixed(1)} mi away`;
+  }
+
   if (distance < 1) {
     return language === 'th'
-      ? `${Math.max(100, Math.round(distance * 1000))} m เหนือ` 
+      ? `${Math.max(100, Math.round(distance * 1000))} m เหนือ`
       : `${Math.max(100, Math.round(distance * 1000))} m away`;
   }
 

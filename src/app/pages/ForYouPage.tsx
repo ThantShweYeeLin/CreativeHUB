@@ -1197,10 +1197,15 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       setIsLoading(true);
       setError(null);
 
-      const [freelancersResponse, clientPostsResponse] = await Promise.all([
+      const [freelancersResponse, clientPostsResponse, blockedIdsResponse] = await Promise.all([
         DataService.getAllFreelancers(40),
         DataService.getClientPosts(30, user?.id),
+        user?.id ? DataService.getMutualBlockIds(user.id) : Promise.resolve({ data: [], error: null }),
       ]);
+      // Either direction - see getMutualBlockIds' own comment; matches how
+      // the rest of the app (messaging, booking requests) already treats
+      // blocking as mutual rather than just "people I blocked".
+      const blockedIds = new Set(blockedIdsResponse.data || []);
 
       const clientPostsTableMissing = isMissingClientPostsTable(clientPostsResponse.error);
 
@@ -1213,7 +1218,9 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         return;
       }
 
-      const normalizedFreelancers = (freelancersResponse.data || []).map(normalizeFreelancer);
+      const normalizedFreelancers = (freelancersResponse.data || [])
+        .filter((row: any) => !blockedIds.has(row.user_id || row.users?.id || row.id))
+        .map(normalizeFreelancer);
 
       const generatedPosts: FeedPost[] = normalizedFreelancers.flatMap((freelancer) => {
         const authorId = freelancer.userId || freelancer.id;
@@ -1240,7 +1247,9 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
         }));
       }).slice(0, 30);
 
-      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || []).map(mapClientPostRowToFeedPost);
+      const clientPosts: FeedPost[] = (clientPostsTableMissing ? [] : clientPostsResponse.data || [])
+        .filter((row: any) => !blockedIds.has(row.client_id))
+        .map(mapClientPostRowToFeedPost);
 
       const demoPosts: FeedPost[] = [
         {
