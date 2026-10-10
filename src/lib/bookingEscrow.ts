@@ -1,6 +1,5 @@
 export const DEPOSIT_DEADLINE_HOURS = 24;
 export const CLIENT_RESPONSE_DAYS = 7;
-export const DISPUTE_RESPONSE_HOURS = 72;
 
 // The platform's cut of the released deposit — taken out of the freelancer's
 // share, not added on top of what the client paid. Fixed platform-wide for

@@ -1,4 +1,4 @@
-import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Clock, FileText, Shield, X } from 'lucide-react';
+import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Clock, FileText, Shield } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useEffect, useState } from 'react';
@@ -13,7 +13,6 @@ import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
-import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
 import { ReportProblemFlow } from './bookingTracking/ReportProblemFlow';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
 import type { DisputeFlowCategory } from '../../lib/disputeCategories';
@@ -29,7 +28,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -66,10 +65,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
   const [disputeInitialCategory, setDisputeInitialCategory] = useState<DisputeFlowCategory | undefined>(undefined);
-
-  const [showRespondForm, setShowRespondForm] = useState(false);
-  const [respondReason, setRespondReason] = useState('');
-  const [isResponding, setIsResponding] = useState(false);
 
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -121,29 +116,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     await refresh();
   };
 
-  const handleStillNotSatisfied = async () => {
-    if (!booking) return;
-    setIsResponding(true);
-    setError(null);
-
-    const response = await DataService.respondToBookingDispute(booking.id, {
-      actor: 'client',
-      hasEvidence: true,
-      reason: respondReason,
-    });
-
-    setIsResponding(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to submit response.');
-      return;
-    }
-
-    setShowRespondForm(false);
-    setRespondReason('');
-    await refresh();
-  };
-
   // Symmetric to BookingTrackingFreelancerPage's handleCancelBooking — only
   // reachable from the deposit_secured card, so the deposit is still
   // paid-and-held at that point and always gets refunded back to the client.
@@ -173,7 +145,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     return formatCurrencyAmount(converted, viewerCurrency);
   };
 
-  const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'client';
   // No known schedule data at all shouldn't permanently block a client from
   // ever reporting a problem - default to allowing it in that case.
   const hasScheduledTimePassed = !bookingData?.scheduledAt || bookingData.scheduledAt.getTime() <= Date.now();
@@ -510,74 +481,6 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             )}
 
             {showDisputeForm && renderDisputeForm()}
-          </div>
-        )}
-
-        {/* Disputed */}
-        {escrowState === 'disputed' && (
-          <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
-            <div className="mb-3 flex items-center gap-2">
-              <AlertCircle className="w-6 h-6 text-amber-600" />
-              <h2 className="font-bold text-lg text-gray-900">Dispute</h2>
-            </div>
-            {formatCountdown(booking.dispute_response_deadline) && (
-              <p className="mb-3 text-xs font-semibold text-amber-600">
-                ⏱ {formatCountdown(booking.dispute_response_deadline)} for {booking.dispute_awaiting === 'freelancer' ? 'the freelancer' : 'you'} to respond
-              </p>
-            )}
-
-            <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
-
-            {canRespondToDispute && !showRespondForm && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => void handleConfirmCompletion()}
-                  disabled={isConfirming}
-                  className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-60"
-                >
-                  <CheckCircle className="h-4 w-4" /> Accept & Confirm
-                </button>
-                <button
-                  onClick={() => setShowRespondForm(true)}
-                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
-                >
-                  Still Not Satisfied
-                </button>
-              </div>
-            )}
-
-            {canRespondToDispute && showRespondForm && (
-              <div className="rounded-xl border-2 border-sky-400 bg-sky-50/50 p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="font-bold text-gray-900">Explain why you still want a refund</p>
-                  <button onClick={() => setShowRespondForm(false)} className="text-gray-400 hover:text-gray-900">
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-                <p className="mb-3 text-xs text-gray-500">
-                  This will freeze the deposit and send your case to CreativeHUB support for a final decision.
-                </p>
-                <textarea
-                  value={respondReason}
-                  onChange={(e) => setRespondReason(e.target.value)}
-                  placeholder="Explain your side..."
-                  className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-                />
-                <button
-                  onClick={() => void handleStillNotSatisfied()}
-                  disabled={isResponding}
-                  className="w-full bg-gradient-to-r from-sky-500 to-blue-600 text-white py-3 px-4 rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-60"
-                >
-                  {isResponding ? 'Submitting...' : 'Submit to Support'}
-                </button>
-              </div>
-            )}
-
-            {!canRespondToDispute && (
-              <p className="text-xs text-gray-500">
-                Waiting for {booking.dispute_awaiting === 'freelancer' ? 'the freelancer' : 'you'} to respond.
-              </p>
-            )}
           </div>
         )}
 

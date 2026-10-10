@@ -12,9 +12,9 @@ export const EVIDENCE_TYPE_OPTIONS: { value: EvidenceType; label: string }[] = [
 ];
 
 // Shared shape for an in-progress (not-yet-uploaded) evidence item, used by
-// both the client's ReportProblemFlow and the freelancer's
-// RespondToDisputeForm — one row per file, each independently tagged with a
-// type and optional description (see supabase/dispute_evidence.sql).
+// ReportProblemFlow (both roles report through the same flow) — one row
+// per file, each independently tagged with a type and optional description
+// (see supabase/dispute_evidence.sql).
 export interface LocalEvidenceItem {
   id: string;
   file: File | null;

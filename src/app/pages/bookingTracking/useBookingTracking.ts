@@ -39,11 +39,13 @@ export function useBookingTracking() {
 
       let response = await DataService.getBooking(id);
       if (isMounted && response.data) {
-        // Reconciliation/arbitration are safe no-ops when nothing is due —
-        // running them on every load is what keeps deadlines enforced
-        // without a server cron.
+        // A safe no-op when nothing is due — running it on every load is
+        // what keeps the deposit/response deadlines enforced without a
+        // server cron. (arbitrateBookingDispute used to run alongside this
+        // too, but openBookingDispute now sends every report straight to
+        // under_admin_review — dispute_status never reaches 'open' any
+        // more, so that function's one remaining branch could never fire.)
         await DataService.reconcileBookingEscrow(id);
-        await DataService.arbitrateBookingDispute(id);
         response = await DataService.getBooking(id);
       }
 

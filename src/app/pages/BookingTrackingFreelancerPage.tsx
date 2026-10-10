@@ -1,4 +1,4 @@
-import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield } from 'lucide-react';
+import { Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useEffect, useState } from 'react';
@@ -11,8 +11,6 @@ import { formatCountdown, getBookingEarningsBreakdown } from '../../lib/bookingE
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
 import { AttendanceTimeline } from './bookingTracking/AttendanceTimeline';
-import { DisputeTimeline } from './bookingTracking/DisputeTimeline';
-import { RespondToDisputeForm } from './bookingTracking/RespondToDisputeForm';
 import { ReportProblemFlow } from './bookingTracking/ReportProblemFlow';
 import type { DisputeFlowCategory } from '../../lib/disputeCategories';
 import { BookingReviewPrompt } from './bookingTracking/BookingReviewPrompt';
@@ -27,7 +25,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const { user } = useAuth();
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
-  const { booking, events, disputeEvidence, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+  const { booking, events, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
 
   // Symmetric to BookingTrackingClientPage's redirect — a client landing on
   // this freelancer-facing route directly would otherwise see a confusing
@@ -55,9 +53,6 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const [completionText, setCompletionText] = useState('');
   const [completionFiles, setCompletionFiles] = useState<File[]>([]);
   const [isSubmittingCompletion, setIsSubmittingCompletion] = useState(false);
-
-  const [showRespondForm, setShowRespondForm] = useState(false);
-  const [isResponding, setIsResponding] = useState(false);
 
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
@@ -146,30 +141,11 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
     await refresh();
   };
 
-  const handleConcede = async () => {
-    if (!booking) return;
-    setIsResponding(true);
-    setError(null);
-
-    const response = await DataService.respondToBookingDispute(booking.id, { actor: 'freelancer', hasEvidence: false });
-
-    setIsResponding(false);
-
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to submit response.');
-      return;
-    }
-
-    await refresh();
-  };
-
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const formatMoney = (amount: number) => {
     const converted = convertAmount(Number(amount || 0), 'THB', viewerCurrency);
     return formatCurrencyAmount(converted, viewerCurrency);
   };
-
-  const canRespondToDispute = booking?.dispute_status === 'open' && booking.dispute_awaiting === 'freelancer';
 
   if (isLoading) {
     return (
@@ -435,60 +411,6 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               </div>
             )}
             <p className="text-xs text-gray-500">Waiting for the client to confirm or report a problem.</p>
-          </div>
-        )}
-
-        {/* Disputed */}
-        {escrowState === 'disputed' && (
-          <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
-            <div className="mb-3 flex items-center gap-2">
-              <AlertCircle className="w-6 h-6 text-amber-600" />
-              <h2 className="font-bold text-lg text-gray-900">Dispute</h2>
-            </div>
-            {formatCountdown(booking.dispute_response_deadline) && (
-              <p className="mb-3 text-xs font-semibold text-amber-600">
-                ⏱ {formatCountdown(booking.dispute_response_deadline)} for {booking.dispute_awaiting === 'freelancer' ? 'you' : 'the client'} to respond
-              </p>
-            )}
-
-            <DisputeTimeline events={events} signedUrls={signedUrls} disputeEvidence={disputeEvidence} />
-
-            {canRespondToDispute && !showRespondForm && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => void handleConcede()}
-                  disabled={isResponding}
-                  className="rounded-lg bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
-                >
-                  I don't have evidence
-                </button>
-                <button
-                  onClick={() => setShowRespondForm(true)}
-                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:shadow-lg"
-                >
-                  Respond with Evidence
-                </button>
-              </div>
-            )}
-
-            {canRespondToDispute && showRespondForm && user?.id && (
-              <RespondToDisputeForm
-                bookingId={booking.id}
-                userId={user.id}
-                round={Number(booking.dispute_round || 1)}
-                onClose={() => setShowRespondForm(false)}
-                onSubmitted={async () => {
-                  setShowRespondForm(false);
-                  await refresh();
-                }}
-              />
-            )}
-
-            {!canRespondToDispute && (
-              <p className="text-xs text-gray-500">
-                Waiting for {booking.dispute_awaiting === 'freelancer' ? 'you' : 'the client'} to respond.
-              </p>
-            )}
           </div>
         )}
 

@@ -12,7 +12,7 @@ import {
 } from './groupRequest';
 import { MAX_NEGOTIATION_ROUNDS } from './negotiation';
 import { extractScheduleMeta } from './requestSchedule';
-import { CLIENT_RESPONSE_DAYS, DISPUTE_RESPONSE_HOURS, getBookingEscrowState } from './bookingEscrow';
+import { CLIENT_RESPONSE_DAYS, getBookingEscrowState } from './bookingEscrow';
 import type { AttendanceArrival, AttendanceArrivalRecord, AttendanceConfirmation, AttendanceReport } from './attendanceVerification';
 import type { ArrivalLocation } from './attendanceLocation';
 import type { DisputeFlowCategory } from './disputeCategories';
@@ -1466,11 +1466,6 @@ export class DataService {
     return { data, error };
   }
 
-  static async arbitrateBookingDispute(bookingId: string) {
-    const { data, error } = await (supabase as any).rpc('arbitrate_booking_dispute', { p_booking_id: bookingId });
-    return { data, error };
-  }
-
   // MUTUAL ATTENDANCE VERIFICATION
   // Each party confirms the OTHER party's presence — never their own — and
   // either can report an attendance problem instead. See
@@ -2718,110 +2713,6 @@ export class DataService {
       type: 'booking_disputed',
       title: 'Deposit Frozen',
       message: 'Deposit frozen due to an issue.',
-      relatedId: bookingId,
-    });
-
-    return { data, error: null };
-  }
-
-  static async respondToBookingDispute(
-    bookingId: string,
-    input: {
-      actor: 'freelancer' | 'client';
-      hasEvidence?: boolean;
-      evidenceText?: string | null;
-      evidencePhotoPaths?: string[];
-      reason?: string;
-    }
-  ) {
-    const previous = await supabase
-      .from('bookings')
-      .select('dispute_round, client_id, freelancer_id')
-      .eq('id', bookingId)
-      .maybeSingle();
-
-    if (!previous.data) {
-      return { data: null, error: new Error('Booking not found.') };
-    }
-
-    const currentRound = Number((previous.data as any).dispute_round || 1);
-    const disputeResponseDeadline = new Date(Date.now() + DISPUTE_RESPONSE_HOURS * 60 * 60 * 1000).toISOString();
-
-    if (input.actor === 'freelancer') {
-      if (!input.hasEvidence) {
-        await (supabase as any).from('booking_events').insert({
-          booking_id: bookingId,
-          round: currentRound,
-          actor: 'freelancer',
-          action: 'conceded',
-          reason: input.reason || null,
-        });
-        return this.arbitrateBookingDispute(bookingId);
-      }
-
-      const { data, error } = await supabase
-        .from('bookings')
-        .update({ dispute_awaiting: 'client', dispute_response_deadline: disputeResponseDeadline } as any)
-        .eq('id', bookingId)
-        .select()
-        .single();
-
-      if (error || !data) {
-        return { data, error };
-      }
-
-      await (supabase as any).from('booking_events').insert({
-        booking_id: bookingId,
-        round: currentRound,
-        actor: 'freelancer',
-        action: 'evidence',
-        evidence_text: input.evidenceText || null,
-        evidence_photos: input.evidencePhotoPaths || [],
-      });
-
-      await this.notifyEvent({
-        userId: (data as any).client_id,
-        actorId: (data as any).freelancer_id,
-        type: 'booking_disputed',
-        title: 'Freelancer responded to your dispute',
-        message: 'The freelancer provided evidence in response to your complaint. Please review it.',
-        relatedId: bookingId,
-      });
-
-      return { data, error: null };
-    }
-
-    // actor === 'client', not satisfied with the freelancer's evidence.
-    // With an admin now reviewing every dispute, there's no more automatic
-    // back-and-forth round escalation - the client's continued dissatisfaction
-    // is itself what sends the case to admin review, deposit frozen either way.
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({ dispute_status: 'under_admin_review', dispute_awaiting: null } as any)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error || !data) {
-      return { data, error };
-    }
-
-    await (supabase as any).from('booking_events').insert({
-      booking_id: bookingId,
-      round: currentRound,
-      actor: 'client',
-      action: 'complain',
-      reason: input.reason || null,
-      evidence_text: input.evidenceText || null,
-      evidence_photos: input.evidencePhotoPaths || [],
-    });
-
-    await this.notifyEvent({
-      userId: (data as any).freelancer_id,
-      actorId: (data as any).client_id,
-      type: 'booking_disputed',
-      title: 'Dispute escalated to CreativeHUB support',
-      message: 'The client was not satisfied with your evidence. This case is now under review by CreativeHUB support.',
       relatedId: bookingId,
     });
 
