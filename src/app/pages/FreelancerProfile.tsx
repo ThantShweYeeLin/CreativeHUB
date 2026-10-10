@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router';
-import { ArrowLeft, Ban, Briefcase, Check, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
+import { ArrowLeft, Ban, Briefcase, Check, ChevronDown, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import type { PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
@@ -47,6 +47,7 @@ interface FreelancerProfileProps {
 const fallbackProfileImage = DEFAULT_AVATAR_URL;
 const OTHER_PURPOSE_VALUE = '__other__';
 const OTHER_LOCATION_VALUE = '__other__';
+const REVIEWS_PREVIEW_COUNT = 3;
 
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
@@ -108,6 +109,12 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [showBidTip, setShowBidTip] = useState(false);
+  // Collapsed to REVIEWS_PREVIEW_COUNT most recent by default - reviews
+  // already arrive newest-first from getFreelancerReviews, so a plain
+  // slice() is correct with no extra sorting here. The grid only switches
+  // to 2 columns once expanded, so the collapsed view still reads as one
+  // narrow list instead of a half-empty grid.
+  const [showAllReviews, setShowAllReviews] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     projectName: '',
@@ -1653,7 +1660,26 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 )}
               </div>
             </div>
+
+        {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
+          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+            <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
+            <div className="mt-4 space-y-3 text-sm text-gray-700">
+              {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
+              {(freelancerProfile?.limitation_days || []).length > 0 && (
+                <p>
+                  <span className="font-semibold text-gray-900">Doesn't work on:</span> {(freelancerProfile.limitation_days as string[]).join(', ')}
+                </p>
+              )}
+              {freelancerProfile?.limitation_note && <p>{freelancerProfile.limitation_note}</p>}
+            </div>
+          </section>
+        )}
+
           </div>
+
+
+          
 
           <aside className="space-y-6">
             {/* One consolidated card instead of three separate boxes -
@@ -1735,8 +1761,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             {canViewClientReviews && (
               <p className="mt-1 text-sm text-gray-500">Only visible to freelancers — {displayName} can't see these.</p>
             )}
-            <div className="mt-5 space-y-4">
-              {reviews.map((review) => (
+            <div className={showAllReviews ? 'mt-5 grid grid-cols-1 gap-4 md:grid-cols-2' : 'mt-5 space-y-4'}>
+              {(showAllReviews ? reviews : reviews.slice(0, REVIEWS_PREVIEW_COUNT)).map((review) => (
                 <div key={review.id} className="rounded-2xl border border-sky-100 bg-sky-50/50 p-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
@@ -1766,23 +1792,20 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                 </div>
               ))}
             </div>
+
+            {reviews.length > REVIEWS_PREVIEW_COUNT && (
+              <button
+                onClick={() => setShowAllReviews((current) => !current)}
+                className="mx-auto mt-5 flex items-center gap-1.5 rounded-xl border border-sky-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50"
+              >
+                {showAllReviews ? 'Show fewer reviews' : `View all ${reviews.length} reviews`}
+                <ChevronDown className={`h-4 w-4 transition-transform ${showAllReviews ? 'rotate-180' : ''}`} />
+              </button>
+            )}
           </section>
         )}
 
-        {isBookableFreelancer && (freelancerProfile?.requirements || (freelancerProfile?.limitation_days || []).length > 0 || freelancerProfile?.limitation_note) && (
-          <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
-            <h2 className="text-2xl font-bold text-gray-900">Requirements & Limitations</h2>
-            <div className="mt-4 space-y-3 text-sm text-gray-700">
-              {freelancerProfile?.requirements && <p>{freelancerProfile.requirements}</p>}
-              {(freelancerProfile?.limitation_days || []).length > 0 && (
-                <p>
-                  <span className="font-semibold text-gray-900">Doesn't work on:</span> {(freelancerProfile.limitation_days as string[]).join(', ')}
-                </p>
-              )}
-              {freelancerProfile?.limitation_note && <p>{freelancerProfile.limitation_note}</p>}
-            </div>
-          </section>
-        )}
+        
 
         {profilePosts.length > 0 && (
           <section className="mt-8 rounded-3xl bg-white/90 backdrop-blur-xl p-6 md:p-8 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
