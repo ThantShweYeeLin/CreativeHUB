@@ -4,17 +4,18 @@
 // dependencies from this directory in isolation, so nothing here should
 // import a file that lives outside server/ (see src/routes/chatbot.ts for
 // the local-copy pattern used to avoid exactly that).
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import dotenv from 'dotenv';
-import apiRouter from './routes/index.js';
-import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
-import { corsOptions } from './lib/cors.js';
+///This file creates the actual Express application.
+import express from 'express'; ///Bring in Express for the server
+import cors from 'cors'; ///to control which websites can call it,
+import helmet from 'helmet'; ///for security-related HTTP headers,
+import dotenv from 'dotenv'; /// to load environment variables from a local .env file.
+import apiRouter from './routes/index.js'; ///the router assembled in server/src/routes/index.ts. It connects route groups such as auth, payments, and chatbot.
+import { createOmiseWebhookHandler } from './routes/omiseWebhook.js'; ///handles incoming payment-provider notifications.
+import { corsOptions } from './lib/cors.js'; /// specify the server’s cross-origin rules.
 
 dotenv.config();
 
-const app = express();
+const app = express(); /// creates the Express application. T
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 // Vercel sits in front of this as a proxy - without trust proxy, req.ip
 // (and every rate limiter keyed on it) sees Vercel's own address for every

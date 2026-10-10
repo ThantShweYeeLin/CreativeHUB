@@ -1,12 +1,12 @@
-import { Router } from 'express';
+import { Router } from 'express'; ///to group related API routes.
 import authRouter from './auth.js';
-import freelancersRouter from './freelancers.js';
+import freelancersRouter from './freelancers.js'; ///Import the route groups for authentication, freelancers, accounts, chatbot, payments, subscriptions, and geocoding. Each group’s implementation lives in its own file in server/src/routes/.
 import accountRouter from './account.js';
 import chatbotRouter from './chatbot.js';
 import paymentsRouter from './payments.js';
 import subscriptionsRouter from './subscriptions.js';
 import geocodeRouter from './geocode.js';
-import { requireAuth } from '../lib/requireAuth.js';
+import { requireAuth } from '../lib/requireAuth.js';///verifies the Supabase access token before allowing the request through.
 import { chatbotRateLimit, generalApiRateLimit, geocodeRateLimit } from '../lib/rateLimit.js';
 
 const router = Router();

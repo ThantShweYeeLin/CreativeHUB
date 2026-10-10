@@ -1,3 +1,4 @@
+///displays the chat interface and handles the user’s message.
 import { useEffect, useRef, useState } from 'react';
 import { Bot, ChevronRight, CreditCard, Flag, Maximize2, Minimize2, Package, RotateCcw, Scale, Search, Send, Star, Users, X, type LucideIcon } from 'lucide-react';
 import { sendChatbotMessage, type ChatTurn } from '../lib/chatbotService';

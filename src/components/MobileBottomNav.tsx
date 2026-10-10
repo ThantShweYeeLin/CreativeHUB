@@ -10,6 +10,7 @@ import { AuthPromptModal } from '../app/components/AuthPromptModal';
 // Favorites, any profile, the dashboards) have their own full-bleed layout
 // with no shared nav at all, which was the actual "can't get there on
 // phone" gap.
+
 //
 // The role-specific "Get Started" / "Become a Freelancer" / "Freelancer
 // Dashboard" action used to live here as a 4th tab, duplicating the same
