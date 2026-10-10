@@ -132,14 +132,14 @@ interface CarouselSectionProps {
 // two-line-tall box below without changing its size. Falls back to the
 // "normal" tier for any category added later without an entry here.
 const HERO_WORD_SIZE: Record<string, string> = {
-  Musician: 'text-6xl sm:text-7xl md:text-8xl',
-  Decorator: 'text-6xl sm:text-7xl md:text-8xl',
+  Musician: 'text-5xl sm:text-6xl md:text-7xl',
+  Decorator: 'text-5xl sm:text-6xl md:text-7xl',
   Photographer: 'text-5xl sm:text-6xl md:text-7xl',
   Videographer: 'text-5xl sm:text-6xl md:text-7xl',
   'Hair Stylist': 'text-5xl sm:text-6xl md:text-7xl',
-  'Makeup Artist': 'text-4xl sm:text-6xl md:text-7xl',
-  'Fashion Designer': 'text-3xl sm:text-5xl md:text-6xl',
-  'Cake/Dessert Maker': 'text-3xl sm:text-5xl md:text-5xl',
+  'Makeup Artist': 'text-5xl sm:text-6xl md:text-7xl',
+  'Fashion Designer': 'text-5xl sm:text-6xl md:text-7xl',
+  'Cake/Dessert Maker': 'text-5xl sm:text-6xl md:text-7xl',
 };
 const HERO_WORD_DEFAULT_SIZE = 'text-4xl sm:text-5xl md:text-6xl';
 
