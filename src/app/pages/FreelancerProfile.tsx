@@ -18,14 +18,11 @@ import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { shouldDisplayPronouns } from '../../lib/pronouns';
 import { genderLabel, shouldDisplayGender } from '../../lib/gender';
 import FollowersModal from '../components/FollowersModal';
-import {
-  appendBudgetMeta,
-  inferCurrencyFromLocation,
-  SUPPORTED_CURRENCIES,
-  type BudgetMeta,
-} from '../../lib/requestBudget';
+import { appendBudgetMeta, type BudgetMeta } from '../../lib/requestBudget';
 import { appendScheduleMeta, generateTimeSlots, formatTimeLabel, addMinutesToTime } from '../../lib/requestSchedule';
 import { appendLocationMeta } from '../../lib/requestLocation';
+import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
+import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { isDateBlocked, isRangeAvailable, isTimeSlotTaken } from '../../lib/availability';
 import { AvailabilityCalendar } from '../components/AvailabilityCalendar';
 import { PostCard } from '../../components/posts/PostCard';
@@ -116,18 +113,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   // narrow list instead of a half-empty grid.
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [authPromptMessage, setAuthPromptMessage] = useState<string | null>(null);
+  // Payments only ever settle in THB (see server/src/lib/demoPayments.ts),
+  // so the budget currency isn't a field on formData at all - every amount
+  // here is THB, full stop, not just defaulted to it.
   const [formData, setFormData] = useState({
     projectName: '',
     customPurpose: '',
     location: '',
-    customLocation: '',
+    customLocation: null as LocationPoint | null,
     notes: '',
     offerAmount: '',
-    currency: normalizeCurrencyCode(preferredCurrency, 'THB'),
     scheduleDate: '',
     scheduleTime: '',
     scheduleEndTime: '',
   });
+  const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
 
   const targetFreelancerUserId = profile?.id || freelancerProfile?.user_id || id || null;
 
@@ -171,34 +171,6 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     };
   }, [showBookingForm]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadClientCurrency() {
-      if (!user?.id) return;
-
-      const response = await DataService.getUser(user.id);
-      if (!isMounted) return;
-
-      const profileCurrency = normalizeCurrencyCode((response.data as any)?.preferred_currency, '');
-      const inferredCurrency = inferCurrencyFromLocation(response.data?.location || null);
-      setFormData((current) => ({ ...current, currency: profileCurrency || inferredCurrency }));
-    }
-
-    loadClientCurrency();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [user?.id]);
-
-  useEffect(() => {
-    setFormData((current) => ({
-      ...current,
-      currency: normalizeCurrencyCode(current.currency || preferredCurrency, 'THB'),
-    }));
-  }, [preferredCurrency]);
-
   const freelancerRateCurrency = normalizeCurrencyCode((profile as any)?.preferred_currency || (freelancerProfile as any)?.preferred_currency || 'THB', 'THB');
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const convertedHourlyRate = freelancerProfile?.hourly_rate
@@ -227,7 +199,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const rateCaption = pricingRateLabel[pricingType] ?? 'starting rate';
   const rateFieldLabel = pricingRateFieldLabel[pricingType] ?? 'Hourly rate';
   const minimumOffer = freelancerProfile?.hourly_rate
-    ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, formData.currency)
+    ? convertAmount(Number(freelancerProfile.hourly_rate), freelancerRateCurrency, 'THB')
     : 0;
 
   useEffect(() => {
@@ -698,7 +670,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     const resolvedLocation = formData.location === OTHER_LOCATION_VALUE
-      ? formData.customLocation.trim()
+      ? formData.customLocation?.formattedAddress.trim() || ''
       : formData.location;
 
     if (!resolvedLocation) {
@@ -714,7 +686,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     if (offerAmount < minimumOffer) {
-      setError(`Your offer must be at least ${formatCurrencyAmount(minimumOffer, formData.currency)}.`);
+      setError(`Your offer must be at least ${formatCurrencyAmount(minimumOffer, 'THB')}.`);
       return;
     }
 
@@ -737,7 +709,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     }
 
     const budgetMeta: BudgetMeta = {
-      currency: formData.currency,
+      currency: 'THB',
       min: minimumOffer,
       max: offerAmount,
     };
@@ -777,7 +749,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       projectName: '',
       customPurpose: '',
       location: '',
-      customLocation: '',
+      customLocation: null,
       notes: '',
       offerAmount: '',
       scheduleDate: '',
@@ -794,7 +766,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   // its own validation on submit.
   const handleAddMoreFreelancer = () => {
     const resolvedPurpose = formData.projectName === OTHER_PURPOSE_VALUE ? formData.customPurpose.trim() : formData.projectName;
-    const resolvedLocation = formData.location === OTHER_LOCATION_VALUE ? formData.customLocation.trim() : formData.location;
+    const resolvedLocation = formData.location === OTHER_LOCATION_VALUE ? formData.customLocation?.formattedAddress.trim() || '' : formData.location;
 
     navigate('/group-request', {
       state: {
@@ -817,7 +789,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         prefillScheduleDate: formData.scheduleDate || undefined,
         prefillScheduleTime: formData.scheduleTime || undefined,
         prefillScheduleEndTime: formData.scheduleEndTime || undefined,
-        prefillCurrency: formData.currency || undefined,
+        prefillCurrency: 'THB',
       },
     });
   };
@@ -2249,13 +2221,34 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
                 </select>
                 {formData.location === OTHER_LOCATION_VALUE && (
-                  <input
-                    required
-                    value={formData.customLocation}
-                    onChange={(event) => setFormData((current) => ({ ...current, customLocation: event.target.value }))}
-                    className="mt-3 w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                    placeholder="Type the location for this booking"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsLocationPickerOpen(true)}
+                    className={`mt-3 w-full overflow-hidden rounded-xl bg-sky-50/50 text-left transition-all ${
+                      formData.customLocation ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
+                    }`}
+                  >
+                    {formData.customLocation ? (
+                      <div className="h-32 w-full">
+                        <LeafletLocationPreview
+                          latitude={formData.customLocation.latitude}
+                          longitude={formData.customLocation.longitude}
+                          title={formData.customLocation.formattedAddress}
+                          interactive={false}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-24 w-full items-center justify-center bg-sky-50">
+                        <MapPin className="h-6 w-6 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 p-3">
+                      <MapPin className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                      <span className={formData.customLocation ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
+                        {formData.customLocation?.formattedAddress || 'Search a place or pick it on the map'}
+                      </span>
+                    </div>
+                  </button>
                 )}
               </div>
 
@@ -2341,67 +2334,43 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <input
-                      value={formData.currency}
-                      onChange={(event) => setFormData((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
-                      list="booking-currency-suggestions"
-                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                      placeholder="Type any currency code"
-                    />
-                    <datalist id="booking-currency-suggestions">
-                      {SUPPORTED_CURRENCIES.map((item) => (
-                        <option key={item.code} value={item.code}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
-                    <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Minimum</span>
-                    <span className="font-semibold text-gray-900">{formatCurrencyAmount(minimumOffer, formData.currency)}</span>
-                  </div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label htmlFor="offerAmount" className="text-sm font-semibold text-gray-900">
+                    Budget <span className="font-normal text-gray-500">(min. {formatCurrencyAmount(minimumOffer, 'THB')})</span>
+                  </label>
+                  <span className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowBidTip((current) => !current)}
+                      className="text-gray-400 transition-colors hover:text-gray-700"
+                      aria-label="Bidding tip"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                    {showBidTip && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowBidTip(false)} />
+                        <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-sky-800 bg-gray-900/90 px-3 py-2 text-xs text-white shadow-xl">
+                          Suggestion: Bid Higher for High Acceptance
+                        </div>
+                      </>
+                    )}
+                  </span>
                 </div>
-
-                <div className="mt-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <label htmlFor="offerAmount" className="text-sm font-semibold text-gray-900">Offer Amount</label>
-                    <span className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowBidTip((current) => !current)}
-                        className="text-gray-400 transition-colors hover:text-gray-700"
-                        aria-label="Bidding tip"
-                      >
-                        <Info className="h-4 w-4" />
-                      </button>
-                      {showBidTip && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowBidTip(false)} />
-                          <div className="absolute right-0 top-full z-20 mt-2 w-56 rounded-xl border border-sky-800 bg-gray-900/90 px-3 py-2 text-xs text-white shadow-xl">
-                            Suggestion: Bid Higher for High Acceptance
-                          </div>
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  <input
-                    id="offerAmount"
-                    required
-                    inputMode="decimal"
-                    value={formData.offerAmount}
-                    onChange={(event) => setFormData((current) => ({ ...current, offerAmount: event.target.value }))}
-                    className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                    placeholder={`Minimum ${formatCurrencyAmount(minimumOffer, formData.currency)}`}
-                  />
-                  {formData.offerAmount && Number(formData.offerAmount) < minimumOffer && (
-                    <p className="mt-2 text-xs font-semibold text-red-600">
-                      Your offer must be at least {formatCurrencyAmount(minimumOffer, formData.currency)}.
-                    </p>
-                  )}
-                </div>
+                <input
+                  id="offerAmount"
+                  required
+                  inputMode="decimal"
+                  value={formData.offerAmount}
+                  onChange={(event) => setFormData((current) => ({ ...current, offerAmount: event.target.value }))}
+                  className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                  placeholder={`Minimum ${formatCurrencyAmount(minimumOffer, 'THB')}`}
+                />
+                {formData.offerAmount && Number(formData.offerAmount) < minimumOffer && (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    Your offer must be at least {formatCurrencyAmount(minimumOffer, 'THB')}.
+                  </p>
+                )}
               </div>
 
               {/* Feeds the same /group-request route as the Group Request
@@ -2437,6 +2406,23 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       {authPromptMessage && (
         <AuthPromptModal message={authPromptMessage} onClose={() => setAuthPromptMessage(null)} />
+      )}
+
+      {/* Portaled to document.body, same as the booking form above it -
+          without this it stays inside whatever stacking context wraps this
+          page (e.g. a route-transition wrapper using transform/opacity),
+          which traps its z-index below the booking form's own portaled
+          z-[1400] overlay no matter how high a number this one uses. */}
+      {isLocationPickerOpen && createPortal(
+        <LeafletLocationPicker
+          initialPoint={formData.customLocation}
+          onCancel={() => setIsLocationPickerOpen(false)}
+          onConfirm={(point) => {
+            setFormData((current) => ({ ...current, customLocation: point }));
+            setIsLocationPickerOpen(false);
+          }}
+        />,
+        document.body
       )}
       </div>
     </div>

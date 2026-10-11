@@ -160,7 +160,13 @@ export function LeafletLocationPicker({ initialPoint, onCancel, onConfirm }: Lea
   };
 
   return (
-    <div className="fixed inset-0 z-[1300] flex items-center justify-center bg-black/50 p-4">
+    // z-[1450]: a caller can open this from within its own full-screen
+    // modal (e.g. FreelancerProfile.tsx's and RequestsPage.tsx's booking
+    // forms both render at z-[1400]) - this needs to sit above whatever
+    // invoked it, but below the app-chrome overlays that are meant to top
+    // everything (NotificationsPanel z-[1500], AppGuide z-[1600], toasts
+    // z-[2000]).
+    <div className="fixed inset-0 z-[1450] flex items-center justify-center bg-black/50 p-4">
       {/* max-h + flex column so this never overflows a short phone screen -
           the header/search/map area scrolls internally while Cancel/Save
           stay pinned at the bottom, always reachable without scrolling.
