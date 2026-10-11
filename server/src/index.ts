@@ -4,15 +4,23 @@
 // dependencies from this directory in isolation, so nothing here should
 // import a file that lives outside server/ (see src/routes/chatbot.ts for
 // the local-copy pattern used to avoid exactly that).
+// Must be the very first import: ESM hoists every import statement to run
+// before any other top-level code in this file, so a plain `import dotenv
+// from 'dotenv'` followed by a later `dotenv.config()` call runs AFTER the
+// other imports below have already fully evaluated - including anything
+// they load that reads process.env at module scope (e.g. omiseClient.ts's
+// `Omise({ secretKey: process.env.OMISE_SECRET_KEY || '' })`), permanently
+// capturing an empty string regardless of what's in .env. Importing the
+// side-effecting 'dotenv/config' entrypoint first, instead, makes dotenv's
+// own import run (and populate process.env) before any import after it is
+// evaluated, since ESM imports execute in declaration order.
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import apiRouter from './routes/index.js';
 import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
 import { corsOptions } from './lib/cors.js';
-
-dotenv.config();
 
 const app = express();
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;

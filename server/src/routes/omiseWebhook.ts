@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { omiseClient } from '../lib/omiseClient.js';
 import { createSupabaseAdminClient } from '../lib/supabase.js';
 import { verifyAndActivate, type ActivationDeps, type PaymentEvent } from '../lib/premiumCharges.js';
+import { verifyAndActivateDeposit, type DepositActivationDeps } from '../lib/bookingDepositCharges.js';
 
 // Omise webhook signature scheme (https://docs.omise.co/api-webhooks):
 //   headers  Omise-Signature            hex HMAC-SHA256, or two comma-separated
@@ -40,7 +41,7 @@ export function verifyOmiseSignature(opts: {
   return match ? { ok: true } : { ok: false, reason: 'signature mismatch' };
 }
 
-export interface WebhookDeps extends ActivationDeps {
+export interface WebhookDeps extends ActivationDeps, DepositActivationDeps {
   secretBase64: string | undefined;
   allowUnsigned?: boolean;
   retrieveCharge: (id: string) => Promise<any>;
@@ -48,6 +49,18 @@ export interface WebhookDeps extends ActivationDeps {
 }
 
 export function defaultWebhookDeps(): WebhookDeps {
+  const recordEvent = async (event: PaymentEvent) => {
+    const { error } = await createSupabaseAdminClient().from('payment_events').insert({
+      omise_event_id: event.omiseEventId ?? null,
+      event_key: event.eventKey ?? null,
+      omise_charge_id: event.chargeId ?? null,
+      user_id: event.userId ?? null,
+      outcome: event.outcome,
+      reason: event.reason ?? null,
+    });
+    if (error) console.error('Unable to record payment event:', error.message);
+  };
+
   return {
     secretBase64: process.env.OMISE_WEBHOOK_SECRET,
     allowUnsigned: process.env.OMISE_WEBHOOK_ALLOW_UNSIGNED === 'true',
@@ -58,17 +71,29 @@ export function defaultWebhookDeps(): WebhookDeps {
       });
       return { error };
     },
-    recordEvent: async (event: PaymentEvent) => {
-      const { error } = await createSupabaseAdminClient().from('payment_events').insert({
-        omise_event_id: event.omiseEventId ?? null,
-        event_key: event.eventKey ?? null,
-        omise_charge_id: event.chargeId ?? null,
-        user_id: event.userId ?? null,
-        outcome: event.outcome,
-        reason: event.reason ?? null,
-      });
-      if (error) console.error('Unable to record payment event:', error.message);
+    // Fetched fresh per webhook delivery - see bookingDepositCharges.ts for
+    // why this isn't just carried over from checkout's own lookup.
+    getDepositContext: async (bookingId) => {
+      const { data } = await createSupabaseAdminClient()
+        .from('bookings')
+        .select('client_id, deposit_amount, budget, deposit_charge_id')
+        .eq('id', bookingId)
+        .maybeSingle();
+      if (!data) return null;
+      const depositThb = (data as any).deposit_amount != null ? Number((data as any).deposit_amount) : Math.round(Number((data as any).budget || 0) * 0.3);
+      return {
+        clientId: (data as any).client_id,
+        amountSatang: Math.round(depositThb * 100),
+        alreadyChargeId: (data as any).deposit_charge_id ?? null,
+      };
     },
+    activateDeposit: async (bookingId, chargeId, amountSatang, cardLabel) => {
+      const { data, error } = await createSupabaseAdminClient().rpc('confirm_booking_deposit_paid', {
+        p_booking_id: bookingId, p_charge_id: chargeId, p_amount_satang: amountSatang, p_card_label: cardLabel,
+      });
+      return { error, booking: data };
+    },
+    recordEvent,
   };
 }
 
@@ -128,10 +153,17 @@ export function createOmiseWebhookHandler(overrides: Partial<WebhookDeps> = {}) 
       return res.status(500).json({ message: 'Unable to verify the charge right now.' });
     }
 
-    const result = await verifyAndActivate(deps, charge, { omiseEventId: event.id, eventKey: event.key });
+    // Dispatch on the charge's own metadata, not the webhook payload's -
+    // retrieveCharge above already re-fetched it from Omise, so this is the
+    // same trustworthy value verifyAndActivate{,Deposit} check internally.
+    const ctx = { omiseEventId: event.id, eventKey: event.key };
+    const result =
+      charge?.metadata?.kind === 'booking_deposit'
+        ? await verifyAndActivateDeposit(deps, charge, ctx)
+        : await verifyAndActivate(deps, charge, ctx);
     // 5xx makes Omise redeliver where it can; the row in payment_events is what
     // reconciliation works from when it doesn't.
     if (result.status === 'error') return res.status(500).json({ message: 'Activation failed; recorded for reconciliation.' });
-    return res.status(200).json({ received: true, handled: result.status === 'activated' });
+    return res.status(200).json({ received: true, handled: result.status === 'activated' || result.status === 'already_active' });
   };
 }

@@ -8,7 +8,7 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { formatCountdown } from '../../lib/bookingEscrow';
-import { formatCardLabel } from '../../lib/paymentCard';
+import { createDemoTokenFromSaved } from '../../lib/demoCard';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
@@ -78,7 +78,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     setIsPayingDeposit(true);
     setError(null);
 
-    const response = await DataService.payBookingDeposit(booking.id, { cardLabel: formatCardLabel(method) });
+    const response = await DataService.startBookingDepositCheckout(booking.id, { demoToken: createDemoTokenFromSaved(method) });
 
     setIsPayingDeposit(false);
 
@@ -87,16 +87,24 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
       return;
     }
 
+    // A saved method can only ever produce a demo token today (see
+    // startBookingDepositCheckout's comment) — real Omise never returns a
+    // pending/3-D Secure charge for one, so this is defensive, not a live path.
+    if (response.data?.status === 'pending') {
+      setError('This card needs extra verification. Please try a different saved card for now.');
+      return;
+    }
+
     // refresh() re-fetches via getBooking(), which includes the
-    // freelancer/client joins — payBookingDeposit's own response is a plain
-    // row update with no joined relations, so setting state from it
+    // freelancer/client joins — the checkout response's booking field is a
+    // plain row update with no joined relations, so setting state from it
     // directly briefly showed the freelancer's name as the generic
     // "CreativeHUB Freelancer" fallback until something else happened to
     // reload the page.
     await refresh();
 
-    if (user?.id) {
-      await checkGroupDepositsAndCreateChat(response.data, user.id);
+    if (user?.id && response.data?.booking) {
+      await checkGroupDepositsAndCreateChat(response.data.booking, user.id);
     }
   };
 

@@ -2438,44 +2438,10 @@ export class DataService {
     return { data, error };
   }
 
-  static async payBookingDeposit(bookingId: string, input: { cardLabel: string }) {
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        status: 'confirmed',
-        payment_status: 'deposit_paid',
-        deposit_paid_via: input.cardLabel,
-      } as any)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error || !data) {
-      return { data, error };
-    }
-
-    await (supabase as any).from('booking_events').insert({
-      booking_id: bookingId,
-      actor: 'client',
-      action: 'deposit_paid',
-      reason: `Paid via ${input.cardLabel}`,
-    });
-
-    await this.notifyEvent({
-      userId: (data as any).freelancer_id,
-      actorId: (data as any).client_id,
-      type: 'booking_deposit_paid',
-      title: 'Deposit received',
-      // No "The client" here — actorId above already resolves to the
-      // client, so NotificationsPanel's bold actor-name prefix already
-      // names them; repeating "the client" right after would be redundant
-      // ("<b>BabyGurl</b> The client transferred...").
-      message: 'Transferred the deposit — the booking is now confirmed.',
-      relatedId: bookingId,
-    });
-
-    return { data, error: null };
-  }
+  // Real-charge path now lives in the BOOKING DEPOSITS section below
+  // (startBookingDepositCheckout/confirmBookingDepositCharge) — this used
+  // to just flip payment_status straight from the browser with no charge,
+  // token, or verification behind it at all.
 
   static async submitBookingCompletion(bookingId: string, input: { text: string; photoPaths: string[] }) {
     const clientResponseDeadline = new Date(Date.now() + CLIENT_RESPONSE_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -4030,6 +3996,32 @@ export class DataService {
 
   static async cancelPremium() {
     return this.premiumApi('/subscriptions/cancel', {});
+  }
+
+  // BOOKING DEPOSITS
+  // Real-charge path (server/src/routes/payments.ts, supabase/booking_deposit_omise.sql)
+  // — the server, not the browser, decides whether a deposit is actually
+  // paid. Same demo/Omise split and token shape as Premium checkout above
+  // (premiumApi is a generic authed-fetch-the-Node-API helper despite its
+  // name); a saved payment method can only ever build a demo token today,
+  // same limitation src/lib/demoCard.ts documents for Premium's own
+  // saved-card reuse — neither flow can re-collect a CVC for a vaulted card.
+  static async startBookingDepositCheckout(bookingId: string, card: CardDetails | { demoToken: string }) {
+    let token: string;
+    if ('demoToken' in card) {
+      token = card.demoToken;
+    } else {
+      try {
+        token = await tokenizeCard(card);
+      } catch (error) {
+        return { data: null, error: error instanceof Error ? error : new Error('Unable to verify this card.') };
+      }
+    }
+    return this.premiumApi('/payments/deposit/checkout', { bookingId, token });
+  }
+
+  static async confirmBookingDepositCharge(chargeId: string) {
+    return this.premiumApi('/payments/deposit/confirm', { chargeId });
   }
 
   static async getGroupOpportunities() {
