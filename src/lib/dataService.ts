@@ -2489,18 +2489,53 @@ export class DataService {
   // lifecycle (see supabase/booking_delivery_tracking.sql). A booking can
   // be 'completed' with no deliverables ever due (makeup, hair) or can sit
   // in 'delivery pending' long after the appointment itself is over
-  // (photo/video editing, final design files). Freelancer-only in
-  // practice — enforced at the UI layer (only rendered on the freelancer's
-  // tracking page), same as "mark complete" above; RLS's existing "Users
-  // can update own bookings" already covers the write for either
-  // participant, consistent with every other booking-detail field.
-  static async setBookingDeliveryPlan(bookingId: string, input: { hasDeliverables: boolean; estimatedDeliveryAt?: string | null; deliveryNotes?: string | null }) {
+  // (photo/video editing, final design files). The CLIENT declares whether
+  // one applies at all (see supabase/delivery_confirmed_by_client.sql) —
+  // letting the freelancer alone decide "no deliverables" was a real
+  // accountability gap in an escrow system built around exactly this kind
+  // of mutual confirmation. Only once the client has confirmed "yes" does
+  // the freelancer get asked for an estimated delivery date, below.
+  // Enforced at the UI layer (role-gated on the tracking pages), same as
+  // "mark complete" above; RLS's existing "Users can update own bookings"
+  // already covers the write for either participant, consistent with every
+  // other booking-detail field.
+  static async confirmBookingDeliverables(bookingId: string, hasDeliverables: boolean) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ delivery_status: hasDeliverables ? 'pending' : 'not_applicable' } as any)
+      .eq('id', bookingId)
+      .select()
+      .single();
+    if (error || !data) {
+      return { data, error };
+    }
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'client',
+      action: 'deliverables_confirmed',
+      reason: hasDeliverables ? 'Client confirmed this booking includes deliverables.' : 'Client confirmed this booking has no deliverables.',
+    });
+    // Only "yes" leaves the freelancer something to do next.
+    if (hasDeliverables) {
+      await this.notifyEvent({
+        userId: (data as any).freelancer_id,
+        actorId: (data as any).client_id,
+        type: 'booking_deliverables_confirmed',
+        title: 'Deliverables confirmed',
+        message: 'The client confirmed this booking includes deliverables. Set an estimated delivery date.',
+        relatedId: bookingId,
+      });
+    }
+    return { data, error: null };
+  }
+
+  /** Freelancer's first estimate, only reachable once the client has confirmed deliverables are expected. */
+  static async setBookingDeliveryEstimate(bookingId: string, input: { estimatedDeliveryAt: string; deliveryNotes?: string | null }) {
     const { data, error } = await supabase
       .from('bookings')
       .update({
-        delivery_status: input.hasDeliverables ? 'pending' : 'not_applicable',
-        estimated_delivery_at: input.hasDeliverables ? input.estimatedDeliveryAt || null : null,
-        delivery_notes: input.hasDeliverables ? input.deliveryNotes || null : null,
+        estimated_delivery_at: input.estimatedDeliveryAt,
+        delivery_notes: input.deliveryNotes || null,
       } as any)
       .eq('id', bookingId)
       .select()
@@ -2508,24 +2543,20 @@ export class DataService {
     if (error || !data) {
       return { data, error };
     }
-    // Declaring "no deliverables" isn't itself an event worth logging in
-    // the dispute-relevant timeline — only a real estimate is.
-    if (input.hasDeliverables) {
-      await (supabase as any).from('booking_events').insert({
-        booking_id: bookingId,
-        actor: 'freelancer',
-        action: 'delivery_date_set',
-        reason: input.deliveryNotes || null,
-      });
-      await this.notifyEvent({
-        userId: (data as any).client_id,
-        actorId: (data as any).freelancer_id,
-        type: 'booking_delivery_estimate_set',
-        title: 'Estimated delivery set',
-        message: 'The freelancer set an estimated delivery date for your results.',
-        relatedId: bookingId,
-      });
-    }
+    await (supabase as any).from('booking_events').insert({
+      booking_id: bookingId,
+      actor: 'freelancer',
+      action: 'delivery_date_set',
+      reason: input.deliveryNotes || null,
+    });
+    await this.notifyEvent({
+      userId: (data as any).client_id,
+      actorId: (data as any).freelancer_id,
+      type: 'booking_delivery_estimate_set',
+      title: 'Estimated delivery set',
+      message: 'The freelancer set an estimated delivery date for your results.',
+      relatedId: bookingId,
+    });
     return { data, error: null };
   }
 

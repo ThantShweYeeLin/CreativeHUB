@@ -24,8 +24,12 @@ function formatDeliveryDate(value: string) {
 // Some services never have a post-appointment result (makeup, hair); some
 // always do (photo/video editing, final design files); some depend on
 // what was agreed (a model booking with or without usage deliverables).
-// So this only ever appears once the freelancer has actually said which
-// applies — never presumed either way from the booking's status alone.
+// The CLIENT decides which applies, not the freelancer — letting the
+// freelancer alone declare "no deliverables" was a real accountability gap
+// in an escrow system built around exactly this kind of mutual
+// confirmation (see supabase/delivery_confirmed_by_client.sql). Only once
+// the client has confirmed "yes" does the freelancer get asked for an
+// estimated delivery date.
 export function DeliveryCard({
   booking,
   role,
@@ -43,7 +47,6 @@ export function DeliveryCard({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showEstimateForm, setShowEstimateForm] = useState(false);
   const [dateDraft, setDateDraft] = useState('');
   const [notesDraft, setNotesDraft] = useState('');
   const [showUpdateForm, setShowUpdateForm] = useState(false);
@@ -52,36 +55,35 @@ export function DeliveryCard({
   const [acknowledgedReceived, setAcknowledgedReceived] = useState(false);
 
   const status: DeliveryStatus = booking.delivery_status ?? null;
+  const hasEstimate = !!booking.estimated_delivery_at;
   const isPastEstimate = booking.estimated_delivery_at && new Date(booking.estimated_delivery_at).getTime() < Date.now();
 
-  const handleDecideYes = async () => {
+  const handleClientConfirm = async (hasDeliverables: boolean) => {
+    setIsSubmitting(true);
+    setError(null);
+    const response = await DataService.confirmBookingDeliverables(booking.id, hasDeliverables);
+    setIsSubmitting(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to save.');
+      return;
+    }
+    await onRefresh();
+  };
+
+  const handleSetEstimate = async () => {
     if (!dateDraft) {
       setError('Choose an estimated delivery date.');
       return;
     }
     setIsSubmitting(true);
     setError(null);
-    const response = await DataService.setBookingDeliveryPlan(booking.id, {
-      hasDeliverables: true,
+    const response = await DataService.setBookingDeliveryEstimate(booking.id, {
       estimatedDeliveryAt: dateStringToTimestamp(dateDraft),
       deliveryNotes: notesDraft.trim() || undefined,
     });
     setIsSubmitting(false);
     if (response.error) {
       setError((response.error as any).message || 'Unable to save the delivery estimate.');
-      return;
-    }
-    setShowEstimateForm(false);
-    await onRefresh();
-  };
-
-  const handleDecideNo = async () => {
-    setIsSubmitting(true);
-    setError(null);
-    const response = await DataService.setBookingDeliveryPlan(booking.id, { hasDeliverables: false });
-    setIsSubmitting(false);
-    if (response.error) {
-      setError((response.error as any).message || 'Unable to save.');
       return;
     }
     await onRefresh();
@@ -118,17 +120,62 @@ export function DeliveryCard({
     await onRefresh();
   };
 
-  // Client view never presumes a delivery story before the freelancer has
-  // declared one, and says nothing at all for a service that never has one.
+  const header = (
+    <div className="mb-3 flex items-center gap-2">
+      <Package className="w-5 h-5 text-gray-900" />
+      <h2 className="font-bold text-gray-900">Result Delivery</h2>
+    </div>
+  );
+
+  // ===== CLIENT VIEW =====
   if (role === 'client') {
-    if (!status || status === 'not_applicable') return null;
+    if (!status) {
+      return (
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+          {header}
+          {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+          <p className="mb-3 text-sm text-gray-700">
+            Does this booking include deliverables prepared after the appointment (e.g. edited photos, video, or files)?
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              disabled={isSubmitting}
+              onClick={() => void handleClientConfirm(true)}
+              className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+            >
+              Yes, deliverables included
+            </button>
+            <button
+              disabled={isSubmitting}
+              onClick={() => void handleClientConfirm(false)}
+              className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
+            >
+              No further items
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (status === 'not_applicable') return null;
+
+    if (status === 'pending' && !hasEstimate) {
+      return (
+        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+          {header}
+          <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
+            <p className="text-sm font-semibold text-gray-900">Waiting for the freelancer</p>
+            <p className="mt-1 text-sm text-gray-700">
+              You confirmed this booking includes deliverables — the freelancer hasn't set an estimated delivery date yet.
+            </p>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
-        <div className="mb-3 flex items-center gap-2">
-          <Package className="w-5 h-5 text-gray-900" />
-          <h2 className="font-bold text-gray-900">Result Delivery</h2>
-        </div>
+        {header}
         {status === 'delivered' ? (
           <div className="rounded-xl border border-green-200 bg-green-50 p-4">
             <div className="flex items-center gap-2 mb-1">
@@ -178,142 +225,133 @@ export function DeliveryCard({
     );
   }
 
-  // Freelancer view.
+  // ===== FREELANCER VIEW =====
+  if (!status) {
+    return (
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+        {header}
+        <p className="text-sm text-gray-500">Waiting for the client to confirm whether this booking includes deliverables.</p>
+      </div>
+    );
+  }
+
+  if (status === 'not_applicable') {
+    return (
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+        {header}
+        <p className="text-sm text-gray-500">The client confirmed this booking has no deliverables.</p>
+      </div>
+    );
+  }
+
+  if (status === 'pending' && !hasEstimate) {
+    return (
+      <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
+        {header}
+        {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+        <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
+          <p className="mb-3 text-sm font-semibold text-gray-900">
+            The client confirmed this booking includes deliverables. When do you expect to deliver them?
+          </p>
+          <input
+            type="date"
+            min={todayDateString()}
+            value={dateDraft}
+            onChange={(e) => setDateDraft(e.target.value)}
+            className="mb-3 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+          />
+          <textarea
+            value={notesDraft}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            placeholder="Delivery notes (optional) — e.g. how results will be delivered"
+            className="mb-3 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+          />
+          <p className="mb-3 text-xs text-gray-500">This is an estimate, not a guarantee — you can update it later if plans change.</p>
+          <button
+            disabled={isSubmitting || !dateDraft}
+            onClick={() => void handleSetEstimate()}
+            className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
+          >
+            {isSubmitting ? 'Saving...' : 'Save estimate'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
-      <div className="mb-3 flex items-center gap-2">
-        <Package className="w-5 h-5 text-gray-900" />
-        <h2 className="font-bold text-gray-900">Result Delivery</h2>
-      </div>
-
+      {header}
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
+        <p className="text-sm font-semibold text-gray-900">
+          {status === 'delivered' ? 'Delivered' : status === 'in_progress' ? 'In progress' : 'Pending'}
+        </p>
+        {booking.estimated_delivery_at && (
+          <p className="mt-1 text-sm text-gray-700">Estimated delivery: {formatDeliveryDate(booking.estimated_delivery_at)}</p>
+        )}
+        {booking.delivery_notes && <p className="mt-1 text-sm text-gray-600">{booking.delivery_notes}</p>}
 
-      {!status ? (
-        !showEstimateForm ? (
-          <div>
-            <p className="mb-3 text-sm text-gray-700">
-              Does this booking include deliverables prepared after the appointment (e.g. edited photos, video, or files)?
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setShowEstimateForm(true)}
-                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
-              >
-                Yes, deliverables included
-              </button>
+        {status !== 'delivered' && !showUpdateForm && (
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-sky-100 pt-3">
+            <button
+              onClick={() => {
+                setUpdateDateDraft(booking.estimated_delivery_at ? booking.estimated_delivery_at.slice(0, 10) : '');
+                setShowUpdateForm(true);
+              }}
+              className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100"
+            >
+              Update estimate
+            </button>
+            {status === 'pending' && (
               <button
                 disabled={isSubmitting}
-                onClick={() => void handleDecideNo()}
-                className="rounded-lg border border-sky-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-sky-50 disabled:opacity-60"
+                onClick={() => void handleMarkStatus('in_progress')}
+                className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
               >
-                No further items
+                Mark in progress
               </button>
-            </div>
+            )}
+            <button
+              disabled={isSubmitting}
+              onClick={() => void handleMarkStatus('delivered')}
+              className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
+            >
+              Mark delivered
+            </button>
           </div>
-        ) : (
-          <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-gray-900">Estimated result delivery</p>
-              <button onClick={() => setShowEstimateForm(false)} className="text-gray-400 hover:text-gray-900">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+        )}
+
+        {status !== 'delivered' && showUpdateForm && (
+          <div className="mt-3 border-t border-sky-100 pt-3">
             <input
               type="date"
               min={todayDateString()}
-              value={dateDraft}
-              onChange={(e) => setDateDraft(e.target.value)}
-              className="mb-3 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+              value={updateDateDraft}
+              onChange={(e) => setUpdateDateDraft(e.target.value)}
+              className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
-            <textarea
-              value={notesDraft}
-              onChange={(e) => setNotesDraft(e.target.value)}
-              placeholder="Delivery notes (optional) — e.g. how results will be delivered"
-              className="mb-3 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+            <input
+              value={updateReasonDraft}
+              onChange={(e) => setUpdateReasonDraft(e.target.value)}
+              placeholder="Reason for the change (optional)"
+              className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
             />
-            <p className="mb-3 text-xs text-gray-500">This is an estimate, not a guarantee — you can update it later if plans change.</p>
-            <button
-              disabled={isSubmitting || !dateDraft}
-              onClick={() => void handleDecideYes()}
-              className="w-full rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 py-2.5 px-4 text-sm font-bold text-white hover:shadow-lg transition-all disabled:opacity-60"
-            >
-              {isSubmitting ? 'Saving...' : 'Save estimate'}
-            </button>
-          </div>
-        )
-      ) : status === 'not_applicable' ? (
-        <p className="text-sm text-gray-500">No deliverables after this booking.</p>
-      ) : (
-        <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-4">
-          <p className="text-sm font-semibold text-gray-900">
-            {status === 'delivered' ? 'Delivered' : status === 'in_progress' ? 'In progress' : 'Pending'}
-          </p>
-          {booking.estimated_delivery_at && (
-            <p className="mt-1 text-sm text-gray-700">Estimated delivery: {formatDeliveryDate(booking.estimated_delivery_at)}</p>
-          )}
-          {booking.delivery_notes && <p className="mt-1 text-sm text-gray-600">{booking.delivery_notes}</p>}
-
-          {status !== 'delivered' && !showUpdateForm && (
-            <div className="mt-3 flex flex-wrap gap-2 border-t border-sky-100 pt-3">
+            <div className="flex gap-2">
               <button
-                onClick={() => {
-                  setUpdateDateDraft(booking.estimated_delivery_at ? booking.estimated_delivery_at.slice(0, 10) : '');
-                  setShowUpdateForm(true);
-                }}
-                className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100"
-              >
-                Update estimate
-              </button>
-              {status === 'pending' && (
-                <button
-                  disabled={isSubmitting}
-                  onClick={() => void handleMarkStatus('in_progress')}
-                  className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-100 disabled:opacity-60"
-                >
-                  Mark in progress
-                </button>
-              )}
-              <button
-                disabled={isSubmitting}
-                onClick={() => void handleMarkStatus('delivered')}
+                disabled={isSubmitting || !updateDateDraft}
+                onClick={() => void handleUpdateEstimate()}
                 className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
               >
-                Mark delivered
+                Save
+              </button>
+              <button onClick={() => setShowUpdateForm(false)} className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50">
+                Cancel
               </button>
             </div>
-          )}
-
-          {status !== 'delivered' && showUpdateForm && (
-            <div className="mt-3 border-t border-sky-100 pt-3">
-              <input
-                type="date"
-                min={todayDateString()}
-                value={updateDateDraft}
-                onChange={(e) => setUpdateDateDraft(e.target.value)}
-                className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-              />
-              <input
-                value={updateReasonDraft}
-                onChange={(e) => setUpdateReasonDraft(e.target.value)}
-                placeholder="Reason for the change (optional)"
-                className="mb-2 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
-              />
-              <div className="flex gap-2">
-                <button
-                  disabled={isSubmitting || !updateDateDraft}
-                  onClick={() => void handleUpdateEstimate()}
-                  className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60"
-                >
-                  Save
-                </button>
-                <button onClick={() => setShowUpdateForm(false)} className="rounded-lg border border-sky-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-sky-50">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
