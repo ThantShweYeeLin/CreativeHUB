@@ -1,7 +1,7 @@
 import { AlertCircle, Ban, ChevronLeft, ChevronRight, CheckCircle, Clock, FileText, Shield } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -41,6 +41,21 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const navigate = useNavigate();
   const { currency: preferredCurrency } = useCurrency();
   const { booking, events, confirmations, arrivals, attendanceReport, signedUrls, isLoading, error, setError, refresh, escrowState, bookingData } = useBookingTracking();
+
+  // The error banner lives near the top of the page, but most of the
+  // actions that can set `error` (paying the deposit, confirming
+  // completion, cancelling) happen from forms further down — e.g. a real
+  // Omise decline ("insufficient funds...") rendered here while the
+  // client's scroll position was still at the deposit form below, so they
+  // never saw it without scrolling back up themselves. Scroll it into view
+  // whenever a new error appears, covering every error path on this page
+  // at once since they all share this one banner.
+  const errorRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (error) {
+      errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error]);
 
   // This is the CLIENT-facing tracking page — a freelancer landing here
   // directly (e.g. an old link, a manually edited URL) would otherwise see
@@ -303,7 +318,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
       </div>
 
       <div className="max-w-[600px] mx-auto px-4 py-6">
-        {error && <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {error && <div ref={errorRef} className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
         {/* Freelancer Profile Preview */}
         <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(56,189,248,0.15)] border border-sky-100 p-5 mb-6">
