@@ -8,7 +8,19 @@ import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { formatCountdown } from '../../lib/bookingEscrow';
-import { createDemoTokenFromSaved } from '../../lib/demoCard';
+import {
+  BRAND_LABEL,
+  createDemoTokenFromSaved,
+  cvcLength,
+  detectBrand,
+  digitsOnly,
+  formatCardNumber,
+  formatExpiry,
+  parseExpiry,
+  validateCardForm,
+  type CardFormErrors,
+} from '../../lib/demoCard';
+import { tokenizeCard, type CardDetails } from '../../lib/omiseClient';
 import { PaymentMethodPicker, type PaymentMethod } from '../components/payments/PaymentMethodPicker';
 import { useBookingTracking } from './bookingTracking/useBookingTracking';
 import { AttendanceCheck } from './bookingTracking/AttendanceCheck';
@@ -61,6 +73,51 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const [selectedPaymentMethodId, setSelectedPaymentMethodId] = useState<string | null>(null);
   const [isPayingDeposit, setIsPayingDeposit] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  // Reused from Premium's checkout: this reads the same server-wide
+  // paymentMode(), not anything Premium-specific — 'demo' = pay with a
+  // saved method (a saved card can only ever produce a demo token, see
+  // src/lib/demoCard.ts), 'omise' = a fresh card is required and really
+  // charged. Mirrors FreelancerPremiumPanel.tsx's mode switch exactly.
+  const [paymentMode, setPaymentMode] = useState<'demo' | 'omise'>('demo');
+  const [depositCard, setDepositCard] = useState({ name: '', number: '', expiry: '', cvc: '' });
+  const [depositCardTouched, setDepositCardTouched] = useState<Record<string, boolean>>({});
+  const depositCardBrand = detectBrand(depositCard.number);
+  const depositCardErrors: CardFormErrors = validateCardForm(depositCard);
+  const showDepositCardError = (field: keyof CardFormErrors) => (depositCardTouched[field] ? depositCardErrors[field] : undefined);
+  const depositCardInputClass = (field: keyof CardFormErrors) =>
+    `w-full rounded-lg border px-3 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 ${
+      showDepositCardError(field) ? 'border-red-300 focus:ring-red-200' : 'border-sky-100 focus:ring-sky-300'
+    }`;
+
+  useEffect(() => {
+    void DataService.getPremiumMode().then(setPaymentMode);
+  }, []);
+
+  // Coming back from the card issuer's 3-D Secure page (real payments
+  // only): the server re-checks the charge with Omise before granting
+  // anything. Mirrors FreelancerPremiumPanel.tsx's own pending-charge effect.
+  useEffect(() => {
+    let pendingChargeId: string | null = null;
+    try {
+      pendingChargeId = sessionStorage.getItem('creativehub.depositPendingCharge');
+    } catch {
+      return;
+    }
+    if (!pendingChargeId) return;
+    sessionStorage.removeItem('creativehub.depositPendingCharge');
+    void (async () => {
+      const response = await DataService.confirmBookingDepositCharge(pendingChargeId!);
+      if (response.error) {
+        setError((response.error as any).message || 'Unable to confirm the deposit.');
+        return;
+      }
+      await refresh();
+      if (user?.id && response.data?.booking) {
+        await checkGroupDepositsAndCreateChat(response.data.booking, user.id);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [isConfirming, setIsConfirming] = useState(false);
   const [showDisputeForm, setShowDisputeForm] = useState(false);
@@ -71,14 +128,25 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const [isCancelling, setIsCancelling] = useState(false);
 
   const handleTransferDeposit = async () => {
-    if (!booking || !selectedPaymentMethodId) return;
-    const method = paymentMethods.find((m) => m.id === selectedPaymentMethodId);
-    if (!method) return;
+    if (!booking) return;
+
+    let card: CardDetails | { demoToken: string };
+    if (paymentMode === 'demo') {
+      if (!selectedPaymentMethodId) return;
+      const method = paymentMethods.find((m) => m.id === selectedPaymentMethodId);
+      if (!method) return;
+      card = { demoToken: createDemoTokenFromSaved(method) };
+    } else {
+      setDepositCardTouched({ name: true, number: true, expiry: true, cvc: true });
+      if (Object.keys(depositCardErrors).length > 0) return;
+      const exp = parseExpiry(depositCard.expiry)!;
+      card = { name: depositCard.name.trim(), number: depositCard.number, expirationMonth: exp.month, expirationYear: exp.year, securityCode: depositCard.cvc };
+    }
 
     setIsPayingDeposit(true);
     setError(null);
 
-    const response = await DataService.startBookingDepositCheckout(booking.id, { demoToken: createDemoTokenFromSaved(method) });
+    const response = await DataService.startBookingDepositCheckout(booking.id, card);
 
     setIsPayingDeposit(false);
 
@@ -87,11 +155,16 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
       return;
     }
 
-    // A saved method can only ever produce a demo token today (see
-    // startBookingDepositCheckout's comment) — real Omise never returns a
-    // pending/3-D Secure charge for one, so this is defensive, not a live path.
-    if (response.data?.status === 'pending') {
-      setError('This card needs extra verification. Please try a different saved card for now.');
+    // 3-D Secure: the buyer must authenticate with their bank first (real
+    // payments only — a demo token's charge always settles synchronously).
+    // Mirrors FreelancerPremiumPanel.tsx's own pending-charge handling.
+    if (response.data?.status === 'pending' && response.data?.authorizeUri) {
+      try {
+        sessionStorage.setItem('creativehub.depositPendingCharge', response.data.chargeId);
+      } catch {
+        // Without storage the user can still finish; they just re-open this page.
+      }
+      window.location.href = response.data.authorizeUri;
       return;
     }
 
@@ -102,6 +175,11 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     // "CreativeHUB Freelancer" fallback until something else happened to
     // reload the page.
     await refresh();
+
+    if (paymentMode === 'omise') {
+      setDepositCard({ name: '', number: '', expiry: '', cvc: '' });
+      setDepositCardTouched({});
+    }
 
     if (user?.id && response.data?.booking) {
       await checkGroupDepositsAndCreateChat(response.data.booking, user.id);
@@ -345,7 +423,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               <p className="text-xs text-gray-500">This amount will be held until service completion</p>
             </div>
 
-            {user?.id && (
+            {user?.id && paymentMode === 'demo' && (
               <div className="mb-4 rounded-xl bg-white p-4">
                 <p className="mb-3 text-sm font-semibold text-gray-900">Pay with</p>
                 <PaymentMethodPicker
@@ -358,9 +436,71 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
             )}
 
+            {paymentMode === 'omise' && (
+              <div className="mb-4 rounded-xl bg-white p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-900">Pay with card</p>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Name on card</label>
+                  <input
+                    value={depositCard.name}
+                    onChange={(e) => setDepositCard((c) => ({ ...c, name: e.target.value }))}
+                    onBlur={() => setDepositCardTouched((t) => ({ ...t, name: true }))}
+                    autoComplete="cc-name"
+                    placeholder="As shown on your card"
+                    className={depositCardInputClass('name')}
+                  />
+                  {showDepositCardError('name') && <p className="mt-1 text-xs text-red-600">{depositCardErrors.name}</p>}
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-gray-600">Card number</label>
+                  <div className="relative">
+                    <input
+                      value={depositCard.number}
+                      onChange={(e) => setDepositCard((c) => ({ ...c, number: formatCardNumber(e.target.value) }))}
+                      onBlur={() => setDepositCardTouched((t) => ({ ...t, number: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-number"
+                      placeholder="1234 1234 1234 1234"
+                      className={`${depositCardInputClass('number')} pr-20`}
+                    />
+                    {depositCardBrand !== 'card' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-sky-600">{BRAND_LABEL[depositCardBrand]}</span>}
+                  </div>
+                  {showDepositCardError('number') && <p className="mt-1 text-xs text-red-600">{depositCardErrors.number}</p>}
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Expiry</label>
+                    <input
+                      value={depositCard.expiry}
+                      onChange={(e) => setDepositCard((c) => ({ ...c, expiry: formatExpiry(e.target.value) }))}
+                      onBlur={() => setDepositCardTouched((t) => ({ ...t, expiry: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-exp"
+                      placeholder="MM/YY"
+                      className={depositCardInputClass('expiry')}
+                    />
+                    {showDepositCardError('expiry') && <p className="mt-1 text-xs text-red-600">{depositCardErrors.expiry}</p>}
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-gray-600">Security code</label>
+                    <input
+                      value={depositCard.cvc}
+                      onChange={(e) => setDepositCard((c) => ({ ...c, cvc: digitsOnly(e.target.value).slice(0, cvcLength(depositCardBrand)) }))}
+                      onBlur={() => setDepositCardTouched((t) => ({ ...t, cvc: true }))}
+                      inputMode="numeric"
+                      autoComplete="cc-csc"
+                      placeholder={depositCardBrand === 'amex' ? '4 digits' : '3 digits'}
+                      className={depositCardInputClass('cvc')}
+                    />
+                    {showDepositCardError('cvc') && <p className="mt-1 text-xs text-red-600">{depositCardErrors.cvc}</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button
               onClick={() => void handleTransferDeposit()}
-              disabled={isPayingDeposit || !selectedPaymentMethodId}
+              disabled={isPayingDeposit || (paymentMode === 'demo' && !selectedPaymentMethodId)}
               className="w-full bg-white text-gray-900 py-3 px-4 rounded-xl font-bold hover:bg-sky-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {isPayingDeposit ? 'Transferring...' : `Transfer ${formatMoney(bookingData.pricing.deposit)} Deposit Now`}
