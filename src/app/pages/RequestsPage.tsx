@@ -11,7 +11,8 @@ import { FeedService } from '../../lib/feedService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
 import { stripRequestDisplayMeta, summarizeGroupRequestMembers } from '../../lib/groupRequest';
 import { appendBudgetMeta, extractBudgetMeta, formatBudgetRange, stripBudgetMeta } from '../../lib/requestBudget';
-import { appendScheduleMeta, extractScheduleMeta, formatScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
+import { addMinutesToTime, appendScheduleMeta, extractScheduleMeta, formatScheduleMeta, generateTimeSlots, formatTimeLabel } from '../../lib/requestSchedule';
+import { isDateBlocked, isTimeSlotTaken } from '../../lib/availability';
 import { appendLocationMeta, extractLocationMeta } from '../../lib/requestLocation';
 import { convertAmount, formatCurrencyAmount } from '../../lib/currency';
 import { acceptRequestAndCreateBooking } from '../../lib/acceptRequest';
@@ -107,6 +108,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   // enforcement here instead of re-deriving a third copy of it.
   const [editTimeSlots, setEditTimeSlots] = useState<string[]>([]);
   const [editMinimumOffer, setEditMinimumOffer] = useState(0);
+  const [editWorkingHours, setEditWorkingHours] = useState<{ start: string; end: string }>({ start: '09:00', end: '18:00' });
+  const [editFreelancerBookings, setEditFreelancerBookings] = useState<any[]>([]);
+  const [editFreelancerBlockedDates, setEditFreelancerBlockedDates] = useState<any[]>([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -377,6 +381,16 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     // still reviews and can reject/counter an edited request same as a new
     // one, so this only needs to keep it inside their stated working hours.
     setEditTimeSlots(generateTimeSlots(freelancerProfile?.working_hours_start, freelancerProfile?.working_hours_end));
+    setEditWorkingHours({
+      start: freelancerProfile?.working_hours_start || '09:00',
+      end: freelancerProfile?.working_hours_end || '18:00',
+    });
+    const [bookingsResponse, blockedResponse] = await Promise.all([
+      DataService.getFreelancerBookings(request.freelancer.id),
+      freelancerProfile?.id ? DataService.getFreelancerBlockedDates(freelancerProfile.id) : Promise.resolve({ data: [] as any[] }),
+    ]);
+    setEditFreelancerBookings((bookingsResponse as any).data || []);
+    setEditFreelancerBlockedDates((blockedResponse as any).data || []);
 
     const requestCurrency = request.budgetMeta?.currency || 'THB';
     const freelancerRateCurrency = (freelancerUserResponse.data as any)?.preferred_currency || 'THB';
@@ -401,6 +415,30 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       customLocation: isKnownLocation ? '' : currentLocation,
     });
   };
+
+  // Same availability rules as FreelancerProfile.tsx's Request Booking form:
+  // blocked dates, already-booked slots (grayed out), nothing already past
+  // today, and at least an hour left before the working day ends so a start
+  // time always has a valid end time to pair with.
+  const editIsDateBlocked = editForm.scheduleDate ? isDateBlocked(editFreelancerBlockedDates, editForm.scheduleDate) : false;
+  const editStartSlots = (() => {
+    const isToday = editForm.scheduleDate === new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    return editTimeSlots
+      .filter((slot) => {
+        if (addMinutesToTime(slot, 60) > editWorkingHours.end) return false;
+        if (!isToday) return true;
+        const [hour, minute] = slot.split(':').map(Number);
+        return hour * 60 + minute > currentMinutes;
+      })
+      .map((slot) => ({
+        value: slot,
+        taken: editForm.scheduleDate ? isTimeSlotTaken(editFreelancerBookings, editForm.scheduleDate, slot) : false,
+      }));
+  })();
+  const editEndSlots = editForm.scheduleTime ? editTimeSlots.filter((slot) => slot > editForm.scheduleTime) : [];
+  const editHasNoAvailableTime = Boolean(editForm.scheduleDate) && !editIsDateBlocked && editStartSlots.every((slot) => slot.taken);
 
   const saveRequestEdits = async () => {
     if (!user?.id || !editingRequest) {
@@ -1266,7 +1304,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                       type="date"
                       min={new Date().toISOString().slice(0, 10)}
                       value={editForm.scheduleDate}
-                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value }))}
+                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleDate: event.target.value, scheduleTime: '', scheduleEndTime: '' }))}
                       className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
                     />
                     {/* Bounded to the freelancer's own working hours
@@ -1274,36 +1312,51 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                         form uses) rather than a plain <input type="time">
                         that let an edit land outside them entirely. */}
                     <select
+                      disabled={!editForm.scheduleDate || editIsDateBlocked || editHasNoAvailableTime}
                       value={editForm.scheduleTime}
-                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value }))}
-                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      onChange={(event) => setEditForm((current) => ({ ...current, scheduleTime: event.target.value, scheduleEndTime: '' }))}
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
                     >
-                      <option value="">Start time</option>
-                      {editTimeSlots.map((slot) => (
-                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      <option value="" disabled>
+                        {!editForm.scheduleDate ? 'Choose a date first' : editIsDateBlocked ? 'Not available this day' : editHasNoAvailableTime ? 'No available time this day' : 'Start time'}
+                      </option>
+                      {editStartSlots.map((slot) => (
+                        <option key={slot.value} value={slot.value} disabled={slot.taken}>
+                          {formatTimeLabel(slot.value)}{slot.taken ? ' — Already booked' : ''}
+                        </option>
                       ))}
                     </select>
                     <select
+                      disabled={!editForm.scheduleTime}
                       value={editForm.scheduleEndTime}
                       onChange={(event) => setEditForm((current) => ({ ...current, scheduleEndTime: event.target.value }))}
-                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      className="w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400 disabled:opacity-60"
                     >
-                      <option value="">End time</option>
-                      {editTimeSlots
-                        .filter((slot) => !editForm.scheduleTime || slot > editForm.scheduleTime)
-                        .map((slot) => (
-                          <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
-                        ))}
+                      <option value="" disabled>{!editForm.scheduleTime ? 'Choose a start time first' : 'End time'}</option>
+                      {editEndSlots.map((slot) => (
+                        <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                      ))}
                     </select>
                   </div>
-                  <p className="mt-2 text-xs text-gray-600">
-                    Date, start time, and end time — leave all three empty if this doesn't need a fixed schedule. Times are limited to{' '}
-                    {editingRequest.freelancer.name}'s working hours.
-                  </p>
+                  {editIsDateBlocked ? (
+                    <p className="mt-2 text-xs font-semibold text-red-600">This freelancer isn't available on this date. Please choose a different day.</p>
+                  ) : editHasNoAvailableTime ? (
+                    <p className="mt-2 text-xs font-semibold text-red-600">There's no available time on this day. Please choose a different day.</p>
+                  ) : (
+                    <p className="mt-2 text-xs text-gray-600">
+                      Available {formatTimeLabel(editWorkingHours.start)} – {formatTimeLabel(editWorkingHours.end)}, {editingRequest.freelancer.name}'s working hours. Times already booked are grayed out, and times already passed today aren't shown.
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="mb-2 block text-sm font-semibold text-gray-900">Budget</label>
+                  {editMinimumOffer > 0 && (
+                    <div className="mb-3 rounded-xl border border-sky-100 bg-sky-50 px-4 py-3">
+                      <span className="block text-xs font-semibold uppercase tracking-wide text-gray-500">Minimum</span>
+                      <span className="font-semibold text-gray-900">{formatCurrencyAmount(editMinimumOffer, editForm.currency)}</span>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                     <input
                       value={editForm.currency}

@@ -1,3 +1,6 @@
+///MainLayout draws the shared site header and navigation, 
+// then places the page inside its children. Individual pages
+// draw their own specific content. 
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Bell, Menu } from 'lucide-react';

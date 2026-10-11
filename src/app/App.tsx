@@ -1,3 +1,5 @@
+///looks at the browser’s URL and chooses which page to show.
+
 import { lazy, Suspense, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation, useNavigationType } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -548,3 +550,8 @@ export default function App() {
     </>
   );
 }
+///main.tsx starts the app
+ ///       ↓
+///App.tsx checks the URL
+///        ↓
+///The matching page appears

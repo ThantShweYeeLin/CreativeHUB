@@ -4,6 +4,7 @@
 // dependencies from this directory in isolation, so nothing here should
 // import a file that lives outside server/ (see src/routes/chatbot.ts for
 // the local-copy pattern used to avoid exactly that).
+///This file creates the actual Express application.
 // Must be the very first import: ESM hoists every import statement to run
 // before any other top-level code in this file, so a plain `import dotenv
 // from 'dotenv'` followed by a later `dotenv.config()` call runs AFTER the
@@ -14,15 +15,15 @@
 // side-effecting 'dotenv/config' entrypoint first, instead, makes dotenv's
 // own import run (and populate process.env) before any import after it is
 // evaluated, since ESM imports execute in declaration order.
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import apiRouter from './routes/index.js';
-import { createOmiseWebhookHandler } from './routes/omiseWebhook.js';
-import { corsOptions } from './lib/cors.js';
+import 'dotenv/config'; ///to load environment variables from a local .env file, before anything below can read them.
+import express from 'express'; ///Bring in Express for the server
+import cors from 'cors'; ///to control which websites can call it,
+import helmet from 'helmet'; ///for security-related HTTP headers,
+import apiRouter from './routes/index.js'; ///the router assembled in server/src/routes/index.ts. It connects route groups such as auth, payments, and chatbot.
+import { createOmiseWebhookHandler } from './routes/omiseWebhook.js'; ///handles incoming payment-provider notifications.
+import { corsOptions } from './lib/cors.js'; /// specify the server’s cross-origin rules.
 
-const app = express();
+const app = express(); /// creates the Express application.
 const port = process.env.PORT ? Number(process.env.PORT) : 4000;
 // Vercel sits in front of this as a proxy - without trust proxy, req.ip
 // (and every rate limiter keyed on it) sees Vercel's own address for every

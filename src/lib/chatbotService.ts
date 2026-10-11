@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 // On the live site the chatbot is served by the website's own Vercel function
 // (api/chatbot/message.js), so it's always same-origin there. In local dev it
 // goes to the Express server, which runs the same shared code.
+///sends the request.
 const API_BASE = import.meta.env.DEV
   ? (import.meta.env.VITE_API_BASE_URL as string | undefined) || 'http://localhost:4000/api'
   : '/api';
