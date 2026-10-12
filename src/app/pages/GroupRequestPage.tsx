@@ -33,7 +33,14 @@ interface PerFreelancerForm {
   purpose: string;
   customPurpose: string;
   budget: string;
+  // Empty means "use the shared group time" below — only set once this
+  // freelancer's own slot is deliberately changed (e.g. the photographer
+  // arrives at 2pm but the makeup artist needs to start at 10am).
+  time: string;
+  endTime: string;
 }
+
+const EMPTY_PER_FREELANCER_FORM: PerFreelancerForm = { purpose: '', customPurpose: '', budget: '', time: '', endTime: '' };
 
 const OTHER_PURPOSE_VALUE = '__other__';
 
@@ -194,6 +201,11 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
           purpose: state.prefillPurpose ? (isKnownSkill ? state.prefillPurpose : OTHER_PURPOSE_VALUE) : '',
           customPurpose: state.prefillPurpose && !isKnownSkill ? state.prefillPurpose : '',
           budget: state.prefillBudget || '',
+          // Empty = same as the shared group time, which prefillScheduleTime/
+          // prefillScheduleEndTime above already seeded with where this
+          // freelancer was heading before "Add Another Freelancer".
+          time: '',
+          endTime: '',
         },
       }));
     }
@@ -230,7 +242,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
   const addFreelancer = (freelancerId: string) => {
     setSelectedIds((current) => (current.includes(freelancerId) ? current : [...current, freelancerId]));
-    setPerFreelancerForm((current) => (current[freelancerId] ? current : { ...current, [freelancerId]: { purpose: '', customPurpose: '', budget: '' } }));
+    setPerFreelancerForm((current) => (current[freelancerId] ? current : { ...current, [freelancerId]: EMPTY_PER_FREELANCER_FORM }));
     setSearchQuery('');
   };
 
@@ -251,7 +263,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
   const updatePerFreelancer = (freelancerId: string, patch: Partial<PerFreelancerForm>) => {
     setPerFreelancerForm((current) => ({
       ...current,
-      [freelancerId]: { ...(current[freelancerId] || { purpose: '', customPurpose: '', budget: '' }), ...patch },
+      [freelancerId]: { ...(current[freelancerId] || EMPTY_PER_FREELANCER_FORM), ...patch },
     }));
   };
 
@@ -287,7 +299,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     const perRecipient: Record<string, { projectName: string; budget: number; description: string }> = {};
 
     for (const freelancer of selectedFreelancers) {
-      const form = perFreelancerForm[freelancer.userId] || { purpose: '', customPurpose: '', budget: '' };
+      const form = perFreelancerForm[freelancer.userId] || EMPTY_PER_FREELANCER_FORM;
       const resolvedPurpose = form.purpose === OTHER_PURPOSE_VALUE ? form.customPurpose.trim() : form.purpose;
 
       if (!resolvedPurpose) {
@@ -307,9 +319,19 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
         return;
       }
 
+      // Falls back to the shared group time whenever this freelancer's own
+      // slot was left blank — only a freelancer whose card was actually
+      // customized gets a different time embedded in their request.
+      const resolvedTime = form.time || scheduleTime;
+      const resolvedEndTime = form.endTime || scheduleEndTime;
+      if (resolvedEndTime <= resolvedTime) {
+        setError(`${freelancer.fullName}'s end time must be after their start time.`);
+        return;
+      }
+
       const budgetMeta: BudgetMeta = { currency, min: minimum, max: budgetAmount };
       const description = appendLocationMeta(
-        appendScheduleMeta(appendBudgetMeta(notes, budgetMeta), { date: scheduleDate, time: scheduleTime, endTime: scheduleEndTime }),
+        appendScheduleMeta(appendBudgetMeta(notes, budgetMeta), { date: scheduleDate, time: resolvedTime, endTime: resolvedEndTime }),
         location.formattedAddress
       );
 
@@ -425,7 +447,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
               Selected freelancers <span className="font-normal text-gray-500">({selectedFreelancers.length})</span>
             </label>
             {selectedFreelancers.map((freelancer) => {
-              const form = perFreelancerForm[freelancer.userId] || { purpose: '', customPurpose: '', budget: '' };
+              const form = perFreelancerForm[freelancer.userId] || EMPTY_PER_FREELANCER_FORM;
               const minimum = minimumFor(freelancer);
               return (
                 <div key={freelancer.userId} className="rounded-2xl border border-sky-100 bg-white p-5">
@@ -492,6 +514,34 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
                       )}
                     </div>
                   </div>
+
+                  <div className="mt-3">
+                    <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+                      Time <span className="font-normal text-gray-500">(optional — defaults to the shared time below)</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <select
+                        value={form.time}
+                        onChange={(event) => updatePerFreelancer(freelancer.userId, { time: event.target.value, endTime: '' })}
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      >
+                        <option value="">{scheduleTime ? `Same as group (${formatTimeLabel(scheduleTime)})` : 'Start time'}</option>
+                        {timeSlots.map((slot) => (
+                          <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={form.endTime}
+                        onChange={(event) => updatePerFreelancer(freelancer.userId, { endTime: event.target.value })}
+                        className="w-full rounded-xl border border-sky-100 bg-sky-50/50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-400"
+                      >
+                        <option value="">{scheduleEndTime ? `Same as group (${formatTimeLabel(scheduleEndTime)})` : 'End time'}</option>
+                        {timeSlots.filter((slot) => slot > (form.time || scheduleTime)).map((slot) => (
+                          <option key={slot} value={slot}>{formatTimeLabel(slot)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -500,6 +550,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
         <div className="rounded-2xl border border-sky-100 bg-white p-5 space-y-5">
           <p className="text-sm font-semibold text-gray-900">Shared for the whole group</p>
+          <p className="-mt-3 text-xs text-gray-500">Location is the same for everyone. Schedule here is the default — override it for an individual freelancer above if they need a different time.</p>
 
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-900">Location</label>

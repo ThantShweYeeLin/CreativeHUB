@@ -2,7 +2,7 @@ import { Check, X } from 'lucide-react';
 import { formatCurrencyAmount } from '../../../lib/currency';
 
 interface ConfirmOfferDialogProps {
-  type: 'accept' | 'reject';
+  type: 'accept' | 'reject' | 'cancel';
   freelancerName?: string;
   projectName: string;
   price: number;
@@ -26,6 +26,7 @@ export function ConfirmOfferDialog({
   onConfirm,
 }: ConfirmOfferDialogProps) {
   const isAccept = type === 'accept';
+  const isCancel = type === 'cancel';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
@@ -37,6 +38,8 @@ export function ConfirmOfferDialog({
         <h3 className="text-lg font-bold text-gray-900">
           {isAccept
             ? isCounterOffer ? 'Accept Counter Offer?' : 'Accept this request?'
+            : isCancel
+            ? 'Withdraw this request?'
             : isCounterOffer ? 'Reject this counter offer?' : 'Reject this request?'}
         </h3>
 
@@ -63,7 +66,9 @@ export function ConfirmOfferDialog({
           </>
         ) : (
           <p className="mt-2 text-sm text-gray-600">
-            {isCounterOffer
+            {isCancel
+              ? `This withdraws your request for "${projectName}" — the freelancer won't be able to accept or counter it anymore.`
+              : isCounterOffer
               ? `This will end the current negotiation for "${projectName}".`
               : `This will decline the request for "${projectName}".`}
           </p>
@@ -84,7 +89,7 @@ export function ConfirmOfferDialog({
               isAccept ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
-            {isSubmitting ? 'Please wait...' : isAccept ? 'Accept & Continue' : 'Reject Offer'}
+            {isSubmitting ? 'Please wait...' : isAccept ? 'Accept & Continue' : isCancel ? 'Withdraw Request' : 'Reject Offer'}
           </button>
         </div>
       </div>

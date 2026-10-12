@@ -82,7 +82,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [counterTimeInput, setCounterTimeInput] = useState('');
   const [counterEndTimeInput, setCounterEndTimeInput] = useState('');
   const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject'; request: any } | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'accept' | 'reject' | 'cancel'; request: any } | null>(null);
   const [isSubmittingConfirm, setIsSubmittingConfirm] = useState(false);
   const [cancellingOpportunityId, setCancellingOpportunityId] = useState<string | null>(null);
   const [isClosingOpportunity, setIsClosingOpportunity] = useState(false);
@@ -737,6 +737,21 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     await reloadRequests();
   };
 
+  // The client withdrawing their own still-open request — distinct from
+  // rejecting a counter-offer (that's declining the *freelancer's* move).
+  // DataService.cancelRequest only allows this while status is still
+  // 'pending', matching what triggers this button below.
+  const handleCancelRequest = async (requestId: string) => {
+    if (!user?.id) return;
+    setError(null);
+    const response = await DataService.cancelRequest(requestId, user.id);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to withdraw this request.');
+      return;
+    }
+    await reloadRequests();
+  };
+
   const handleOpenAcceptedRequest = async (request: any) => {
     if (request.status !== 'accepted' || openingBookingForRequestId) {
       return;
@@ -766,6 +781,8 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     try {
       if (confirmAction.type === 'accept') {
         await handleAcceptCounter(confirmAction.request);
+      } else if (confirmAction.type === 'cancel') {
+        await handleCancelRequest(confirmAction.request.id);
       } else {
         await handleRejectCounter(confirmAction.request.id);
       }
@@ -1058,13 +1075,22 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     {/* Action Buttons */}
                     <div className="flex flex-col md:flex-row items-stretch md:items-center gap-2 md:gap-3">
                       {request.status === 'pending' && (
-                        <button
-                          onClick={() => openEditRequest(request)}
-                          className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-105 transition-all"
-                        >
-                          <Edit className="w-4 h-4" />
-                          Edit Request
-                        </button>
+                        <>
+                          <button
+                            onClick={() => openEditRequest(request)}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-blue-600 text-white rounded-lg text-sm md:text-base font-semibold shadow-md shadow-sky-500/30 hover:shadow-lg hover:scale-105 transition-all"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit Request
+                          </button>
+                          <button
+                            onClick={() => setConfirmAction({ type: 'cancel', request })}
+                            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-50 text-gray-700 rounded-lg text-sm md:text-base font-semibold hover:bg-sky-100 transition-colors"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel Request
+                          </button>
+                        </>
                       )}
                       {request.status === 'countered' && request.counterBy === 'freelancer' && (
                         <>
@@ -1110,6 +1136,13 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           >
                             View Details
                           </button>
+                          <button
+                            onClick={() => setConfirmAction({ type: 'cancel', request })}
+                            className="flex items-center justify-center gap-2 rounded-lg bg-sky-50 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-sky-100 transition-colors md:text-base"
+                          >
+                            <X className="w-4 h-4" />
+                            Withdraw
+                          </button>
                         </div>
                       )}
                       {request.status === 'accepted' && (
@@ -1141,6 +1174,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                           <UserPlus className="w-4 h-4" />
                           Add Another Freelancer
                         </button>
+                      )}
+                      {request.status === 'cancelled' && (
+                        <div className="px-4 py-2.5 text-sm text-gray-500">You withdrew this request.</div>
                       )}
                       <button
                         onClick={(event) => {

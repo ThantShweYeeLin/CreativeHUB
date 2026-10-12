@@ -4696,10 +4696,10 @@ export class DataService {
     return { data, error };
   }
 
-  // Only the client who sent it can cancel, and only while it's still
-  // pending — once countered/accepted, use the existing reject/accept
-  // flow instead, since a counter-offer thread involves the freelancer's
-  // own input too.
+  // Only the client who sent it can cancel, and only while the request is
+  // still open (pending, or mid-negotiation with the client's own counter
+  // on the table) — once the freelancer has accepted or it's already
+  // resolved, there's nothing left to withdraw.
   static async cancelRequest(requestId: string, clientId: string) {
     const previous = await supabase
       .from('requests')
@@ -4711,8 +4711,8 @@ export class DataService {
     if (previous.error || !previous.data) {
       return { data: null, error: previous.error || new Error('Request not found.') };
     }
-    if ((previous.data as any).status !== 'pending') {
-      return { data: null, error: new Error('Only pending requests can be cancelled.') };
+    if (!['pending', 'countered'].includes((previous.data as any).status)) {
+      return { data: null, error: new Error('Only an open request can be withdrawn.') };
     }
 
     return this.updateRequest(requestId, { status: 'cancelled' } as any);
