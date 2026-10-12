@@ -18,7 +18,7 @@ import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
-import { FREELANCER_CATEGORIES } from '../../lib/categories';
+import { FREELANCER_CATEGORIES, MAX_MINOR_CATEGORIES } from '../../lib/categories';
 import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
 import { LegalContentModal } from '../../components/LegalContentModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
@@ -130,6 +130,18 @@ export function SettingsPage() {
   const [bookingPreferences, setBookingPreferences] = useState<string[]>([]);
   const [isSavingBookingPrefs, setIsSavingBookingPrefs] = useState(false);
 
+  // The freelancer-viewer equivalent: ExplorePage sources clientInterests
+  // from freelancer_profiles.title + minor_categories instead of
+  // client_interests (freelancers have no client_interests of their own),
+  // so this is what actually drives their "Recommended for you" peers.
+  // title (the primary category) isn't editable here - changing it
+  // invalidates previously-picked Skills/Styles the same way it does in
+  // BecomeFreelancerPage, which needs that flow's confirm-and-reset step,
+  // not a quick toggle.
+  const [freelancerTitle, setFreelancerTitle] = useState<string | null>(null);
+  const [freelancerMinorCategories, setFreelancerMinorCategories] = useState<string[]>([]);
+  const [isSavingSpecialties, setIsSavingSpecialties] = useState(false);
+
   const role = (user?.role || 'client') as Role;
 
   // Stored server-side (unlike the localStorage toggles above) because the
@@ -229,6 +241,10 @@ export function SettingsPage() {
 
       if (freelancerResponse.data) {
         setProfileVisibility(freelancerResponse.data.visibility === 'limited' ? 'limited' : 'public');
+        setFreelancerTitle((freelancerResponse.data as any).title || null);
+        setFreelancerMinorCategories(
+          Array.isArray((freelancerResponse.data as any).minor_categories) ? (freelancerResponse.data as any).minor_categories : []
+        );
       }
 
       setIsLoading(false);
@@ -288,6 +304,30 @@ export function SettingsPage() {
       return;
     }
     setStatusMessage('Booking preferences saved.');
+  };
+
+  const toggleFreelancerMinorCategory = (value: string) => {
+    if (value === freelancerTitle) return;
+    setFreelancerMinorCategories((current) => {
+      if (current.includes(value)) return current.filter((item) => item !== value);
+      if (current.length >= MAX_MINOR_CATEGORIES) return current;
+      return [...current, value];
+    });
+  };
+
+  const handleSaveSpecialties = async () => {
+    if (!user?.id) return;
+    setIsSavingSpecialties(true);
+    setErrorMessage(null);
+    const { error } = await DataService.updateFreelancerProfile(user.id, {
+      minor_categories: freelancerMinorCategories,
+    } as any);
+    setIsSavingSpecialties(false);
+    if (error) {
+      setErrorMessage('Unable to save your specialties.');
+      return;
+    }
+    setStatusMessage('Specialties saved.');
   };
 
   const handleUnblock = async (blockedId: string) => {
@@ -843,6 +883,60 @@ export function SettingsPage() {
                 className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
               >
                 {isSavingBookingPrefs ? 'Saving...' : 'Save preferences'}
+              </button>
+            </section>
+          )}
+
+          {role === 'freelancer' && (
+            <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+              <div className="mb-3 flex items-center gap-2 text-gray-900">
+                <Heart className="h-5 w-5" />
+                <h2 className="text-lg font-bold">Specialties</h2>
+              </div>
+              <p className="mb-4 text-sm text-gray-600">
+                What Explore's "Recommended for you" uses to show you other freelancers worth following. Your main
+                specialty is always included; add other categories you're interested in below.
+              </p>
+
+              <p className="mb-2 text-sm font-semibold text-gray-700">
+                Main specialty{freelancerTitle ? `: ${freelancerTitle}` : ''}
+              </p>
+              <p className="mb-4 text-xs text-gray-500">
+                Changing your main specialty also resets your Skills and Styles, so it isn't available here yet —
+                contact support if you need it changed.
+              </p>
+
+              <p className="mb-2 text-sm font-semibold text-gray-700">
+                Other categories you're interested in ({freelancerMinorCategories.length}/{MAX_MINOR_CATEGORIES})
+              </p>
+              <div className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-3">
+                {FREELANCER_CATEGORIES.filter((category) => category.label !== freelancerTitle).map((category) => {
+                  const selected = freelancerMinorCategories.includes(category.label);
+                  const disabled = !selected && freelancerMinorCategories.length >= MAX_MINOR_CATEGORIES;
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => toggleFreelancerMinorCategory(category.label)}
+                      disabled={disabled}
+                      className={`rounded-xl border-2 px-3 py-2 text-sm font-semibold transition-all ${
+                        selected
+                          ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                          : 'border-sky-100 text-gray-600 hover:border-sky-300 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-sky-100'
+                      }`}
+                    >
+                      {category.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => void handleSaveSpecialties()}
+                disabled={isSavingSpecialties}
+                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+              >
+                {isSavingSpecialties ? 'Saving...' : 'Save specialties'}
               </button>
             </section>
           )}

@@ -1394,7 +1394,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                             }));
                             setShowBookingForm(true);
                           }}
-                          className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
+                          disabled={Boolean(unfinishedBookingWithFreelancer)}
+                          title={unfinishedBookingWithFreelancer ? `Finish or resolve your unfinished booking with ${displayName} first` : undefined}
+                          className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-3 text-base font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:hover:shadow-none"
                         >
                           Request Booking
                         </button>
@@ -1529,7 +1531,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                             }));
                             setShowBookingForm(true);
                           }}
-                          className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg"
+                          disabled={Boolean(unfinishedBookingWithFreelancer)}
+                          title={unfinishedBookingWithFreelancer ? `Finish or resolve your unfinished booking with ${displayName} first` : undefined}
+                          className="flex-1 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-500/30 transition-all hover:shadow-lg disabled:cursor-not-allowed disabled:from-gray-300 disabled:to-gray-300 disabled:text-gray-500 disabled:shadow-none disabled:hover:shadow-none"
                         >
                           Request Booking
                         </button>
