@@ -4,6 +4,7 @@ import {
   ClipboardList,
   CreditCard,
   Globe,
+  Heart,
   Lock,
   LogOut,
   Shield,
@@ -17,9 +18,11 @@ import { authService } from '../../lib/authService';
 import { normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../lib/defaults';
+import { FREELANCER_CATEGORIES } from '../../lib/categories';
 import { PaymentMethodPicker } from '../components/payments/PaymentMethodPicker';
 import { LegalContentModal } from '../../components/LegalContentModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { CLIENT_PREFERENCE_OPTIONS } from './ClientOnboardingPage';
 
 type Role = 'freelancer' | 'client';
 
@@ -120,6 +123,13 @@ export function SettingsPage() {
 
   const [legalModalTab, setLegalModalTab] = useState<'terms' | 'privacy' | null>(null);
 
+  // What ExplorePage's "Recommended for you" scores against (see
+  // ExplorePage.tsx's recommendedProfiles) - previously only ever set once,
+  // during client onboarding, with no way to change it afterward.
+  const [bookingInterests, setBookingInterests] = useState<string[]>([]);
+  const [bookingPreferences, setBookingPreferences] = useState<string[]>([]);
+  const [isSavingBookingPrefs, setIsSavingBookingPrefs] = useState(false);
+
   const role = (user?.role || 'client') as Role;
 
   // Stored server-side (unlike the localStorage toggles above) because the
@@ -209,6 +219,12 @@ export function SettingsPage() {
           hideEmailFromPublic: !!(userResponse.data as any)?.hide_email_from_public,
           hidePhoneFromPublic: !!(userResponse.data as any)?.hide_phone_from_public,
         }));
+        if (Array.isArray((userResponse.data as any)?.client_interests)) {
+          setBookingInterests((userResponse.data as any).client_interests);
+        }
+        if (Array.isArray((userResponse.data as any)?.client_preferences)) {
+          setBookingPreferences((userResponse.data as any).client_preferences);
+        }
       }
 
       if (freelancerResponse.data) {
@@ -250,6 +266,29 @@ export function SettingsPage() {
       isMounted = false;
     };
   }, [user?.id]);
+
+  const toggleBookingInterest = (value: string) => {
+    setBookingInterests((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
+  };
+  const toggleBookingPreference = (value: string) => {
+    setBookingPreferences((current) => (current.includes(value) ? current.filter((item) => item !== value) : [...current, value]));
+  };
+
+  const handleSaveBookingPreferences = async () => {
+    if (!user?.id) return;
+    setIsSavingBookingPrefs(true);
+    setErrorMessage(null);
+    const { error } = await DataService.updateUser(user.id, {
+      client_interests: bookingInterests,
+      client_preferences: bookingPreferences,
+    } as any);
+    setIsSavingBookingPrefs(false);
+    if (error) {
+      setErrorMessage('Unable to save your booking preferences.');
+      return;
+    }
+    setStatusMessage('Booking preferences saved.');
+  };
 
   const handleUnblock = async (blockedId: string) => {
     if (!user?.id) return;
@@ -747,6 +786,63 @@ export function SettingsPage() {
                 className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg"
               >
                 Complete your profile
+              </button>
+            </section>
+          )}
+
+          {role === 'client' && (
+            <section className="rounded-2xl border border-sky-100 bg-white/80 backdrop-blur-xl p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
+              <div className="mb-3 flex items-center gap-2 text-gray-900">
+                <Heart className="h-5 w-5" />
+                <h2 className="text-lg font-bold">Booking Preferences</h2>
+              </div>
+              <p className="mb-4 text-sm text-gray-600">
+                What Explore's "Recommended for you" uses to pick freelancers for you — set once at signup, editable
+                any time here.
+              </p>
+
+              <p className="mb-2 text-sm font-semibold text-gray-700">Services you're interested in</p>
+              <div className="mb-5 grid grid-cols-2 gap-2 md:grid-cols-3">
+                {FREELANCER_CATEGORIES.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => toggleBookingInterest(category.label)}
+                    className={`rounded-xl border-2 px-3 py-2 text-sm font-semibold transition-all ${
+                      bookingInterests.includes(category.label)
+                        ? 'border-sky-500 bg-gradient-to-r from-sky-500 to-blue-600 text-white'
+                        : 'border-sky-100 text-gray-600 hover:border-sky-300'
+                    }`}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mb-2 text-sm font-semibold text-gray-700">What matters most to you</p>
+              <div className="mb-5 grid grid-cols-1 gap-2 md:grid-cols-2">
+                {CLIENT_PREFERENCE_OPTIONS.map((option) => (
+                  <label
+                    key={option.value}
+                    className="flex cursor-pointer items-center gap-3 rounded-xl border-2 border-sky-100 px-3 py-2 hover:border-sky-300"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={bookingPreferences.includes(option.value)}
+                      onChange={() => toggleBookingPreference(option.value)}
+                      className="h-4 w-4 rounded border-sky-300 text-sky-600 focus:ring-sky-400"
+                    />
+                    <span className="text-sm font-semibold text-gray-800">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+
+              <button
+                onClick={() => void handleSaveBookingPreferences()}
+                disabled={isSavingBookingPrefs}
+                className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+              >
+                {isSavingBookingPrefs ? 'Saving...' : 'Save preferences'}
               </button>
             </section>
           )}

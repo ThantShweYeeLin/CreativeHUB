@@ -14,7 +14,7 @@ import { usePersistedOnboardingStep, clearPersistedOnboardingStep } from '../../
 
 const CLIENT_TYPE_CATALOG = ['Individual', 'Business', 'Event Planner', 'Wedding Organizer', 'Brand', 'Organization'];
 
-const CLIENT_PREFERENCE_OPTIONS: Array<{ value: string; label: string }> = [
+export const CLIENT_PREFERENCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'affordable_pricing', label: 'Affordable pricing' },
   { value: 'high_quality', label: 'High quality' },
   { value: 'fast_response', label: 'Fast response' },

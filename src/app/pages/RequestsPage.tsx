@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 import { ChevronLeft, MessageCircle, Edit, AlertCircle, DollarSign, Check, X, UserPlus, Search, Clock, MapPin, Megaphone } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
+import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { RequestChatThread } from '../../components/common/RequestChatThread';
 import { CounterOfferModal } from '../../components/common/CounterOfferModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -96,8 +99,14 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     scheduleTime: '',
     scheduleEndTime: '',
     location: '',
-    customLocation: '',
+    // The request's existing free-text "other" location, if it has one —
+    // kept only as a fallback label/submit value until the map picker below
+    // sets a real LocationPoint; there's no lat/lng to recover for a string
+    // written before this picker existed.
+    customLocationText: '',
   });
+  const [editCustomLocationPoint, setEditCustomLocationPoint] = useState<LocationPoint | null>(null);
+  const [isEditLocationPickerOpen, setIsEditLocationPickerOpen] = useState(false);
   const [editLocationOptions, setEditLocationOptions] = useState<string[]>([]);
   // The freelancer's own limits (working hours, minimum rate) — the
   // original request creation form (FreelancerProfile.tsx) enforces these
@@ -412,8 +421,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       scheduleTime: request.scheduleMeta?.time || '',
       scheduleEndTime: request.scheduleMeta?.endTime || '',
       location: isKnownLocation ? currentLocation : OTHER_LOCATION_VALUE,
-      customLocation: isKnownLocation ? '' : currentLocation,
+      customLocationText: isKnownLocation ? '' : currentLocation,
     });
+    setEditCustomLocationPoint(null);
   };
 
   // Same availability rules as FreelancerProfile.tsx's Request Booking form:
@@ -487,7 +497,9 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
           })
         : descriptionWithBudget;
 
-    const resolvedLocation = editForm.location === OTHER_LOCATION_VALUE ? editForm.customLocation.trim() : editForm.location;
+    const resolvedLocation = editForm.location === OTHER_LOCATION_VALUE
+      ? (editCustomLocationPoint?.formattedAddress.trim() || editForm.customLocationText.trim())
+      : editForm.location;
     const descriptionWithLocation = appendLocationMeta(descriptionWithSchedule, resolvedLocation.trim());
 
     const response = await DataService.updatePendingBookingRequest({
@@ -1275,13 +1287,34 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                     <option value={OTHER_LOCATION_VALUE}>Other (please specify)</option>
                   </select>
                   {editForm.location === OTHER_LOCATION_VALUE && (
-                    <input
-                      required
-                      value={editForm.customLocation}
-                      onChange={(event) => setEditForm((current) => ({ ...current, customLocation: event.target.value }))}
-                      className="mt-3 w-full rounded-xl border border-sky-100 bg-sky-50/40 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-sky-400"
-                      placeholder="Type the location for this booking"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsEditLocationPickerOpen(true)}
+                      className={`mt-3 w-full overflow-hidden rounded-xl bg-sky-50/50 text-left transition-all ${
+                        editCustomLocationPoint ? 'border-2 border-sky-500' : 'border border-sky-100 hover:border-sky-300'
+                      }`}
+                    >
+                      {editCustomLocationPoint ? (
+                        <div className="h-32 w-full">
+                          <LeafletLocationPreview
+                            latitude={editCustomLocationPoint.latitude}
+                            longitude={editCustomLocationPoint.longitude}
+                            title={editCustomLocationPoint.formattedAddress}
+                            interactive={false}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex h-24 w-full items-center justify-center bg-sky-50">
+                          <MapPin className="h-6 w-6 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 p-3">
+                        <MapPin className="h-4 w-4 flex-shrink-0 text-gray-500" />
+                        <span className={editCustomLocationPoint || editForm.customLocationText ? 'text-sm font-bold text-gray-900' : 'text-sm text-gray-400'}>
+                          {editCustomLocationPoint?.formattedAddress || editForm.customLocationText || 'Search a place or pick it on the map'}
+                        </span>
+                      </div>
+                    </button>
                   )}
                 </div>
 
@@ -1624,6 +1657,17 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
             if (request) onOpenMessages?.(request.freelancer.id);
           }}
         />
+      )}
+      {isEditLocationPickerOpen && createPortal(
+        <LeafletLocationPicker
+          initialPoint={editCustomLocationPoint}
+          onCancel={() => setIsEditLocationPickerOpen(false)}
+          onConfirm={(point) => {
+            setEditCustomLocationPoint(point);
+            setIsEditLocationPickerOpen(false);
+          }}
+        />,
+        document.body
       )}
       </div>
     </div>
