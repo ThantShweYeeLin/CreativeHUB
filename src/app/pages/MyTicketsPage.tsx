@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus, Ticket as TicketIcon, X } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { FileUploadField } from '../components/common/FileUploadField';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import {
@@ -97,14 +98,15 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
     if (!isValidBookingId(bookingId) || !user?.id) return;
     setIsRoutingToDispute(true);
     setSubmitError(null);
-    const response = await DataService.getBooking(bookingId.trim());
+    const response = await DataService.getBookingByReference(bookingId);
     setIsRoutingToDispute(false);
     if (response.error || !response.data) {
       setSubmitError("Couldn't find that booking — double check the ID, or submit this as a regular ticket instead.");
       return;
     }
+    const realBookingId = (response.data as any).id;
     const isClient = String((response.data as any).client_id) === String(user.id);
-    const basePath = isClient ? `/booking/${bookingId.trim()}` : `/freelancer-booking/${bookingId.trim()}`;
+    const basePath = isClient ? `/booking/${realBookingId}` : `/freelancer-booking/${realBookingId}`;
     setShowCreateModal(false);
     navigate(`${basePath}#${isClient ? 'report-a-problem-button' : 'attendance-check'}`);
   };
@@ -130,6 +132,21 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
     setIsSubmitting(true);
     setSubmitError(null);
 
+    // related_booking_id is a real uuid column, but the only "booking ID" a
+    // client can actually copy is the short "#XXXXXXXX" form the tracking
+    // page displays (isValidBookingId accepts both) - resolve it to the
+    // real id before this gets anywhere near the database.
+    let resolvedBookingId: string | null = null;
+    if (needsBookingId) {
+      const bookingResponse = await DataService.getBookingByReference(bookingId);
+      if (bookingResponse.error || !bookingResponse.data) {
+        setSubmitError("Couldn't find that booking — double check the ID.");
+        setIsSubmitting(false);
+        return;
+      }
+      resolvedBookingId = (bookingResponse.data as any).id;
+    }
+
     let screenshotPath: string | null = null;
     if (file) {
       const uploadResponse = await DataService.uploadReportEvidencePhoto(user.id, file);
@@ -146,7 +163,7 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
       category,
       description: description.trim(),
       screenshotPath,
-      relatedBookingId: needsBookingId ? bookingId.trim() || null : null,
+      relatedBookingId: resolvedBookingId,
     });
 
     setIsSubmitting(false);
@@ -393,11 +410,11 @@ export function MyTicketsPage({ onBack }: MyTicketsPageProps) {
               </>
             )}
             <label className="mb-1 block text-xs font-semibold text-gray-600">Attach screenshot (optional)</label>
-            <input
-              type="file"
+            <FileUploadField
               accept="image/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="mb-4 text-xs"
+              onFilesSelected={(selected) => setFile(selected[0] || null)}
+              selectedLabel={file?.name || null}
+              className="mb-4"
             />
             {submitError && <p className="mb-3 text-sm text-red-600">{submitError}</p>}
             <button

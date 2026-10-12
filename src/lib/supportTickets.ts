@@ -68,8 +68,17 @@ export const CLIENT_TICKET_STATUS_DETAIL: Record<TicketStatus, string> = {
 // requires.
 const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Every booking tracking page displays its id as "#" + the first 8 hex
+// characters of the real UUID, uppercased (useBookingTracking.ts) - that's
+// the only "booking ID" a client ever actually sees, so rejecting it here
+// (requiring the full 36-character UUID instead) meant copying exactly
+// what the app shows you always failed. DataService.getBookingByReference
+// resolves either form to the real booking.
+const SHORT_BOOKING_ID_FORMAT = /^#?[0-9a-f]{8}$/i;
+
 export function isValidBookingId(value: string): boolean {
-  return UUID_FORMAT.test(value.trim());
+  const trimmed = value.trim();
+  return UUID_FORMAT.test(trimmed) || SHORT_BOOKING_ID_FORMAT.test(trimmed);
 }
 
 // Content-based, not category-based - selecting "Booking problem" alone must

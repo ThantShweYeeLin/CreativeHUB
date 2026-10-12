@@ -1497,6 +1497,26 @@ export class DataService {
     return { data, error };
   }
 
+  // Accepts either the real id or the short "#XXXXXXXX" form every tracking
+  // page actually displays (see supportTickets.ts's isValidBookingId) - a
+  // client has no way to know the real 36-character UUID exists at all, so
+  // anywhere a booking id is typed by hand (MyTicketsPage's ticket form)
+  // needs to resolve the one thing they could have actually copied.
+  static async getBookingByReference(value: string) {
+    const trimmed = value.trim().replace(/^#/, '');
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+      return this.getBooking(trimmed);
+    }
+    // Postgres has no ILIKE operator for a uuid column without an explicit
+    // cast, so the prefix match itself has to happen in a function
+    // (supabase/find_booking_by_short_id.sql), not a plain PostgREST filter.
+    const { data: shortMatch, error: shortMatchError } = await (supabase as any).rpc('find_booking_by_short_id', { p_prefix: trimmed });
+    if (shortMatchError || !shortMatch) {
+      return { data: null, error: shortMatchError };
+    }
+    return this.getBooking((shortMatch as any).id);
+  }
+
   // BOOKING ESCROW / DISPUTE LIFECYCLE
   static async reconcileBookingEscrow(bookingId: string) {
     const { data, error } = await (supabase as any).rpc('reconcile_booking_escrow', { p_booking_id: bookingId });
