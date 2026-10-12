@@ -1,6 +1,5 @@
 import { Router } from 'express'; ///to group related API routes.
 import authRouter from './auth.js';
-import freelancersRouter from './freelancers.js'; ///Import the route groups for authentication, freelancers, accounts, chatbot, payments, subscriptions, and geocoding. Each group’s implementation lives in its own file in server/src/routes/.
 import accountRouter from './account.js';
 import chatbotRouter from './chatbot.js';
 import paymentsRouter from './payments.js';
@@ -24,7 +23,6 @@ router.use('/auth', authRouter);
 router.use('/geocode', geocodeRateLimit, geocodeRouter);
 router.use(requireAuth);
 router.use(generalApiRateLimit);
-router.use('/freelancers', freelancersRouter);
 //router.use('/feed', feedRouter);
 router.use('/account', accountRouter);
 router.use('/chatbot', chatbotRateLimit, chatbotRouter);
