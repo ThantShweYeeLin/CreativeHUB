@@ -23,11 +23,15 @@ export interface BookingEarningsBreakdown {
 
 /**
  * Only meaningful once the deposit has actually been released to the
- * freelancer (payment_status 'paid' -> getBookingEscrowState === 'released')
- * — a still-escrowed or refunded deposit hasn't generated any commission.
+ * freelancer (payment_status 'paid' -> getBookingEscrowState === 'released',
+ * or a 'partially_refunded'/0%-refund-tier cancellation — see
+ * supabase/booking_cancellation_policy.sql) — a still-escrowed or fully
+ * refunded deposit hasn't generated any commission.
  */
 export function getBookingEarningsBreakdown(booking: any): BookingEarningsBreakdown {
-  const depositAmount = booking?.deposit_amount != null
+  const depositAmount = booking?.cancellation_compensation_amount != null
+    ? Number(booking.cancellation_compensation_amount)
+    : booking?.deposit_amount != null
     ? Number(booking.deposit_amount)
     : Math.round(Number(booking?.budget || 0) * LEGACY_DEPOSIT_PERCENTAGE);
   const commissionAmount = Math.round(depositAmount * COMMISSION_PERCENTAGE);
@@ -43,6 +47,7 @@ export type EscrowState =
   | 'under_admin_review'
   | 'released'
   | 'refunded'
+  | 'partially_refunded'
   | 'annulled';
 
 export function getBookingEscrowState(booking: any): EscrowState {
@@ -51,6 +56,7 @@ export function getBookingEscrowState(booking: any): EscrowState {
   // existed (see supabase/booking_annulled_reconcile.sql) — status was
   // 'cancelled' with this reason instead.
   if (booking?.status === 'cancelled' && booking?.cancellation_reason === 'deposit_not_paid') return 'annulled';
+  if (booking?.payment_status === 'partially_refunded') return 'partially_refunded';
   if (booking?.payment_status === 'refunded') return 'refunded';
   if (booking?.payment_status === 'paid') return 'released';
   if (booking?.dispute_status === 'under_admin_review') return 'under_admin_review';

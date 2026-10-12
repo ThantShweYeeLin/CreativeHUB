@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { omiseClient } from '../lib/omiseClient.js';
-import { createDemoCharge, paymentMode } from '../lib/demoPayments.js';
+import { createDemoCharge, createDemoRefund, paymentMode } from '../lib/demoPayments.js';
 import { createSupabaseAdminClient } from '../lib/supabase.js';
 import { verifyAndActivateDeposit, type DepositActivationDeps } from '../lib/bookingDepositCharges.js';
+import { quoteCancellation, forcedFreelancerCancellationQuote, type CancellationQuote } from '../lib/cancellationPolicy.js';
 import { defaultWebhookDeps } from './omiseWebhook.js';
 
 const router = Router();
@@ -196,6 +197,142 @@ router.post('/deposit/confirm', async (req, res) => {
   } catch (error) {
     console.error('Deposit confirm failed:', error);
     return res.status(500).json({ message: 'Unable to confirm the payment right now.' });
+  }
+});
+
+// BOOKING CANCELLATION
+// Tiered deposit-refund policy, replacing DataService.cancelBooking's flat
+// client-side 100%-refund UPDATE. See supabase/booking_cancellation_policy.sql
+// and server/src/lib/cancellationPolicy.ts for the full design (claim ->
+// provider refund call -> finalize, split specifically so the provider call
+// and the database write can each fail independently without ever double-
+// refunding or marking a refund "complete" that never happened).
+interface CancellableBooking {
+  id: string;
+  client_id: string;
+  freelancer_id: string;
+  status: string;
+  payment_status: string;
+  dispute_status: string;
+  deposit_amount: number | null;
+  budget: number | null;
+  deposit_charge_id: string | null;
+  start_at: string | null;
+  cancellation_claim_id: string | null;
+  cancellation_refund_id: string | null;
+  cancellation_claim_refund_amount: number | null;
+  cancellation_claim_compensation_amount: number | null;
+}
+
+async function loadCancellableBooking(bookingId: string): Promise<{ admin: ReturnType<typeof createSupabaseAdminClient>; booking: CancellableBooking | null }> {
+  const admin = createSupabaseAdminClient();
+  const { data } = await admin
+    .from('bookings')
+    .select(
+      'id, client_id, freelancer_id, status, payment_status, dispute_status, deposit_amount, budget, deposit_charge_id, start_at, cancellation_claim_id, cancellation_refund_id, cancellation_claim_refund_amount, cancellation_claim_compensation_amount'
+    )
+    .eq('id', bookingId)
+    .maybeSingle();
+  return { admin, booking: (data as CancellableBooking | null) ?? null };
+}
+
+function depositThbOf(booking: Pick<CancellableBooking, 'deposit_amount' | 'budget'>): number {
+  // Same fallback as depositDeps() above and src/lib/bookingEscrow.ts's
+  // LEGACY_DEPOSIT_PERCENTAGE, for bookings written before deposit_amount
+  // was persisted.
+  return booking.deposit_amount != null ? Number(booking.deposit_amount) : Math.round(Number(booking.budget || 0) * 0.3);
+}
+
+router.get('/booking/:bookingId/cancellation-quote', async (req, res) => {
+  const userId = String(res.locals.userId);
+  const { booking } = await loadCancellableBooking(req.params.bookingId);
+  if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+  if (booking.client_id !== userId && booking.freelancer_id !== userId) {
+    return res.status(403).json({ message: 'This booking does not belong to this account.' });
+  }
+
+  const depositThb = depositThbOf(booking);
+  const quote: CancellationQuote = booking.freelancer_id === userId ? forcedFreelancerCancellationQuote(depositThb) : quoteCancellation(booking.start_at, depositThb);
+  return res.json({ ...quote, depositThb });
+});
+
+const cancelSchema = z.object({ reason: z.string().max(2000).optional() });
+
+router.post('/booking/:bookingId/cancel', async (req, res) => {
+  const parsed = cancelSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid request.' });
+
+  const userId = String(res.locals.userId);
+  const { admin, booking } = await loadCancellableBooking(req.params.bookingId);
+  if (!booking) return res.status(404).json({ message: 'Booking not found.' });
+  const actorRole = booking.client_id === userId ? 'client' : booking.freelancer_id === userId ? 'freelancer' : null;
+  if (!actorRole) return res.status(403).json({ message: 'This booking does not belong to this account.' });
+
+  const depositThb = depositThbOf(booking);
+  const quote = actorRole === 'freelancer' ? forcedFreelancerCancellationQuote(depositThb) : quoteCancellation(booking.start_at, depositThb);
+  if (!quote.ok) return res.status(409).json({ message: quote.reason });
+
+  try {
+    const { data: claimed, error: claimError } = await admin.rpc('claim_booking_cancellation', {
+      p_booking_id: booking.id,
+      p_actor_id: userId,
+      p_actor_role: actorRole,
+      p_reason: parsed.data.reason?.trim() || `Cancelled by ${actorRole}`,
+      p_tier: quote.tier,
+      p_refund_amount: quote.refundAmount,
+      p_compensation_amount: quote.compensationAmount,
+    });
+    if (claimError) return res.status(409).json({ message: claimError.message || 'Unable to cancel this booking.' });
+
+    const claim = claimed as CancellableBooking & { status: string; cancellation_claim_tier: string | null };
+    if (claim.status === 'cancelled') {
+      return res.json({ status: 'cancelled', booking: claim });
+    }
+
+    // The provider call happens at most once per claim - skip it entirely if
+    // a prior attempt already got a refund id recorded (crash/retry
+    // recovery) or if this tier owes nothing back.
+    if (!claim.cancellation_refund_id && (claim.cancellation_claim_refund_amount || 0) > 0) {
+      if (!booking.deposit_charge_id) {
+        return res.status(409).json({ message: "This booking's deposit has no payment reference on record. Contact support to resolve this cancellation." });
+      }
+
+      const refundAmountSatang = Math.round((claim.cancellation_claim_refund_amount || 0) * 100);
+      const isDemoCharge = booking.deposit_charge_id.startsWith('chrg_demo_');
+      let refundId: string;
+      try {
+        if (isDemoCharge) {
+          refundId = createDemoRefund({ chargeId: booking.deposit_charge_id, amount: refundAmountSatang, currency: 'thb' }).id;
+        } else {
+          const refund = await (omiseClient.charges as any).createRefund(booking.deposit_charge_id, { amount: refundAmountSatang });
+          refundId = refund.id;
+        }
+      } catch (error) {
+        console.error('Cancellation refund failed:', booking.id, error);
+        return res.status(502).json({ message: 'Unable to process the refund right now. Please try again.' });
+      }
+
+      const { error: recordError } = await admin.rpc('record_booking_cancellation_refund', {
+        p_booking_id: booking.id,
+        p_claim_id: claim.cancellation_claim_id,
+        p_refund_id: refundId,
+      });
+      if (recordError) {
+        console.error('Recording cancellation refund id failed (refund already sent):', booking.id, refundId, recordError);
+        return res.status(500).json({ message: 'Refund sent but could not be recorded. Contact support with reference ' + refundId });
+      }
+    }
+
+    const { data: finalized, error: finalizeError } = await admin.rpc('finalize_booking_cancellation', {
+      p_booking_id: booking.id,
+      p_claim_id: claim.cancellation_claim_id,
+    });
+    if (finalizeError) return res.status(500).json({ message: finalizeError.message || 'Unable to finalize this cancellation.' });
+
+    return res.json({ status: 'cancelled', booking: finalized });
+  } catch (error) {
+    console.error('Booking cancellation failed:', req.params.bookingId, error);
+    return res.status(500).json({ message: 'Unable to cancel this booking right now.' });
   }
 });
 

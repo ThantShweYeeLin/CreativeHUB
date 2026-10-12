@@ -141,6 +141,8 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelQuote, setCancelQuote] = useState<any | null>(null);
+  const [isLoadingCancelQuote, setIsLoadingCancelQuote] = useState(false);
 
   const handleTransferDeposit = async () => {
     if (!booking) return;
@@ -217,17 +219,32 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     await refresh();
   };
 
-  // Symmetric to BookingTrackingFreelancerPage's handleCancelBooking — only
-  // reachable from the deposit_secured card, so the deposit is still
-  // paid-and-held at that point and always gets refunded back to the client.
+  // Opening the cancel form fetches the server's quote (how close the event
+  // is decides the refund tier — see server/src/lib/cancellationPolicy.ts)
+  // so the confirmation copy shows exactly what will happen, not a guess.
+  const openCancelForm = async () => {
+    if (!booking) return;
+    setShowCancelForm(true);
+    setCancelQuote(null);
+    setIsLoadingCancelQuote(true);
+    const response = await DataService.getCancellationQuote(booking.id);
+    setIsLoadingCancelQuote(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load the cancellation policy for this booking.');
+      return;
+    }
+    setCancelQuote(response.data);
+  };
+
+  // Symmetric to BookingTrackingFreelancerPage's handleCancelBooking —
+  // only reachable from the deposit_secured card. The actual refund tier
+  // is decided and applied server-side (server/src/routes/payments.ts).
   const handleCancelBooking = async () => {
     if (!booking || !user?.id || isCancelling) return;
     setIsCancelling(true);
     setError(null);
 
-    const response = await DataService.cancelBooking(booking.id, user.id, 'client', cancelReason.trim() || 'Cancelled by client', {
-      refundDeposit: true,
-    });
+    const response = await DataService.cancelBookingWithPolicy(booking.id, cancelReason.trim());
 
     setIsCancelling(false);
     if (response.error) {
@@ -237,6 +254,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
     setShowCancelForm(false);
     setCancelReason('');
+    setCancelQuote(null);
     await refresh();
   };
 
@@ -556,7 +574,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
 
             {!showDisputeForm && !showCancelForm && (
               <button
-                onClick={() => setShowCancelForm(true)}
+                onClick={() => void openCancelForm()}
                 className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-3 px-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
               >
                 <Ban className="w-4 h-4" />
@@ -566,9 +584,23 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             {!showDisputeForm && showCancelForm && (
               <div className="mt-3 rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
                 <p className="mb-1 text-sm font-bold text-red-900">Cancel this booking?</p>
-                <p className="mb-3 text-xs text-red-700">
-                  Your secured deposit ({formatMoney(bookingData.pricing.deposit)}) will be refunded to you. This can't be undone.
-                </p>
+                {isLoadingCancelQuote && <p className="mb-3 text-xs text-red-700">Checking the cancellation policy…</p>}
+                {!isLoadingCancelQuote && cancelQuote?.ok === false && (
+                  <p className="mb-3 text-xs text-red-700">{cancelQuote.reason}</p>
+                )}
+                {!isLoadingCancelQuote && cancelQuote?.ok && (
+                  <div className="mb-3 space-y-1 text-xs text-red-700">
+                    <p>
+                      {cancelQuote.tier === 'full_refund' && 'Your event is more than 7 days away — cancelling now qualifies for a full refund.'}
+                      {cancelQuote.tier === 'partial_refund' && 'Your event is 3–7 days away — cancelling now qualifies for a 50% deposit refund.'}
+                      {cancelQuote.tier === 'no_refund' && 'Your event is less than 72 hours away — cancelling now does not qualify for a refund.'}
+                    </p>
+                    <p>Deposit paid: {formatMoney(cancelQuote.depositThb)}</p>
+                    <p>Refund to you: {formatMoney(cancelQuote.refundAmount)}</p>
+                    {cancelQuote.compensationAmount > 0 && <p>Cancellation compensation to the freelancer: {formatMoney(cancelQuote.compensationAmount)}</p>}
+                    <p className="font-semibold">This action cannot be undone.</p>
+                  </div>
+                )}
                 <textarea
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
@@ -580,6 +612,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                     onClick={() => {
                       setShowCancelForm(false);
                       setCancelReason('');
+                      setCancelQuote(null);
                     }}
                     disabled={isCancelling}
                     className="flex-1 rounded-lg border border-red-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-red-50 disabled:opacity-60"
@@ -588,10 +621,10 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
                   </button>
                   <button
                     onClick={() => void handleCancelBooking()}
-                    disabled={isCancelling}
+                    disabled={isCancelling || isLoadingCancelQuote || cancelQuote?.ok === false}
                     className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                   >
-                    {isCancelling ? 'Cancelling...' : 'Yes, cancel & refund'}
+                    {isCancelling ? 'Cancelling...' : 'Yes, cancel booking'}
                   </button>
                 </div>
               </div>
@@ -667,7 +700,29 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
               </div>
               <div>
                 <p className="font-bold text-gray-900">{formatMoney(bookingData.pricing.deposit)} Released</p>
-                <p className="text-xs text-gray-600">Deposit successfully transferred to {bookingData.freelancer.name}</p>
+                <p className="text-xs text-gray-600">
+                  {booking.cancellation_tier === 'no_refund'
+                    ? `This booking was cancelled within 72 hours of the event, so the deposit was released to ${bookingData.freelancer.name} instead of being refunded.`
+                    : `Deposit successfully transferred to ${bookingData.freelancer.name}`}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Partially refunded */}
+        {escrowState === 'partially_refunded' && (
+          <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+                <Ban className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">Deposit Split on Cancellation</p>
+                <p className="text-xs text-gray-600">
+                  This booking was cancelled 3–7 days before the event — {formatMoney(booking.cancellation_refund_amount)} was refunded to you
+                  and {formatMoney(booking.cancellation_compensation_amount)} was released to {bookingData.freelancer.name} as cancellation compensation.
+                </p>
               </div>
             </div>
           </div>
@@ -692,7 +747,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
           </div>
         )}
 
-        {(escrowState === 'released' || (escrowState === 'refunded' && !booking.cancelled_by)) && user?.id && (
+        {!booking.cancelled_by && (escrowState === 'released' || escrowState === 'refunded') && user?.id && (
           <BookingReviewPrompt
             bookingId={booking.id}
             viewerId={user.id}
@@ -723,7 +778,7 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             </div>
           </div>
 
-          {escrowState !== 'released' && escrowState !== 'refunded' && escrowState !== 'annulled' && (
+          {escrowState !== 'released' && escrowState !== 'refunded' && escrowState !== 'partially_refunded' && escrowState !== 'annulled' && (
             <div className="mt-4 bg-sky-50/60 rounded-xl p-4">
               <div className="flex items-start gap-3">
                 <Shield className="w-5 h-5 text-gray-700 flex-shrink-0 mt-0.5" />

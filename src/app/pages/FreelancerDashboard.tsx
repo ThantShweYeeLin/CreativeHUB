@@ -59,6 +59,8 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: 'Unpaid',
   deposit_paid: 'Deposit secured',
   paid: 'Paid in full',
+  refunded: 'Refunded',
+  partially_refunded: 'Partially refunded',
 };
 
 interface FreelancerDashboardProps {
@@ -348,21 +350,30 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   }, [bookings, earningsMonthFilter]);
 
   const earningsStats = useMemo(() => {
-    const paidBookings = monthFilteredBookings.filter((booking) => booking.payment_status === 'paid');
+    // 'paid' now also covers a 0%-refund-tier cancellation (the full deposit
+    // released to the freelancer as compensation — see
+    // supabase/booking_cancellation_policy.sql), and 'partially_refunded'
+    // covers the 50%-tier split. Both are real money earned, so both feed
+    // the totals below — but neither is a completed project, so
+    // completedProjectCount excludes any cancelled booking regardless of
+    // which tier it landed on.
+    const earnedBookings = monthFilteredBookings.filter(
+      (booking) => booking.payment_status === 'paid' || booking.payment_status === 'partially_refunded'
+    );
     // "Total earned" is what actually lands in the freelancer's pocket —
     // the released deposit minus the platform's commission, not the full
     // project budget (most of which settles directly between client and
     // freelancer, outside escrow; see bookingEscrow.ts).
-    const totalEarned = paidBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).netAmount, 0);
-    const totalCommission = paidBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).commissionAmount, 0);
+    const totalEarned = earnedBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).netAmount, 0);
+    const totalCommission = earnedBookings.reduce((acc, booking) => acc + getBookingEarningsBreakdown(booking).commissionAmount, 0);
     const pendingInEscrow = monthFilteredBookings
       .filter((booking) => booking.payment_status === 'deposit_paid')
       .reduce((acc, booking) => acc + Number(booking.budget || 0), 0);
 
     const bookingCount = monthFilteredBookings.filter(
-      (booking) => getBookingEscrowState(booking) !== 'annulled' && booking.payment_status !== 'paid'
+      (booking) => getBookingEscrowState(booking) !== 'annulled' && booking.status !== 'cancelled' && booking.payment_status !== 'paid'
     ).length;
-    const completedProjectCount = paidBookings.length;
+    const completedProjectCount = earnedBookings.filter((booking) => booking.status !== 'cancelled').length;
 
     return { totalEarned, totalCommission, pendingInEscrow, bookingCount, completedProjectCount };
   }, [monthFilteredBookings]);
@@ -1373,11 +1384,15 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                   .filter((booking) => booking.payment_status !== 'unpaid')
                   .map((booking) => {
                   const isDisputed = booking.dispute_status === 'open' || booking.dispute_status === 'under_admin_review';
-                  const isRefunded = booking.payment_status === 'refunded';
+                  const isRefunded = booking.payment_status === 'refunded' || booking.payment_status === 'partially_refunded';
+                  // A cancelled booking (whichever refund tier it landed on —
+                  // see supabase/booking_cancellation_policy.sql) is done,
+                  // same as a dispute outcome - never still advanceable.
+                  const isCancelled = booking.status === 'cancelled';
                   // unpaid -> deposit_paid is a client-only action (paying money in) —
                   // a freelancer can only advance deposit_paid -> paid from here.
                   const nextStatus =
-                    isDisputed || isRefunded
+                    isDisputed || isRefunded || isCancelled
                       ? null
                       : PAYMENT_STATUS_SEQUENCE[PAYMENT_STATUS_SEQUENCE.indexOf(booking.payment_status) + 1];
                   return (
@@ -1419,7 +1434,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
                           </button>
                         ) : isRefunded ? (
                           <span className="flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700">
-                            Refunded
+                            {booking.payment_status === 'partially_refunded' ? 'Partially refunded' : 'Refunded'}
                           </span>
                         ) : (
                           <span className="rounded-full border border-sky-100 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-700">

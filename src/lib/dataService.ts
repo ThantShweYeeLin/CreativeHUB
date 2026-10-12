@@ -2912,46 +2912,18 @@ export class DataService {
     return { data, error };
   }
 
-  // Participant-initiated cancellation of an already-confirmed booking,
-  // capturing who/when/why (supabase/booking_cancellation.sql) — until now
-  // cancellation_reason was only ever system-written for a lapsed deposit
-  // deadline (see reconcile_booking_escrow), so an "Unexpected cancellation"
-  // dispute had no real platform record to check against. Routes through
-  // updateBooking() so the existing 'booking_cancelled' notifications to
-  // both parties still fire.
-  static async cancelBooking(
-    bookingId: string,
-    actorId: string,
-    actorRole: 'client' | 'freelancer',
-    reason: string,
-    options?: { refundDeposit?: boolean }
-  ) {
-    const updates: Record<string, any> = {
-      status: 'cancelled',
-      cancelled_by: actorId,
-      cancelled_at: new Date().toISOString(),
-      cancellation_reason: reason,
-    };
-    // Routed through updateBooking() (not a separate write) so its existing
-    // payment_status-transition notification ("Your deposit for '...' has
-    // been refunded.") fires the same way a dispute refund does — one
-    // update, both the cancellation and the refund notifications.
-    if (options?.refundDeposit) {
-      updates.payment_status = 'refunded';
-    }
+  // Participant-initiated cancellation of an already-confirmed booking, now
+  // via the server (server/src/routes/payments.ts, supabase/booking_cancellation_policy.sql)
+  // instead of a direct client-side UPDATE — the refund is tiered by how
+  // close the event is (always 100% for a freelancer-initiated cancel) and
+  // involves a real provider refund call, both of which have to be decided
+  // and executed server-side, not trusted from the browser.
+  static async getCancellationQuote(bookingId: string) {
+    return this.premiumApi(`/payments/booking/${bookingId}/cancellation-quote`);
+  }
 
-    const response = await this.updateBooking(bookingId, updates as any);
-
-    if (!response.error && response.data) {
-      await (supabase as any).from('booking_events').insert({
-        booking_id: bookingId,
-        actor: actorRole,
-        action: 'cancelled',
-        reason,
-      });
-    }
-
-    return response;
+  static async cancelBookingWithPolicy(bookingId: string, reason?: string) {
+    return this.premiumApi(`/payments/booking/${bookingId}/cancel`, { reason });
   }
 
   // MESSAGES
@@ -5197,7 +5169,7 @@ export class DataService {
 
     const unfinished = (data || []).find((booking: any) => {
       const state = getBookingEscrowState(booking);
-      return !['released', 'refunded', 'annulled'].includes(state);
+      return !['released', 'refunded', 'partially_refunded', 'annulled'].includes(state);
     });
 
     return { data: unfinished || null, error: null };

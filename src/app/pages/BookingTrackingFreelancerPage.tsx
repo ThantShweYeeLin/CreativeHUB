@@ -119,16 +119,16 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
   // Only reachable from the deposit_secured card (see escrowState gating
   // below) — by definition the deposit is still paid-and-held at that
-  // point, so cancelling here always refunds it back to the client, the
-  // same way an admin's dispute "refund" decision would.
+  // point. A freelancer-initiated cancellation always refunds the client in
+  // full regardless of the event date (server/src/lib/cancellationPolicy.ts's
+  // forcedFreelancerCancellationQuote) — only a client-initiated cancel is
+  // tiered by how close the event is.
   const handleCancelBooking = async () => {
     if (!booking || !user?.id || isCancelling) return;
     setIsCancelling(true);
     setError(null);
 
-    const response = await DataService.cancelBooking(booking.id, user.id, 'freelancer', cancelReason.trim() || 'Cancelled by freelancer', {
-      refundDeposit: true,
-    });
+    const response = await DataService.cancelBookingWithPolicy(booking.id, cancelReason.trim());
 
     setIsCancelling(false);
     if (response.error) {
@@ -428,7 +428,12 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
         {/* Released — shows what actually landed in the freelancer's
             balance (deposit minus the platform's commission), same figure
             as the Earnings tab's breakdown (getBookingEarningsBreakdown),
-            not the pre-commission deposit total. */}
+            not the pre-commission deposit total. getBookingEarningsBreakdown
+            already bases this on cancellation_compensation_amount when the
+            booking was cancelled within 72h of the event (full compensation,
+            same payment_status='paid' as a normal completion) rather than
+            deposit_amount, so the figures here are correct either way —
+            only the copy needs to say which case this is. */}
         {escrowState === 'released' && (() => {
           const { depositAmount, commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
           return (
@@ -440,7 +445,30 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
                 <div>
                   <p className="font-bold text-gray-900">{formatMoney(netAmount)} Released</p>
                   <p className="text-xs text-gray-600">
-                    Deposit {formatMoney(depositAmount)} − platform commission {formatMoney(commissionAmount)}
+                    {booking.cancellation_tier === 'no_refund'
+                      ? `This booking was cancelled within 72 hours of the event, so the full deposit was released to you as compensation (${formatMoney(depositAmount)} − platform commission ${formatMoney(commissionAmount)}).`
+                      : `Deposit ${formatMoney(depositAmount)} − platform commission ${formatMoney(commissionAmount)}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Partially refunded */}
+        {escrowState === 'partially_refunded' && (() => {
+          const { depositAmount, commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
+          return (
+            <div className="rounded-2xl shadow-lg border-2 border-amber-400 bg-white p-5 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">{formatMoney(netAmount)} Received</p>
+                  <p className="text-xs text-gray-600">
+                    This booking was cancelled 3–7 days before the event — {formatMoney(booking.cancellation_refund_amount)} was refunded to the client
+                    and you received {formatMoney(depositAmount)} as cancellation compensation (− platform commission {formatMoney(commissionAmount)}).
                   </p>
                 </div>
               </div>
@@ -467,7 +495,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
           </div>
         )}
 
-        {(escrowState === 'released' || (escrowState === 'refunded' && !booking.cancelled_by)) && user?.id && (
+        {!booking.cancelled_by && (escrowState === 'released' || escrowState === 'refunded') && user?.id && (
           <BookingReviewPrompt
             bookingId={booking.id}
             viewerId={user.id}
@@ -494,7 +522,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
             </div>
             {/* Commission only actually applies once the deposit is
                 released to the freelancer — see getBookingEarningsBreakdown. */}
-            {escrowState === 'released' && (() => {
+            {(escrowState === 'released' || escrowState === 'partially_refunded') && (() => {
               const { commissionAmount, netAmount } = getBookingEarningsBreakdown(booking);
               return (
                 <>

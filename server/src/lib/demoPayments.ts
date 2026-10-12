@@ -73,3 +73,23 @@ export function createDemoCharge(input: { amount: number; currency: string; card
   }
   return { ...base, card, paid: true, status: 'successful', failure_code: null, failure_message: null };
 }
+
+/**
+ * Returns an object shaped like Omise's refund response (amount/currency/charge/
+ * transaction/voided) for a demo-mode charge. No card network to decline a
+ * refund against, unlike createDemoCharge's card outcomes - a refund against an
+ * already-successful demo charge always succeeds here, the same way it always
+ * would against a real captured charge on Omise.
+ */
+export function createDemoRefund(input: { chargeId: string; amount: number; currency: string }, now = new Date()) {
+  return {
+    id: `rfnd_demo_${randomBytes(9).toString('hex')}`,
+    object: 'refund',
+    amount: input.amount,
+    currency: input.currency,
+    charge: input.chargeId,
+    transaction: `trxn_demo_${randomBytes(9).toString('hex')}`,
+    voided: false,
+    created_at: now.toISOString(),
+  };
+}
