@@ -949,9 +949,18 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
                                       </div>
                                     </button>
                                     <div className="flex flex-shrink-0 items-center gap-2 pl-11 sm:pl-0">
-                                      <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold whitespace-nowrap ${getStatusColor(applicant.status)}`}>
-                                        {getStatusText(applicant.status)}
-                                      </span>
+                                      {/* "Countered" here is just the negotiation system's
+                                          vocabulary bleeding through - an Open Group
+                                          Request application IS the freelancer's own
+                                          price from the start, there's no original ask of
+                                          theirs being "countered" against, so the badge
+                                          only reads as confusing. Only shown for an actual
+                                          accepted/rejected outcome. */}
+                                      {!(applicant.status === 'countered' && applicant.counterBy === 'freelancer') && (
+                                        <span className={`rounded-full border-2 px-2.5 py-1 text-xs font-bold whitespace-nowrap ${getStatusColor(applicant.status)}`}>
+                                          {getStatusText(applicant.status)}
+                                        </span>
+                                      )}
                                       {applicant.status === 'countered' && applicant.counterBy === 'freelancer' && (
                                         <>
                                           {roleIsFull ? (
