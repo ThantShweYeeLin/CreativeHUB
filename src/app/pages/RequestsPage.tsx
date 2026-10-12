@@ -54,6 +54,52 @@ const getStatusText = (status: RequestStatus) => {
   return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
+// Shared by normalizedRequests below AND the notification-triggered
+// auto-open effect, which used to pass a raw DB row (snake_case fields,
+// no budgetMeta/scheduleMeta/locationMeta/notesText, freelancer.full_name
+// instead of freelancer.name) straight into openEditRequest - the modal
+// opened (setEditingRequest doesn't care about shape) but every field it
+// reads expects this normalized shape, so it rendered with the freelancer
+// name, description, budget, and schedule all blank. One function used in
+// both places means that can't drift apart again.
+function normalizeRequest(request: any) {
+  return {
+    raw: request,
+    budgetMeta: extractBudgetMeta(request.message, request.description) || {
+      currency: 'THB',
+      min: Number(request.budget || 0),
+      max: Number(request.budget || 0),
+    },
+    scheduleMeta: extractScheduleMeta(request.message, request.description),
+    locationMeta: extractLocationMeta(request.message, request.description),
+    notesText: stripRequestDisplayMeta(request.message || request.description || ''),
+    id: request.id,
+    groupMeta: request.group_meta || null,
+    acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
+    isGroupRequest: Boolean(request.is_group_request),
+    freelancer: {
+      id: request.freelancer?.id || request.freelancer_id || '',
+      name: request.freelancer?.full_name || 'Freelancer',
+      specialty: request.freelancer?.title || 'Creative Freelancer',
+      avatar: request.freelancer?.avatar_url || DEFAULT_AVATAR_URL,
+      gender: request.freelancer?.gender || null,
+    },
+    projectName: request.project_name,
+    budget: Number(request.budget || 0),
+    status: request.status as RequestStatus,
+    counterPrice: request.counter_price != null ? Number(request.counter_price) : null,
+    counterMessage: request.counter_message || null,
+    attachmentUrls: Array.isArray(request.attachment_urls) ? request.attachment_urls : [],
+    counterBy: request.counter_by || null,
+    counterRound: Number(request.counter_round || 1),
+    counterDate: request.counter_date || null,
+    counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
+    counterEndTime: request.counter_end_time ? String(request.counter_end_time).slice(0, 5) : null,
+    includes: request.includes || null,
+    date: request.created_at,
+  };
+}
+
 export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: RequestsPageProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -181,7 +227,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         const resp = await DataService.getClientRequestsWithProgress(user?.id || '');
         if (!resp.error) {
           const found = (resp.data || []).find((r: any) => r.id === openRequestId);
-          if (found) openEditRequest(found);
+          // normalizeRequest - openEditRequest expects the same shape
+          // normalizedRequests gives the rest of this page, not a raw row
+          // (which has project_name/full_name/etc, not the projectName/
+          // freelancer.name/budgetMeta/... the edit form actually reads).
+          if (found) openEditRequest(normalizeRequest(found));
         }
       })();
     }
@@ -248,45 +298,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     };
   }, [requests]);
 
-  const normalizedRequests = useMemo(
-    () =>
-      requests.map((request) => ({
-        raw: request,
-        budgetMeta: extractBudgetMeta(request.message, request.description) || {
-          currency: 'THB',
-          min: Number(request.budget || 0),
-          max: Number(request.budget || 0),
-        },
-        scheduleMeta: extractScheduleMeta(request.message, request.description),
-        locationMeta: extractLocationMeta(request.message, request.description),
-        notesText: stripRequestDisplayMeta(request.message || request.description || ''),
-        id: request.id,
-        groupMeta: request.group_meta || null,
-        acceptanceProgress: request.acceptance_progress || '0 out of 1 accepted',
-        isGroupRequest: Boolean(request.is_group_request),
-        freelancer: {
-          id: request.freelancer?.id || request.freelancer_id || '',
-          name: request.freelancer?.full_name || 'Freelancer',
-          specialty: request.freelancer?.title || 'Creative Freelancer',
-          avatar: request.freelancer?.avatar_url || DEFAULT_AVATAR_URL,
-          gender: request.freelancer?.gender || null,
-        },
-        projectName: request.project_name,
-        budget: Number(request.budget || 0),
-        status: request.status as RequestStatus,
-        counterPrice: request.counter_price != null ? Number(request.counter_price) : null,
-        counterMessage: request.counter_message || null,
-        attachmentUrls: Array.isArray(request.attachment_urls) ? request.attachment_urls : [],
-        counterBy: request.counter_by || null,
-        counterRound: Number(request.counter_round || 1),
-        counterDate: request.counter_date || null,
-        counterTime: request.counter_time ? String(request.counter_time).slice(0, 5) : null,
-        counterEndTime: request.counter_end_time ? String(request.counter_end_time).slice(0, 5) : null,
-        includes: request.includes || null,
-        date: request.created_at,
-      })),
-    [requests, groupMemberNamesByRequest]
-  );
+  const normalizedRequests = useMemo(() => requests.map(normalizeRequest), [requests, groupMemberNamesByRequest]);
 
   // Every request id that's actually a freelancer's application to one of
   // this client's Open Group Requests, not a request the client sent
