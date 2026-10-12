@@ -58,6 +58,16 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [majorSkillExperienceLevel, setMajorSkillExperienceLevel] = useState<string | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
+  // Separate from freelancerBookings (which is deliberately one-directional -
+  // every booking this PROFILE has as the freelancer, across any client, for
+  // availability/calendar purposes). A booking between the viewer and this
+  // profile can have either of them as client_id depending on who booked
+  // whom (e.g. two freelancers hiring each other) - filtering
+  // freelancerBookings by client_id only ever caught the direction where
+  // this profile was the freelancer_id on that specific row, so the warning
+  // silently didn't show for the other party. getActiveOrLatestBookingBetweenUsers
+  // checks both directions, same as the DB trigger behind it.
+  const [unfinishedBookingBetweenViewerAndProfile, setUnfinishedBookingBetweenViewerAndProfile] = useState<any | null>(null);
   const [freelancerBlockedDates, setFreelancerBlockedDates] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
   const [postEngagement, setPostEngagement] = useState<Record<string, { likes: number; comments: number; shares: number; saves: number; liked: boolean; saved: boolean }>>({});
@@ -295,6 +305,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         skillsResponse,
         reviewsResponse,
         bookingsResponse,
+        unfinishedBookingResponse,
         favoriteResponse,
         followResponse,
         followedByTargetResponse,
@@ -308,6 +319,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         // anyway until they sign up (gated below), so there's nothing for
         // them to see here; only fetch once there's an actual viewer.
         user?.id ? DataService.getFreelancerBookings(targetId) : Promise.resolve({ data: [], error: null }),
+        // Checked both directions (see unfinishedBookingBetweenViewerAndProfile's
+        // declaration) - unlike bookingsResponse above, which only ever has
+        // this profile as freelancer_id.
+        user?.id && user.id !== targetId ? DataService.getActiveOrLatestBookingBetweenUsers(user.id, targetId) : Promise.resolve({ data: null, error: null }),
         user?.id && user.id !== targetId ? DataService.isFavorited(user.id, targetId) : Promise.resolve({ isFavorited: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(user.id, targetId) : Promise.resolve({ isFollowing: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),
@@ -322,6 +337,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       setFreelancerBlockedDates(blockedDatesResponse.data || []);
       setMinorSkills((skillsResponse.data?.minor || []).map((skill: any) => ({ name: skill.name, experienceLevel: skill.experienceLevel })));
       setMajorSkillExperienceLevel(skillsResponse.data?.major?.experienceLevel ?? null);
+      setUnfinishedBookingBetweenViewerAndProfile(unfinishedBookingResponse.data || null);
 
       setReviews(reviewsResponse.data || []);
       setFreelancerBookings(bookingsResponse.data || []);
@@ -394,18 +410,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   // Mirrors DataService.createBookingRequests's own pre-check (and the
   // prevent_duplicate_active_booking_request DB trigger behind it) so the
   // block is visible before the client ever opens the form, not just as a
-  // silent rejection on submit. freelancerBookings is every booking this
-  // freelancer has with ANY client, already fetched for the profile's
-  // activeProjects/completedProjects stats — find the viewer's own row in
-  // it rather than firing a second query for the same data.
+  // silent rejection on submit.
   const unfinishedBookingWithFreelancer = useMemo(() => {
-    if (!user?.id || !isBookableFreelancer) return null;
-    const match = freelancerBookings.find((booking: any) => booking.client_id === user.id);
-    if (!match) return null;
-    const state = getBookingEscrowState(match);
+    if (!user?.id || !isBookableFreelancer || !unfinishedBookingBetweenViewerAndProfile) return null;
+    const state = getBookingEscrowState(unfinishedBookingBetweenViewerAndProfile);
     if (state === 'released' || state === 'refunded' || state === 'annulled') return null;
-    return match;
-  }, [freelancerBookings, user?.id, isBookableFreelancer]);
+    return unfinishedBookingBetweenViewerAndProfile;
+  }, [unfinishedBookingBetweenViewerAndProfile, user?.id, isBookableFreelancer]);
   // Reviews of a client are only ever useful to another freelancer deciding
   // whether to work with them, and must never be visible to the client
   // themselves or to any other client — RLS (see supabase/review_visibility.sql)
