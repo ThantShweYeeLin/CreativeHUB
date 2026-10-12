@@ -258,6 +258,28 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
     await refresh();
   };
 
+  // Separate from handleCancelBooking above (deposit already paid, tiered
+  // refund policy) - before any deposit is paid there's no money to
+  // refund or compensate, so this skips the quote fetch entirely and goes
+  // straight to DataService.cancelUnpaidBooking.
+  const handleCancelUnpaidBooking = async () => {
+    if (!booking || isCancelling) return;
+    setIsCancelling(true);
+    setError(null);
+
+    const response = await DataService.cancelUnpaidBooking(booking.id, cancelReason.trim());
+
+    setIsCancelling(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to cancel this booking.');
+      return;
+    }
+
+    setShowCancelForm(false);
+    setCancelReason('');
+    await refresh();
+  };
+
   const viewerCurrency = normalizeCurrencyCode(preferredCurrency, 'THB');
   const formatMoney = (amount: number) => {
     const converted = convertAmount(Number(amount || 0), 'THB', viewerCurrency);
@@ -538,6 +560,48 @@ export function BookingTrackingClientPage({ onBack }: BookingTrackingClientPageP
             >
               {isPayingDeposit ? 'Transferring...' : `Transfer ${formatMoney(bookingData.pricing.deposit)} Deposit Now`}
             </button>
+
+            {!showCancelForm ? (
+              <button
+                onClick={() => setShowCancelForm(true)}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/40 py-2.5 px-4 text-sm font-semibold text-white hover:bg-white/10 transition-all"
+              >
+                <Ban className="w-4 h-4" />
+                Cancel Booking
+              </button>
+            ) : (
+              <div className="mt-3 rounded-xl bg-white p-4">
+                <p className="mb-1 text-sm font-bold text-gray-900">Cancel this booking?</p>
+                <p className="mb-3 text-xs text-gray-600">
+                  No deposit has been paid yet, so there's nothing to refund. This just releases the time slot. This can't be undone.
+                </p>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Why are you cancelling? (optional)"
+                  className="mb-3 w-full min-h-[60px] rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-300"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setShowCancelForm(false);
+                      setCancelReason('');
+                    }}
+                    disabled={isCancelling}
+                    className="flex-1 rounded-lg border border-gray-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    Keep booking
+                  </button>
+                  <button
+                    onClick={() => void handleCancelUnpaidBooking()}
+                    disabled={isCancelling}
+                    className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {isCancelling ? 'Cancelling...' : 'Yes, cancel booking'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

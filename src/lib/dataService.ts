@@ -2926,6 +2926,19 @@ export class DataService {
     return this.premiumApi(`/payments/booking/${bookingId}/cancel`, { reason });
   }
 
+  // Separate, simpler path for cancelling BEFORE the deposit is ever paid
+  // (supabase/cancel_unpaid_booking.sql) — no money has moved, so no
+  // refund/compensation policy applies and no provider call is needed,
+  // which is also why this is a plain RPC rather than going through the
+  // server like cancelBookingWithPolicy above. Still releases the time
+  // slot immediately (the 'annulled' status it sets is already excluded
+  // from bookings_no_overlap) instead of leaving it held until the 24h
+  // deposit deadline lapses on its own.
+  static async cancelUnpaidBooking(bookingId: string, reason?: string) {
+    const { data, error } = await (supabase as any).rpc('cancel_unpaid_booking', { p_booking_id: bookingId, p_reason: reason || null });
+    return { data, error };
+  }
+
   // MESSAGES
   static async getConversation(userId1: string, userId2: string) {
     const { data, error } = await supabase
