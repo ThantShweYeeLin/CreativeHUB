@@ -34,6 +34,7 @@ import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 import { isBookableLocation } from '../../lib/serviceLocations';
+import { getBookingEscrowState } from '../../lib/bookingEscrow';
 
 interface FreelancerProfileProps {
   onBack: () => void;
@@ -84,6 +85,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [shareStatusMessage, setShareStatusMessage] = useState<string | null>(null);
   const [copyLinkError, setCopyLinkError] = useState<string | null>(null);
   const savedScrollYRef = useRef<number | null>(null);
+  const unfinishedBookingBlockRef = useRef<HTMLDivElement | null>(null);
   const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
   const [activeProjects, setActiveProjects] = useState(0);
   const [completedProjects, setCompletedProjects] = useState(0);
@@ -389,6 +391,21 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const coverUrl = profile?.cover_url || freelancerProfile?.cover_image_url || freelancerProfile?.image_urls?.[0] || '';
   const location = profile?.location || 'Location not provided';
   const isBookableFreelancer = profile?.role === 'freelancer' && Boolean(freelancerProfile?.id);
+  // Mirrors DataService.createBookingRequests's own pre-check (and the
+  // prevent_duplicate_active_booking_request DB trigger behind it) so the
+  // block is visible before the client ever opens the form, not just as a
+  // silent rejection on submit. freelancerBookings is every booking this
+  // freelancer has with ANY client, already fetched for the profile's
+  // activeProjects/completedProjects stats — find the viewer's own row in
+  // it rather than firing a second query for the same data.
+  const unfinishedBookingWithFreelancer = useMemo(() => {
+    if (!user?.id || !isBookableFreelancer) return null;
+    const match = freelancerBookings.find((booking: any) => booking.client_id === user.id);
+    if (!match) return null;
+    const state = getBookingEscrowState(match);
+    if (state === 'released' || state === 'refunded' || state === 'annulled') return null;
+    return match;
+  }, [freelancerBookings, user?.id, isBookableFreelancer]);
   // Reviews of a client are only ever useful to another freelancer deciding
   // whether to work with them, and must never be visible to the client
   // themselves or to any other client — RLS (see supabase/review_visibility.sql)
@@ -1253,6 +1270,22 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
             {successMessage}
           </div>
         )}
+        {unfinishedBookingWithFreelancer && (
+          <div
+            ref={unfinishedBookingBlockRef}
+            className="mb-6 scroll-mt-24 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            <p className="font-semibold">You already have an unfinished booking with {displayName}.</p>
+            <p className="mt-1">Finish or resolve it before sending a new request.</p>
+            <button
+              type="button"
+              onClick={() => navigate(`/booking/${unfinishedBookingWithFreelancer.id}`)}
+              className="mt-2 font-semibold underline underline-offset-2 hover:text-amber-900"
+            >
+              View that booking &rarr;
+            </button>
+          </div>
+        )}
 
         <section className="mb-8 overflow-hidden rounded-3xl bg-white/90 backdrop-blur-xl shadow-[0_8px_30px_rgba(56,189,248,0.15)]">
           {/* Desktop header — unchanged from before. Hidden below md; the
@@ -1344,6 +1377,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                           onClick={() => {
                             if (!user?.id) {
                               setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                              return;
+                            }
+                            if (unfinishedBookingWithFreelancer) {
+                              unfinishedBookingBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                               return;
                             }
                             // Pre-fill with the minimum so the field never
@@ -1480,6 +1517,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                           onClick={() => {
                             if (!user?.id) {
                               setAuthPromptMessage('Create an account to send a booking request to this freelancer.');
+                              return;
+                            }
+                            if (unfinishedBookingWithFreelancer) {
+                              unfinishedBookingBlockRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                               return;
                             }
                             setFormData((current) => ({
@@ -2142,7 +2183,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         </div>
       )}
 
-      {showBookingForm && isBookableFreelancer && createPortal(
+      {showBookingForm && isBookableFreelancer && !unfinishedBookingWithFreelancer && createPortal(
         <div className="fixed inset-0 z-[1400] overflow-y-auto bg-white">
           <div className="relative min-h-full">
             <PageBackdrop />

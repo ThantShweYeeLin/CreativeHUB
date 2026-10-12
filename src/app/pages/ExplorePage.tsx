@@ -788,16 +788,38 @@ export function ExplorePage() {
 
     DataService.getUser(user.id).then(({ data }) => {
       if (!isMounted) return;
+      setUserLocation((data as any)?.location || null);
+      const lat = Number((data as any)?.location_latitude);
+      const lng = Number((data as any)?.location_longitude);
+      setClientCoords(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
+
+      // A freelancer viewer has no client_interests/client_preferences of
+      // their own (those only ever come from ClientOnboardingPage) - for
+      // them, "Recommended for you" is read as "other freelancers in my own
+      // category," so clientInterests is sourced from their own
+      // freelancer_profiles.title/minor_categories instead. clientPreferences
+      // (high_quality/experienced/affordable/nearby) is a client-only buying
+      // preference with no freelancer equivalent, so it's left empty here -
+      // a freelancer viewer's recommendations are purely category-matched.
+      if ((data as any)?.role === 'freelancer') {
+        DataService.getFreelancerProfile(user.id).then(({ data: fp }) => {
+          if (!isMounted) return;
+          const categories = Array.from(new Set([
+            (fp as any)?.title,
+            ...(((fp as any)?.minor_categories as string[] | null) || []),
+          ].filter(Boolean))) as string[];
+          setClientInterests(categories);
+          setClientPreferences([]);
+        });
+        return;
+      }
+
       if (Array.isArray((data as any)?.client_interests)) {
         setClientInterests((data as any).client_interests);
       }
       if (Array.isArray((data as any)?.client_preferences)) {
         setClientPreferences((data as any).client_preferences);
       }
-      setUserLocation((data as any)?.location || null);
-      const lat = Number((data as any)?.location_latitude);
-      const lng = Number((data as any)?.location_longitude);
-      setClientCoords(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null);
     });
 
     DataService.getUserFavorites(user.id).then(({ data }) => {
@@ -1054,20 +1076,25 @@ export function ExplorePage() {
       .filter((section) => section.profiles.length > 0);
   }, [filteredProfiles, freelancers, clientInterests, popularSectionSuffix]);
 
-  // "Recommended for you" ranks freelancers against what this client told us
-  // during onboarding — category interests (a strong, directly-comparable
-  // signal: client_interests is drawn from the same FREELANCER_CATEGORIES
-  // labels as freelancer_profiles.title) and the softer client_preferences
-  // checkboxes (experienced, high quality, affordable, nearby). A freelancer
-  // only appears here if at least one of those signals actually matched —
+  // "Recommended for you" ranks freelancers against what this viewer told us
+  // during onboarding. For a client that's their category interests (a
+  // strong, directly-comparable signal: client_interests is drawn from the
+  // same FREELANCER_CATEGORIES labels as freelancer_profiles.title) and the
+  // softer client_preferences checkboxes (experienced, high quality,
+  // affordable, nearby). For a freelancer viewer, clientInterests is instead
+  // populated from their own title/minor_categories (see the fetch effect
+  // above) and clientPreferences is always empty, so only the category match
+  // below applies — "other freelancers in my own category." Either way, a
+  // freelancer only appears here if at least one signal actually matched —
   // this is deliberately not "everyone, sorted somehow," so the section is
-  // hidden entirely for a client with no onboarding preferences set.
+  // hidden entirely for a viewer with no onboarding categories/preferences set.
   const recommendedProfiles = useMemo(() => {
     if (clientInterests.length === 0 && clientPreferences.length === 0) return [];
 
     const sourceById = new Map(freelancers.map((item) => [item.user_id || item.users?.id || item.id, item]));
 
     const scored = profiles
+      .filter((profile) => profile.id !== user?.id)
       .map((profile) => {
         const source = sourceById.get(profile.id);
         if (!source) return null;
@@ -1126,7 +1153,7 @@ export function ExplorePage() {
       .sort((a, b) => b.score - a.score);
 
     return scored.slice(0, 12).map((item) => item.profile);
-  }, [profiles, freelancers, clientInterests, clientPreferences, clientCoords]);
+  }, [profiles, freelancers, clientInterests, clientPreferences, clientCoords, user?.id]);
 
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedCategory !== 'All';
 
@@ -1743,7 +1770,7 @@ export function ExplorePage() {
         </div>
       )}
 
-      {!isLoading && !hasActiveSearch && recommendedProfiles.length > 0 && (
+      {!isLoading && recommendedProfiles.length > 0 && (
         <CarouselSection
           title="Recommended for you"
           profiles={recommendedProfiles}
