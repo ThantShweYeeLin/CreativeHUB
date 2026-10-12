@@ -382,16 +382,17 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     setError(null);
     setSuccess(null);
 
-    const response = await DataService.updateRequest(requestId, { status } as any);
-    if (response.error) {
-      setError((response.error as any).message || `Unable to ${status} request.`);
-      return;
-    }
-
+    // Booking creation has to succeed BEFORE the request is marked accepted,
+    // not after (matches handleAcceptCounter below and RequestsPage.tsx's own
+    // accept-counter flow) - flipping status first left a request stuck
+    // showing as "accepted" with no booking at all whenever
+    // acceptRequestAndCreateBooking failed afterward (an overlap conflict,
+    // bad schedule data, ...), which is what "Unable to find the booking for
+    // this request" surfaced later with no indication of the real cause.
     if (status === 'accepted') {
       const request = requests.find((item) => item.id === requestId);
       if (!request) {
-        setError('Request accepted, but could not find its details to create a booking. Please refresh and check My Bookings.');
+        setError('Unable to find this request\'s details. Please refresh the page and try again.');
         return;
       }
 
@@ -400,6 +401,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
         setError(acceptError.message);
         return;
       }
+    }
+
+    const response = await DataService.updateRequest(requestId, { status } as any);
+    if (response.error) {
+      setError((response.error as any).message || `Unable to ${status} request.`);
+      return;
     }
 
     setRequests((current) => current.map((request) => (request.id === requestId ? { ...request, status } : request)));
