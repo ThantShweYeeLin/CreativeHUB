@@ -1770,7 +1770,11 @@ export function ExplorePage() {
         </div>
       )}
 
-      {!isLoading && recommendedProfiles.length > 0 && (
+      {/* Above search results while browsing (no active search), so it's
+          the first thing a visitor sees - but below them once the visitor
+          is actively searching, so their actual results aren't pushed down
+          past a whole carousel they didn't ask to see first. */}
+      {!isLoading && !hasActiveSearch && recommendedProfiles.length > 0 && (
         <CarouselSection
           title="Recommended for you"
           profiles={recommendedProfiles}
@@ -1800,6 +1804,15 @@ export function ExplorePage() {
               : `Popular ${pluralizeCategory(selectedCategory)}${popularSectionSuffix}`
           }
           profiles={filteredProfiles}
+          favoritedIds={favoritedIds}
+          onToggleFavorite={handleToggleFavorite}
+        />
+      )}
+
+      {!isLoading && hasActiveSearch && recommendedProfiles.length > 0 && (
+        <CarouselSection
+          title="Recommended for you"
+          profiles={recommendedProfiles}
           favoritedIds={favoritedIds}
           onToggleFavorite={handleToggleFavorite}
         />
