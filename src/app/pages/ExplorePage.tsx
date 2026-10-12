@@ -697,7 +697,7 @@ export function ExplorePage() {
       }
       setError(null);
 
-      const response = await DataService.getAllFreelancers(200);
+      const response = await DataService.getAllFreelancers(200, 0, Boolean(user?.id));
 
       // Debugging: log raw response to inspect why some names are not returned
       // Use console.log so it's visible in all browser consoles

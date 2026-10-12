@@ -695,7 +695,20 @@ export class DataService {
     return { data, error };
   }
 
-  static async getAllFreelancers(limit = 20, offset = 0) {
+  // isAuthenticated defaults true (every existing caller stays on today's
+  // behavior unchanged) - pass false only from a page a logged-out guest
+  // can actually reach (Explore/For You/Map). anon never has the location
+  // columns (see supabase/grant_anon_public_browsing.sql's deliberate
+  // allow-list), so for a guest caller skipping straight to the
+  // columns-free query avoids a guaranteed-to-fail first attempt - same
+  // data either way, just without a permission-denied round trip (and the
+  // "Failed to load resource: 401" console noise it leaves behind) on
+  // every single guest page load.
+  static async getAllFreelancers(limit = 20, offset = 0, isAuthenticated = true) {
+    if (!isAuthenticated) {
+      return this.getAllFreelancersQuery(limit, offset, false);
+    }
+
     const firstAttempt = await this.getAllFreelancersQuery(limit, offset, true);
     if (firstAttempt.error && this.hasMissingLocationColumnError(firstAttempt.error)) {
       const fallbackAttempt = await this.getAllFreelancersQuery(limit, offset, false);

@@ -1198,7 +1198,7 @@ export function ForYouPage({ onViewProfile, onOpenMessages }: ForYouPageProps) {
       setError(null);
 
       const [freelancersResponse, clientPostsResponse, blockedIdsResponse] = await Promise.all([
-        DataService.getAllFreelancers(40),
+        DataService.getAllFreelancers(40, 0, Boolean(user?.id)),
         DataService.getClientPosts(30, user?.id),
         user?.id ? DataService.getMutualBlockIds(user.id) : Promise.resolve({ data: [], error: null }),
       ]);

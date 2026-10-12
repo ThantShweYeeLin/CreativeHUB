@@ -236,7 +236,7 @@ export function MapView({ onViewProfile }: MapViewProps) {
       setErrorMessage(null);
 
       const [freelancerResponse, userResponse] = await Promise.all([
-        DataService.getAllFreelancers(200),
+        DataService.getAllFreelancers(200, 0, Boolean(user?.id)),
         user?.id ? DataService.getUser(user.id) : Promise.resolve({ data: null, error: null }),
       ]);
 
