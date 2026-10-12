@@ -34,7 +34,6 @@ import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 import { isBookableLocation } from '../../lib/serviceLocations';
-import { getBookingEscrowState } from '../../lib/bookingEscrow';
 
 interface FreelancerProfileProps {
   onBack: () => void;
@@ -65,8 +64,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   // whom (e.g. two freelancers hiring each other) - filtering
   // freelancerBookings by client_id only ever caught the direction where
   // this profile was the freelancer_id on that specific row, so the warning
-  // silently didn't show for the other party. getActiveOrLatestBookingBetweenUsers
-  // checks both directions, same as the DB trigger behind it.
+  // silently didn't show for the other party. getUnfinishedBookingBetweenUsers
+  // checks both directions AND every booking between the pair (not just the
+  // newest), same as the DB trigger behind it - resolving your most recent
+  // booking with someone while an older one is still unfinished (e.g. an
+  // open dispute) has to keep this blocked too.
   const [unfinishedBookingBetweenViewerAndProfile, setUnfinishedBookingBetweenViewerAndProfile] = useState<any | null>(null);
   const [freelancerBlockedDates, setFreelancerBlockedDates] = useState<any[]>([]);
   const [profilePosts, setProfilePosts] = useState<any[]>([]);
@@ -322,7 +324,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         // Checked both directions (see unfinishedBookingBetweenViewerAndProfile's
         // declaration) - unlike bookingsResponse above, which only ever has
         // this profile as freelancer_id.
-        user?.id && user.id !== targetId ? DataService.getActiveOrLatestBookingBetweenUsers(user.id, targetId) : Promise.resolve({ data: null, error: null }),
+        user?.id && user.id !== targetId ? DataService.getUnfinishedBookingBetweenUsers(user.id, targetId) : Promise.resolve({ data: null, error: null }),
         user?.id && user.id !== targetId ? DataService.isFavorited(user.id, targetId) : Promise.resolve({ isFavorited: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(user.id, targetId) : Promise.resolve({ isFollowing: false, error: null }),
         user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),
@@ -410,11 +412,10 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   // Mirrors DataService.createBookingRequests's own pre-check (and the
   // prevent_duplicate_active_booking_request DB trigger behind it) so the
   // block is visible before the client ever opens the form, not just as a
-  // silent rejection on submit.
+  // silent rejection on submit. getUnfinishedBookingBetweenUsers already
+  // filters to only-unfinished, so this is just the viewer/bookable gate.
   const unfinishedBookingWithFreelancer = useMemo(() => {
-    if (!user?.id || !isBookableFreelancer || !unfinishedBookingBetweenViewerAndProfile) return null;
-    const state = getBookingEscrowState(unfinishedBookingBetweenViewerAndProfile);
-    if (state === 'released' || state === 'refunded' || state === 'annulled') return null;
+    if (!user?.id || !isBookableFreelancer) return null;
     return unfinishedBookingBetweenViewerAndProfile;
   }, [unfinishedBookingBetweenViewerAndProfile, user?.id, isBookableFreelancer]);
   // Reviews of a client are only ever useful to another freelancer deciding

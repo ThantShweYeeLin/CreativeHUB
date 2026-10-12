@@ -4321,14 +4321,17 @@ export class DataService {
     // happens to pick. Blocked here, the one place every client-initiated
     // request path (direct profile booking, Event Assistant, Group Request)
     // goes through — finish or resolve the existing one first.
+    // getUnfinishedBookingBetweenUsers, not getActiveOrLatestBookingBetweenUsers -
+    // the latter only looks at the single newest booking, so resolving a
+    // recent booking while an older one with the same person was still
+    // unfinished (e.g. an open dispute) let this pre-check wave it through,
+    // only for prevent_duplicate_active_booking_request_trigger's own
+    // every-row check to reject the insert moments later with a raw DB
+    // error instead of this readable one.
     const unfinishedBookingChecks = await Promise.all(
-      recipients.map((recipientId) => this.getActiveOrLatestBookingBetweenUsers(input.clientId, recipientId))
+      recipients.map((recipientId) => this.getUnfinishedBookingBetweenUsers(input.clientId, recipientId))
     );
-    const unfinishedIndex = unfinishedBookingChecks.findIndex((check) => {
-      if (!check.data) return false;
-      const state = getBookingEscrowState(check.data);
-      return !['released', 'refunded', 'annulled'].includes(state);
-    });
+    const unfinishedIndex = unfinishedBookingChecks.findIndex((check) => Boolean(check.data));
     if (unfinishedIndex !== -1) {
       const unfinishedRecipientId = recipients[unfinishedIndex];
       const unfinishedRecipient = (pausedCheck.data || []).find((row: any) => row.id === unfinishedRecipientId);
@@ -5170,6 +5173,34 @@ export class DataService {
       .maybeSingle();
 
     return { data, error };
+  }
+
+  // "Is there an unfinished booking between these two people" has to mean
+  // ANY of their bookings, not just the latest one - getActiveOrLatestBookingBetweenUsers
+  // (used for chat's "which booking is this conversation about" card, where
+  // "latest" genuinely is the right pick) was being reused here too, so
+  // resolving/cancelling someone's newest booking while an older one was
+  // still unfinished (e.g. stuck in a dispute under admin review) made this
+  // check go quiet - while prevent_duplicate_active_booking_request's own
+  // has_unfinished_booking_between SQL function (EXISTS across every row,
+  // not just the newest) kept correctly blocking at the DB layer. Same
+  // getBookingEscrowState used everywhere else, so this can't drift from it
+  // the way a second hand-written SQL predicate would.
+  static async getUnfinishedBookingBetweenUsers(userAId: string, userBId: string) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .or(`and(client_id.eq.${userAId},freelancer_id.eq.${userBId}),and(client_id.eq.${userBId},freelancer_id.eq.${userAId})`)
+      .order('created_at', { ascending: false });
+
+    if (error) return { data: null, error };
+
+    const unfinished = (data || []).find((booking: any) => {
+      const state = getBookingEscrowState(booking);
+      return !['released', 'refunded', 'annulled'].includes(state);
+    });
+
+    return { data: unfinished || null, error: null };
   }
 
   // Powers MessagesPage.tsx's Friends/Work inbox split. "Work" means there's
