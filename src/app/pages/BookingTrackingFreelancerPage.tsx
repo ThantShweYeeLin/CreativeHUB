@@ -1,6 +1,7 @@
 import { Ban, ChevronLeft, ChevronRight, CheckCircle, Camera, Clock, FileText, Shield } from 'lucide-react';
 import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { FileUploadField } from '../components/common/FileUploadField';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../../contexts/AuthContext';
@@ -408,14 +409,13 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               />
               <div className="mb-3">
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence photos (optional)</label>
-                <input
-                  type="file"
+                <FileUploadField
                   accept="image/*"
                   multiple
-                  onChange={(e) => setCompletionFiles(Array.from(e.target.files || []).slice(0, 6))}
-                  className="text-xs"
+                  buttonLabel="Choose files"
+                  onFilesSelected={(selected) => setCompletionFiles(selected.slice(0, 6))}
+                  selectedLabel={completionFiles.length === 0 ? null : completionFiles.length === 1 ? completionFiles[0].name : `${completionFiles.length} file(s) selected`}
                 />
-                {completionFiles.length > 0 && <p className="mt-1 text-xs text-gray-500">{completionFiles.length} file(s) selected</p>}
               </div>
               <button
                 onClick={() => void handleSubmitCompletion()}

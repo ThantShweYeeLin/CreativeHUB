@@ -32,6 +32,7 @@ import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { AuthPromptModal } from '../components/AuthPromptModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { ErrorDialog } from '../components/common/ErrorDialog';
+import { FileUploadField } from '../components/common/FileUploadField';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 import { isBookableLocation } from '../../lib/serviceLocations';
@@ -1991,12 +1992,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
                   className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
                 />
                 <label className="mb-1 block text-xs font-semibold text-gray-600">Evidence (optional)</label>
-                <input
-                  type="file"
+                <FileUploadField
                   accept="image/*"
                   multiple
-                  onChange={(e) => setReportFiles(Array.from(e.target.files || []).slice(0, 6))}
-                  className="mb-4 text-xs"
+                  buttonLabel="Choose files"
+                  onFilesSelected={(selected) => setReportFiles(selected.slice(0, 6))}
+                  selectedLabel={reportFiles.length === 0 ? null : reportFiles.length === 1 ? reportFiles[0].name : `${reportFiles.length} files selected`}
+                  className="mb-4"
                 />
                 <button
                   onClick={() => void handleSubmitReport()}

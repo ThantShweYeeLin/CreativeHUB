@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { EVIDENCE_TYPE_OPTIONS, type EvidenceType, type LocalEvidenceItem } from '../../../lib/disputeFlowConfig';
+import { FileUploadField } from '../../components/common/FileUploadField';
 
 interface EvidenceItemEditorProps {
   items: LocalEvidenceItem[];
@@ -38,11 +39,12 @@ export function EvidenceItemEditor({ items, onAdd, onUpdate, onRemove, label, he
                 </option>
               ))}
             </select>
-            <input
-              type="file"
+            <FileUploadField
               accept="image/*,video/*,.pdf,.doc,.docx"
-              onChange={(e) => onUpdate(item.id, { file: e.target.files?.[0] || null })}
-              className="min-w-0 flex-1 text-xs"
+              compact
+              onFilesSelected={(selected) => onUpdate(item.id, { file: selected[0] || null })}
+              selectedLabel={item.file?.name || null}
+              className="min-w-0 flex-1"
             />
             <button onClick={() => onRemove(item.id)} className="text-gray-400 hover:text-red-600">
               <X className="h-3.5 w-3.5" />

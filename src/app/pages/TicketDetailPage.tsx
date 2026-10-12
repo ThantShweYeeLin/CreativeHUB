@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { CheckCircle2, ChevronLeft, Circle, MessageCircle, MessageSquare, Paperclip, ShieldAlert, Ticket as TicketIcon } from 'lucide-react';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { FileUploadField } from '../components/common/FileUploadField';
 import { TicketThread } from '../../components/support/TicketThread';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -256,12 +257,13 @@ export function TicketDetailPage({ onBack }: TicketDetailPageProps) {
                     placeholder="Add more details..."
                     className="mb-3 w-full min-h-[80px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-300"
                   />
-                  <input
-                    type="file"
+                  <FileUploadField
                     accept="image/*,.pdf"
                     multiple
-                    onChange={(e) => setFiles(Array.from(e.target.files || []).slice(0, 6))}
-                    className="mb-3 text-xs"
+                    buttonLabel="Choose files"
+                    onFilesSelected={(selected) => setFiles(selected.slice(0, 6))}
+                    selectedLabel={files.length === 0 ? null : files.length === 1 ? files[0].name : `${files.length} files selected`}
+                    className="mb-3"
                   />
                   {submitError && <p className="mb-3 text-sm text-red-600">{submitError}</p>}
                   <button
