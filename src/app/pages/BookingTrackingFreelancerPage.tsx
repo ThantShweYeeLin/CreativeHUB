@@ -57,6 +57,8 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
   const [showCancelForm, setShowCancelForm] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelQuote, setCancelQuote] = useState<any | null>(null);
+  const [isLoadingCancelQuote, setIsLoadingCancelQuote] = useState(false);
 
   // Freelancers previously had no way to file a dispute at all (only to
   // respond to one the client opened) — this mirrors
@@ -117,11 +119,31 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
     await refresh();
   };
 
+  // Opens the confirmation and fetches the quote the same way
+  // BookingTrackingClientPage does, for the same reason (show what the
+  // server actually decided, not a guessed figure) - even though a
+  // freelancer-initiated cancel is always forced to the full-refund tier
+  // (server/src/lib/cancellationPolicy.ts's forcedFreelancerCancellationQuote),
+  // fetching it still confirms eligibility server-side before showing a
+  // confirm button, and keeps both tracking pages' cancel UX identical.
+  const openCancelForm = async () => {
+    if (!booking) return;
+    setShowCancelForm(true);
+    setCancelQuote(null);
+    setIsLoadingCancelQuote(true);
+    const response = await DataService.getCancellationQuote(booking.id);
+    setIsLoadingCancelQuote(false);
+    if (response.error) {
+      setError((response.error as any).message || 'Unable to load the cancellation policy for this booking.');
+      return;
+    }
+    setCancelQuote(response.data);
+  };
+
   // Only reachable from the deposit_secured card (see escrowState gating
   // below) — by definition the deposit is still paid-and-held at that
   // point. A freelancer-initiated cancellation always refunds the client in
-  // full regardless of the event date (server/src/lib/cancellationPolicy.ts's
-  // forcedFreelancerCancellationQuote) — only a client-initiated cancel is
+  // full regardless of the event date — only a client-initiated cancel is
   // tiered by how close the event is.
   const handleCancelBooking = async () => {
     if (!booking || !user?.id || isCancelling) return;
@@ -138,6 +160,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
     setShowCancelForm(false);
     setCancelReason('');
+    setCancelQuote(null);
     await refresh();
   };
 
@@ -339,7 +362,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
 
               {!showCancelForm ? (
                 <button
-                  onClick={() => setShowCancelForm(true)}
+                  onClick={() => void openCancelForm()}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 py-3 px-4 text-sm font-semibold text-red-600 hover:bg-red-50 transition-all"
                 >
                   <Ban className="w-4 h-4" />
@@ -348,9 +371,18 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
               ) : (
                 <div className="mt-3 rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
                   <p className="mb-1 text-sm font-bold text-red-900">Cancel this booking?</p>
-                  <p className="mb-3 text-xs text-red-700">
-                    The secured deposit ({formatMoney(bookingData.pricing.deposit)}) will be refunded to the client. This can't be undone.
-                  </p>
+                  {isLoadingCancelQuote && <p className="mb-3 text-xs text-red-700">Checking the cancellation policy…</p>}
+                  {!isLoadingCancelQuote && cancelQuote?.ok === false && (
+                    <p className="mb-3 text-xs text-red-700">{cancelQuote.reason}</p>
+                  )}
+                  {!isLoadingCancelQuote && cancelQuote?.ok && (
+                    <div className="mb-3 space-y-1 text-xs text-red-700">
+                      <p>As the freelancer, cancelling always fully refunds the client — this doesn't depend on the event date.</p>
+                      <p>Deposit paid: {formatMoney(cancelQuote.depositThb)}</p>
+                      <p>Refund to the client: {formatMoney(cancelQuote.refundAmount)}</p>
+                      <p className="font-semibold">This action cannot be undone.</p>
+                    </div>
+                  )}
                   <textarea
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
@@ -362,6 +394,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
                       onClick={() => {
                         setShowCancelForm(false);
                         setCancelReason('');
+                        setCancelQuote(null);
                       }}
                       disabled={isCancelling}
                       className="flex-1 rounded-lg border border-red-200 bg-white py-2.5 text-sm font-semibold text-gray-700 hover:bg-red-50 disabled:opacity-60"
@@ -370,7 +403,7 @@ export function BookingTrackingFreelancerPage({ onBack }: BookingTrackingFreelan
                     </button>
                     <button
                       onClick={() => void handleCancelBooking()}
-                      disabled={isCancelling}
+                      disabled={isCancelling || isLoadingCancelQuote || cancelQuote?.ok === false}
                       className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
                     >
                       {isCancelling ? 'Cancelling...' : 'Yes, cancel & refund'}
