@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Check, Send, Trash2, X } from 'lucide-react';
+import { Check, Paperclip, Send, Trash2, X } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
 import { DataService } from '../../../lib/dataService';
 import { DEFAULT_AVATAR_URL } from '../../../lib/defaults';
@@ -33,6 +33,8 @@ export function AdminMessagesPage() {
   const [reply, setReply] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentSignedUrls, setAttachmentSignedUrls] = useState<Record<string, string>>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -86,6 +88,24 @@ export function AdminMessagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // Attachments are stored under a private bucket (message-attachments) -
+  // same signed-url-per-path approach as MessagesPage.tsx, batched so a
+  // thread with several attachments doesn't fire one request per message.
+  const resolveAttachmentUrls = async (items: any[]) => {
+    const paths = Array.from(new Set(items.map((m) => m.attachment_path).filter(Boolean)));
+    if (!paths.length) return;
+    const entries = await Promise.all(
+      paths.map(async (path) => {
+        const res = await DataService.getMessageAttachmentSignedUrl(path as string);
+        return [path, res.url] as const;
+      })
+    );
+    setAttachmentSignedUrls((current) => ({
+      ...current,
+      ...Object.fromEntries(entries.filter(([, url]) => url)),
+    }));
+  };
+
   useEffect(() => {
     if (!selectedId || !user?.id) return;
     let isMounted = true;
@@ -93,8 +113,10 @@ export function AdminMessagesPage() {
     (async () => {
       const response = await DataService.getMessages(selectedId);
       if (!isMounted) return;
-      setMessages((response.data || []).slice().reverse());
+      const list = (response.data || []).slice().reverse();
+      setMessages(list);
       setIsLoadingThread(false);
+      void resolveAttachmentUrls(list);
       await DataService.markMessagesAsRead(selectedId, user.id);
     })();
 
@@ -102,7 +124,9 @@ export function AdminMessagesPage() {
       void (async () => {
         const response = await DataService.getMessages(selectedId);
         if (!isMounted) return;
-        setMessages((response.data || []).slice().reverse());
+        const list = (response.data || []).slice().reverse();
+        setMessages(list);
+        void resolveAttachmentUrls(list);
         await DataService.markMessagesAsRead(selectedId, user.id);
       })();
     });
@@ -146,15 +170,31 @@ export function AdminMessagesPage() {
   };
 
   const handleSend = async () => {
-    if (!user?.id || !selectedId || !selectedOther?.id || !reply.trim() || isSending) return;
+    if (!user?.id || !selectedId || !selectedOther?.id || (!reply.trim() && !attachmentFile) || isSending) return;
     setIsSending(true);
     setSendError(null);
+
+    let attachmentPath: string | null = null;
+    let attachmentType: string | null = null;
+    if (attachmentFile) {
+      const uploadResponse = await DataService.uploadMessageAttachment(user.id, selectedId, attachmentFile);
+      if (uploadResponse.error || !uploadResponse.path) {
+        setSendError('Unable to upload the attachment.');
+        setIsSending(false);
+        return;
+      }
+      attachmentPath = uploadResponse.path;
+      attachmentType = attachmentFile.type;
+    }
+
     const response = await DataService.sendMessage({
       conversation_id: selectedId,
       sender_id: user.id,
       recipient_id: selectedOther.id,
       content: reply.trim(),
       read: false,
+      attachment_path: attachmentPath,
+      attachment_type: attachmentType,
     } as any);
     setIsSending(false);
     if (response.error) {
@@ -162,8 +202,11 @@ export function AdminMessagesPage() {
       return;
     }
     setReply('');
+    setAttachmentFile(null);
     const refreshed = await DataService.getMessages(selectedId);
-    setMessages((refreshed.data || []).slice().reverse());
+    const list = (refreshed.data || []).slice().reverse();
+    setMessages(list);
+    void resolveAttachmentUrls(list);
     void loadConversations();
   };
 
@@ -263,6 +306,8 @@ export function AdminMessagesPage() {
                 ) : (
                   messages.map((m) => {
                     const isSelf = m.sender_id === user?.id;
+                    const attachmentUrl = m.attachment_path ? attachmentSignedUrls[m.attachment_path] : null;
+                    const isImageAttachment = m.attachment_type?.startsWith('image/');
                     return (
                       <div key={m.id} className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}>
                         <div
@@ -270,7 +315,27 @@ export function AdminMessagesPage() {
                             isSelf ? 'rounded-br-sm bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'rounded-bl-sm bg-white text-gray-800 shadow-sm'
                           }`}
                         >
-                          <p className="whitespace-pre-wrap">{m.content}</p>
+                          {m.attachment_path && (
+                            <div className="mb-1.5">
+                              {isImageAttachment && attachmentUrl ? (
+                                <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                                  <img src={attachmentUrl} alt="Attachment" className="max-h-64 rounded-xl object-cover" />
+                                </a>
+                              ) : attachmentUrl ? (
+                                <a
+                                  href={attachmentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className={`flex items-center gap-1.5 text-xs font-semibold underline ${isSelf ? 'text-white' : 'text-sky-700'}`}
+                                >
+                                  <Paperclip className="h-3.5 w-3.5" /> View attachment
+                                </a>
+                              ) : (
+                                <p className="text-xs italic opacity-70">Loading attachment…</p>
+                              )}
+                            </div>
+                          )}
+                          {m.content && <p className="whitespace-pre-wrap">{m.content}</p>}
                           <p className={`mt-1 text-[10px] ${isSelf ? 'text-sky-100' : 'text-gray-400'}`}>
                             {new Date(m.created_at).toLocaleString()}
                           </p>
@@ -282,7 +347,24 @@ export function AdminMessagesPage() {
               </div>
 
               {sendError && <p className="mb-2 text-xs font-semibold text-red-600">{sendError}</p>}
+              {attachmentFile && (
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2">
+                  <p className="truncate text-xs text-gray-700">{attachmentFile.name}</p>
+                  <button onClick={() => setAttachmentFile(null)} className="shrink-0 text-gray-400 hover:text-gray-700" aria-label="Remove attachment">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-end gap-2">
+                <label className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sky-100 text-gray-500 hover:bg-sky-50">
+                  <Paperclip className="h-4 w-4" />
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    className="hidden"
+                    onChange={(e) => setAttachmentFile(e.target.files?.[0] || null)}
+                  />
+                </label>
                 <textarea
                   value={reply}
                   onChange={(e) => setReply(e.target.value)}
@@ -298,7 +380,7 @@ export function AdminMessagesPage() {
                 />
                 <button
                   onClick={() => void handleSend()}
-                  disabled={!reply.trim() || isSending}
+                  disabled={(!reply.trim() && !attachmentFile) || isSending}
                   className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 disabled:opacity-40"
                   aria-label="Send"
                 >
