@@ -543,7 +543,12 @@ export default function App() {
       (!isAuthenticated && ['/explore', '/map', '/for-you'].includes(location.pathname))
     ) && <MobileBottomNav />}
     {isAuthenticated && user?.onboardingCompleted && <GlobalReviewPrompt />}
-    {isAuthenticated && user?.onboardingCompleted && <ChatbotWidget />}
+    {/* Client/freelancer-facing support assistant ("What's my booking
+        status?", "How do I become a freelancer?") - none of its suggested
+        prompts or backend context apply to an admin's own account, and the
+        floating bubble/panel otherwise sits on top of admin page content
+        with no way to tell it isn't part of the admin UI. */}
+    {isAuthenticated && user?.onboardingCompleted && user.role !== 'admin' && <ChatbotWidget />}
     {isAuthenticated && user?.onboardingCompleted && <AppGuide />}
     {isAuthenticated && user?.onboardingCompleted && user.role === 'freelancer' && <PremiumPromo />}
     {isAuthenticated && <NotificationToastHost />}
