@@ -55,6 +55,11 @@ interface GroupRequestPrefillState {
   prefillScheduleTime?: string;
   prefillScheduleEndTime?: string;
   prefillCurrency?: string;
+  // Set when arriving here via FreelancerProfile.tsx's "Add More
+  // Freelancer" - lets Back return to that exact profile with the
+  // single-freelancer booking form restored, instead of just the bare
+  // profile page (see FreelancerProfile.tsx's own reopenBookingForm effect).
+  returnTo?: { profileId: string; formData: any };
 }
 
 export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
@@ -369,13 +374,29 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     navigate('/requests');
   };
 
+  // The returnTo state (set by FreelancerProfile.tsx's "Add More
+  // Freelancer") takes priority over the generic onBack prop, since a
+  // plain navigate(-1) lands back on the same profile URL but doesn't
+  // reopen the booking form a route remount just closed.
+  const handleBack = () => {
+    const state = routerLocation.state as GroupRequestPrefillState | null;
+    if (state?.returnTo?.profileId) {
+      navigate(`/profile/${state.returnTo.profileId}`, {
+        replace: true,
+        state: { reopenBookingForm: true, formData: state.returnTo.formData },
+      });
+      return;
+    }
+    onBack();
+  };
+
   return (
     <div className="relative min-h-screen pb-20">
       <PageBackdrop />
       <div className="relative z-10">
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-lg border-b border-sky-100">
         <div className="mx-auto max-w-2xl px-4 py-4">
-          <button onClick={onBack} className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black">
+          <button onClick={handleBack} className="mb-3 flex items-center gap-2 font-semibold text-gray-900 transition-colors hover:text-black">
             <ChevronLeft className="h-5 w-5" />
             Back
           </button>

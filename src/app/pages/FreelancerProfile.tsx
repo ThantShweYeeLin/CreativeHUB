@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router';
+import { useLocation, useNavigate, useParams } from 'react-router';
 import { ArrowLeft, Ban, Briefcase, Check, ChevronDown, ChevronLeft, Edit, Flag, Heart, Info, Mail, MapPin, MessageCircle, Phone, Send, Share2, Sparkles, Star, Users, X } from 'lucide-react';
 import type { PostShareMethod } from '../../lib/database.types';
 import { PostShareMenu } from '../../components/PostShareMenu';
@@ -50,6 +50,9 @@ const REVIEWS_PREVIEW_COUNT = 3;
 export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: FreelancerProfileProps) {
   const { id } = useParams();
   const navigate = useNavigate();
+  // Named routerLocation, not location — profile?.location (the
+  // freelancer's address text) already owns that name further down.
+  const routerLocation = useLocation();
   const { user } = useAuth();
   const { currency: preferredCurrency } = useCurrency();
   const [profile, setProfile] = useState<any | null>(null);
@@ -825,9 +828,30 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         prefillScheduleTime: formData.scheduleTime || undefined,
         prefillScheduleEndTime: formData.scheduleEndTime || undefined,
         prefillCurrency: 'THB',
+        // So Group Request's own "Back" button can return here with this
+        // exact form restored (see the reopenBookingForm effect below) —
+        // separate from the prefill* fields above, which are a lossy,
+        // flattened copy Group Request's own form reads (e.g. "other"
+        // purpose/location collapsed to plain text). This carries the
+        // real formData shape (including which option was "other" and its
+        // custom text) for an exact restore, not a re-interpreted guess.
+        returnTo: targetFreelancerUserId ? { profileId: targetFreelancerUserId, formData } : undefined,
       },
     });
   };
+
+  // The other half of returnTo above — Group Request's "Back" button
+  // navigates here with { reopenBookingForm: true, formData }, since
+  // leaving this page (even back to the exact same URL) remounts it and
+  // resets all local state, including which modal was open. Runs once on
+  // arrival only, same as Group Request's own prefill effect.
+  useEffect(() => {
+    const state = routerLocation.state as { reopenBookingForm?: boolean; formData?: typeof formData } | null;
+    if (!state?.reopenBookingForm || !state.formData) return;
+    setFormData(state.formData);
+    setShowBookingForm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openPostFocus = async (postId: string, options?: { focusComment?: boolean }) => {
     const stateKey = String(postId);
