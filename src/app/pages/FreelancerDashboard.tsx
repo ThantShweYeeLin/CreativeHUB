@@ -32,6 +32,7 @@ import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { RequestChatThread } from '../../components/common/RequestChatThread';
 import { CounterOfferModal } from '../../components/common/CounterOfferModal';
+import { ErrorDialog } from '../components/common/ErrorDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { convertAmount, formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
@@ -91,6 +92,12 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
   const [requests, setRequests] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Easy to miss as a small inline banner, especially after a wait - a
+  // booking-creation failure (most commonly the slot being taken by someone
+  // else between viewing and accepting) needs a "click OK" modal instead.
+  // Separate from `error` above (which stays inline for everything else on
+  // this page) so only these specific failures get the blocking treatment.
+  const [blockingError, setBlockingError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
   const [highlightRequestId, setHighlightRequestId] = useState<string | null>(null);
@@ -398,7 +405,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
 
       const { error: acceptError } = await acceptRequestAndCreateBooking(request);
       if (acceptError) {
-        setError(acceptError.message);
+        setBlockingError(acceptError.message);
         return;
       }
     }
@@ -529,7 +536,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
     const counterPrice = Number(request.counter_price);
     const { error: acceptError } = await acceptRequestAndCreateBooking(request, counterPrice);
     if (acceptError) {
-      setError(acceptError.message);
+      setBlockingError(acceptError.message);
       return;
     }
 
@@ -1781,6 +1788,7 @@ export function FreelancerDashboard({ onBack, section, initialOpenRequestId }: F
           }}
         />
       )}
+      {blockingError && <ErrorDialog message={blockingError} onClose={() => setBlockingError(null)} title="Unable to accept this request" />}
       </div>
     </div>
   );

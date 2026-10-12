@@ -29,6 +29,7 @@ import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { TagSelector } from '../../components/common/TagSelector';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
+import { ErrorDialog } from '../components/common/ErrorDialog';
 import { Calendar } from '../components/ui/calendar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
@@ -996,7 +997,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                   </div>
                 )}
 
-                {submitError && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{submitError}</div>}
+                {submitError && <ErrorDialog message={submitError} onClose={() => setSubmitError(null)} />}
 
                 <div className="space-y-4">
                   {sortedCategoryMatches.map((match) => {

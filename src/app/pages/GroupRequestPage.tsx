@@ -5,6 +5,7 @@ import { Avatar } from '../../components/common/Avatar';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { LeafletLocationPicker, type LocationPoint } from '../../components/common/LeafletLocationPicker';
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
+import { ErrorDialog } from '../components/common/ErrorDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { DataService } from '../../lib/dataService';
@@ -80,6 +81,10 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which stays inline elsewhere on this page) - the
+  // final submission failing server-side is easy to miss as a small banner
+  // above a long multi-freelancer form, so this one gets a "click OK" modal.
+  const [blockingError, setBlockingError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -357,7 +362,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
     setIsSubmitting(false);
 
     if (requestError) {
-      setError((requestError as any).message || 'Unable to send group request.');
+      setBlockingError((requestError as any).message || 'Unable to send group request.');
       return;
     }
 
@@ -641,6 +646,7 @@ export function GroupRequestPage({ onBack }: GroupRequestPageProps) {
       {isLocationPickerOpen && (
         <LeafletLocationPicker initialPoint={location} onCancel={() => setIsLocationPickerOpen(false)} onConfirm={handleLocationPicked} />
       )}
+      {blockingError && <ErrorDialog message={blockingError} onClose={() => setBlockingError(null)} />}
       </div>
     </div>
   );

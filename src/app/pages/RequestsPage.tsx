@@ -8,6 +8,7 @@ import { LeafletLocationPicker, type LocationPoint } from '../../components/comm
 import { LeafletLocationPreview } from '../../components/common/LeafletLocationPreview';
 import { RequestChatThread } from '../../components/common/RequestChatThread';
 import { CounterOfferModal } from '../../components/common/CounterOfferModal';
+import { ErrorDialog } from '../components/common/ErrorDialog';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
 import { FeedService } from '../../lib/feedService';
@@ -109,6 +110,11 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
   const [groupMemberNamesByRequest, setGroupMemberNamesByRequest] = useState<Record<string, string[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which stays inline for everything else here) -
+  // a booking-creation failure (slot taken by someone else, an overlap, ...)
+  // is easy to miss as a small banner above a form, so these two specific
+  // cases get a "click OK" modal instead.
+  const [blockingError, setBlockingError] = useState<string | null>(null);
   const [editingRequest, setEditingRequest] = useState<any | null>(null);
   const [availableFreelancers, setAvailableFreelancers] = useState<
     Array<{ id: string; full_name: string; title: string; skills: string[]; hourlyRate: number | null; rateCurrency: string }>
@@ -524,7 +530,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     });
 
     if (response.error) {
-      setError((response.error as any).message || 'Unable to update request.');
+      setBlockingError((response.error as any).message || 'Unable to update request.');
       return;
     }
 
@@ -726,7 +732,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
     const counterPrice = Number(normalizedRequest.counterPrice);
     const { error: acceptError } = await acceptRequestAndCreateBooking(rawRequest, counterPrice);
     if (acceptError) {
-      setError(acceptError.message);
+      setBlockingError(acceptError.message);
       return;
     }
 
@@ -1717,6 +1723,7 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         />,
         document.body
       )}
+      {blockingError && <ErrorDialog message={blockingError} onClose={() => setBlockingError(null)} />}
       </div>
     </div>
   );

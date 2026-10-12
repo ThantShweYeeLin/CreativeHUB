@@ -31,6 +31,7 @@ import { LikesListModal } from '../../components/posts/LikesListModal';
 import { PhotoViewerModal } from '../../components/posts/PhotoViewerModal';
 import { AuthPromptModal } from '../components/AuthPromptModal';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
+import { ErrorDialog } from '../components/common/ErrorDialog';
 import { buildCommentThreads, buildMentionPrefill, getReplyKey, hasReplyContent } from '../../lib/commentThreads';
 import logoImage from '../../imports/logo.png';
 import { isBookableLocation } from '../../lib/serviceLocations';
@@ -103,6 +104,11 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [completedProjects, setCompletedProjects] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which stays inline elsewhere on this page) - a
+  // booking-request submission failing server-side (unfinished booking,
+  // blocked user, paused freelancer, ...) is easy to miss as a small banner
+  // above a long form, so this one gets a "click OK" modal instead.
+  const [blockingError, setBlockingError] = useState<string | null>(null);
   const [isFavorited, setIsFavorited] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [isFollowedByTarget, setIsFollowedByTarget] = useState(false);
@@ -733,7 +739,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     // is the database's bookings_no_overlap exclusion constraint, applied
     // once the freelancer actually accepts (see DataService.createBooking).
     if (!isRangeAvailable(freelancerBookings, freelancerBlockedDates, formData.scheduleDate, formData.scheduleTime, formData.scheduleEndTime)) {
-      setError('This freelancer is already occupied during that time range. Please choose a different slot.');
+      setBlockingError('This freelancer is already occupied during that time range. Please choose a different slot.');
       return;
     }
 
@@ -763,7 +769,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
     });
 
     if (requestError) {
-      setError((requestError as any).message || 'Unable to send booking request.');
+      setBlockingError((requestError as any).message || 'Unable to send booking request.');
       setIsSubmittingRequest(false);
       return;
     }
@@ -2481,6 +2487,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         />,
         document.body
       )}
+      {blockingError && <ErrorDialog message={blockingError} onClose={() => setBlockingError(null)} />}
       </div>
     </div>
   );
