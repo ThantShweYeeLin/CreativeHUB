@@ -1,6 +1,7 @@
 import { Router } from 'express'; ///to group related API routes.
 import authRouter from './auth.js';
 import accountRouter from './account.js';
+import adminRouter from './admin.js';
 import chatbotRouter from './chatbot.js';
 import paymentsRouter from './payments.js';
 import subscriptionsRouter from './subscriptions.js';
@@ -25,6 +26,7 @@ router.use(requireAuth);
 router.use(generalApiRateLimit);
 //router.use('/feed', feedRouter);
 router.use('/account', accountRouter);
+router.use('/admin', adminRouter);
 router.use('/chatbot', chatbotRateLimit, chatbotRouter);
 router.use('/payments', paymentsRouter);
 router.use('/subscriptions', subscriptionsRouter);

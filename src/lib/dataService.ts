@@ -1942,6 +1942,16 @@ export class DataService {
     return { data, error };
   }
 
+  // The RPC above writes account_status (what the app itself enforces via
+  // RLS/triggers - see supabase/account_ban_enforcement.sql). This is the
+  // separate, Supabase-Auth-layer half: it needs the service-role key, so
+  // it's a backend call, not a direct RPC. Only meaningful for the
+  // banned <-> not-banned transition - AccountStatusActions.tsx only calls
+  // this when that's what's actually changing, not for pause/suspend.
+  static async setAuthBanStatus(userId: string, banned: boolean) {
+    return this.premiumApi('/admin/ban', { userId, banned });
+  }
+
   static async uploadReportEvidencePhoto(userId: string, file: File) {
     const path = `${userId}/${Date.now()}-${file.name}`;
     const { error } = await supabase.storage.from('report-evidence').upload(path, file, {

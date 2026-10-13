@@ -19,6 +19,7 @@ import { BootSplash } from './components/BootSplash';
 import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { BannedScreen } from './pages/BannedScreen';
 
 // Authenticated page imports — lazy so each route's code downloads only
 // when a signed-in user actually navigates there, instead of one ~8.7MB
@@ -112,7 +113,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
 }
 
 export default function App() {
-  const { loading, isAuthenticated, user } = useAuth();
+  const { loading, isAuthenticated, isBanned, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -150,6 +151,14 @@ export default function App() {
     return <SupabaseSetupScreen />;
   }
 
+  // Takes over every route - a banned account has no business reaching
+  // Explore, a dashboard, or anything else, and showing a real explanation
+  // here beats a blank page or a silent bounce back to /login with no
+  // context. See BannedScreen.tsx and supabase/account_ban_enforcement.sql.
+  if (isAuthenticated && isBanned) {
+    return <BannedScreen />;
+  }
+
   return (
     <>
     <Suspense fallback={<LoadingScreen />}>
@@ -173,7 +182,7 @@ export default function App() {
           a signed-up-but-incomplete user still finishes onboarding first. */}
       {(!isAuthenticated || user?.onboardingCompleted) && (
         <>
-          <Route path="/" element={<Navigate to="/explore" replace />} />
+          <Route path="/" element={<Navigate to="/for-you" replace />} />
           <Route
             path="/explore"
             element={

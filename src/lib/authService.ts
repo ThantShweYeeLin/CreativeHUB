@@ -41,6 +41,8 @@ export interface AuthUser {
   pronouns: string | null;
   emailConfirmedAt: string | null;
   onboardingCompleted: boolean;
+  accountStatus: 'active' | 'paused' | 'suspended' | 'banned';
+  accountStatusReason: string | null;
 }
 
 class AuthService {
@@ -61,6 +63,14 @@ class AuthService {
 
     if (lower.includes('invalid login credentials')) {
       return new Error('Incorrect email or password. Please try again.');
+    }
+
+    // Set by POST /admin/ban (server/src/routes/admin.ts) via ban_duration -
+    // GoTrue rejects sign-in entirely once that's set, before this app ever
+    // sees a session to read account_status from, so this is the one place
+    // a banned user can still be told why, right on the login form.
+    if (error?.code === 'user_banned' || lower.includes('banned')) {
+      return new Error('This account has been banned. Contact CreativeHUB support for help with any existing bookings.');
     }
 
     if (lower.includes('invalid email')) {
@@ -249,6 +259,8 @@ class AuthService {
           pronouns: null,
           emailConfirmedAt: session.user.email_confirmed_at ?? null,
           onboardingCompleted: false,
+          accountStatus: 'active',
+          accountStatusReason: null,
         },
         error: null,
       };
@@ -295,6 +307,8 @@ class AuthService {
           pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: authData.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
+          accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
+          accountStatusReason: (userProfile as any).account_status_reason ?? null,
         },
         error: null,
       };
@@ -399,6 +413,8 @@ class AuthService {
           pronouns: userProfile.pronouns ?? null,
           emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
           onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
+          accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
+          accountStatusReason: (userProfile as any).account_status_reason ?? null,
         },
         error: null,
       };
@@ -508,6 +524,8 @@ class AuthService {
             pronouns: userProfile.pronouns ?? null,
             emailConfirmedAt: session.user.email_confirmed_at ?? null,
             onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
+            accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
+            accountStatusReason: (userProfile as any).account_status_reason ?? null,
           });
         }
       } else {

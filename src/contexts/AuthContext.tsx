@@ -12,6 +12,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isBanned: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signOut,
         isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
+        isBanned: user?.accountStatus === 'banned',
       }}
     >
       {children}

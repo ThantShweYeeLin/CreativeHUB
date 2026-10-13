@@ -29,11 +29,27 @@ export function AccountStatusActions({
     setIsPending(true);
     setError(null);
     const response = await DataService.adminSetAccountStatus(userId, confirming, reason.trim() || undefined);
-    setIsPending(false);
     if (response.error) {
+      setIsPending(false);
       setError((response.error as any).message || 'Unable to update account status.');
       return;
     }
+
+    // Only the banned <-> not-banned edge actually needs the Auth-layer
+    // call (see DataService.setAuthBanStatus) - pausing/suspending/
+    // reactivating from those never touches it. Account status itself is
+    // already saved at this point either way, so a failure here is
+    // reported but doesn't roll back or re-block the confirmed change.
+    if (confirming === 'banned' || status === 'banned') {
+      const authResponse = await DataService.setAuthBanStatus(userId, confirming === 'banned');
+      if (authResponse.error) {
+        setIsPending(false);
+        setError((authResponse.error as any).message || 'Account status saved, but updating sign-in access failed.');
+        return;
+      }
+    }
+
+    setIsPending(false);
     setConfirming(null);
     setReason('');
     await onChanged();
