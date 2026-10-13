@@ -62,6 +62,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
   const [majorSkillExperienceLevel, setMajorSkillExperienceLevel] = useState<string | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [freelancerBookings, setFreelancerBookings] = useState<any[]>([]);
+  const [freelancerCancellationCount, setFreelancerCancellationCount] = useState(0);
   // Separate from freelancerBookings (which is deliberately one-directional -
   // every booking this PROFILE has as the freelancer, across any client, for
   // availability/calendar purposes). A booking between the viewer and this
@@ -323,6 +324,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         followedByTargetResponse,
         followCountsResponse,
         postsResponse,
+        cancellationCountResponse,
       ] = await Promise.all([
         freelancerResponse.data?.id ? DataService.getFreelancerBlockedDates(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
         freelancerResponse.data?.id ? DataService.getFreelancerSkills(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
@@ -340,6 +342,13 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),
         DataService.getFollowCounts(targetId),
         DataService.getClientPostsByClientId(targetId, 12, user?.id),
+        // Trust level's cancellation penalty needs this for EVERY viewer,
+        // including a signed-out guest - bookingsResponse above can't be
+        // reused for it, since RLS only ever returns this freelancer's own
+        // bookings to the freelancer (or the specific client on each one),
+        // never to a browsing prospective client (see
+        // supabase/freelancer_cancellation_count.sql).
+        DataService.getFreelancerCancellationCount(targetId),
       ]);
 
       if (!isMounted) {
@@ -353,6 +362,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
 
       setReviews(reviewsResponse.data || []);
       setFreelancerBookings(bookingsResponse.data || []);
+      setFreelancerCancellationCount(cancellationCountResponse.count);
 
       if (shouldCheckFollowState) {
         if (!favoriteResponse.error) {
@@ -540,8 +550,9 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
           hasPricing: Boolean(freelancerProfile?.pricing_type || freelancerProfile?.hourly_rate),
           hasAvailability: (freelancerProfile?.working_days || []).length > 0,
         },
+        freelancerCancellationCount,
       }),
-    [rating, totalReviews, freelancerProfile, socialLinks, profile, skills]
+    [rating, totalReviews, freelancerProfile, socialLinks, profile, skills, freelancerCancellationCount]
   );
 
   const focusedPost = useMemo(() => profilePosts.find((post: any) => String(post.id) === focusedPostId) || null, [profilePosts, focusedPostId]);

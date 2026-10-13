@@ -15,6 +15,12 @@ export interface TrustLevelInput {
     hasPricing: boolean;
     hasAvailability: boolean;
   };
+  // Bookings this freelancer themselves cancelled (bookings.cancelled_by =
+  // their own id - never a client-initiated cancellation, which isn't
+  // their fault to be penalized for). Always recomputed from real booking
+  // history, same as every other input here - there's no separately
+  // stored, decaying "penalty" counter to drift out of sync with it.
+  freelancerCancellationCount: number;
 }
 
 export interface TrustLevel {
@@ -46,6 +52,13 @@ export function computeTrustLevel(input: TrustLevelInput): TrustLevel {
     score += (input.rating / 5) * 15;
     score += Math.min(input.totalReviews, 10);
   }
+
+  // Cancelling a booking you already committed to is the one thing here
+  // that's a direct action, not a passive signal - weighted accordingly
+  // (8 points is roughly half a completeness field's worth of a single
+  // review), capped at 5 so a freelancer with a rough patch years ago
+  // isn't permanently floored once they've since built up everything else.
+  score -= Math.min(input.freelancerCancellationCount, 5) * 8;
 
   score = Math.max(0, Math.min(100, Math.round(score)));
 

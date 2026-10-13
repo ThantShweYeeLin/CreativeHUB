@@ -1527,6 +1527,16 @@ export class DataService {
     return { data, error };
   }
 
+  // Public-safe aggregate for trustLevel.ts's cancellation penalty - see
+  // supabase/freelancer_cancellation_count.sql for why this has to be an
+  // RPC rather than a client-side count of getFreelancerBookings (RLS
+  // hides a freelancer's own bookings rows from anyone else, which would
+  // make the count silently 0 for the exact audience it's meant to warn).
+  static async getFreelancerCancellationCount(freelancerId: string) {
+    const { data, error } = await supabase.rpc('get_freelancer_cancellation_count' as any, { p_freelancer_id: freelancerId });
+    return { count: error ? 0 : Number(data || 0), error };
+  }
+
   static async getFreelancerBookings(freelancerId: string) {
     const { data, error } = await supabase
       .from('bookings')
