@@ -618,13 +618,19 @@ export class DataService {
     return { error };
   }
 
-  static async reportAndBlock(reporterId: string, reportedUserId: string, conversationId?: string | null) {
+  static async reportAndBlock(
+    reporterId: string,
+    reportedUserId: string,
+    conversationId?: string | null,
+    groupConversationId?: string | null
+  ) {
     const { error: reportError } = await supabase
       .from('message_reports' as any)
       .insert({
         reporter_id: reporterId,
         reported_user_id: reportedUserId,
         conversation_id: conversationId || null,
+        group_conversation_id: groupConversationId || null,
         reason: 'spam',
       } as any);
 
@@ -3045,6 +3051,18 @@ export class DataService {
       .order('joined_at', { ascending: true });
 
     return { data: data || [], error };
+  }
+
+  // "Conversation owners can add members" (see rls_fixes.sql) already
+  // restricts this to the group's creator - same trust boundary as who's
+  // allowed to create the group chat in the first place. unique(conversation_id,
+  // user_id) makes re-adding an already-present member a 409 the caller can
+  // just ignore rather than something this needs to pre-check.
+  static async addGroupConversationMember(conversationId: string, userId: string) {
+    const { error } = await supabase
+      .from('group_conversation_members')
+      .insert({ conversation_id: conversationId, user_id: userId, role: 'member' });
+    return { error };
   }
 
   // Each event-team group chat's members are each independently booked for

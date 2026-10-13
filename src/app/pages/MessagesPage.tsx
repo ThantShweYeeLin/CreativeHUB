@@ -140,6 +140,15 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [workUserIds, setWorkUserIds] = useState<Set<string>>(new Set());
   const [showGroupMembers, setShowGroupMembers] = useState(false);
   const [groupMemberCategories, setGroupMemberCategories] = useState<Record<string, string>>({});
+  const [showAddGroupMembers, setShowAddGroupMembers] = useState(false);
+  const [addGroupMemberIds, setAddGroupMemberIds] = useState<string[]>([]);
+  const [isAddingGroupMembers, setIsAddingGroupMembers] = useState(false);
+  const [addGroupMemberError, setAddGroupMemberError] = useState<string | null>(null);
+  // Per-member id, so one row's block/report doesn't disable every row's
+  // button while its own request is in flight.
+  const [busyGroupMemberAction, setBusyGroupMemberAction] = useState<Record<string, 'blocking' | 'reporting'>>({});
+  const [groupMemberActionError, setGroupMemberActionError] = useState<string | null>(null);
+  const [handledGroupMemberIds, setHandledGroupMemberIds] = useState<Set<string>>(new Set());
   const [showBookingSummaryDetails, setShowBookingSummaryDetails] = useState(false);
   const [groupEventBooking, setGroupEventBooking] = useState<any | null>(null);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
@@ -182,6 +191,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   useEffect(() => {
     setShowGroupMembers(false);
     setShowBookingSummaryDetails(false);
+    setShowAddGroupMembers(false);
+    setAddGroupMemberIds([]);
+    setAddGroupMemberError(null);
+    setGroupMemberActionError(null);
+    setHandledGroupMemberIds(new Set());
   }, [selectedConversationId]);
 
   useEffect(() => {
@@ -798,6 +812,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             memberCount: (groupMembersByConversationId[groupId] || []).length,
             lastMessageAt: conversation.last_message_at,
             relatedGroupRequestId: conversation.related_group_request_id || null,
+            createdBy: conversation.created_by || null,
           };
         }
 
@@ -1277,6 +1292,77 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
     removeActiveConversationFromList();
     setIsBlockingContact(false);
+  };
+
+  // Block/report a specific group member - unlike handleBlockContact above,
+  // this never closes or leaves the conversation: blocking someone only
+  // ever stops THEM reaching you 1:1 (same global blocked_users effect as
+  // everywhere else in the app), it doesn't remove either of you from a
+  // group chat you're both still legitimately part of. handledGroupMemberIds
+  // just swaps that row's buttons for a confirmation so the action reads as
+  // done, without needing to touch the member list itself.
+  const handleBlockGroupMember = async (memberId: string) => {
+    if (!user?.id || memberId === user.id || busyGroupMemberAction[memberId]) return;
+    setBusyGroupMemberAction((current) => ({ ...current, [memberId]: 'blocking' }));
+    setGroupMemberActionError(null);
+    const response = await DataService.blockUser(user.id, memberId);
+    setBusyGroupMemberAction((current) => {
+      const next = { ...current };
+      delete next[memberId];
+      return next;
+    });
+    if (response.error) {
+      setGroupMemberActionError((response.error as any)?.message || 'Unable to block this member.');
+      return;
+    }
+    setHandledGroupMemberIds((current) => new Set(current).add(memberId));
+  };
+
+  const handleReportGroupMember = async (memberId: string) => {
+    if (!user?.id || !activeConversation?.isGroup || memberId === user.id || busyGroupMemberAction[memberId]) return;
+    setBusyGroupMemberAction((current) => ({ ...current, [memberId]: 'reporting' }));
+    setGroupMemberActionError(null);
+    const response = await DataService.reportAndBlock(user.id, memberId, null, activeConversation.rawId);
+    setBusyGroupMemberAction((current) => {
+      const next = { ...current };
+      delete next[memberId];
+      return next;
+    });
+    if (response.error) {
+      setGroupMemberActionError((response.error as any)?.message || 'Unable to report this member.');
+      return;
+    }
+    setHandledGroupMemberIds((current) => new Set(current).add(memberId));
+  };
+
+  const toggleAddGroupMember = (userId: string) => {
+    setAddGroupMemberIds((current) =>
+      current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]
+    );
+  };
+
+  const handleAddGroupMembers = async () => {
+    if (!activeConversation?.isGroup || addGroupMemberIds.length === 0) return;
+    setIsAddingGroupMembers(true);
+    setAddGroupMemberError(null);
+
+    for (const memberId of addGroupMemberIds) {
+      const response = await DataService.addGroupConversationMember(activeConversation.rawId, memberId);
+      if (response.error) {
+        setAddGroupMemberError((response.error as any)?.message || 'Unable to add one or more people.');
+        setIsAddingGroupMembers(false);
+        return;
+      }
+    }
+
+    const refreshed = await DataService.getGroupConversationMembers(activeConversation.rawId);
+    if (!refreshed.error) {
+      setGroupMembersByConversationId((current) => ({ ...current, [activeConversation.rawId]: refreshed.data }));
+    }
+
+    setAddGroupMemberIds([]);
+    setShowAddGroupMembers(false);
+    setIsAddingGroupMembers(false);
   };
 
   return (
@@ -2263,50 +2349,164 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       </div>
 
       {showGroupMembers && activeConversation?.isGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowGroupMembers(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => {
+            setShowGroupMembers(false);
+            setShowAddGroupMembers(false);
+          }}
+        >
           <div
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(56,189,248,0.25)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-900">{activeConversation.name}</h3>
-              <button onClick={() => setShowGroupMembers(false)} aria-label="Close" className="rounded-full p-1.5 text-gray-400 hover:bg-sky-50 hover:text-gray-700">
+              <button
+                onClick={() => {
+                  setShowGroupMembers(false);
+                  setShowAddGroupMembers(false);
+                }}
+                aria-label="Close"
+                className="rounded-full p-1.5 text-gray-400 hover:bg-sky-50 hover:text-gray-700"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
-              {Math.max(0, Number(activeConversation.memberCount || 0))} members
-            </p>
-            <div className="max-h-80 space-y-1 overflow-y-auto">
-              {(groupMembersByConversationId[String(activeConversation.rawId)] || []).map((member: any) => (
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                {Math.max(0, Number(activeConversation.memberCount || 0))} members
+              </p>
+              {/* Only the group's creator can add people - matches
+                  "Conversation owners can add members" in
+                  supabase/rls_fixes.sql, the same RLS policy that would
+                  reject this insert from anyone else. */}
+              {String(activeConversation.createdBy) === String(user?.id) && (
                 <button
-                  key={member.user_id}
                   type="button"
-                  onClick={() => {
-                    setShowGroupMembers(false);
-                    onViewProfile?.(member.user_id);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-sky-50"
+                  onClick={() => setShowAddGroupMembers((v) => !v)}
+                  className="flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-800"
                 >
-                  <Avatar
-                    src={member.users?.avatar_url || fallbackProfileImage}
-                    alt={member.users?.full_name || member.users?.email || 'Member'}
-                    gender={member.users?.gender}
-                    sizeClassName="h-10 w-10 rounded-full ring-2 ring-white shadow-sm"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-gray-900">
-                      {member.users?.full_name || member.users?.email || 'Member'}
-                      {String(member.user_id) === String(user?.id) && <span className="ml-1 font-normal text-gray-400">(you)</span>}
-                    </p>
-                    {groupMemberCategories[member.user_id] ? (
-                      <p className="truncate text-xs text-sky-600">{groupMemberCategories[member.user_id]}</p>
-                    ) : workUserIds.has(member.user_id) ? (
-                      <p className="text-xs text-sky-600">Work contact</p>
-                    ) : null}
-                  </div>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add people
                 </button>
-              ))}
+              )}
+            </div>
+
+            {showAddGroupMembers && (
+              <div className="mb-4 rounded-xl border border-sky-100 bg-sky-50/50 p-3">
+                {addGroupMemberError && <p className="mb-2 text-xs font-semibold text-red-600">{addGroupMemberError}</p>}
+                {(() => {
+                  const existingIds = new Set(
+                    (groupMembersByConversationId[String(activeConversation.rawId)] || []).map((m: any) => String(m.user_id))
+                  );
+                  const candidates = mutualUsers.filter((mutual) => !existingIds.has(String(mutual.id)));
+                  if (candidates.length === 0) {
+                    return <p className="px-1 py-2 text-center text-xs text-gray-500">Every mutual is already in this chat.</p>;
+                  }
+                  return (
+                    <div className="max-h-48 space-y-1 overflow-y-auto">
+                      {candidates.map((mutual) => {
+                        const isSelected = addGroupMemberIds.includes(mutual.id);
+                        return (
+                          <button
+                            key={mutual.id}
+                            type="button"
+                            onClick={() => toggleAddGroupMember(mutual.id)}
+                            className={`flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${
+                              isSelected ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white' : 'hover:bg-white'
+                            }`}
+                          >
+                            <Avatar
+                              src={mutual.avatar_url || fallbackProfileImage}
+                              alt={mutual.full_name || mutual.email}
+                              gender={mutual.gender}
+                              sizeClassName="h-8 w-8 rounded-full"
+                            />
+                            <span className={`truncate text-sm font-semibold ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                              {mutual.full_name || mutual.email}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+                <button
+                  type="button"
+                  onClick={() => void handleAddGroupMembers()}
+                  disabled={addGroupMemberIds.length === 0 || isAddingGroupMembers}
+                  className="mt-3 w-full rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {isAddingGroupMembers ? 'Adding...' : `Add ${addGroupMemberIds.length || ''}`.trim()}
+                </button>
+              </div>
+            )}
+
+            {groupMemberActionError && <p className="mb-2 text-xs font-semibold text-red-600">{groupMemberActionError}</p>}
+
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {(groupMembersByConversationId[String(activeConversation.rawId)] || []).map((member: any) => {
+                const isSelf = String(member.user_id) === String(user?.id);
+                const busy = busyGroupMemberAction[member.user_id];
+                const handled = handledGroupMemberIds.has(member.user_id);
+                return (
+                  <div key={member.user_id} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-sky-50">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGroupMembers(false);
+                        onViewProfile?.(member.user_id);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <Avatar
+                        src={member.users?.avatar_url || fallbackProfileImage}
+                        alt={member.users?.full_name || member.users?.email || 'Member'}
+                        gender={member.users?.gender}
+                        sizeClassName="h-10 w-10 rounded-full ring-2 ring-white shadow-sm"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-gray-900">
+                          {member.users?.full_name || member.users?.email || 'Member'}
+                          {isSelf && <span className="ml-1 font-normal text-gray-400">(you)</span>}
+                        </p>
+                        {groupMemberCategories[member.user_id] ? (
+                          <p className="truncate text-xs text-sky-600">{groupMemberCategories[member.user_id]}</p>
+                        ) : workUserIds.has(member.user_id) ? (
+                          <p className="text-xs text-sky-600">Work contact</p>
+                        ) : null}
+                      </div>
+                    </button>
+                    {!isSelf && (
+                      handled ? (
+                        <span className="shrink-0 text-xs font-semibold text-gray-400">Handled</span>
+                      ) : (
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handleBlockGroupMember(member.user_id)}
+                            disabled={!!busy}
+                            title="Block this member"
+                            className="rounded-lg border border-sky-200 px-2 py-1 text-[11px] font-semibold text-gray-600 hover:bg-sky-50 disabled:opacity-50"
+                          >
+                            {busy === 'blocking' ? '...' : 'Block'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleReportGroupMember(member.user_id)}
+                            disabled={!!busy}
+                            title="Report as spam and block"
+                            className="rounded-lg border border-red-200 px-2 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          >
+                            {busy === 'reporting' ? '...' : 'Report'}
+                          </button>
+                        </div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
