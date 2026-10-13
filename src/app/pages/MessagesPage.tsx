@@ -304,7 +304,17 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             return null;
           }
 
-          return directItems[0]?.id
+          // directItems[0] isn't necessarily the most recent REAL
+          // conversation - ensureConversation() stamps last_message_at at
+          // creation time too, so an empty, never-messaged thread (e.g. a
+          // "Message" button clicked and abandoned) can sort above every
+          // actual conversation purely by timing. Auto-opening that empty
+          // thread made it pass the "hide until a message exists, except
+          // the one currently open" filter below by accident - it then
+          // disappeared the moment the user picked an unrelated real
+          // conversation, which read as a bug (a conversation vanishing),
+          // not as the empty-thread-hiding behavior working as intended.
+          return directItems.find((item: any) => item.has_messages !== false)?.id
             ?? (groupItems[0]?.id ? toGroupConversationKey(String(groupItems[0].id)) : null);
         });
       }
