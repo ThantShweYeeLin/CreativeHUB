@@ -26,13 +26,25 @@ import './styles/index.css';
 // index.html and its real chunk manifest. Guarded to at most once per 10s
 // so a genuinely broken deploy (not just a stale chunk from before the
 // latest one) shows an error instead of reloading forever.
-window.addEventListener('vite:preloadError', () => {
+function recoverFromStaleChunk() {
   const key = 'creativehub:chunk-reload-at';
   const last = Number(sessionStorage.getItem(key) || 0);
   const now = Date.now();
   if (now - last > 10000) {
     sessionStorage.setItem(key, String(now));
-    window.location.reload();
+    // A normal reload can reuse a stale cached index.html. A one-time query
+    // parameter forces the hosting CDN to fetch the current build manifest.
+    const url = new URL(window.location.href);
+    url.searchParams.set('__chunk_recovery', String(now));
+    window.location.replace(url.toString());
+  }
+}
+
+window.addEventListener('vite:preloadError', recoverFromStaleChunk);
+window.addEventListener('unhandledrejection', (event) => {
+  const message = String(event.reason?.message || event.reason || '');
+  if (/Failed to fetch dynamically imported module|Importing a module script failed|Expected a JavaScript-or-Wasm module script/i.test(message)) {
+    recoverFromStaleChunk();
   }
 });
 
@@ -57,4 +69,4 @@ createRoot(root).render(
     </ErrorBoundary>
   </StrictMode>,
 );
-///App decides whether the URL should show Explore or a profile. 
+///App decides whether the URL should show Explore or a profile.
