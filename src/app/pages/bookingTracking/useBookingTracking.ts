@@ -52,7 +52,17 @@ export function useBookingTracking() {
       if (!isMounted) return;
 
       if (response.error || !response.data) {
-        setError((response.error as any)?.message || 'Unable to load booking.');
+        // PGRST116 ("Cannot coerce the result to a single JSON object") is
+        // what .single() throws when RLS filters a query down to zero rows
+        // - a booking that doesn't exist, or one the viewer isn't a
+        // participant on. Either way it's not something a raw PostgREST
+        // error message should ever explain to an end user.
+        const code = (response.error as any)?.code;
+        setError(
+          code === 'PGRST116'
+            ? "This booking doesn't exist, or you don't have access to it."
+            : (response.error as any)?.message || 'Unable to load booking.'
+        );
         setBooking(null);
       } else {
         setBooking(response.data);
