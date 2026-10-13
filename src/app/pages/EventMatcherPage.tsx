@@ -69,6 +69,11 @@ interface RankedCandidate extends EventMatcherCandidate {
   serviceName: string;
   score: number;
   isPremium: boolean;
+  // false when the freelancer never set a starting price/hourly rate -
+  // packagePrice is still a real 0 (so budget-fit math and the offer input
+  // both work without a special case), this only controls display text so
+  // "no rate listed" never reads as "this freelancer charges ฿0".
+  hasListedPrice: boolean;
 }
 
 interface CategoryMatch {
@@ -174,14 +179,21 @@ function buildRankedCandidates(
     ];
     if (!locationCovers(providerLocations, eventLocation)) continue;
 
-    let packagePrice: number | null = null;
+    // A freelancer who never set a starting price/hourly rate (optional,
+    // skippable step in onboarding - see BecomeFreelancerPage.tsx) used to
+    // be silently dropped here entirely, with no error or explanation -
+    // category, availability, location and Premium could all match and
+    // they'd still never appear. Falls back to 0 instead, same reasoning as
+    // the locations-step fix: being invisible to the whole feature is worse
+    // than showing up with no stated rate for the client to negotiate from.
+    let packagePrice = 0;
     let serviceName = category;
-    if (profile.hourly_rate != null) {
+    const hasListedPrice = profile.hourly_rate != null;
+    if (hasListedPrice) {
       const rateCurrency = normalizeCurrencyCode(profile.users?.preferred_currency, 'THB');
       packagePrice = convertAmount(Number(profile.hourly_rate), rateCurrency, currency);
       serviceName = 'Hourly rate';
     }
-    if (packagePrice == null) continue;
 
     const candidate: RankedCandidate = {
       userId: profile.user_id,
@@ -197,6 +209,7 @@ function buildRankedCandidates(
       serviceName,
       score: 0,
       isPremium,
+      hasListedPrice,
     };
     candidate.score = scoreEventCandidate(candidate, { styles, budgetForCategory });
     candidates.push(candidate);
@@ -443,10 +456,17 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       false
     );
 
-    // Premium first, free only filling in what's left - capped at 3 so the
-    // picker stays a short, real "who should I pick" choice instead of a
-    // long list to scroll.
-    const ranked = [...premiumCandidates, ...freeCandidates].slice(0, 3);
+    // Premium first, free only filling in what's left. Used to be capped at
+    // 3 here, which meant anyone ranked below the top 3 (e.g. no reviews
+    // yet, or no listed price) was permanently unreachable - not just
+    // de-prioritized, but literally never fetched into state, so neither
+    // scrolling nor "Search by name..." could ever find them. The card's
+    // own selected/collapsed view still only ever shows one candidate at a
+    // time, so nothing here changes what a client sees by default - this
+    // only changes whether the rest of a real, qualifying category's
+    // freelancers are actually searchable once they expand "See all
+    // options", same as the search box already implies they should be.
+    const ranked = [...premiumCandidates, ...freeCandidates];
     return { category, tier, candidates: ranked, selectedIndex: ranked.length > 0 ? 0 : null };
   };
 
@@ -548,7 +568,13 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       for (const match of categoryMatches) {
         if (next[match.category] !== undefined) continue;
         const candidate = match.selectedIndex !== null ? match.candidates[match.selectedIndex] : undefined;
-        next[match.category] = candidate?.packagePrice ?? Math.max(1, Math.round(budgetNumber / categoryMatches.length));
+        // candidate.packagePrice is a real 0 (not null) for a candidate with
+        // no listed rate - fall back the same way as "nobody selected yet"
+        // rather than pre-filling a real offer field with ฿0.
+        next[match.category] =
+          candidate && candidate.hasListedPrice && candidate.packagePrice != null
+            ? candidate.packagePrice
+            : Math.max(1, Math.round(budgetNumber / categoryMatches.length));
         changed = true;
       }
       return changed ? next : current;
@@ -1133,7 +1159,10 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                             <label htmlFor={`offer-${match.category}`} className="text-xs font-semibold text-gray-600">
                               Your offer
                               {candidate && (
-                                <span className="font-normal text-gray-400"> (min {formatCurrencyAmount(candidate.packagePrice || 0, currency)})</span>
+                                <span className="font-normal text-gray-400">
+                                  {' '}
+                                  ({candidate.hasListedPrice ? `min ${formatCurrencyAmount(candidate.packagePrice || 0, currency)}` : 'rate not listed'})
+                                </span>
                               )}
                             </label>
                             <div
@@ -1185,47 +1214,52 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
                                   return <p className="py-2 text-center text-xs text-gray-400">No freelancers match "{candidateSearch}".</p>;
                                 }
 
-                                return filtered.map(({ option, index }) => {
-                                  const isSelected = index === match.selectedIndex;
-                                  return (
-                                    <div key={option.userId} className="flex items-center gap-3">
-                                      <button
-                                        type="button"
-                                        onClick={() => navigate(`/profile/${option.userId}`)}
-                                        title={`View ${option.fullName}'s profile`}
-                                        className="flex-shrink-0 rounded-full"
-                                      >
-                                        <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
-                                      </button>
-                                      <div className="min-w-0 flex-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => navigate(`/profile/${option.userId}`)}
-                                          className="truncate text-left text-sm font-semibold text-gray-900 hover:underline"
-                                        >
-                                          {option.fullName}
-                                        </button>
-                                        <p className="text-xs text-gray-500">
-                                          {option.serviceName} · {formatCurrencyAmount(option.packagePrice || 0, currency)}
-                                          {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
-                                        </p>
-                                      </div>
-                                      {isSelected ? (
-                                        <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
-                                          Selected
-                                        </span>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => selectCandidate(match.category, index)}
-                                          className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
-                                        >
-                                          Select
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                });
+                                return (
+                                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                                    {filtered.map(({ option, index }) => {
+                                      const isSelected = index === match.selectedIndex;
+                                      return (
+                                        <div key={option.userId} className="flex items-center gap-3">
+                                          <button
+                                            type="button"
+                                            onClick={() => navigate(`/profile/${option.userId}`)}
+                                            title={`View ${option.fullName}'s profile`}
+                                            className="flex-shrink-0 rounded-full"
+                                          >
+                                            <Avatar src={option.avatarUrl || DEFAULT_AVATAR_URL} alt={option.fullName} sizeClassName="w-9 h-9" />
+                                          </button>
+                                          <div className="min-w-0 flex-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => navigate(`/profile/${option.userId}`)}
+                                              className="truncate text-left text-sm font-semibold text-gray-900 hover:underline"
+                                            >
+                                              {option.fullName}
+                                            </button>
+                                            <p className="text-xs text-gray-500">
+                                              {option.serviceName} ·{' '}
+                                              {option.hasListedPrice ? formatCurrencyAmount(option.packagePrice || 0, currency) : 'Rate not listed'}
+                                              {option.rating > 0 && ` · ★ ${option.rating.toFixed(1)}`}
+                                            </p>
+                                          </div>
+                                          {isSelected ? (
+                                            <span className="flex-shrink-0 rounded-full bg-sky-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
+                                              Selected
+                                            </span>
+                                          ) : (
+                                            <button
+                                              type="button"
+                                              onClick={() => selectCandidate(match.category, index)}
+                                              className="flex-shrink-0 rounded-full border-2 border-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-600 transition-colors hover:bg-gradient-to-r hover:from-sky-500 hover:to-blue-600 hover:text-white hover:border-transparent"
+                                            >
+                                              Select
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
                               })()}
                             </div>
                           )}

@@ -856,11 +856,14 @@ export class DataService {
   }
 
   // Same shape as getEventMatcherCandidates, minus the Premium check (see
-  // supabase/event_matcher_fallback_after_filtering.sql) - only ever called
-  // as a second attempt by EventMatcherPage.tsx, after the Premium-only
-  // result comes back empty once date/location/budget filtering is applied,
-  // so a category never shows "no providers" just because the Premium
-  // freelancers who exist happen to be busy or too far that day.
+  // supabase/event_matcher_fallback_after_filtering.sql). EventMatcherPage.tsx's
+  // matchCategory() always calls both this and getEventMatcherCandidates
+  // together and merges the results (Premium candidates ranked first as the
+  // default pick, everyone else filling out the rest of the searchable
+  // list) - not just as a fallback for an empty Premium-only result. Premium
+  // still controls who gets AUTO-RECOMMENDED/notified about a category
+  // first; it was never meant to make a non-Premium freelancer impossible
+  // for a client to find and deliberately pick by name.
   static async getEventMatcherCandidatesAny(category: string, eventDate: string) {
     const { data: rpcProfiles, error } = await (supabase as any).rpc('get_event_matcher_candidates_any', { p_category: category });
     if (error) return { data: { profiles: [], blockedDates: [], bookings: [] }, error };
