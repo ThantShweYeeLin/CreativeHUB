@@ -148,13 +148,14 @@ export function AdminMessagesPage() {
   const selectedOther = otherParticipant(selectedConversation);
 
   // Same reasoning as MessagesPage.tsx's normalizedConversations filter:
-  // ensureConversation() creates the row the moment "Message" is clicked,
-  // before anything's actually been sent - hide it from the list until a
-  // message exists, except the one currently open (so the admin's own
-  // in-progress composer doesn't vanish from the sidebar while typing).
+  // once the admin has opened a conversation they started, it stays in
+  // their own sidebar from then on, even before anything's been sent -
+  // it no longer disappears just because they clicked a different
+  // conversation. The other person still never sees it until a real
+  // message arrives.
   const visibleConversations = conversations
     .filter((c) => !c.is_hidden_for_me)
-    .filter((c) => c.has_messages !== false || c.id === selectedId);
+    .filter((c) => c.has_messages !== false || c.id === selectedId || String(c.initiated_by) === String(user?.id));
 
   // "Delete chat" - hides it from this admin's own inbox only; the other
   // person's copy is untouched, and it reappears if they message again.
@@ -302,7 +303,9 @@ export function AdminMessagesPage() {
                 {isLoadingThread ? (
                   <p className="py-2 text-center text-xs text-gray-500">Loading...</p>
                 ) : messages.length === 0 ? (
-                  <p className="py-2 text-center text-xs text-gray-500">No messages yet.</p>
+                  <p className="py-4 text-center text-xs text-gray-500">
+                    You can start chatting with {selectedOther?.full_name || 'this user'} now.
+                  </p>
                 ) : (
                   messages.map((m) => {
                     const isSelf = m.sender_id === user?.id;

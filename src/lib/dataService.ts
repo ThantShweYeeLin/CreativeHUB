@@ -467,6 +467,45 @@ export class DataService {
     return { data: (data || []) as MutualUserResult[], error };
   }
 
+  // Same shape as getMutualUsers() above, for the same "who can I add to a
+  // group chat" pickers - a real booking relationship (either direction:
+  // freelancers the caller has booked, or clients who've booked the caller)
+  // is its own, separate reason to already know someone, independent of
+  // whether they also happen to follow each other. Scoped to bookings
+  // (not the earlier, not-yet-accepted `requests` stage) and to any status
+  // - even a finished or cancelled booking still means these two people
+  // have genuinely worked together before.
+  static async getBookingContactUsers(userId: string) {
+    const [bookAsClient, bookAsFreelancer] = await Promise.all([
+      supabase.from('bookings').select('freelancer_id').eq('client_id', userId),
+      supabase.from('bookings').select('client_id').eq('freelancer_id', userId),
+    ]);
+
+    if (bookAsClient.error) {
+      return { data: [] as MutualUserResult[], error: bookAsClient.error };
+    }
+    if (bookAsFreelancer.error) {
+      return { data: [] as MutualUserResult[], error: bookAsFreelancer.error };
+    }
+
+    const contactIds = new Set<string>();
+    (bookAsClient.data || []).forEach((row: any) => contactIds.add(row.freelancer_id));
+    (bookAsFreelancer.data || []).forEach((row: any) => contactIds.add(row.client_id));
+    contactIds.delete(userId);
+
+    if (contactIds.size === 0) {
+      return { data: [] as MutualUserResult[], error: null };
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, full_name, email, avatar_url, gender')
+      .in('id', Array.from(contactIds))
+      .order('full_name', { ascending: true });
+
+    return { data: (data || []) as MutualUserResult[], error };
+  }
+
   static async isFollowing(userId: string, targetUserId: string) {
     const { data, error } = await supabase
       .from('followers')

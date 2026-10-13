@@ -115,6 +115,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   const [groupConversations, setGroupConversations] = useState<any[]>([]);
   const [groupMembersByConversationId, setGroupMembersByConversationId] = useState<Record<string, any[]>>({});
   const [mutualUsers, setMutualUsers] = useState<any[]>([]);
+  // Freelancers the viewer currently/previously booked, or clients who've
+  // booked the viewer (if the viewer is a freelancer) - a real booking
+  // relationship is its own reason to already know someone, independent of
+  // mutual-follow. Kept separate from mutualUsers rather than merged into
+  // it: mutualUserIds (below) powers the Friends/Work inbox split, which
+  // needs "mutual-follow" and "has a booking with" to stay two distinct
+  // signals, not collapsed into one.
+  const [bookingContactUsers, setBookingContactUsers] = useState<any[]>([]);
   const [showNewGroupModal, setShowNewGroupModal] = useState(false);
   const [newGroupTitle, setNewGroupTitle] = useState('');
   const [newGroupMemberIds, setNewGroupMemberIds] = useState<string[]>([]);
@@ -205,20 +213,21 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       if (!user?.id) {
         if (isMounted) {
           setMutualUsers([]);
+          setBookingContactUsers([]);
         }
         return;
       }
 
-      const response = await DataService.getMutualUsers(user.id);
+      const [mutualsResponse, bookingContactsResponse] = await Promise.all([
+        DataService.getMutualUsers(user.id),
+        DataService.getBookingContactUsers(user.id),
+      ]);
       if (!isMounted) {
         return;
       }
 
-      if (response.error) {
-        setMutualUsers([]);
-      } else {
-        setMutualUsers(response.data || []);
-      }
+      setMutualUsers(mutualsResponse.error ? [] : mutualsResponse.data || []);
+      setBookingContactUsers(bookingContactsResponse.error ? [] : bookingContactsResponse.data || []);
     }
 
     async function loadConversations() {
@@ -862,15 +871,23 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
   const normalizedConversations = useMemo(() => {
     const directConversations = conversations
-      // A conversation ensureConversation() created but nobody has actually
-      // sent a message in yet shouldn't appear as a saved thread in either
-      // person's inbox - except the one currently open, so the person who
-      // just clicked "Message" still sees their own in-progress composer.
+      // Whoever clicked "Message" keeps seeing that thread in their own
+      // inbox from the moment they open it, even before they've actually
+      // typed anything - it no longer disappears the instant they look at
+      // something else (see the starter-prompt empty state below for what
+      // they see when they reopen it). The OTHER person still never sees it
+      // until a real message arrives - nobody should see a "conversation"
+      // appear in their inbox just because someone looked at their profile.
       // is_hidden_for_me reflects "Delete chat" (hide_conversation_for_me) -
       // always hide it regardless of selection, since deleting the open
       // conversation also closes it (see handleDeleteConversation).
       .filter((conversation) => !conversation.is_hidden_for_me)
-      .filter((conversation) => conversation.has_messages !== false || conversation.id === selectedConversationId)
+      .filter(
+        (conversation) =>
+          conversation.has_messages !== false ||
+          conversation.id === selectedConversationId ||
+          String(conversation.initiated_by) === String(user?.id)
+      )
       .map((conversation) => {
         const participant1 = conversation.participant_1;
         const participant2 = conversation.participant_2;
@@ -923,6 +940,18 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
   // conversation history (see loadMutualUsers) - shared here between the
   // header's Close Chat/Block choice and the Friends/Work tab split below.
   const mutualUserIds = new Set(mutualUsers.map((m: any) => String(m.id)));
+  // "Who can I start/add to a chat with" - wider than mutualUserIds above
+  // on purpose: a booking relationship is enough to message or group-add
+  // someone even without a mutual follow. Used by "Start a chat",
+  // "New Group Chat", and "Add people" to an existing group - never by the
+  // Friends/Work split, which needs the two signals kept apart.
+  const chatCandidateUsers = useMemo(() => {
+    const byId = new Map<string, any>();
+    for (const candidate of [...mutualUsers, ...bookingContactUsers]) {
+      if (candidate?.id) byId.set(String(candidate.id), candidate);
+    }
+    return Array.from(byId.values()).sort((a, b) => (a.full_name || a.email || '').localeCompare(b.full_name || b.email || ''));
+  }, [mutualUsers, bookingContactUsers]);
   const isActiveConversationMutualFriend =
     !activeConversation?.isGroup && !!activeConversation?.otherParticipantId && mutualUserIds.has(String(activeConversation.otherParticipantId));
   // Once a booking wraps up, the header defaulted to "Block" even for a
@@ -1176,16 +1205,16 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
       return;
     }
     if (newGroupMemberIds.length < 2) {
-      setNewGroupError('Pick at least 2 mutuals to start a group chat.');
+      setNewGroupError('Pick at least 2 people to start a group chat.');
       return;
     }
 
     setIsCreatingGroup(true);
     setNewGroupError(null);
 
-    const memberNames = mutualUsers
-      .filter((mutual) => newGroupMemberIds.includes(mutual.id))
-      .map((mutual) => mutual.full_name || mutual.email);
+    const memberNames = chatCandidateUsers
+      .filter((candidate) => newGroupMemberIds.includes(candidate.id))
+      .map((candidate) => candidate.full_name || candidate.email);
     const title = newGroupTitle.trim() || memberNames.slice(0, 3).join(', ') || 'Group chat';
 
     const response = await DataService.createGroupConversation({
@@ -1447,11 +1476,11 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
               </div>
             </div>
 
-            {!searchQuery.trim() && mutualUsers.length > 0 && (
+            {!searchQuery.trim() && chatCandidateUsers.length > 0 && (
               <div className="border-b border-sky-100 bg-sky-50/40 px-4 py-3">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Start a chat</p>
                 <div className="flex gap-3 overflow-x-auto pb-1">
-                  {mutualUsers.map((mutual) => (
+                  {chatCandidateUsers.map((mutual) => (
                     <button
                       key={mutual.id}
                       type="button"
@@ -1852,7 +1881,18 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   )}
 
                   {!isLoadingMessages && messages.length === 0 && (
-                    <div className="text-center text-sm text-gray-600">No messages yet. Start the conversation below.</div>
+                    <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                      <Avatar
+                        src={activeConversation?.avatar || fallbackProfileImage}
+                        alt={activeConversation?.name || 'this user'}
+                        gender={activeConversation?.avatarGender as any}
+                        sizeClassName="h-16 w-16 rounded-full ring-2 ring-white shadow-sm"
+                      />
+                      <p className="text-sm font-semibold text-gray-900">
+                        You can start chatting with {activeConversation?.name || 'this user'} now
+                      </p>
+                      <p className="text-xs text-gray-500">Say hello below to get things started.</p>
+                    </div>
                   )}
 
                   {messages.map((message, messageIndex) => {
@@ -2400,9 +2440,9 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                   const existingIds = new Set(
                     (groupMembersByConversationId[String(activeConversation.rawId)] || []).map((m: any) => String(m.user_id))
                   );
-                  const candidates = mutualUsers.filter((mutual) => !existingIds.has(String(mutual.id)));
+                  const candidates = chatCandidateUsers.filter((candidate) => !existingIds.has(String(candidate.id)));
                   if (candidates.length === 0) {
-                    return <p className="px-1 py-2 text-center text-xs text-gray-500">Every mutual is already in this chat.</p>;
+                    return <p className="px-1 py-2 text-center text-xs text-gray-500">Everyone you can add is already in this chat.</p>;
                   }
                   return (
                     <div className="max-h-48 space-y-1 overflow-y-auto">
@@ -2535,13 +2575,14 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             />
 
             <label className="mb-2 block text-xs font-semibold text-gray-600">
-              Add mutuals ({newGroupMemberIds.length} selected — pick at least 2)
+              Add people ({newGroupMemberIds.length} selected — pick at least 2)
             </label>
+            <p className="mb-2 text-xs text-gray-500">Mutuals, and freelancers/clients you have a booking with.</p>
             <div className="mb-4 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-sky-100 p-2">
-              {mutualUsers.length === 0 && (
-                <p className="px-2 py-4 text-center text-sm text-gray-500">You don't have any mutuals yet.</p>
+              {chatCandidateUsers.length === 0 && (
+                <p className="px-2 py-4 text-center text-sm text-gray-500">No mutuals or booking contacts yet.</p>
               )}
-              {mutualUsers.map((mutual) => {
+              {chatCandidateUsers.map((mutual) => {
                 const isSelected = newGroupMemberIds.includes(mutual.id);
                 return (
                   <button
