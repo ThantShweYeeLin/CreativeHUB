@@ -210,14 +210,26 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
         return;
       }
 
-      const items = (response.data || []).map((item: any) => ({
-        id: String(item.user_id || item.users?.id || item.id),
-        full_name: item.users?.full_name || item.title || 'Freelancer',
-        title: item.title || item.skills?.[0] || 'Creative Freelancer',
-        skills: Array.isArray(item.skills) ? item.skills : [],
-        hourlyRate: item.hourly_rate ? Number(item.hourly_rate) : null,
-        rateCurrency: item.users?.preferred_currency || 'THB',
-      }));
+      // getAllFreelancers() has no reason to know who's asking, so it
+      // returns every freelancer regardless of viewer - including the
+      // viewer themselves, if their own account is a freelancer (anyone
+      // can still be the CLIENT on a request, e.g. booking for their own
+      // event). Both consumers of this list (the group request's
+      // recipients checklist and "Add Another Freelancer") let the viewer
+      // pick anyone shown here, so filtering here once is what actually
+      // stops a freelancer from adding themselves as a recipient on their
+      // own request - a client_id === freelancer_id booking that nothing
+      // downstream was ever built to handle.
+      const items = (response.data || [])
+        .map((item: any) => ({
+          id: String(item.user_id || item.users?.id || item.id),
+          full_name: item.users?.full_name || item.title || 'Freelancer',
+          title: item.title || item.skills?.[0] || 'Creative Freelancer',
+          skills: Array.isArray(item.skills) ? item.skills : [],
+          hourlyRate: item.hourly_rate ? Number(item.hourly_rate) : null,
+          rateCurrency: item.users?.preferred_currency || 'THB',
+        }))
+        .filter((item) => item.id !== user?.id);
       setAvailableFreelancers(items);
     }
 

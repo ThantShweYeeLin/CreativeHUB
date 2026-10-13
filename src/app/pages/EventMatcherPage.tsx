@@ -429,8 +429,14 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
       DataService.getEventMatcherCandidatesAny(category, date),
     ]);
 
+    // get_event_matcher_candidates()/_any() have no reason to know who's
+    // asking, so neither excludes the viewer's own freelancer_profiles row
+    // if they happen to have one (e.g. a client account that also kept a
+    // dormant freelancer profile from before switching roles) - without
+    // this, a client planning their own event could match, select, and
+    // send a booking request to themselves.
     const premiumCandidates = buildRankedCandidates(
-      premiumResponse.data.profiles as any[],
+      (premiumResponse.data.profiles as any[]).filter((profile) => profile.user_id !== user?.id),
       premiumResponse.data.blockedDates,
       premiumResponse.data.bookings,
       category,
@@ -444,7 +450,7 @@ export function EventMatcherPage({ onBack }: EventMatcherPageProps) {
     const premiumIds = new Set(premiumCandidates.map((c) => c.userId));
 
     const freeCandidates = buildRankedCandidates(
-      (anyResponse.data.profiles as any[]).filter((profile) => !premiumIds.has(profile.user_id)),
+      (anyResponse.data.profiles as any[]).filter((profile) => !premiumIds.has(profile.user_id) && profile.user_id !== user?.id),
       anyResponse.data.blockedDates,
       anyResponse.data.bookings,
       category,
