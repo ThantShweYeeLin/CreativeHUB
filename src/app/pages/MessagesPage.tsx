@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { ImageWithFallback } from '../../components/common/ImageWithFallback';
 import { Avatar } from '../../components/common/Avatar';
+import { GroupAvatarMosaic } from '../../components/common/GroupAvatarMosaic';
 import { PageBackdrop } from '../../components/common/PageBackdrop';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../lib/dataService';
@@ -818,6 +819,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
             name: conversation.title || 'Group chat',
             avatar: coverMember?.avatar_url || fallbackProfileImage,
             avatarGender: coverMember?.gender || null,
+            memberAvatars: members.map((member: any) => member.users?.avatar_url),
             memberCount: (groupMembersByConversationId[groupId] || []).length,
             lastMessageAt: conversation.last_message_at,
             relatedGroupRequestId: conversation.related_group_request_id || null,
@@ -843,6 +845,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
           avatarGender: otherParticipant?.gender || null,
+          memberAvatars: [] as (string | null | undefined)[],
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
           status: conversation.status || 'accepted',
@@ -902,6 +905,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
           name: otherParticipant?.full_name || otherParticipant?.email || 'CreativeHUB user',
           avatar: otherParticipant?.avatar_url || fallbackProfileImage,
           avatarGender: otherParticipant?.gender || null,
+          memberAvatars: [] as (string | null | undefined)[],
           memberCount: 2,
           lastMessageAt: conversation.last_message_at,
           isRequestForMe,
@@ -912,7 +916,8 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
     const grouped = groupConversations.map((conversation: any) => {
       const conversationId = String(conversation.id);
       const members = groupMembersByConversationId[conversationId] || [];
-      const coverMember = members.find((member: any) => String(member.user_id) !== String(user?.id))?.users;
+      const otherMembers = members.filter((member: any) => String(member.user_id) !== String(user?.id));
+      const coverMember = otherMembers[0]?.users;
 
       return {
         id: toGroupConversationKey(conversationId),
@@ -922,6 +927,7 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
         name: conversation.title || 'Group chat',
         avatar: coverMember?.avatar_url || fallbackProfileImage,
         avatarGender: coverMember?.gender || null,
+        memberAvatars: otherMembers.map((member: any) => member.users?.avatar_url),
         memberCount: members.length,
         lastMessageAt: conversation.last_message_at,
         isRequestForMe: false,
@@ -1560,12 +1566,21 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     selectedConversationId === conversation.id ? 'bg-sky-50 border-l-4 border-l-sky-500' : ''
                   }`}
                 >
-                  <Avatar
-                    src={conversation.avatar}
-                    alt={conversation.name}
-                    gender={conversation.avatarGender}
-                    sizeClassName="w-12 h-12 ring-2 ring-white shadow-sm rounded-full"
-                  />
+                  {conversation.isGroup ? (
+                    <GroupAvatarMosaic
+                      avatarUrls={conversation.memberAvatars || []}
+                      alt={conversation.name}
+                      fallbackSrc={fallbackProfileImage}
+                      sizeClassName="w-12 h-12"
+                    />
+                  ) : (
+                    <Avatar
+                      src={conversation.avatar}
+                      alt={conversation.name}
+                      gender={conversation.avatarGender}
+                      sizeClassName="w-12 h-12 ring-2 ring-white shadow-sm rounded-full"
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate">{conversation.name}</h3>
                     <p className="mt-1 text-xs text-gray-500">
@@ -1649,12 +1664,21 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
                     disabled={!activeConversation.otherParticipantId}
                     className="w-12 h-12 rounded-full transition-opacity hover:opacity-80 disabled:cursor-default disabled:opacity-70"
                   >
-                    <Avatar
-                      src={activeConversation.avatar}
-                      alt={activeConversation.name}
-                      gender={activeConversation.avatarGender}
-                      sizeClassName="w-full h-full ring-2 ring-white shadow-sm rounded-full"
-                    />
+                    {activeConversation.isGroup ? (
+                      <GroupAvatarMosaic
+                        avatarUrls={activeConversation.memberAvatars || []}
+                        alt={activeConversation.name}
+                        fallbackSrc={fallbackProfileImage}
+                        sizeClassName="w-full h-full"
+                      />
+                    ) : (
+                      <Avatar
+                        src={activeConversation.avatar}
+                        alt={activeConversation.name}
+                        gender={activeConversation.avatarGender}
+                        sizeClassName="w-full h-full ring-2 ring-white shadow-sm rounded-full"
+                      />
+                    )}
                   </button>
                   <div>
                     <h2 className="font-bold text-gray-900">{activeConversation.name}</h2>
@@ -1882,12 +1906,21 @@ export function MessagesPage({ onBack, onViewProfile }: MessagesPageProps) {
 
                   {!isLoadingMessages && messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-                      <Avatar
-                        src={activeConversation?.avatar || fallbackProfileImage}
-                        alt={activeConversation?.name || 'this user'}
-                        gender={activeConversation?.avatarGender as any}
-                        sizeClassName="h-16 w-16 rounded-full ring-2 ring-white shadow-sm"
-                      />
+                      {activeConversation?.isGroup ? (
+                        <GroupAvatarMosaic
+                          avatarUrls={activeConversation.memberAvatars || []}
+                          alt={activeConversation.name}
+                          fallbackSrc={fallbackProfileImage}
+                          sizeClassName="h-16 w-16"
+                        />
+                      ) : (
+                        <Avatar
+                          src={activeConversation?.avatar || fallbackProfileImage}
+                          alt={activeConversation?.name || 'this user'}
+                          gender={activeConversation?.avatarGender as any}
+                          sizeClassName="h-16 w-16 rounded-full ring-2 ring-white shadow-sm"
+                        />
+                      )}
                       <p className="text-sm font-semibold text-gray-900">
                         You can start chatting with {activeConversation?.name || 'this user'} now
                       </p>
