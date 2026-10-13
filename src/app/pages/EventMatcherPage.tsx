@@ -231,7 +231,7 @@ const DRAFT_STORAGE_KEY = 'creativehub.eventMatcher.draft';
 // differently than a fresh match would (e.g. the picker's candidate cap) -
 // otherwise a draft saved before such a change keeps replaying its old
 // results indefinitely, since resuming never re-fetches on its own.
-const DRAFT_SCHEMA_VERSION = 2;
+const DRAFT_SCHEMA_VERSION = 3;
 
 interface EventMatcherDraft {
   version: number;
