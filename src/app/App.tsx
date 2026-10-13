@@ -190,7 +190,7 @@ export default function App() {
           a signed-up-but-incomplete user still finishes onboarding first. */}
       {(!isAuthenticated || user?.onboardingCompleted) && (
         <>
-          <Route path="/" element={<Navigate to="/for-you" replace />} />
+          <Route path="/" element={<Navigate to="/explore" replace />} />
           <Route
             path="/explore"
             element={
