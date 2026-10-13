@@ -1537,6 +1537,20 @@ export class DataService {
     return { count: error ? 0 : Number(data || 0), error };
   }
 
+  static async getFreelancerProjectCounts(freelancerId: string) {
+    const { data, error } = await supabase.rpc('get_freelancer_project_counts' as any, { p_freelancer_id: freelancerId });
+    const counts = Array.isArray(data) ? data[0] : data;
+    return {
+      data: error || !counts
+        ? { activeProjects: 0, completedProjects: 0 }
+        : {
+            activeProjects: Number(counts.active_projects || 0),
+            completedProjects: Number(counts.completed_projects || 0),
+          },
+      error,
+    };
+  }
+
   static async getFreelancerBookings(freelancerId: string) {
     const { data, error } = await supabase
       .from('bookings')

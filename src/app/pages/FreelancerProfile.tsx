@@ -324,6 +324,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         followedByTargetResponse,
         followCountsResponse,
         postsResponse,
+        projectCountsResponse,
         cancellationCountResponse,
       ] = await Promise.all([
         freelancerResponse.data?.id ? DataService.getFreelancerBlockedDates(freelancerResponse.data.id) : Promise.resolve({ data: null, error: null }),
@@ -342,6 +343,7 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
         user?.id && user.id !== targetId ? DataService.isFollowing(targetId, user.id) : Promise.resolve({ isFollowing: false, error: null }),
         DataService.getFollowCounts(targetId),
         DataService.getClientPostsByClientId(targetId, 12, user?.id),
+        DataService.getFreelancerProjectCounts(targetId),
         // Trust level's cancellation penalty needs this for EVERY viewer,
         // including a signed-out guest - bookingsResponse above can't be
         // reused for it, since RLS only ever returns this freelancer's own
@@ -388,11 +390,8 @@ export function FreelancerProfile({ onBack, requestStatus = null, onOpenChat }: 
       }
 
       if (userResponse.data.role === 'freelancer' && freelancerResponse.data) {
-        const bookingRows = bookingsResponse.data || [];
-        setActiveProjects(
-          bookingRows.filter((booking: any) => ['pending', 'confirmed', 'in_progress'].includes(booking.status)).length
-        );
-        setCompletedProjects(bookingRows.filter((booking: any) => booking.status === 'completed').length);
+        setActiveProjects(projectCountsResponse.data.activeProjects);
+        setCompletedProjects(projectCountsResponse.data.completedProjects);
       } else {
         setActiveProjects(0);
         setCompletedProjects(0);
