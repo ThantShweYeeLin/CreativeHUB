@@ -167,6 +167,31 @@ export function AdminUserDetailPage() {
               <p className="mt-1 text-gray-900">{profile.total_reviews > 0 ? `★ ${Number(profile.rating || 0).toFixed(1)} (${profile.total_reviews})` : 'No reviews yet'}</p>
             </div>
           </div>
+
+          {profile.account_status === 'suspended' && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 text-xs text-amber-900">
+              <p className="font-bold">Account is Temporarily Suspended</p>
+              <p className="mt-0.5">
+                <span className="font-semibold">Reason:</span>{' '}
+                {profile.suspension_reason || profile.account_status_reason || 'Policy violation under review'}
+              </p>
+              <p className="mt-0.5">
+                <span className="font-semibold">Duration / Expiration:</span>{' '}
+                {profile.suspension_expires_at
+                  ? new Date(profile.suspension_expires_at).toLocaleString()
+                  : 'Until manually reviewed (indefinite)'}
+              </p>
+            </div>
+          )}
+
+          {profile.account_status === 'banned' && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50/70 p-3.5 text-xs text-red-900">
+              <p className="font-bold">Account is Permanently Banned</p>
+              {profile.account_status_reason && (
+                <p className="mt-0.5"><span className="font-semibold">Reason:</span> {profile.account_status_reason}</p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="rounded-2xl border border-sky-100 bg-white p-5 shadow-[0_8px_30px_rgba(56,189,248,0.15)]">

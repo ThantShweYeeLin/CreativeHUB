@@ -20,6 +20,7 @@ import { LoginPageWithRouting } from './pages/LoginPageWithRouting';
 import { SignUpPageWithRouting } from './pages/SignUpPageWithRouting';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { BannedScreen } from './pages/BannedScreen';
+import { SuspendedScreen } from './pages/SuspendedScreen';
 
 // Authenticated page imports — lazy so each route's code downloads only
 // when a signed-in user actually navigates there, instead of one ~8.7MB
@@ -113,7 +114,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key`}
 }
 
 export default function App() {
-  const { loading, isAuthenticated, isBanned, user } = useAuth();
+  const { loading, isAuthenticated, isBanned, isSuspended, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -157,6 +158,13 @@ export default function App() {
   // context. See BannedScreen.tsx and supabase/account_ban_enforcement.sql.
   if (isAuthenticated && isBanned) {
     return <BannedScreen />;
+  }
+
+  // Takes over every route when temporarily suspended. Displays reason,
+  // duration/expiration, guidance, and support contact while preserving
+  // existing bookings.
+  if (isAuthenticated && isSuspended) {
+    return <SuspendedScreen />;
   }
 
   return (

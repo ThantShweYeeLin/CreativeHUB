@@ -13,6 +13,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isBanned: boolean;
+  isSuspended: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -123,6 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         isAdmin: user?.role === 'admin',
         isBanned: user?.accountStatus === 'banned',
+        isSuspended: Boolean(
+          user?.accountStatus === 'suspended' &&
+          (!user.suspensionExpiresAt || new Date(user.suspensionExpiresAt).getTime() > Date.now())
+        ),
       }}
     >
       {children}

@@ -33,6 +33,13 @@ export interface Database {
           client_budget_preference: string | null;
           client_preferences: string[] | null;
           onboarding_completed: boolean;
+          account_status?: 'active' | 'paused' | 'suspended' | 'banned';
+          account_status_reason?: string | null;
+          account_status_changed_at?: string | null;
+          suspension_reason?: string | null;
+          suspended_at?: string | null;
+          suspension_expires_at?: string | null;
+          suspended_by?: string | null;
           created_at: string;
           updated_at: string;
         }>;

@@ -19,6 +19,7 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [decision, setDecision] = useState('');
   const [reason, setReason] = useState('');
+  const [durationHours, setDurationHours] = useState<number | null>(168); // 7 days default
   const [isSaving, setIsSaving] = useState(false);
 
   const load = async () => {
@@ -51,12 +52,39 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
     if (!decision) return;
     setIsSaving(true);
     setError(null);
-    const response = await DataService.adminResolveUserReport(reportId, decision as any, reason.trim() || undefined);
-    setIsSaving(false);
+
+    let expiresAt: string | null = null;
+    if (decision === 'suspended' && durationHours !== null) {
+      expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+    }
+
+    const response = await DataService.adminResolveUserReport(
+      reportId,
+      decision as any,
+      reason.trim() || undefined,
+      expiresAt
+    );
+
     if (response.error) {
+      setIsSaving(false);
       setError((response.error as any).message || 'Unable to resolve report.');
       return;
     }
+
+    // If decision was ban, ensure Auth layer also records the ban status.
+    // The report decision itself is already saved at this point either way
+    // - a failure here is reported, not rolled back, same as
+    // AccountStatusActions.tsx's equivalent call.
+    if (decision === 'banned' && report?.reported_user_id) {
+      const authResponse = await DataService.setAuthBanStatus(report.reported_user_id, true);
+      if (authResponse.error) {
+        setIsSaving(false);
+        setError((authResponse.error as any).message || 'Report resolved, but updating sign-in access failed.');
+        return;
+      }
+    }
+
+    setIsSaving(false);
     setDecision('');
     setReason('');
     await load();
@@ -114,27 +142,47 @@ export function AdminReportDetail({ reportId }: { reportId: string }) {
       )}
 
       {report.status === 'open' ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-sky-100 pt-3">
-          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="rounded-lg border border-sky-100 px-3 py-2 text-sm">
-            <option value="">Choose a decision...</option>
-            <option value="no_action">No action</option>
-            <option value="warning">Warning</option>
-            <option value="suspended">Suspend account</option>
-            <option value="banned">Ban account</option>
-          </select>
-          <input
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason (optional)"
-            className="min-w-[200px] flex-1 rounded-lg border border-sky-100 px-3 py-2 text-sm"
-          />
-          <button
-            disabled={!decision || isSaving}
-            onClick={() => void handleResolve()}
-            className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
-          >
-            {isSaving ? 'Saving...' : 'Confirm Decision'}
-          </button>
+        <div className="mt-3 space-y-2 border-t border-sky-100 pt-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <select value={decision} onChange={(e) => setDecision(e.target.value)} className="rounded-lg border border-sky-100 px-3 py-2 text-sm bg-white">
+              <option value="">Choose a decision...</option>
+              <option value="no_action">No action</option>
+              <option value="warning">Warning</option>
+              <option value="suspended">Suspend account</option>
+              <option value="banned">Ban account</option>
+            </select>
+            {decision === 'suspended' && (
+              <select
+                value={durationHours === null ? 'indefinite' : String(durationHours)}
+                onChange={(e) => setDurationHours(e.target.value === 'indefinite' ? null : Number(e.target.value))}
+                className="rounded-lg border border-sky-100 px-3 py-2 text-sm bg-white"
+              >
+                <option value="24">24 hours</option>
+                <option value="72">3 days</option>
+                <option value="168">7 days</option>
+                <option value="720">30 days</option>
+                <option value="indefinite">Until manually reviewed</option>
+              </select>
+            )}
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (optional)"
+              className="min-w-[200px] flex-1 rounded-lg border border-sky-100 px-3 py-2 text-sm"
+            />
+            <button
+              disabled={!decision || isSaving}
+              onClick={() => void handleResolve()}
+              className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-4 py-2 text-sm font-semibold text-white hover:shadow-lg disabled:opacity-60"
+            >
+              {isSaving ? 'Saving...' : 'Confirm Decision'}
+            </button>
+          </div>
+          {decision === 'suspended' && (
+            <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+              Suspends marketplace actions while preserving existing bookings and notifying the user.
+            </p>
+          )}
         </div>
       ) : (
         <div className="mt-3 rounded-lg bg-sky-50/50 px-3 py-2 text-sm text-gray-600 border-t border-sky-100 pt-3">

@@ -43,6 +43,8 @@ export interface AuthUser {
   onboardingCompleted: boolean;
   accountStatus: 'active' | 'paused' | 'suspended' | 'banned';
   accountStatusReason: string | null;
+  suspensionExpiresAt?: string | null;
+  suspendedAt?: string | null;
 }
 
 class AuthService {
@@ -271,6 +273,35 @@ class AuthService {
     }
   }
 
+  private mapProfileToAuthUser(userProfile: any, emailConfirmedAt: string | null = null): AuthUser {
+    let accountStatus = ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'];
+    const suspensionExpiresAt = (userProfile as any).suspension_expires_at ?? null;
+
+    // Auto-lift expired suspensions (never touches banned users)
+    if (accountStatus === 'suspended' && suspensionExpiresAt) {
+      if (new Date(suspensionExpiresAt).getTime() <= Date.now()) {
+        accountStatus = 'active';
+        void (supabase as any).rpc('check_and_lift_expired_suspension', { p_user_id: userProfile.id });
+      }
+    }
+
+    return {
+      id: userProfile.id,
+      email: userProfile.email,
+      fullName: userProfile.full_name,
+      avatar_url: userProfile.avatar_url,
+      role: userProfile.role,
+      gender: userProfile.gender ?? null,
+      pronouns: userProfile.pronouns ?? null,
+      emailConfirmedAt,
+      onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
+      accountStatus,
+      accountStatusReason: (userProfile as any).account_status_reason ?? null,
+      suspensionExpiresAt,
+      suspendedAt: (userProfile as any).suspended_at ?? null,
+    };
+  }
+
   async signIn(data: SignInData): Promise<{ user: AuthUser | null; error: Error | null }> {
     try {
       if (!hasSupabaseConfig) {
@@ -297,19 +328,7 @@ class AuthService {
       }
 
       return {
-        user: {
-          id: userProfile.id,
-          email: userProfile.email,
-          fullName: userProfile.full_name,
-          avatar_url: userProfile.avatar_url,
-          role: userProfile.role,
-          gender: userProfile.gender ?? null,
-          pronouns: userProfile.pronouns ?? null,
-          emailConfirmedAt: authData.user.email_confirmed_at ?? null,
-          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-          accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
-          accountStatusReason: (userProfile as any).account_status_reason ?? null,
-        },
+        user: this.mapProfileToAuthUser(userProfile, authData.user.email_confirmed_at ?? null),
         error: null,
       };
     } catch (error) {
@@ -403,19 +422,7 @@ class AuthService {
       }
 
       return {
-        user: {
-          id: userProfile.id,
-          email: userProfile.email,
-          fullName: userProfile.full_name,
-          avatar_url: userProfile.avatar_url,
-          role: userProfile.role,
-          gender: userProfile.gender ?? null,
-          pronouns: userProfile.pronouns ?? null,
-          emailConfirmedAt: data.session.user.email_confirmed_at ?? null,
-          onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-          accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
-          accountStatusReason: (userProfile as any).account_status_reason ?? null,
-        },
+        user: this.mapProfileToAuthUser(userProfile, data.session.user.email_confirmed_at ?? null),
         error: null,
       };
     } catch (error) {
@@ -514,19 +521,7 @@ class AuthService {
         const { data: userProfile } = await this.ensureUserProfile(session.user);
 
         if (userProfile) {
-          callback({
-            id: userProfile.id,
-            email: userProfile.email,
-            fullName: userProfile.full_name,
-            avatar_url: userProfile.avatar_url,
-            role: userProfile.role,
-            gender: userProfile.gender ?? null,
-            pronouns: userProfile.pronouns ?? null,
-            emailConfirmedAt: session.user.email_confirmed_at ?? null,
-            onboardingCompleted: Boolean((userProfile as any).onboarding_completed),
-            accountStatus: ((userProfile as any).account_status || 'active') as AuthUser['accountStatus'],
-            accountStatusReason: (userProfile as any).account_status_reason ?? null,
-          });
+          callback(this.mapProfileToAuthUser(userProfile, session.user.email_confirmed_at ?? null));
         }
       } else {
         callback(null);

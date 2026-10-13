@@ -219,7 +219,10 @@ export function RequestsPage({ onBack, onViewProfile, onOpenMessages }: Requests
       // pick anyone shown here, so filtering here once is what actually
       // stops a freelancer from adding themselves as a recipient on their
       // own request - a client_id === freelancer_id booking that nothing
-      // downstream was ever built to handle.
+      // downstream was ever built to handle. (This filter was accidentally
+      // dropped by an unrelated edit and restored here - see
+      // supabase/prevent_self_booking.sql for the matching DB-level
+      // backstop, which this frontend check is not a substitute for.)
       const items = (response.data || [])
         .map((item: any) => ({
           id: String(item.user_id || item.users?.id || item.id),

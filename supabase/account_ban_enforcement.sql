@@ -42,6 +42,17 @@ grant execute on function public.is_banned(uuid) to authenticated, service_role;
 -- admin or any other non-banned participant updating a shared row (e.g.
 -- resolving a dispute on a booking whose other party is banned) is
 -- completely unaffected.
+-- NOTE: account_suspension_enforcement.sql later redeclares this same
+-- function (via create or replace) to also block suspended accounts.
+-- Because both files use create or replace, whichever one is run LAST
+-- wins outright - re-running this file after the suspension file has
+-- already run would silently drop suspension enforcement with no error
+-- (this happened once in practice). The guarded is_suspended() call below
+-- makes this file's own definition converge to the same combined
+-- behavior on its own, so re-running either file in any order never
+-- regresses the other. The exception handler only exists for a fresh
+-- database where this file runs before account_suspension_enforcement.sql
+-- has ever been applied, in which case is_suspended() doesn't exist yet.
 create or replace function public.block_if_banned()
 returns trigger
 language plpgsql
@@ -52,6 +63,15 @@ begin
   if public.is_banned(auth.uid()) then
     raise exception 'Your account has been banned. Contact CreativeHUB support for help with any existing bookings.';
   end if;
+
+  begin
+    if public.is_suspended(auth.uid()) then
+      raise exception 'Your account is temporarily suspended. You cannot perform this action while your suspension is active.';
+    end if;
+  exception when undefined_function then
+    null;
+  end;
+
   return new;
 end;
 $$;

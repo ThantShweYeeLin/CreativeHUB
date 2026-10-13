@@ -3,6 +3,23 @@ import { DataService } from '../../../lib/dataService';
 
 type AccountStatus = 'active' | 'paused' | 'suspended' | 'banned';
 
+const SUSPENSION_REASONS = [
+  'Suspicious activity',
+  'Repeated cancellations',
+  'Harassment or inappropriate conduct',
+  'Suspected fraud',
+  'Policy violation under review',
+  'Other',
+];
+
+const SUSPENSION_DURATIONS = [
+  { label: '24 hours', hours: 24 },
+  { label: '3 days', hours: 72 },
+  { label: '7 days', hours: 168 },
+  { label: '30 days', hours: 720 },
+  { label: 'Until manually reviewed (indefinite)', hours: null },
+];
+
 export function AccountStatusActions({
   userId,
   currentStatus,
@@ -19,7 +36,9 @@ export function AccountStatusActions({
   const [isPending, setIsPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<AccountStatus | null>(null);
+  const [presetReason, setPresetReason] = useState(SUSPENSION_REASONS[0]);
   const [reason, setReason] = useState('');
+  const [selectedDurationHours, setSelectedDurationHours] = useState<number | null>(168); // default 7 days
 
   const status = currentStatus || 'active';
   const buttonClass = size === 'md' ? 'px-3.5 py-2 text-sm' : 'px-2.5 py-1 text-xs';
@@ -28,7 +47,22 @@ export function AccountStatusActions({
     if (!confirming) return;
     setIsPending(true);
     setError(null);
-    const response = await DataService.adminSetAccountStatus(userId, confirming, reason.trim() || undefined);
+
+    let finalReason: string | undefined = undefined;
+    let expiresAt: string | null = null;
+
+    if (confirming === 'suspended') {
+      const parts = [presetReason !== 'Other' ? presetReason : null, reason.trim() || null].filter(Boolean);
+      finalReason = parts.join(' — ') || 'Temporary account suspension under review';
+
+      if (selectedDurationHours !== null) {
+        expiresAt = new Date(Date.now() + selectedDurationHours * 60 * 60 * 1000).toISOString();
+      }
+    } else {
+      finalReason = reason.trim() || undefined;
+    }
+
+    const response = await DataService.adminSetAccountStatus(userId, confirming, finalReason, expiresAt);
     if (response.error) {
       setIsPending(false);
       setError((response.error as any).message || 'Unable to update account status.');
@@ -58,18 +92,83 @@ export function AccountStatusActions({
   if (confirming) {
     const labels: Record<AccountStatus, string> = { active: 'reactivate', paused: 'pause', suspended: 'suspend', banned: 'ban' };
     return (
-      <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3">
-        <p className="mb-2 text-sm font-semibold text-gray-900">
+      <div className="rounded-xl border border-sky-100 bg-sky-50/50 p-3.5 text-sm">
+        <p className="mb-2 font-bold text-gray-900">
           {labels[confirming].charAt(0).toUpperCase() + labels[confirming].slice(1)} this account?
         </p>
-        {confirming !== 'active' && (
+
+        {confirming === 'suspended' && (
+          <div className="mb-3 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">Reason category</label>
+              <select
+                value={presetReason}
+                onChange={(e) => setPresetReason(e.target.value)}
+                className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-400"
+              >
+                {SUSPENSION_REASONS.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">Duration</label>
+              <select
+                value={selectedDurationHours === null ? 'indefinite' : String(selectedDurationHours)}
+                onChange={(e) => setSelectedDurationHours(e.target.value === 'indefinite' ? null : Number(e.target.value))}
+                className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-400"
+              >
+                {SUSPENSION_DURATIONS.map((d) => (
+                  <option key={d.label} value={d.hours === null ? 'indefinite' : String(d.hours)}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-gray-700">Additional notes / User explanation</label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Explain the specific issue or steps for review..."
+                className="w-full min-h-[55px] rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-400"
+              />
+            </div>
+
+            <div className="rounded-lg bg-amber-50 p-2 text-[11px] text-amber-800 border border-amber-200">
+              <p className="font-semibold">Policy enforcement:</p>
+              <p>• Blocks new bookings, messages, and job applications while suspended.</p>
+              <p>• Existing bookings and deposits are preserved without automatic cancellation.</p>
+              <p>• The user will be notified in-app with the reason and duration.</p>
+            </div>
+          </div>
+        )}
+
+        {confirming === 'active' && (
+          <div className="mb-3">
+            <p className="mb-2 text-xs text-gray-600">
+              Reactivating will immediately lift all account restrictions and allow the user to access the marketplace.
+            </p>
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason for lifting restriction (optional)"
+              className="w-full min-h-[50px] rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-sky-400"
+            />
+          </div>
+        )}
+
+        {(confirming === 'banned' || confirming === 'paused') && (
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Reason (optional)"
-            className="mb-2 w-full min-h-[60px] rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-400"
+            className="mb-2 w-full min-h-[60px] rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-sky-400"
           />
         )}
+
         {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
         <div className="flex gap-2">
           <button

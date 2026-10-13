@@ -1881,11 +1881,10 @@ export class DataService {
     if (role) {
       query = query.eq('role', role);
     }
-    // "suspended" in the UI covers both suspended and banned accounts —
-    // banned is the harder version of the same "can't use the platform"
-    // state, so it belongs in the same filter bucket.
     if (status === 'suspended') {
-      query = query.in('account_status', ['suspended', 'banned']);
+      query = query.eq('account_status', 'suspended');
+    } else if (status === 'banned') {
+      query = query.eq('account_status', 'banned');
     } else if (status) {
       query = query.eq('account_status', status);
     }
@@ -1943,11 +1942,17 @@ export class DataService {
     return { counts, error: null };
   }
 
-  static async adminSetAccountStatus(userId: string, status: 'active' | 'paused' | 'suspended' | 'banned', reason?: string) {
+  static async adminSetAccountStatus(
+    userId: string,
+    status: 'active' | 'paused' | 'suspended' | 'banned',
+    reason?: string,
+    expiresAt?: string | null
+  ) {
     const { data, error } = await (supabase as any).rpc('admin_set_account_status', {
       p_user_id: userId,
       p_status: status,
       p_reason: reason || null,
+      p_expires_at: expiresAt || null,
     });
     return { data, error };
   }
@@ -2046,11 +2051,17 @@ export class DataService {
     return { data, error };
   }
 
-  static async adminResolveUserReport(reportId: string, decision: 'no_action' | 'warning' | 'suspended' | 'banned', reason?: string) {
+  static async adminResolveUserReport(
+    reportId: string,
+    decision: 'no_action' | 'warning' | 'suspended' | 'banned',
+    reason?: string,
+    expiresAt?: string | null
+  ) {
     const { data, error } = await (supabase as any).rpc('admin_resolve_user_report', {
       p_report_id: reportId,
       p_decision: decision,
       p_reason: reason || null,
+      p_expires_at: expiresAt || null,
     });
     return { data, error };
   }

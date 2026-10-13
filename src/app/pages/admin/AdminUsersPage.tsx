@@ -7,7 +7,7 @@ import { useAuth } from '../../../contexts/AuthContext';
 import { AdminLayout } from './AdminLayout';
 import { AccountStatusActions } from './AccountStatusActions';
 
-type UserFilter = 'all' | 'clients' | 'freelancers' | 'suspended';
+type UserFilter = 'all' | 'clients' | 'freelancers' | 'suspended' | 'banned';
 
 const PAGE_SIZE = 20;
 
@@ -40,7 +40,7 @@ export function AdminUsersPage() {
       DataService.getAllUsersForAdmin({
         search,
         role: filter === 'clients' ? 'client' : filter === 'freelancers' ? 'freelancer' : undefined,
-        status: filter === 'suspended' ? 'suspended' : undefined,
+        status: filter === 'suspended' ? 'suspended' : filter === 'banned' ? 'banned' : undefined,
         limit: PAGE_SIZE,
         offset,
       }),
@@ -70,7 +70,8 @@ export function AdminUsersPage() {
     { id: 'all', label: 'All' },
     { id: 'clients', label: 'Clients' },
     { id: 'freelancers', label: 'Freelancers' },
-    { id: 'suspended', label: 'Suspended Accounts' },
+    { id: 'suspended', label: 'Suspended' },
+    { id: 'banned', label: 'Banned' },
   ];
 
   const rangeStart = count === 0 ? 0 : offset + 1;
