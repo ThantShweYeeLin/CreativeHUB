@@ -40,7 +40,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 grant select (
-  id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location,
+  id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_visibility,
   role, account_status, created_at, preferred_currency
 ) on public.users to anon;
 

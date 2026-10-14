@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
 import { formatCurrencyAmount, normalizeCurrencyCode } from '../../lib/currency';
 import { DataService } from '../../lib/dataService';
+import type { LocationVisibility } from '../../lib/database.types';
 import { geocodeAddress } from '../../lib/osmGeocoding';
 import { FREELANCER_CATEGORIES } from '../../lib/categories';
 import { OnboardingStepShell } from '../../components/common/OnboardingStepShell';
@@ -56,6 +57,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
   const [locationLatitude, setLocationLatitude] = useState<number | null>(null);
   const [locationLongitude, setLocationLongitude] = useState<number | null>(null);
   const [locationPlaceId, setLocationPlaceId] = useState<string | null>(null);
+  const [locationVisibility, setLocationVisibility] = useState<LocationVisibility>('approximate');
   const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
   const [avatarUpload, setAvatarUpload] = useState<ImageUpload | null>(null);
   const [isDraggingAvatar, setIsDraggingAvatar] = useState(false);
@@ -114,6 +116,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
       if (typeof data.location_latitude === 'number') setLocationLatitude(data.location_latitude);
       if (typeof data.location_longitude === 'number') setLocationLongitude(data.location_longitude);
       if (data.location_place_id) setLocationPlaceId(data.location_place_id);
+      if (data.location_visibility) setLocationVisibility(data.location_visibility as LocationVisibility);
       if (Array.isArray(data.client_type)) setClientType(data.client_type);
       if (Array.isArray(data.client_interests)) setInterests(data.client_interests);
       if (data.client_budget_preference) setBudgetPreference(data.client_budget_preference);
@@ -212,6 +215,7 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
       location_latitude: resolvedLat,
       location_longitude: resolvedLng,
       location_place_id: resolvedPlaceId,
+      location_visibility: locationVisibility,
       // Omitted entirely (not set to null) when there's nothing new/usable —
       // revisiting this form without re-picking a photo must never erase
       // whatever is already saved.
@@ -325,6 +329,17 @@ export function ClientOnboardingPage({ onBack }: ClientOnboardingPageProps) {
             {locationLatitude !== null && locationLongitude !== null && (
               <p className="mt-1 text-xs text-gray-500">Exact location pinned on the map.</p>
             )}
+            <label className="mt-3 block text-xs font-semibold text-gray-700">Map visibility</label>
+            <select
+              value={locationVisibility}
+              onChange={(event) => setLocationVisibility(event.target.value as LocationVisibility)}
+              className="mt-1 w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+            >
+              <option value="approximate">Approximate area</option>
+              <option value="public">Public location</option>
+              <option value="hidden">Hide from map</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-500">Choose whether your saved location can appear on map-based discovery.</p>
           </div>
 
           <div className="md:col-span-2">

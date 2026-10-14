@@ -9,7 +9,7 @@ export interface FreelancerPortfolioItem {
   comments?: number;
 }
 
-import type { Gender } from './database.types';
+import type { Gender, LocationVisibility } from './database.types';
 import { DEFAULT_AVATAR_URL } from './defaults';
 
 export interface FreelancerMapProfile {
@@ -38,6 +38,7 @@ export interface FreelancerMapProfile {
   hourlyRate?: number;
   experienceYears?: number;
   isAvailable: boolean;
+  locationVisibility: LocationVisibility;
 }
 
 const PLACEHOLDER_IMAGE = DEFAULT_AVATAR_URL;
@@ -167,6 +168,11 @@ export function normalizeFreelancer(row: unknown): FreelancerMapProfile {
   const availability = stringArray(source.availability);
 
   const gender = (source.gender ?? user.gender ?? null) as Gender | null;
+  const locationVisibility = (source.location_visibility ?? user.location_visibility ?? 'approximate') as LocationVisibility;
+  const rawLatitude = numberValue(source.latitude, source.lat, source.location_latitude, user.location_latitude);
+  const rawLongitude = numberValue(source.longitude, source.lng, source.lon, source.location_longitude, user.location_longitude);
+  const latitude = locationVisibility === 'public' ? rawLatitude : locationVisibility === 'approximate' && rawLatitude !== null ? Math.round(rawLatitude * 100) / 100 : null;
+  const longitude = locationVisibility === 'public' ? rawLongitude : locationVisibility === 'approximate' && rawLongitude !== null ? Math.round(rawLongitude * 100) / 100 : null;
 
   return {
     id: stringValue(source.id, source._id),
@@ -178,12 +184,12 @@ export function normalizeFreelancer(row: unknown): FreelancerMapProfile {
     coverImage,
     profession,
     bio: stringValue(source.bio, source.description),
-    latitude: numberValue(source.latitude, source.lat, source.location_latitude, user.location_latitude),
-    longitude: numberValue(source.longitude, source.lng, source.lon, source.location_longitude, user.location_longitude),
+    latitude,
+    longitude,
     rating,
     totalProjects,
     totalReviews,
-    location: stringValue(source.location, user.location),
+    location: locationVisibility === 'public' ? stringValue(source.location, user.location) : locationVisibility === 'approximate' ? 'Approximate service area' : '',
     skills: stringArray(source.skills),
     minorSkills: stringArray(source.minorSkills ?? source.minor_skills),
     portfolio,
@@ -193,5 +199,6 @@ export function normalizeFreelancer(row: unknown): FreelancerMapProfile {
     hourlyRate: numberValue(source.hourlyRate, source.hourly_rate) ?? undefined,
     experienceYears: numberValue(source.experienceYears, source.experience_years) ?? undefined,
     isAvailable,
+    locationVisibility,
   };
 }

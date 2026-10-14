@@ -23,6 +23,8 @@ create table public.users (
   location_latitude numeric(10,7),
   location_longitude numeric(10,7),
   location_place_id text,
+  location_visibility text not null default 'approximate'
+    check (location_visibility in ('hidden', 'approximate', 'public')),
   rating numeric(3,2) default 0,
   total_reviews int default 0,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,

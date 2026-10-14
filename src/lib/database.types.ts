@@ -2,6 +2,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type PostShareMethod = 'copy_link' | 'native' | 'whatsapp' | 'facebook' | 'instagram' | 'x';
 export type Gender = 'male' | 'female' | 'lgbtq_plus' | 'prefer_not_to_say';
+export type LocationVisibility = 'hidden' | 'approximate' | 'public';
 
 type Row<T> = T;
 type Insert<T> = Partial<T>;
@@ -26,6 +27,7 @@ export interface Database {
           location_latitude: number | null;
           location_longitude: number | null;
           location_place_id: string | null;
+          location_visibility: LocationVisibility;
           rating: number;
           total_reviews: number;
           client_type: string[] | null;

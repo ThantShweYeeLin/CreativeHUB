@@ -149,6 +149,7 @@ export class DataService {
       message.includes('location_latitude') ||
       message.includes('location_longitude') ||
       message.includes('location_place_id') ||
+      message.includes('location_visibility') ||
       (message.includes('permission denied') && message.includes('users'))
     );
   }
@@ -159,8 +160,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
-      : 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
+      ? 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, location_visibility, preferred_currency'
+      : 'id, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_visibility, preferred_currency';
 
     return supabase
       .from('freelancer_profiles')
@@ -173,6 +174,7 @@ export class DataService {
       .eq('is_available', true)
       .neq('visibility', 'limited')
       .eq('users.account_status', 'active')
+      .neq('users.location_visibility', 'hidden')
       // Without an explicit order Postgres/PostgREST returns rows in
       // whatever order the query planner happens to produce — not "newest
       // first" or "best-reviewed first," just unpredictable. Every caller of
@@ -194,8 +196,8 @@ export class DataService {
     includeLocationColumns: boolean
   ) {
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, preferred_currency'
-      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, preferred_currency';
+      ? 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_latitude, location_longitude, location_place_id, location_visibility, preferred_currency'
+      : 'id, email, full_name, avatar_url, gender, pronouns, rating, total_reviews, location, location_visibility, preferred_currency';
 
     let q = supabase
       .from('freelancer_profiles')
@@ -221,8 +223,8 @@ export class DataService {
     }
 
     const userFields = includeLocationColumns
-      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_latitude, location_longitude, location_place_id'
-      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location';
+      ? 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_visibility, location_latitude, location_longitude, location_place_id'
+      : 'id, email, full_name, avatar_url, gender, rating, total_reviews, location, location_visibility';
 
     const { data, error } = await supabase
       .from('freelancer_profiles')
@@ -1133,10 +1135,11 @@ export class DataService {
       firstAttempt.error &&
       (Object.prototype.hasOwnProperty.call(updates, 'location_latitude') ||
         Object.prototype.hasOwnProperty.call(updates, 'location_longitude') ||
-        Object.prototype.hasOwnProperty.call(updates, 'location_place_id'))
+        Object.prototype.hasOwnProperty.call(updates, 'location_place_id') ||
+        Object.prototype.hasOwnProperty.call(updates, 'location_visibility'))
     ) {
       // If the DB schema is missing location columns, retry without them so onboarding can complete.
-      const { location_latitude: _lat, location_longitude: _lng, location_place_id: _pid, ...safeUpdates } = updates as any;
+      const { location_latitude: _lat, location_longitude: _lng, location_place_id: _pid, location_visibility: _visibility, ...safeUpdates } = updates as any;
 
       const fallbackAttempt = await supabase
         .from('users')

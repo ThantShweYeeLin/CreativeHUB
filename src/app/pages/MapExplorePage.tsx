@@ -252,7 +252,16 @@ export function MapView({ onViewProfile }: MapViewProps) {
 
       let normalized = (freelancerResponse.data || [])
         .map(normalizeFreelancer)
-        .filter((freelancer) => freelancer.id && freelancer.latitude !== null && freelancer.longitude !== null);
+        .filter((freelancer) => freelancer.id && freelancer.locationVisibility !== 'hidden' && freelancer.latitude !== null && freelancer.longitude !== null);
+
+      // Defense in depth: if a stale client, an older query shape, or a
+      // partially migrated row fails to carry the nested visibility field,
+      // never show the current user's own profile when their profile row says
+      // they chose hidden.
+      const currentUserHidden = userResponse.data?.location_visibility === 'hidden';
+      if (currentUserHidden && user?.id) {
+        normalized = normalized.filter((freelancer) => freelancer.userId !== user.id);
+      }
 
       if (normalized.length === 0) {
         const missingCoordinates = (freelancerResponse.data || [])
@@ -280,7 +289,12 @@ export function MapView({ onViewProfile }: MapViewProps) {
           }
         }
 
-        normalized = resolved.filter((freelancer) => freelancer.latitude !== null && freelancer.longitude !== null);
+        normalized = resolved.filter((freelancer) =>
+          freelancer.locationVisibility !== 'hidden' &&
+          (!currentUserHidden || freelancer.userId !== user?.id) &&
+          freelancer.latitude !== null &&
+          freelancer.longitude !== null
+        );
       }
 
       // Freelancers whose category isn't one of the five supported labels
@@ -293,7 +307,10 @@ export function MapView({ onViewProfile }: MapViewProps) {
       const userLat = toFiniteNumber(userResponse.data?.location_latitude);
       const userLng = toFiniteNumber(userResponse.data?.location_longitude);
 
-      if (userLat !== null && userLng !== null) {
+      if (currentUserHidden) {
+        setClientLocation(null);
+        setLocationSource(null);
+      } else if (userLat !== null && userLng !== null) {
         setClientLocation({
           lat: userLat,
           lng: userLng,

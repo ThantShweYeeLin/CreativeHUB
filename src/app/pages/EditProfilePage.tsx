@@ -16,7 +16,7 @@ import { geocodeAddress } from '../../lib/osmGeocoding';
 import { PRONOUN_OPTIONS } from '../../lib/pronouns';
 import { isValidSocialUrl, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_ICONS, type SocialPlatform } from '../../lib/socialPlatforms';
 import { LIMITATION_DAY_OPTIONS, WORKING_DAY_OPTIONS, toggle } from './freelancer-onboarding/types';
-import type { Gender } from '../../lib/database.types';
+import type { Gender, LocationVisibility } from '../../lib/database.types';
 import { GENDER_OPTIONS } from '../../lib/gender';
 
 interface SocialLinkFormEntry {
@@ -35,6 +35,12 @@ interface StoredLocation {
   city: string | null;
   district: string | null;
 }
+
+const LOCATION_VISIBILITY_OPTIONS: Array<{ value: LocationVisibility; label: string; description: string }> = [
+  { value: 'approximate', label: 'Approximate area', description: 'Show a nearby area, not the exact point.' },
+  { value: 'public', label: 'Public location', description: 'Show the saved map point and location label.' },
+  { value: 'hidden', label: 'Hide from map', description: 'Do not show your location as a map pin.' },
+];
 
 interface EditProfilePageProps {
   onBack: () => void;
@@ -68,6 +74,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
     location_latitude: null as number | null,
     location_longitude: null as number | null,
     location_place_id: null as string | null,
+    location_visibility: 'approximate' as LocationVisibility,
   });
 
   const [freelancerForm, setFreelancerForm] = useState({
@@ -155,6 +162,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
         location_latitude: profile.location_latitude ?? null,
         location_longitude: profile.location_longitude ?? null,
         location_place_id: profile.location_place_id ?? null,
+        location_visibility: (profile.location_visibility as LocationVisibility) || 'approximate',
       });
 
       if (freelancer && freelancerProfile) {
@@ -438,6 +446,7 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
       location_latitude: locationLatitude,
       location_longitude: locationLongitude,
       location_place_id: locationPlaceId,
+      location_visibility: basicForm.location_visibility,
       bio: isFreelancer ? undefined : basicForm.bio,
       updated_at: new Date().toISOString(),
     } as any);
@@ -646,6 +655,19 @@ export function EditProfilePage({ onBack }: EditProfilePageProps) {
                   <button type="button" onClick={() => void handleResolveLocation()} disabled={isResolvingLocation} className="rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:shadow-lg disabled:opacity-60">
                     {isResolvingLocation ? 'Resolving...' : 'Resolve Address'}
                   </button>
+                </div>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-semibold text-gray-700">Map visibility</label>
+                  <select
+                    value={basicForm.location_visibility}
+                    onChange={(event) => setBasicForm((current) => ({ ...current, location_visibility: event.target.value as LocationVisibility }))}
+                    className="w-full rounded-lg border border-sky-100 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-sky-400"
+                  >
+                    {LOCATION_VISIBILITY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {LOCATION_VISIBILITY_OPTIONS.find((option) => option.value === basicForm.location_visibility)?.description}
+                  </p>
                 </div>
               </div>
             </div>
